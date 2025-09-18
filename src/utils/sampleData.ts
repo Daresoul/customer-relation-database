@@ -31,7 +31,7 @@ export const generateSampleData = async () => {
         breed: 'Golden Retriever',
         weight: 30.5,
         medicalNotes: 'Healthy and active dog. Regular checkups recommended.',
-        ownerId: createdOwners[0]?.id
+        ownerId: (createdOwners[0] as any)?.id
       },
       {
         name: 'Luna',
@@ -39,7 +39,7 @@ export const generateSampleData = async () => {
         breed: 'Persian',
         weight: 4.2,
         medicalNotes: 'Indoor cat. Annual vaccinations up to date.',
-        ownerId: createdOwners[1]?.id
+        ownerId: (createdOwners[1] as any)?.id
       },
       {
         name: 'Charlie',
@@ -47,21 +47,21 @@ export const generateSampleData = async () => {
         breed: 'Labrador',
         weight: 28.0,
         medicalNotes: 'Friendly dog. Had hip surgery in 2022.',
-        ownerId: createdOwners[2]?.id
+        ownerId: (createdOwners[2] as any)?.id
       },
       {
         name: 'Bella',
         species: 'Cat',
         breed: 'Siamese',
         weight: 3.8,
-        ownerId: createdOwners[0]?.id
+        ownerId: (createdOwners[0] as any)?.id
       },
       {
         name: 'Buddy',
         species: 'Dog',
         breed: 'Beagle',
         weight: 12.5,
-        ownerId: createdOwners[1]?.id
+        ownerId: (createdOwners[1] as any)?.id
       },
     ];
 
