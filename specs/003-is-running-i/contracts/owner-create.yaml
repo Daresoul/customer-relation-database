@@ -1,0 +1,422 @@
+openapi: 3.0.3
+info:
+  title: Owner Creation API
+  version: 1.0.0
+  description: Tauri commands for creating owners during patient creation workflow
+
+paths:
+  /create_owner_with_contacts:
+    post:
+      summary: Create a new owner with contact information
+      operationId: createOwnerWithContacts
+      description: |
+        Creates a new owner record with associated contact information.
+        This is used when creating a new owner during patient creation workflow.
+        All operations are atomic - either all succeed or all fail.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOwnerWithContactsDto'
+      responses:
+        '201':
+          description: Owner created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnerWithContacts'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '409':
+          description: Duplicate owner detected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DuplicateError'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /create_patient_with_owner:
+    post:
+      summary: Create a patient with a new owner atomically
+      operationId: createPatientWithOwner
+      description: |
+        Creates both a new patient and a new owner in a single atomic transaction.
+        Used when creating a patient and the owner doesn't exist in the system.
+        If any part fails, the entire operation is rolled back.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - owner
+                - contacts
+                - patient
+              properties:
+                owner:
+                  $ref: '#/components/schemas/CreateOwnerDto'
+                contacts:
+                  type: array
+                  minItems: 1
+                  items:
+                    $ref: '#/components/schemas/CreateContactDto'
+                patient:
+                  $ref: '#/components/schemas/CreatePatientDto'
+                relationship:
+                  $ref: '#/components/schemas/PatientOwnerRelationship'
+      responses:
+        '201':
+          description: Patient and owner created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - owner
+                  - patient
+                  - relationship
+                properties:
+                  owner:
+                    $ref: '#/components/schemas/OwnerWithContacts'
+                  patient:
+                    $ref: '#/components/schemas/Patient'
+                  relationship:
+                    $ref: '#/components/schemas/PatientOwnerRelationship'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '500':
+          description: Transaction failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionError'
+
+components:
+  schemas:
+    CreateOwnerWithContactsDto:
+      type: object
+      required:
+        - owner
+        - contacts
+      properties:
+        owner:
+          $ref: '#/components/schemas/CreateOwnerDto'
+        contacts:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/CreateContactDto'
+
+    CreateOwnerDto:
+      type: object
+      required:
+        - firstName
+        - lastName
+      properties:
+        firstName:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: "^[a-zA-Z\\s\\-']+$"
+          example: "John"
+        lastName:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: "^[a-zA-Z\\s\\-']+$"
+          example: "Doe"
+        address:
+          type: string
+          maxLength: 500
+          nullable: true
+          example: "123 Main St, City, State 12345"
+
+    CreateContactDto:
+      type: object
+      required:
+        - contactType
+        - contactValue
+      properties:
+        contactType:
+          type: string
+          enum:
+            - phone_mobile
+            - phone_work
+            - phone_home
+            - email_primary
+            - email_secondary
+            - phone_emergency
+          example: "email_primary"
+        contactValue:
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: "john.doe@email.com"
+        isPrimary:
+          type: boolean
+          default: false
+          example: true
+
+    CreatePatientDto:
+      type: object
+      required:
+        - name
+        - species
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: "Fluffy"
+        species:
+          type: string
+          enum:
+            - dog
+            - cat
+            - bird
+            - rabbit
+            - hamster
+            - other
+          example: "cat"
+        breed:
+          type: string
+          maxLength: 100
+          nullable: true
+          example: "Persian"
+        dateOfBirth:
+          type: string
+          format: date
+          nullable: true
+          example: "2020-03-15"
+        weight:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1000
+          nullable: true
+          example: 4.5
+        medicalNotes:
+          type: string
+          maxLength: 5000
+          nullable: true
+          example: "Allergic to certain foods"
+
+    PatientOwnerRelationship:
+      type: object
+      properties:
+        relationshipType:
+          type: string
+          enum:
+            - primary_owner
+            - co_owner
+            - caretaker
+          default: primary_owner
+          example: "primary_owner"
+        isPrimary:
+          type: boolean
+          default: true
+          example: true
+
+    Patient:
+      type: object
+      required:
+        - id
+        - name
+        - species
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+          example: 789
+        name:
+          type: string
+          example: "Fluffy"
+        species:
+          type: string
+          example: "cat"
+        breed:
+          type: string
+          nullable: true
+          example: "Persian"
+        dateOfBirth:
+          type: string
+          format: date
+          nullable: true
+          example: "2020-03-15"
+        weight:
+          type: number
+          format: float
+          nullable: true
+          example: 4.5
+        medicalNotes:
+          type: string
+          nullable: true
+          example: "Allergic to certain foods"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2025-01-15T10:30:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2025-01-15T10:30:00Z"
+
+    OwnerWithContacts:
+      type: object
+      required:
+        - id
+        - firstName
+        - lastName
+        - contacts
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+          example: 123
+        firstName:
+          type: string
+          example: "John"
+        lastName:
+          type: string
+          example: "Doe"
+        address:
+          type: string
+          nullable: true
+          example: "123 Main St, City, State 12345"
+        contacts:
+          type: array
+          items:
+            $ref: '#/components/schemas/OwnerContact'
+        createdAt:
+          type: string
+          format: date-time
+          example: "2025-01-15T10:30:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2025-01-15T10:30:00Z"
+
+    OwnerContact:
+      type: object
+      required:
+        - id
+        - ownerId
+        - contactType
+        - contactValue
+        - isPrimary
+      properties:
+        id:
+          type: integer
+          example: 456
+        ownerId:
+          type: integer
+          example: 123
+        contactType:
+          type: string
+          example: "email_primary"
+        contactValue:
+          type: string
+          example: "john.doe@email.com"
+        isPrimary:
+          type: boolean
+          example: true
+
+    ValidationError:
+      type: object
+      required:
+        - code
+        - message
+        - errors
+      properties:
+        code:
+          type: string
+          example: "VALIDATION_ERROR"
+        message:
+          type: string
+          example: "Request validation failed"
+        errors:
+          type: array
+          items:
+            type: object
+            required:
+              - field
+              - message
+            properties:
+              field:
+                type: string
+                example: "owner.firstName"
+              message:
+                type: string
+                example: "First name is required"
+
+    DuplicateError:
+      type: object
+      required:
+        - code
+        - message
+        - existingOwners
+      properties:
+        code:
+          type: string
+          example: "DUPLICATE_OWNER"
+        message:
+          type: string
+          example: "Similar owner records found"
+        existingOwners:
+          type: array
+          items:
+            $ref: '#/components/schemas/OwnerWithContacts'
+
+    TransactionError:
+      type: object
+      required:
+        - code
+        - message
+        - rollbackSuccessful
+      properties:
+        code:
+          type: string
+          example: "TRANSACTION_FAILED"
+        message:
+          type: string
+          example: "Failed to save patient and owner atomically"
+        rollbackSuccessful:
+          type: boolean
+          example: true
+        details:
+          type: object
+          additionalProperties: true
+
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          example: "INTERNAL_ERROR"
+        message:
+          type: string
+          example: "An unexpected error occurred"
+        details:
+          type: object
+          additionalProperties: true

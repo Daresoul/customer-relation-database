@@ -1,0 +1,578 @@
+# Household Creation API Contract
+openapi: 3.0.0
+info:
+  title: Household Creation API
+  version: 2.0.0
+  description: Tauri commands for creating households with multiple people and contacts
+
+paths:
+  /create_household_with_people:
+    post:
+      summary: Create a new household with multiple people and their contacts
+      operationId: createHouseholdWithPeople
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - household
+                - people
+              properties:
+                household:
+                  $ref: '#/components/schemas/CreateHouseholdDto'
+                people:
+                  type: array
+                  minItems: 1
+                  maxItems: 5
+                  items:
+                    type: object
+                    required:
+                      - person
+                      - contacts
+                    properties:
+                      person:
+                        $ref: '#/components/schemas/CreatePersonDto'
+                      contacts:
+                        type: array
+                        minItems: 0
+                        maxItems: 10
+                        items:
+                          $ref: '#/components/schemas/CreateContactDto'
+            examples:
+              couple:
+                summary: Couple with individual contacts
+                value:
+                  household:
+                    householdName: "The Smith Family"
+                    address: "123 Main St"
+                    notes: "Preferred contact is John"
+                  people:
+                    - person:
+                        firstName: "John"
+                        lastName: "Smith"
+                        isPrimary: true
+                      contacts:
+                        - contactType: "mobile"
+                          contactValue: "555-0100"
+                          isPrimary: true
+                        - contactType: "email"
+                          contactValue: "john@work.com"
+                          isPrimary: true
+                        - contactType: "email"
+                          contactValue: "john@personal.com"
+                          isPrimary: false
+                    - person:
+                        firstName: "Jane"
+                        lastName: "Smith"
+                        isPrimary: false
+                      contacts:
+                        - contactType: "mobile"
+                          contactValue: "555-0101"
+                          isPrimary: true
+                        - contactType: "email"
+                          contactValue: "jane@work.com"
+                          isPrimary: true
+              single_person:
+                summary: Single person household
+                value:
+                  household:
+                    address: "456 Oak Ave"
+                  people:
+                    - person:
+                        firstName: "Bob"
+                        lastName: "Johnson"
+                        isPrimary: true
+                      contacts:
+                        - contactType: "phone"
+                          contactValue: "555-9876"
+                          isPrimary: true
+      responses:
+        '200':
+          description: Household created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - household
+                  - people
+                properties:
+                  household:
+                    $ref: '#/components/schemas/Household'
+                  people:
+                    type: array
+                    items:
+                      type: object
+                      required:
+                        - person
+                        - contacts
+                      properties:
+                        person:
+                          $ref: '#/components/schemas/Person'
+                        contacts:
+                          type: array
+                          items:
+                            $ref: '#/components/schemas/PersonContact'
+              examples:
+                created:
+                  value:
+                    household:
+                      id: 123
+                      householdName: "The Smith Family"
+                      address: "123 Main St"
+                      notes: "Preferred contact is John"
+                      createdAt: "2025-09-18T10:30:00Z"
+                      updatedAt: "2025-09-18T10:30:00Z"
+                    people:
+                      - person:
+                          id: 456
+                          householdId: 123
+                          firstName: "John"
+                          lastName: "Smith"
+                          isPrimary: true
+                          createdAt: "2025-09-18T10:30:00Z"
+                          updatedAt: "2025-09-18T10:30:00Z"
+                        contacts:
+                          - id: 789
+                            personId: 456
+                            contactType: "mobile"
+                            contactValue: "555-0100"
+                            isPrimary: true
+                            createdAt: "2025-09-18T10:30:00Z"
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                no_people:
+                  value:
+                    error: "Household must have at least one person"
+                too_many_people:
+                  value:
+                    error: "Household cannot have more than 5 people"
+                missing_name:
+                  value:
+                    error: "First name and last name are required for all people"
+                invalid_email:
+                  value:
+                    error: "Invalid email format"
+                multiple_primary:
+                  value:
+                    error: "Only one person can be marked as primary per household"
+        '500':
+          description: Server error
+
+  /create_patient_with_household:
+    post:
+      summary: Create a patient with a new household in one transaction
+      operationId: createPatientWithHousehold
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - household
+                - people
+                - patient
+              properties:
+                household:
+                  $ref: '#/components/schemas/CreateHouseholdDto'
+                people:
+                  type: array
+                  minItems: 1
+                  maxItems: 5
+                  items:
+                    type: object
+                    required:
+                      - person
+                      - contacts
+                    properties:
+                      person:
+                        $ref: '#/components/schemas/CreatePersonDto'
+                      contacts:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/CreateContactDto'
+                patient:
+                  $ref: '#/components/schemas/CreatePatientDto'
+                relationship:
+                  type: object
+                  properties:
+                    relationshipType:
+                      type: string
+                      default: "primary_household"
+                    isPrimary:
+                      type: boolean
+                      default: true
+            examples:
+              complete:
+                summary: Complete patient with couple household
+                value:
+                  household:
+                    householdName: "The Williams Family"
+                    address: "789 Pine St"
+                  people:
+                    - person:
+                        firstName: "Alice"
+                        lastName: "Williams"
+                        isPrimary: true
+                      contacts:
+                        - contactType: "mobile"
+                          contactValue: "555-1234"
+                          isPrimary: true
+                    - person:
+                        firstName: "Bob"
+                        lastName: "Williams"
+                        isPrimary: false
+                      contacts:
+                        - contactType: "mobile"
+                          contactValue: "555-1235"
+                          isPrimary: true
+                  patient:
+                    name: "Fluffy"
+                    species: "Cat"
+                    breed: "Persian"
+                    dateOfBirth: "2020-03-15"
+                    weight: 4.5
+                    medicalNotes: "Indoor cat, all vaccinations up to date"
+                  relationship:
+                    relationshipType: "primary_household"
+                    isPrimary: true
+      responses:
+        '200':
+          description: Patient and household created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - household
+                  - people
+                  - patient
+                  - relationship
+                properties:
+                  household:
+                    $ref: '#/components/schemas/Household'
+                  people:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        person:
+                          $ref: '#/components/schemas/Person'
+                        contacts:
+                          type: array
+                          items:
+                            $ref: '#/components/schemas/PersonContact'
+                  patient:
+                    $ref: '#/components/schemas/Patient'
+                  relationship:
+                    $ref: '#/components/schemas/PatientHouseholdRelationship'
+              examples:
+                created:
+                  value:
+                    household:
+                      id: 124
+                      householdName: "The Williams Family"
+                      address: "789 Pine St"
+                      createdAt: "2025-09-18T10:35:00Z"
+                      updatedAt: "2025-09-18T10:35:00Z"
+                    people:
+                      - person:
+                          id: 457
+                          householdId: 124
+                          firstName: "Alice"
+                          lastName: "Williams"
+                          isPrimary: true
+                          createdAt: "2025-09-18T10:35:00Z"
+                          updatedAt: "2025-09-18T10:35:00Z"
+                        contacts:
+                          - id: 790
+                            personId: 457
+                            contactType: "mobile"
+                            contactValue: "555-1234"
+                            isPrimary: true
+                            createdAt: "2025-09-18T10:35:00Z"
+                    patient:
+                      id: 567
+                      name: "Fluffy"
+                      species: "Cat"
+                      breed: "Persian"
+                      dateOfBirth: "2020-03-15"
+                      weight: 4.5
+                      medicalNotes: "Indoor cat, all vaccinations up to date"
+                      createdAt: "2025-09-18T10:35:00Z"
+                      updatedAt: "2025-09-18T10:35:00Z"
+                    relationship:
+                      id: 789
+                      patientId: 567
+                      householdId: 124
+                      relationshipType: "primary_household"
+                      isPrimary: true
+                      createdAt: "2025-09-18T10:35:00Z"
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                invalid_patient:
+                  value:
+                    error: "Patient name and species are required"
+                invalid_date:
+                  value:
+                    error: "Date of birth must be in the past"
+        '500':
+          description: Transaction failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                rollback:
+                  value:
+                    error: "Transaction rolled back: Failed to create patient"
+
+components:
+  schemas:
+    CreateHouseholdDto:
+      type: object
+      properties:
+        householdName:
+          type: string
+          maxLength: 200
+          nullable: true
+          description: Optional household name (e.g., "The Smith Family")
+        address:
+          type: string
+          maxLength: 500
+          nullable: true
+        notes:
+          type: string
+          maxLength: 2000
+          nullable: true
+
+    CreatePersonDto:
+      type: object
+      required:
+        - firstName
+        - lastName
+      properties:
+        firstName:
+          type: string
+          minLength: 1
+          maxLength: 100
+        lastName:
+          type: string
+          minLength: 1
+          maxLength: 100
+        isPrimary:
+          type: boolean
+          default: false
+          description: Primary contact for the household
+
+    CreateContactDto:
+      type: object
+      required:
+        - contactType
+        - contactValue
+      properties:
+        contactType:
+          type: string
+          enum: [phone, email, mobile, work_phone]
+        contactValue:
+          type: string
+          minLength: 1
+          maxLength: 255
+        isPrimary:
+          type: boolean
+          default: false
+          description: Primary contact of this type for this person
+
+    CreatePatientDto:
+      type: object
+      required:
+        - name
+        - species
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        species:
+          type: string
+          minLength: 1
+          maxLength: 50
+        breed:
+          type: string
+          maxLength: 50
+          nullable: true
+        dateOfBirth:
+          type: string
+          format: date
+          nullable: true
+        weight:
+          type: number
+          format: float
+          minimum: 0
+          nullable: true
+        medicalNotes:
+          type: string
+          maxLength: 5000
+          nullable: true
+
+    Household:
+      type: object
+      required:
+        - id
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+        householdName:
+          type: string
+          nullable: true
+        address:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Person:
+      type: object
+      required:
+        - id
+        - householdId
+        - firstName
+        - lastName
+        - isPrimary
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+        householdId:
+          type: integer
+        firstName:
+          type: string
+        lastName:
+          type: string
+        isPrimary:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    PersonContact:
+      type: object
+      required:
+        - id
+        - personId
+        - contactType
+        - contactValue
+        - isPrimary
+        - createdAt
+      properties:
+        id:
+          type: integer
+        personId:
+          type: integer
+        contactType:
+          type: string
+          enum: [phone, email, mobile, work_phone]
+        contactValue:
+          type: string
+        isPrimary:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    Patient:
+      type: object
+      required:
+        - id
+        - name
+        - species
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        species:
+          type: string
+        breed:
+          type: string
+          nullable: true
+        dateOfBirth:
+          type: string
+          format: date
+          nullable: true
+        weight:
+          type: number
+          format: float
+          nullable: true
+        medicalNotes:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    PatientHouseholdRelationship:
+      type: object
+      required:
+        - id
+        - patientId
+        - householdId
+        - relationshipType
+        - isPrimary
+        - createdAt
+      properties:
+        id:
+          type: integer
+        patientId:
+          type: integer
+        householdId:
+          type: integer
+        relationshipType:
+          type: string
+        isPrimary:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
