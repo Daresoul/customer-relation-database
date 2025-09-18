@@ -1,0 +1,9 @@
+pub mod patient;
+pub mod owner;
+pub mod patient_owner;
+pub mod dto;
+
+pub use patient::{Patient, PatientWithOwners};
+pub use owner::{Owner, OwnerWithPatients};
+pub use patient_owner::PatientOwner;
+pub use dto::{CreatePatientDto, CreateOwnerDto, UpdatePatientDto, UpdateOwnerDto};
