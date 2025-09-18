@@ -19,8 +19,8 @@ export const PatientCard: React.FC<PatientCardProps> = ({
   onDelete,
   className = ''
 }) => {
-  const primaryOwner = patient.owners.find(owner => owner.isPrimary);
-  const otherOwners = patient.owners.filter(owner => !owner.isPrimary);
+  const primaryOwner = patient.owners?.find(owner => owner.isPrimary);
+  const otherOwners = patient.owners?.filter(owner => !owner.isPrimary) || [];
 
   const formatDate = (dateString: string) => {
     try {
@@ -111,7 +111,7 @@ export const PatientCard: React.FC<PatientCardProps> = ({
           )}
         </div>
 
-        {patient.owners.length > 0 && (
+        {patient.owners && patient.owners.length > 0 && (
           <div className="patient-owners">
             <h4>Owners:</h4>
             {primaryOwner && (

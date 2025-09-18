@@ -1,0 +1,189 @@
+openapi: 3.0.3
+info:
+  title: Owner Search API
+  version: 1.0.0
+  description: Tauri command for searching owners in the veterinary clinic system
+
+paths:
+  /search_owners:
+    post:
+      summary: Search for owners by multiple fields
+      operationId: searchOwners
+      description: |
+        Searches for owners using FTS5 full-text search across multiple fields
+        including name, address, and contact information. Returns paginated results
+        with relevance scoring.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - query
+              properties:
+                query:
+                  type: string
+                  minLength: 2
+                  maxLength: 100
+                  description: Search query string
+                  example: "John Doe"
+                limit:
+                  type: integer
+                  minimum: 1
+                  maximum: 100
+                  default: 10
+                  description: Maximum number of results to return
+                offset:
+                  type: integer
+                  minimum: 0
+                  default: 0
+                  description: Number of results to skip for pagination
+      responses:
+        '200':
+          description: Successful search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResults'
+        '400':
+          description: Invalid search parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    SearchResults:
+      type: object
+      required:
+        - results
+        - totalCount
+        - hasMore
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OwnerSearchResult'
+        totalCount:
+          type: integer
+          description: Total number of matching records
+          example: 42
+        hasMore:
+          type: boolean
+          description: Whether more results are available
+          example: true
+
+    OwnerSearchResult:
+      type: object
+      required:
+        - owner
+        - relevanceScore
+        - matchedFields
+      properties:
+        owner:
+          $ref: '#/components/schemas/OwnerWithContacts'
+        relevanceScore:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          description: Search relevance score
+          example: 0.95
+        matchedFields:
+          type: array
+          items:
+            type: string
+          description: Fields that matched the search query
+          example: ["firstName", "email"]
+
+    OwnerWithContacts:
+      type: object
+      required:
+        - id
+        - firstName
+        - lastName
+        - contacts
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+          example: 123
+        firstName:
+          type: string
+          example: "John"
+        lastName:
+          type: string
+          example: "Doe"
+        address:
+          type: string
+          nullable: true
+          example: "123 Main St, City, State 12345"
+        contacts:
+          type: array
+          items:
+            $ref: '#/components/schemas/OwnerContact'
+        createdAt:
+          type: string
+          format: date-time
+          example: "2025-01-15T10:30:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2025-01-15T10:30:00Z"
+
+    OwnerContact:
+      type: object
+      required:
+        - id
+        - ownerId
+        - contactType
+        - contactValue
+        - isPrimary
+      properties:
+        id:
+          type: integer
+          example: 456
+        ownerId:
+          type: integer
+          example: 123
+        contactType:
+          type: string
+          enum:
+            - phone_mobile
+            - phone_work
+            - phone_home
+            - email_primary
+            - email_secondary
+            - phone_emergency
+          example: "email_primary"
+        contactValue:
+          type: string
+          example: "john.doe@email.com"
+        isPrimary:
+          type: boolean
+          example: true
+
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          example: "INVALID_QUERY"
+        message:
+          type: string
+          example: "Query must be at least 2 characters long"
+        details:
+          type: object
+          additionalProperties: true

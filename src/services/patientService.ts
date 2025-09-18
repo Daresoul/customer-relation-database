@@ -29,14 +29,38 @@ export class PatientService {
    * Create a new patient
    */
   static async createPatient(input: CreatePatientInput): Promise<PatientWithOwners> {
-    return ApiService.invoke<PatientWithOwners>('create_patient', { input });
+    // Transform camelCase frontend data to snake_case backend format
+    const dto = {
+      name: input.name,
+      species: input.species,
+      breed: input.breed || null,
+      date_of_birth: input.dateOfBirth || null,
+      weight: input.weight || null,
+      medical_notes: input.notes || null,
+    };
+
+    console.log('🎯 PatientService: Creating patient with transformed data:', dto);
+    return ApiService.invoke<PatientWithOwners>('create_patient', { dto });
   }
+
 
   /**
    * Update an existing patient
    */
   static async updatePatient(id: number, updates: UpdatePatientInput): Promise<Patient> {
-    return ApiService.invoke<Patient>('update_patient', { id, updates });
+    // Transform camelCase frontend data to snake_case backend format
+    const dto = {
+      name: updates.name,
+      species: updates.species,
+      breed: updates.breed || null,
+      date_of_birth: updates.dateOfBirth || null,
+      weight: updates.weight || null,
+      medical_notes: updates.notes || null,
+      is_active: updates.isActive
+    };
+
+    console.log('🎯 PatientService: Updating patient with transformed data:', dto);
+    return ApiService.invoke<Patient>('update_patient', { id, dto });
   }
 
   /**

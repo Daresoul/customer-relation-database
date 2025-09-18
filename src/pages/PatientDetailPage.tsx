@@ -207,8 +207,8 @@ export const PatientDetailPage: React.FC = () => {
   }
 
   const age = calculateAge(patient.dateOfBirth);
-  const primaryOwner = patient.owners.find(owner => owner.isPrimary);
-  const otherOwners = patient.owners.filter(owner => !owner.isPrimary);
+  const primaryOwner = patient.owners?.find(owner => owner.isPrimary);
+  const otherOwners = patient.owners?.filter(owner => !owner.isPrimary) || [];
 
   return (
     <div className="patient-detail-page">
@@ -310,7 +310,7 @@ export const PatientDetailPage: React.FC = () => {
               </button>
             </div>
 
-            {patient.owners.length === 0 ? (
+            {!patient.owners || patient.owners.length === 0 ? (
               <p className="no-data">No owners associated with this patient.</p>
             ) : (
               <div className="owners-list">
