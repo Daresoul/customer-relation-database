@@ -1,0 +1,232 @@
+# Household Search API Contract
+openapi: 3.0.0
+info:
+  title: Household Search API
+  version: 2.0.0
+  description: Tauri command for searching households with multiple people
+
+paths:
+  /search_households:
+    post:
+      summary: Search for households by any person's name or contact information
+      operationId: searchHouseholds
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - query
+              properties:
+                query:
+                  type: string
+                  minLength: 2
+                  description: Search query (min 2 characters) - searches all people and contacts
+                limit:
+                  type: integer
+                  default: 10
+                  minimum: 1
+                  maximum: 100
+                  description: Maximum households to return
+                offset:
+                  type: integer
+                  default: 0
+                  minimum: 0
+                  description: Pagination offset
+            examples:
+              basic_search:
+                summary: Search by person name
+                value:
+                  query: "Smith"
+                  limit: 10
+                  offset: 0
+              contact_search:
+                summary: Search by contact info
+                value:
+                  query: "555-01"
+                  limit: 20
+                  offset: 0
+      responses:
+        '200':
+          description: Successful search
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - results
+                  - total
+                  - hasMore
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/HouseholdSearchResult'
+                  total:
+                    type: integer
+                    description: Total matching households
+                  hasMore:
+                    type: boolean
+                    description: More results available
+              examples:
+                couple_household:
+                  summary: Household with couple
+                  value:
+                    results:
+                      - id: 1
+                        householdName: "The Smith Family"
+                        address: "123 Main St"
+                        people:
+                          - id: 1
+                            firstName: "John"
+                            lastName: "Smith"
+                            isPrimary: true
+                            contacts:
+                              - id: 1
+                                contactType: "mobile"
+                                contactValue: "555-0100"
+                                isPrimary: true
+                              - id: 2
+                                contactType: "email"
+                                contactValue: "john@example.com"
+                                isPrimary: true
+                          - id: 2
+                            firstName: "Jane"
+                            lastName: "Smith"
+                            isPrimary: false
+                            contacts:
+                              - id: 3
+                                contactType: "mobile"
+                                contactValue: "555-0101"
+                                isPrimary: true
+                        relevanceScore: 0.95
+                        snippet: "John <mark>Smith</mark> & Jane <mark>Smith</mark>"
+                    total: 15
+                    hasMore: true
+                single_person:
+                  summary: Single person household
+                  value:
+                    results:
+                      - id: 2
+                        householdName: null
+                        address: "456 Oak Ave"
+                        people:
+                          - id: 3
+                            firstName: "Alice"
+                            lastName: "Johnson"
+                            isPrimary: true
+                            contacts:
+                              - id: 5
+                                contactType: "phone"
+                                contactValue: "555-9876"
+                                isPrimary: true
+                        relevanceScore: 0.85
+                        snippet: "Alice <mark>Johnson</mark>"
+                    total: 1
+                    hasMore: false
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                query_too_short:
+                  value:
+                    error: "Query must be at least 2 characters"
+                invalid_limit:
+                  value:
+                    error: "Limit must be between 1 and 100"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    HouseholdSearchResult:
+      type: object
+      required:
+        - id
+        - people
+        - relevanceScore
+      properties:
+        id:
+          type: integer
+        householdName:
+          type: string
+          nullable: true
+          description: Optional household name (e.g., "The Smith Family")
+        address:
+          type: string
+          nullable: true
+        people:
+          type: array
+          minItems: 1
+          maxItems: 5
+          items:
+            $ref: '#/components/schemas/PersonWithContacts'
+        relevanceScore:
+          type: number
+          format: float
+          description: Search relevance score (0-1)
+        snippet:
+          type: string
+          nullable: true
+          description: HTML snippet with search highlights
+
+    PersonWithContacts:
+      type: object
+      required:
+        - id
+        - firstName
+        - lastName
+        - isPrimary
+        - contacts
+      properties:
+        id:
+          type: integer
+        firstName:
+          type: string
+        lastName:
+          type: string
+        isPrimary:
+          type: boolean
+          description: Primary contact for the household
+        contacts:
+          type: array
+          items:
+            $ref: '#/components/schemas/PersonContact'
+
+    PersonContact:
+      type: object
+      required:
+        - id
+        - contactType
+        - contactValue
+        - isPrimary
+      properties:
+        id:
+          type: integer
+        contactType:
+          type: string
+          enum: [phone, email, mobile, work_phone]
+        contactValue:
+          type: string
+        isPrimary:
+          type: boolean
+          description: Primary contact of this type for this person
+
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+        details:
+          type: object
+          additionalProperties: true

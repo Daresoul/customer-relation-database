@@ -59,6 +59,15 @@ fn main() {
             commands::search_owners,
             commands::find_owners_by_name,
             commands::search_owners_by_patient,
+            // Household commands
+            commands::create_household_with_people,
+            commands::create_patient_with_household,
+            commands::search_households,
+            commands::get_household_with_people,
+            commands::update_household,
+            commands::delete_household,
+            commands::quick_search_households,
+            commands::rebuild_household_search_index,
             // Relationship commands
             commands::add_patient_owner,
             commands::remove_patient_owner,

@@ -17,7 +17,7 @@ import {
   useToast,
   useOwners
 } from '../hooks';
-import { PatientWithOwners, CreatePatientInput } from '../types';
+import { PatientWithOwners, CreatePatientInput, UpdatePatientInput } from '../types';
 
 export const MainPage: React.FC = () => {
   const navigate = useNavigate();
@@ -72,20 +72,22 @@ export const MainPage: React.FC = () => {
     }
   };
 
-  const handleFormSubmit = async (data: CreatePatientInput) => {
+  const handleFormSubmit = async (data: CreatePatientInput | UpdatePatientInput) => {
     try {
       if (editingPatient) {
         // Update existing patient
-        await updatePatient(editingPatient.id, data);
-        showSuccess('Patient Updated', `${data.name} has been updated successfully.`);
+        await updatePatient(editingPatient.id, data as UpdatePatientInput);
+        showSuccess('Patient Updated', `${data.name || editingPatient.name} has been updated successfully.`);
       } else {
-        // Create new patient
-        await createPatient(data);
-        showSuccess('Patient Created', `${data.name} has been added successfully.`);
+        // Create new patient - the PatientForm will handle household vs owner logic internally
+        console.log('🎯 MainPage: Creating patient with data:', data);
+        await createPatient(data as CreatePatientInput);
+        showSuccess('Patient Created', `${(data as CreatePatientInput).name} has been added successfully.`);
       }
       setShowPatientForm(false);
       setEditingPatient(null);
     } catch (error: any) {
+      console.error('🎯 MainPage: Patient creation/update failed:', error);
       showError(
         editingPatient ? 'Update Failed' : 'Creation Failed',
         error?.message || `Failed to ${editingPatient ? 'update' : 'create'} patient`
@@ -114,7 +116,7 @@ export const MainPage: React.FC = () => {
             patient={editingPatient || undefined}
             onSubmit={handleFormSubmit}
             onCancel={handleFormCancel}
-            onCreateOwner={createOwner}
+            useHouseholds={true}
           />
         </div>
 
