@@ -6,6 +6,7 @@ import React, { useState, useEffect } from 'react';
 import { Patient, CreatePatientInput, UpdatePatientInput } from '../types';
 import HouseholdSearch from './HouseholdSearch';
 import LoadingSpinner from './LoadingSpinner';
+import { HouseholdService } from '../services/householdService';
 
 interface PatientFormProps {
   patient?: Patient;
@@ -268,7 +269,22 @@ export const PatientForm: React.FC<PatientFormProps> = ({
             <label>Household *</label>
             <HouseholdSearch
               value={formData.householdId || undefined}
-              onChange={(householdId) => handleInputChange('householdId', householdId)}
+              onChange={(householdId) => {
+                handleInputChange('householdId', householdId);
+                // Clear the error when a household is selected
+                if (householdId && validationErrors.householdId) {
+                  setValidationErrors(prev => ({ ...prev, householdId: '' }));
+                }
+              }}
+              onCreateHousehold={async (householdData) => {
+                try {
+                  const result = await HouseholdService.createHousehold(householdData);
+                  return result;
+                } catch (error: any) {
+                  console.error('Failed to create household:', error);
+                  throw error;
+                }
+              }}
               required
               className={validationErrors.householdId ? 'error' : ''}
             />

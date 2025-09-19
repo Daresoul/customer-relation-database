@@ -1,366 +1,198 @@
-use serde::{Deserialize, Serialize};
 use tauri::State;
-use crate::database::connection::DatabasePool;
-use crate::database::queries::owner as owner_queries;
-use crate::models::{Owner, CreateOwnerDto};
+use sqlx::Row;
+use crate::database::DatabasePool;
+use crate::models::household::*;
+use crate::database::queries::{household, household_search};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct HouseholdContact {
-    #[serde(rename = "type")]
-    pub contact_type: String,
-    pub value: String,
-    #[serde(rename = "isPrimary")]
-    pub is_primary: bool,
+#[tauri::command]
+pub async fn create_household_with_people(
+    pool: State<'_, DatabasePool>,
+    dto: CreateHouseholdWithPeopleDto,
+) -> Result<HouseholdWithPeople, String> {
+    let pool = pool.lock().await;
+    household::create_household_with_people(&*pool, dto)
+        .await
+        .map_err(|e| format!("Failed to create household: {}", e))
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct HouseholdSearchResult {
-    pub id: i64,
-    #[serde(rename = "householdName")]
-    pub household_name: String,
-    pub address: Option<String>,
-    pub city: Option<String>,
-    #[serde(rename = "postalCode")]
-    pub postal_code: Option<String>,
-    pub contacts: Vec<HouseholdContact>,
-    #[serde(rename = "petCount")]
-    pub pet_count: i64,
-    #[serde(rename = "relevanceScore")]
-    pub relevance_score: Option<f64>,
-}
+#[tauri::command]
+pub async fn create_patient_with_household(
+    pool: State<'_, DatabasePool>,
+    dto: CreatePatientWithHouseholdDto,
+) -> Result<serde_json::Value, String> {
+    let pool = pool.lock().await;
+    let (household_with_people, patient_id) = household::create_patient_with_household(&*pool, dto)
+        .await
+        .map_err(|e| format!("Failed to create patient with household: {}", e))?;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SearchHouseholdsCommand {
-    pub query: String,
-    pub limit: Option<i32>,
-    pub offset: Option<i32>,
-    #[serde(rename = "sortBy")]
-    pub sort_by: Option<String>,
-    #[serde(rename = "sortDirection")]
-    pub sort_direction: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SearchHouseholdsResponse {
-    pub results: Vec<HouseholdSearchResult>,
-    pub total: i64,
-    #[serde(rename = "hasMore")]
-    pub has_more: bool,
-    pub query: String,
-    pub offset: i32,
-    pub limit: i32,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CreateHouseholdCommand {
-    #[serde(rename = "householdName")]
-    pub household_name: String,
-    pub address: Option<String>,
-    pub city: Option<String>,
-    #[serde(rename = "postalCode")]
-    pub postal_code: Option<String>,
-    pub contacts: Vec<HouseholdContact>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GetHouseholdResponse {
-    pub id: i64,
-    #[serde(rename = "householdName")]
-    pub household_name: String,
-    pub address: Option<String>,
-    pub city: Option<String>,
-    #[serde(rename = "postalCode")]
-    pub postal_code: Option<String>,
-    pub contacts: Vec<HouseholdContact>,
-    #[serde(rename = "petCount")]
-    pub pet_count: i64,
-    #[serde(rename = "createdAt")]
-    pub created_at: String,
-    #[serde(rename = "updatedAt")]
-    pub updated_at: String,
-}
-
-// Helper function to convert Owner to HouseholdSearchResult
-fn owner_to_household_result(owner: &Owner, pet_count: i64) -> HouseholdSearchResult {
-    let mut contacts = Vec::new();
-
-    // Add primary phone contact if available
-    if let Some(phone) = &owner.phone {
-        contacts.push(HouseholdContact {
-            contact_type: "phone".to_string(),
-            value: phone.clone(),
-            is_primary: true,
-        });
-    }
-
-    // Add email contact if available
-    if let Some(email) = &owner.email {
-        contacts.push(HouseholdContact {
-            contact_type: "email".to_string(),
-            value: email.clone(),
-            is_primary: contacts.is_empty(), // Primary if no phone
-        });
-    }
-
-    // Parse address for city and postal code
-    let (city, postal_code) = if let Some(address) = &owner.address {
-        // Simple parsing - split by comma and try to extract city/postal
-        let parts: Vec<&str> = address.split(',').map(|s| s.trim()).collect();
-        let city = if parts.len() > 1 {
-            Some(parts[parts.len() - 2].to_string())
-        } else {
-            None
-        };
-        let postal_code = if parts.len() > 0 {
-            // Look for postal code pattern in last part
-            let last_part = parts[parts.len() - 1];
-            if last_part.chars().any(|c| c.is_numeric()) {
-                Some(last_part.to_string())
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-        (city, postal_code)
-    } else {
-        (None, None)
-    };
-
-    HouseholdSearchResult {
-        id: owner.id,
-        household_name: format!("{} {}", owner.first_name, owner.last_name),
-        address: owner.address.clone(),
-        city,
-        postal_code,
-        contacts,
-        pet_count,
-        relevance_score: Some(1.0), // Simple relevance score
-    }
-}
-
-// Helper function to get pet count for an owner
-async fn get_pet_count_for_owner(pool: &sqlx::SqlitePool, owner_id: i64) -> Result<i64, sqlx::Error> {
-    let result = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*) FROM patient_owners WHERE owner_id = ?"
-    )
-    .bind(owner_id)
-    .fetch_one(pool)
-    .await?;
-
-    Ok(result)
+    // Return both household and patient ID
+    Ok(serde_json::json!({
+        "household": household_with_people,
+        "patient_id": patient_id,
+    }))
 }
 
 #[tauri::command]
 pub async fn search_households(
     pool: State<'_, DatabasePool>,
-    command: SearchHouseholdsCommand,
+    query: String,
+    limit: Option<i32>,
+    offset: Option<i32>,
 ) -> Result<SearchHouseholdsResponse, String> {
-    // Validate query length
-    if command.query.len() < 2 {
-        return Err("Query must be at least 2 characters".to_string());
-    }
+    let pool = pool.lock().await;
+    household_search::search_households(&*pool, &query, limit, offset)
+        .await
+        .map_err(|e| format!("Failed to search households: {}", e))
+}
 
-    // Validate limits
-    let limit = command.limit.unwrap_or(10);
-    let offset = command.offset.unwrap_or(0);
+#[tauri::command]
+pub async fn get_household_with_people(
+    pool: State<'_, DatabasePool>,
+    household_id: i32,
+) -> Result<Option<HouseholdWithPeople>, String> {
+    let pool = pool.lock().await;
+    household::get_household_with_people(&*pool, household_id)
+        .await
+        .map_err(|e| format!("Failed to get household: {}", e))
+}
 
-    if limit > 100 {
-        return Err("Limit cannot exceed 100".to_string());
-    }
+#[tauri::command]
+pub async fn update_household(
+    pool: State<'_, DatabasePool>,
+    household_id: i32,
+    household_name: Option<String>,
+    address: Option<String>,
+    notes: Option<String>,
+) -> Result<(), String> {
+    let pool = pool.lock().await;
+    household::update_household(&*pool, household_id, household_name, address, notes)
+        .await
+        .map_err(|e| format!("Failed to update household: {}", e))
+}
 
+#[tauri::command]
+pub async fn delete_household(
+    pool: State<'_, DatabasePool>,
+    household_id: i32,
+) -> Result<(), String> {
+    let pool = pool.lock().await;
+    household::delete_household(&*pool, household_id)
+        .await
+        .map_err(|e| format!("Failed to delete household: {}", e))
+}
+
+#[tauri::command]
+pub async fn quick_search_households(
+    pool: State<'_, DatabasePool>,
+    query: String,
+    limit: Option<i32>,
+) -> Result<Vec<(i32, String)>, String> {
+    let limit = limit.unwrap_or(10);
+    let pool = pool.lock().await;
+    household_search::quick_search_households(&*pool, &query, limit)
+        .await
+        .map_err(|e| format!("Failed to quick search households: {}", e))
+}
+
+#[tauri::command]
+pub async fn get_all_households(
+    pool: State<'_, DatabasePool>,
+    limit: Option<i32>,
+    offset: Option<i32>,
+) -> Result<Vec<HouseholdWithPeople>, String> {
     let pool = pool.lock().await;
 
-    // Search owners using existing infrastructure
-    let owners = crate::database::queries::search::search_owners(&*pool, &command.query)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    // Convert to household results with pet counts
-    let mut household_results = Vec::new();
-    for owner in &owners {
-        let pet_count = get_pet_count_for_owner(&*pool, owner.id)
-            .await
-            .unwrap_or(0);
-        let household = owner_to_household_result(owner, pet_count);
-        household_results.push(household);
-    }
-
-    // Apply sorting if specified
-    if let Some(sort_by) = &command.sort_by {
-        match sort_by.as_str() {
-            "pet_count" => {
-                let desc = command.sort_direction.as_deref() == Some("desc");
-                household_results.sort_by(|a, b| {
-                    if desc {
-                        b.pet_count.cmp(&a.pet_count)
-                    } else {
-                        a.pet_count.cmp(&b.pet_count)
-                    }
-                });
-            }
-            "household_name" => {
-                let desc = command.sort_direction.as_deref() == Some("desc");
-                household_results.sort_by(|a, b| {
-                    if desc {
-                        b.household_name.cmp(&a.household_name)
-                    } else {
-                        a.household_name.cmp(&b.household_name)
-                    }
-                });
-            }
-            _ => {} // Default order from database
-        }
-    }
-
-    let total = household_results.len() as i64;
-
-    // Apply pagination
-    let start = offset as usize;
-    let end = std::cmp::min(start + limit as usize, household_results.len());
-    let paginated_results = if start < household_results.len() {
-        household_results[start..end].to_vec()
-    } else {
-        Vec::new()
-    };
-
-    let has_more = end < household_results.len();
-
-    Ok(SearchHouseholdsResponse {
-        results: paginated_results,
-        total,
-        has_more,
-        query: command.query,
-        offset,
+    // Use the search function with a wildcard pattern to get all households
+    // Pass a pattern that matches everything
+    let search_response = household_search::search_households(
+        &*pool,
+        "%%",  // Wildcard pattern that matches all
         limit,
-    })
-}
-
-#[tauri::command]
-pub async fn create_household(
-    pool: State<'_, DatabasePool>,
-    command: CreateHouseholdCommand,
-) -> Result<GetHouseholdResponse, String> {
-    let pool = pool.lock().await;
-
-    // Parse household name into first and last name
-    let name_parts: Vec<&str> = command.household_name.split_whitespace().collect();
-    let (first_name, last_name) = if name_parts.len() >= 2 {
-        (name_parts[0].to_string(), name_parts[1..].join(" "))
-    } else {
-        (command.household_name.clone(), "".to_string())
-    };
-
-    // Extract primary phone and email from contacts
-    let primary_phone = command.contacts.iter()
-        .find(|c| c.contact_type == "phone" && c.is_primary)
-        .or_else(|| command.contacts.iter().find(|c| c.contact_type == "phone"))
-        .map(|c| c.value.clone());
-
-    let primary_email = command.contacts.iter()
-        .find(|c| c.contact_type == "email" && c.is_primary)
-        .or_else(|| command.contacts.iter().find(|c| c.contact_type == "email"))
-        .map(|c| c.value.clone());
-
-    // Create owner DTO
-    let owner_dto = CreateOwnerDto {
-        first_name,
-        last_name,
-        email: primary_email,
-        phone: primary_phone,
-        address: command.address,
-    };
-
-    // Create owner using existing infrastructure
-    let owner = owner_queries::create_owner(&*pool, owner_dto)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    // Return household response
-    Ok(GetHouseholdResponse {
-        id: owner.id,
-        household_name: command.household_name,
-        address: owner.address,
-        city: command.city,
-        postal_code: command.postal_code,
-        contacts: command.contacts,
-        pet_count: 0,
-        created_at: owner.created_at.to_rfc3339(),
-        updated_at: owner.updated_at.to_rfc3339(),
-    })
-}
-
-#[tauri::command]
-pub async fn get_household(
-    pool: State<'_, DatabasePool>,
-    id: i64,
-) -> Result<Option<GetHouseholdResponse>, String> {
-    let pool = pool.lock().await;
-
-    // Get owner using existing infrastructure
-    let owner = owner_queries::get_owner_by_id(&*pool, id)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    if let Some(owner) = owner {
-        let pet_count = get_pet_count_for_owner(&*pool, owner.id)
-            .await
-            .unwrap_or(0);
-
-        // Convert owner to household format
-        let mut contacts = Vec::new();
-
-        if let Some(phone) = &owner.phone {
-            contacts.push(HouseholdContact {
-                contact_type: "phone".to_string(),
-                value: phone.clone(),
-                is_primary: true,
-            });
+        offset
+    )
+    .await
+    .map_err(|e| {
+        // If search fails due to minimum length requirement, try another approach
+        if e.to_string().contains("at least 2 characters") {
+            // Fall back to direct query
+            return "Falling back to direct query".to_string();
         }
+        format!("Failed to search households: {}", e)
+    });
 
-        if let Some(email) = &owner.email {
-            contacts.push(HouseholdContact {
-                contact_type: "email".to_string(),
-                value: email.clone(),
-                is_primary: contacts.is_empty(),
-            });
+    // If search failed with the 2-char minimum error, do direct query
+    if search_response.is_err() {
+        // Directly fetch all households without using FTS5 search
+        let household_rows = sqlx::query(
+            r#"
+            SELECT id, household_name, address, notes, created_at
+            FROM households
+            ORDER BY household_name
+            LIMIT ? OFFSET ?
+            "#
+        )
+        .bind(limit.unwrap_or(100))
+        .bind(offset.unwrap_or(0))
+        .fetch_all(&*pool)
+        .await
+        .map_err(|e| format!("Failed to fetch households: {}", e))?;
+
+        // Convert raw households to HouseholdWithPeople format
+        let mut households = Vec::new();
+        for row in household_rows {
+            let household_id: i64 = row.get("id");
+
+            // Get the full household with people
+            let household_with_people = household::get_household_with_people(&*pool, household_id as i32)
+                .await
+                .map_err(|e| format!("Failed to fetch household {}: {}", household_id, e))?;
+
+            if let Some(hwp) = household_with_people {
+                households.push(hwp);
+            }
         }
+        return Ok(households);
+    }
 
-        // Parse address for city and postal code
-        let (city, postal_code) = if let Some(address) = &owner.address {
-            let parts: Vec<&str> = address.split(',').map(|s| s.trim()).collect();
-            let city = if parts.len() > 1 {
-                Some(parts[parts.len() - 2].to_string())
-            } else {
-                None
-            };
-            let postal_code = if parts.len() > 0 {
-                let last_part = parts[parts.len() - 1];
-                if last_part.chars().any(|c| c.is_numeric()) {
-                    Some(last_part.to_string())
-                } else {
-                    None
-                }
-            } else {
-                None
-            };
-            (city, postal_code)
-        } else {
-            (None, None)
+    // Convert search results to HouseholdWithPeople
+    let search_response = search_response.unwrap();
+    let mut households = Vec::new();
+
+    for result in search_response.results {
+        // Build HouseholdWithPeople from search result
+        let household = Household {
+            id: result.id,
+            household_name: result.household_name,
+            address: result.address,
+            notes: None,
+            created_at: chrono::Utc::now().naive_utc(),
+            updated_at: chrono::Utc::now().naive_utc(),
         };
 
-        Ok(Some(GetHouseholdResponse {
-            id: owner.id,
-            household_name: format!("{} {}", owner.first_name, owner.last_name),
-            address: owner.address,
-            city,
-            postal_code,
-            contacts,
-            pet_count,
-            created_at: owner.created_at.to_rfc3339(),
-            updated_at: owner.updated_at.to_rfc3339(),
-        }))
-    } else {
-        Ok(None)
+        let people = result.people.into_iter().map(|p| PersonWithContacts {
+            id: p.id,
+            first_name: p.first_name,
+            last_name: p.last_name,
+            is_primary: p.is_primary,
+            contacts: p.contacts,
+        }).collect();
+
+        households.push(HouseholdWithPeople {
+            household: household,
+            people,
+            pet_count: result.pet_count,  // Use the pet count from search result
+        });
     }
+
+    Ok(households)
+}
+
+#[tauri::command]
+pub async fn rebuild_household_search_index(
+    pool: State<'_, DatabasePool>,
+) -> Result<(), String> {
+    let pool = pool.lock().await;
+    household_search::rebuild_search_index(&*pool)
+        .await
+        .map_err(|e| format!("Failed to rebuild search index: {}", e))
 }

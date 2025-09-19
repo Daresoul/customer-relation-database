@@ -1,174 +1,422 @@
-/**
- * Service for managing household operations
- */
-
-import { ApiService } from './api';
+import { invoke } from '@tauri-apps/api/tauri';
 import {
-  SearchHouseholdsCommand,
+  HouseholdWithPeople,
+  CreateHouseholdWithPeopleDto,
+  CreatePatientWithHouseholdDto,
+  CreatePatientWithHouseholdResponse,
   SearchHouseholdsResponse,
-  CreateHouseholdCommand,
-  GetHouseholdResponse,
-  HouseholdSearchResult,
-} from '../types';
+  validateHouseholdDto,
+} from '../types/household';
 
-export class HouseholdService {
-  /**
-   * Search households with pagination and sorting
-   */
-  static async searchHouseholds(
-    query: string,
-    options: {
-      limit?: number;
-      offset?: number;
-      sortBy?: string;
-      sortDirection?: string;
-    } = {}
-  ): Promise<SearchHouseholdsResponse> {
-    if (query.length < 2) {
-      throw ApiService.createError('Query must be at least 2 characters', 'INVALID_QUERY');
-    }
+// Create a new household with people
+export async function createHouseholdWithPeople(
+  dto: CreateHouseholdWithPeopleDto
+): Promise<HouseholdWithPeople> {
+  console.log('🔧 Service: Starting household creation with:', dto);
 
-    const command: SearchHouseholdsCommand = {
-      query,
-      limit: options.limit,
-      offset: options.offset,
-      sortBy: options.sortBy,
-      sortDirection: options.sortDirection,
+  // Validate before sending
+  const error = validateHouseholdDto(dto);
+  if (error) {
+    console.log('🔧 Service: Validation failed:', error);
+    throw new Error(error);
+  }
+
+  // Transform camelCase to snake_case for Rust backend
+  const transformedDto = {
+    household: {
+      household_name: dto.household.householdName || null,
+      address: dto.household.address || null,
+      notes: dto.household.notes || null,
+    },
+    people: dto.people.map(personWithContacts => ({
+      person: {
+        first_name: personWithContacts.person.firstName || '',
+        last_name: personWithContacts.person.lastName || '',
+        is_primary: personWithContacts.person.isPrimary || false,
+      },
+      contacts: personWithContacts.contacts.map(contact => ({
+        contact_type: contact.contactType || 'phone',
+        contact_value: contact.contactValue || '',
+        is_primary: contact.isPrimary || false,
+      })),
+    })),
+  };
+
+  console.log('🔧 Service: Transformed data for backend:', transformedDto);
+  console.log('🔧 Service: Validation passed, calling Tauri backend...');
+  try {
+    const backendResult = await invoke<any>('create_household_with_people', { dto: transformedDto });
+    console.log('🔧 Service: Raw backend response:', backendResult);
+
+    // Transform snake_case response back to camelCase for frontend
+    console.log('🔧 Service: Backend household keys:', Object.keys(backendResult.household || {}));
+    console.log('🔧 Service: Backend people sample:', backendResult.people?.[0] ? Object.keys(backendResult.people[0]) : 'No people');
+
+    const result: HouseholdWithPeople = {
+      household: {
+        id: backendResult.household?.id || 0,
+        householdName: backendResult.household?.household_name || null,
+        address: backendResult.household?.address || null,
+        notes: backendResult.household?.notes || null,
+        createdAt: backendResult.household?.created_at || new Date().toISOString(),
+        updatedAt: backendResult.household?.updated_at || new Date().toISOString(),
+      },
+      people: (backendResult.people || []).map((person: any) => {
+        console.log('🔧 Service: Transforming person:', person);
+        console.log('🔧 Service: Person keys:', Object.keys(person || {}));
+
+        return {
+          id: person?.id || 0,
+          firstName: person?.first_name || '',
+          lastName: person?.last_name || '',
+          isPrimary: person?.is_primary || false,
+          contacts: (person?.contacts || []).map((contact: any) => {
+            console.log('🔧 Service: Transforming contact:', contact);
+            return {
+              id: contact?.id || 0,
+              personId: contact?.person_id || person?.id || 0,
+              contactType: contact?.contact_type || 'phone',
+              contactValue: contact?.contact_value || '',
+              isPrimary: contact?.is_primary || false,
+              createdAt: contact?.created_at || new Date().toISOString(),
+            };
+          }),
+        };
+      }),
     };
 
-    return ApiService.invoke<SearchHouseholdsResponse>('search_households', command);
-  }
+    console.log('🔧 Service: Final transformed result:', result);
+    console.log('🔧 Service: First person after transform:', result.people[0]);
 
-  /**
-   * Search households with simple query (for compatibility)
-   */
-  static async searchHouseholdsSimple(query: string): Promise<HouseholdSearchResult[]> {
-    const response = await this.searchHouseholds(query);
-    return response.results;
-  }
-
-  /**
-   * Create a new household
-   */
-  static async createHousehold(command: CreateHouseholdCommand): Promise<GetHouseholdResponse> {
-    // Validation
-    if (!command.householdName.trim()) {
-      throw ApiService.createError('Household name is required', 'VALIDATION_ERROR');
+    // Validate transformation was successful
+    if (!result.household || result.household.id === 0) {
+      console.error('🔧 Service: Invalid household in transformation result');
+      throw new Error('Failed to transform household data - invalid household');
     }
 
-    if (command.contacts.length === 0) {
-      throw ApiService.createError('At least one contact is required', 'VALIDATION_ERROR');
+    if (!result.people || result.people.length === 0) {
+      console.error('🔧 Service: No people in transformation result');
+      throw new Error('Failed to transform household data - no people found');
     }
 
-    // Validate contact information
-    for (const contact of command.contacts) {
-      if (!contact.value.trim()) {
-        throw ApiService.createError('Contact value cannot be empty', 'VALIDATION_ERROR');
-      }
+    // Check if people have valid names
+    const invalidPeople = result.people.filter(person =>
+      !person.firstName || !person.lastName ||
+      typeof person.firstName !== 'string' ||
+      typeof person.lastName !== 'string'
+    );
 
-      if (contact.type === 'email') {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(contact.value)) {
-          throw ApiService.createError('Invalid email format', 'VALIDATION_ERROR');
-        }
-      }
+    if (invalidPeople.length > 0) {
+      console.error('🔧 Service: People with invalid names found:', invalidPeople);
+      console.error('🔧 Service: Backend response had keys:', backendResult.people?.[0] ? Object.keys(backendResult.people[0]) : 'No people');
+      console.error('🔧 Service: Transformed result has keys:', result.people[0] ? Object.keys(result.people[0]) : 'No people');
+      throw new Error('Failed to transform household data - invalid person names after transformation');
     }
 
-    return ApiService.invoke<GetHouseholdResponse>('create_household', command);
-  }
-
-  /**
-   * Get household by ID
-   */
-  static async getHousehold(id: number): Promise<GetHouseholdResponse | null> {
-    return ApiService.invoke<GetHouseholdResponse | null>('get_household', { id });
-  }
-
-  /**
-   * Search households with advanced filtering
-   */
-  static async searchWithFilters(
-    query: string,
-    filters: {
-      minPetCount?: number;
-      maxPetCount?: number;
-      city?: string;
-      postalCode?: string;
-      contactType?: string;
-    } = {}
-  ): Promise<SearchHouseholdsResponse> {
-    // For now, we'll do basic search and filter on the client side
-    // In a production system, these filters would be sent to the backend
-    const response = await this.searchHouseholds(query);
-
-    let filteredResults = response.results;
-
-    if (filters.minPetCount !== undefined) {
-      filteredResults = filteredResults.filter(h => h.petCount >= filters.minPetCount!);
-    }
-
-    if (filters.maxPetCount !== undefined) {
-      filteredResults = filteredResults.filter(h => h.petCount <= filters.maxPetCount!);
-    }
-
-    if (filters.city) {
-      filteredResults = filteredResults.filter(h =>
-        h.city?.toLowerCase().includes(filters.city!.toLowerCase())
-      );
-    }
-
-    if (filters.postalCode) {
-      filteredResults = filteredResults.filter(h =>
-        h.postalCode?.includes(filters.postalCode!)
-      );
-    }
-
-    if (filters.contactType) {
-      filteredResults = filteredResults.filter(h =>
-        h.contacts.some(c => c.type === filters.contactType)
-      );
-    }
-
-    return {
-      ...response,
-      results: filteredResults,
-      total: filteredResults.length,
-      hasMore: false,
-    };
-  }
-
-  /**
-   * Get household statistics
-   */
-  static async getHouseholdStats(): Promise<{
-    totalHouseholds: number;
-    averagePetsPerHousehold: number;
-    householdsWithMultiplePets: number;
-  }> {
-    try {
-      // Since we don't have a dedicated stats endpoint, we'll search for all households
-      // In a production system, this would be a separate endpoint
-      const response = await this.searchHouseholds('', { limit: 1000 });
-
-      const totalHouseholds = response.results.length;
-      const totalPets = response.results.reduce((sum, h) => sum + h.petCount, 0);
-      const averagePetsPerHousehold = totalHouseholds > 0 ? totalPets / totalHouseholds : 0;
-      const householdsWithMultiplePets = response.results.filter(h => h.petCount > 1).length;
-
-      return {
-        totalHouseholds,
-        averagePetsPerHousehold: Math.round(averagePetsPerHousehold * 100) / 100,
-        householdsWithMultiplePets,
-      };
-    } catch (error) {
-      console.warn('Failed to get household stats:', error);
-      return {
-        totalHouseholds: 0,
-        averagePetsPerHousehold: 0,
-        householdsWithMultiplePets: 0,
-      };
-    }
+    console.log('🔧 Service: Validation passed, returning transformed data');
+    return result;
+  } catch (error) {
+    console.error('🔧 Service: Backend call failed:', error);
+    throw error;
   }
 }
 
-export default HouseholdService;
+// Create a patient with a new household
+export async function createPatientWithHousehold(
+  dto: CreatePatientWithHouseholdDto
+): Promise<CreatePatientWithHouseholdResponse> {
+  // Validate household part
+  const householdDto: CreateHouseholdWithPeopleDto = {
+    household: dto.household,
+    people: dto.people,
+  };
+  const error = validateHouseholdDto(householdDto);
+  if (error) {
+    throw new Error(error);
+  }
+
+  try {
+    const response = await invoke<any>('create_patient_with_household', { dto });
+    return {
+      household: response.household,
+      patientId: response.patient_id,
+    };
+  } catch (error) {
+    console.error('Failed to create patient with household:', error);
+    throw error;
+  }
+}
+
+// Search households
+export async function searchHouseholds(
+  query: string,
+  limit?: number,
+  offset?: number
+): Promise<SearchHouseholdsResponse> {
+  if (query.length < 2) {
+    throw new Error('Search query must be at least 2 characters');
+  }
+
+  try {
+    const backendResult = await invoke<any>('search_households', {
+      query,
+      limit: limit || 10,
+      offset: offset || 0,
+    });
+
+    console.log('🔧 Service: searchHouseholds backend response:', backendResult);
+
+    // Transform snake_case response back to camelCase for frontend
+    const result: SearchHouseholdsResponse = {
+      results: (backendResult.results || []).map((household: any) => ({
+        id: household?.id || 0,
+        householdName: household?.household_name || null,
+        address: household?.address || null,
+        people: (household?.people || []).map((person: any) => ({
+          id: person?.id || 0,
+          firstName: person?.first_name || '',
+          lastName: person?.last_name || '',
+          isPrimary: person?.is_primary || false,
+          contacts: (person?.contacts || []).map((contact: any) => ({
+            id: contact?.id || 0,
+            personId: contact?.person_id || person?.id || 0,
+            contactType: contact?.contact_type || 'phone',
+            contactValue: contact?.contact_value || '',
+            isPrimary: contact?.is_primary || false,
+            createdAt: contact?.created_at || new Date().toISOString(),
+          })),
+        })),
+        relevanceScore: household?.relevance_score || 0,
+        snippet: household?.snippet || undefined,
+      })),
+      total: backendResult.total || 0,
+      hasMore: backendResult.has_more || false,
+    };
+
+    console.log('🔧 Service: searchHouseholds transformed result:', result);
+    return result;
+  } catch (error) {
+    console.error('Failed to search households:', error);
+    throw error;
+  }
+}
+
+// Quick search for autocomplete
+export async function quickSearchHouseholds(
+  query: string,
+  limit?: number
+): Promise<Array<{ id: number; name: string }>> {
+  if (query.length < 2) {
+    return [];
+  }
+
+  try {
+    const results = await invoke<Array<[number, string]>>('quick_search_households', {
+      query,
+      limit: limit || 10,
+    });
+
+    return results.map(([id, name]) => ({ id, name }));
+  } catch (error) {
+    console.error('Failed to quick search households:', error);
+    return [];
+  }
+}
+
+// Get household with all people and contacts
+export async function getHouseholdWithPeople(
+  householdId: number
+): Promise<HouseholdWithPeople | null> {
+  try {
+    const backendResult = await invoke<any>('get_household_with_people', {
+      householdId,
+    });
+
+    if (!backendResult) {
+      return null;
+    }
+
+    console.log('🔧 Service: getHouseholdWithPeople backend response:', backendResult);
+
+    // Transform snake_case response back to camelCase for frontend
+    const result: HouseholdWithPeople = {
+      household: {
+        id: backendResult.household?.id || 0,
+        householdName: backendResult.household?.household_name || null,
+        address: backendResult.household?.address || null,
+        notes: backendResult.household?.notes || null,
+        createdAt: backendResult.household?.created_at || new Date().toISOString(),
+        updatedAt: backendResult.household?.updated_at || new Date().toISOString(),
+      },
+      people: (backendResult.people || []).map((person: any) => ({
+        id: person?.id || 0,
+        firstName: person?.first_name || '',
+        lastName: person?.last_name || '',
+        isPrimary: person?.is_primary || false,
+        contacts: (person?.contacts || []).map((contact: any) => ({
+          id: contact?.id || 0,
+          personId: contact?.person_id || person?.id || 0,
+          contactType: contact?.contact_type || 'phone',
+          contactValue: contact?.contact_value || '',
+          isPrimary: contact?.is_primary || false,
+          createdAt: contact?.created_at || new Date().toISOString(),
+        })),
+      })),
+    };
+
+    console.log('🔧 Service: getHouseholdWithPeople transformed result:', result);
+    return result;
+  } catch (error) {
+    console.error('Failed to get household:', error);
+    throw error;
+  }
+}
+
+// Update household information
+export async function updateHousehold(
+  householdId: number,
+  updates: {
+    householdName?: string;
+    address?: string;
+    notes?: string;
+  }
+): Promise<void> {
+  try {
+    await invoke('update_household', {
+      householdId,
+      householdName: updates.householdName || null,
+      address: updates.address || null,
+      notes: updates.notes || null,
+    });
+  } catch (error) {
+    console.error('Failed to update household:', error);
+    throw error;
+  }
+}
+
+// Delete household (will cascade delete people and contacts)
+export async function deleteHousehold(householdId: number): Promise<void> {
+  try {
+    await invoke('delete_household', { householdId });
+  } catch (error) {
+    console.error('Failed to delete household:', error);
+    throw error;
+  }
+}
+
+// Rebuild search index (for maintenance)
+export async function rebuildHouseholdSearchIndex(): Promise<void> {
+  try {
+    await invoke('rebuild_household_search_index');
+  } catch (error) {
+    console.error('Failed to rebuild search index:', error);
+    throw error;
+  }
+}
+
+// Backward compatibility wrapper class
+export class HouseholdService {
+  static async searchHouseholdsSimple(query: string): Promise<any[]> {
+    const response = await searchHouseholds(query);
+    return response.results.map(result => ({
+      id: result.id,
+      householdName: result.householdName,
+      address: result.address,
+      contacts: result.people.flatMap(person =>
+        person.contacts.map(contact => ({
+          type: contact.contactType,
+          value: contact.contactValue,
+          isPrimary: contact.isPrimary
+        }))
+      ),
+      petCount: 0 // TODO: Implement pet count
+    }));
+  }
+
+  static async createHousehold(data: any): Promise<any> {
+    // Check if it's the new format with people array
+    if (data.people && Array.isArray(data.people)) {
+      const dto: CreateHouseholdWithPeopleDto = {
+        household: {
+          householdName: data.householdName,
+          address: data.address || undefined,
+          notes: undefined
+        },
+        people: data.people.map((p: any) => ({
+          person: {
+            firstName: p.firstName || '',
+            lastName: p.lastName || '',
+            isPrimary: p.isPrimary || false
+          },
+          contacts: [
+            p.email && {
+              contactType: 'email',
+              contactValue: p.email,
+              isPrimary: true
+            },
+            p.phone && {
+              contactType: 'phone',
+              contactValue: p.phone,
+              isPrimary: !p.email
+            },
+            p.mobile && {
+              contactType: 'mobile',
+              contactValue: p.mobile,
+              isPrimary: false
+            },
+            p.workPhone && {
+              contactType: 'work',
+              contactValue: p.workPhone,
+              isPrimary: false
+            }
+          ].filter(Boolean) as any[]
+        }))
+      };
+
+      const result = await createHouseholdWithPeople(dto);
+      return {
+        id: result.household.id,
+        householdName: result.household.householdName
+      };
+    }
+
+    // Old format for backward compatibility
+    const dto: CreateHouseholdWithPeopleDto = {
+      household: {
+        householdName: data.householdName,
+        address: data.address || undefined,
+        notes: undefined
+      },
+      people: [{
+        person: {
+          firstName: data.firstName || '',
+          lastName: data.lastName || '',
+          isPrimary: true
+        },
+        contacts: []
+      }]
+    };
+
+    if (data.email) {
+      dto.people[0].contacts.push({
+        contactType: 'email',
+        contactValue: data.email,
+        isPrimary: true
+      });
+    }
+
+    if (data.phone) {
+      dto.people[0].contacts.push({
+        contactType: 'phone',
+        contactValue: data.phone,
+        isPrimary: !data.email
+      });
+    }
+
+    const result = await createHouseholdWithPeople(dto);
+    return {
+      id: result.household.id,
+      householdName: result.household.householdName
+    };
+  }
+}

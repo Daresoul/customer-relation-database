@@ -59,6 +59,17 @@ const HouseholdCard: React.FC<HouseholdCardProps> = ({
     return household.contacts.filter(c => !c.isPrimary);
   };
 
+  // Get people names from the household if available
+  const getPeopleNames = () => {
+    // This should be populated from the backend in a real implementation
+    // For now, we'll show placeholder or extract from household name
+    if (household.householdName && household.householdName.includes('family')) {
+      const familyName = household.householdName.replace(' family', '').replace(' Family', '');
+      return familyName;
+    }
+    return 'Family members';
+  };
+
   const primaryContact = getPrimaryContact();
   const secondaryContacts = getSecondaryContacts();
 
@@ -77,9 +88,10 @@ const HouseholdCard: React.FC<HouseholdCardProps> = ({
       <div className="household-card__header">
         <div className="household-info">
           <h3 className="household-name">{household.householdName}</h3>
+          <p className="household-members">👥 {getPeopleNames()}</p>
           {household.address && (
             <p className="household-address">
-              {household.address}
+              📍 {household.address}
               {household.city && `, ${household.city}`}
               {household.postalCode && ` ${household.postalCode}`}
             </p>
@@ -91,29 +103,31 @@ const HouseholdCard: React.FC<HouseholdCardProps> = ({
       <div className="household-card__body">
         <div className="household-stats">
           <div className="stat">
-            <span className="stat-label">Pets:</span>
-            <span className="stat-value">{household.petCount}</span>
+            <span className="stat-label">🐾 Pets:</span>
+            <span className="stat-value">{household.petCount || 0}</span>
           </div>
-          {household.relevanceScore && (
-            <div className="stat">
-              <span className="stat-label">Relevance:</span>
-              <span className="stat-value">{Math.round(household.relevanceScore * 100)}%</span>
-            </div>
-          )}
+          <div className="stat">
+            <span className="stat-label">👤 Contacts:</span>
+            <span className="stat-value">{household.contacts.length || 0}</span>
+          </div>
         </div>
 
         <div className="household-contacts">
           {primaryContact && (
             <div className="contact primary-contact">
-              <span className="contact-type">{primaryContact.type}:</span>
+              <span className="contact-icon">
+                {primaryContact.type === 'phone' || primaryContact.type === 'mobile' ? '📱' : '✉️'}
+              </span>
               <span className="contact-value">{primaryContact.value}</span>
               <span className="contact-badge">Primary</span>
             </div>
           )}
 
-          {secondaryContacts.map((contact, index) => (
+          {secondaryContacts.slice(0, 2).map((contact, index) => (
             <div key={index} className="contact secondary-contact">
-              <span className="contact-type">{contact.type}:</span>
+              <span className="contact-icon">
+                {contact.type === 'phone' || contact.type === 'mobile' ? '📱' : '✉️'}
+              </span>
               <span className="contact-value">{contact.value}</span>
             </div>
           ))}
