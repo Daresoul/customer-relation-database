@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Patient, CreatePatientInput, UpdatePatientInput } from '../types';
-import OwnerSelect from './OwnerSelect';
+import HouseholdSearch from './HouseholdSearch';
 import LoadingSpinner from './LoadingSpinner';
 
 interface PatientFormProps {
@@ -34,7 +34,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({
     weight: '',
     microchipId: '',
     notes: '',
-    ownerId: null as number | null,
+    householdId: null as number | null,
     isActive: true
   });
 
@@ -52,7 +52,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({
         weight: patient.weight?.toString() || '',
         microchipId: patient.microchipId || '',
         notes: patient.notes || '',
-        ownerId: null, // Owner selection is separate for edits
+        householdId: null, // Household selection is separate for edits
         isActive: patient.isActive
       });
     }
@@ -81,9 +81,9 @@ export const PatientForm: React.FC<PatientFormProps> = ({
       }
     }
 
-    // For new patients, require an owner
-    if (!patient && !formData.ownerId) {
-      errors.ownerId = 'Please select an owner for the new patient';
+    // For new patients, require a household
+    if (!patient && !formData.householdId) {
+      errors.householdId = 'Please select or create a household for the new patient';
     }
 
     setValidationErrors(errors);
@@ -108,7 +108,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({
         weight: formData.weight ? parseFloat(formData.weight) : undefined,
         microchipId: formData.microchipId.trim() || undefined,
         notes: formData.notes.trim() || undefined,
-        ...(patient ? { isActive: formData.isActive } : { ownerId: formData.ownerId })
+        ...(patient ? { isActive: formData.isActive } : { ownerId: formData.householdId })
       };
 
       await onSubmit(submitData);
@@ -265,16 +265,15 @@ export const PatientForm: React.FC<PatientFormProps> = ({
 
         {!patient && (
           <div className="form-group">
-            <label htmlFor="owner">Owner *</label>
-            <OwnerSelect
-              value={formData.ownerId || undefined}
-              onChange={(ownerId) => handleInputChange('ownerId', ownerId)}
+            <label>Household *</label>
+            <HouseholdSearch
+              value={formData.householdId || undefined}
+              onChange={(householdId) => handleInputChange('householdId', householdId)}
               required
-              allowCreate={true}
-              className={validationErrors.ownerId ? 'error' : ''}
+              className={validationErrors.householdId ? 'error' : ''}
             />
-            {validationErrors.ownerId && (
-              <span className="field-error">{validationErrors.ownerId}</span>
+            {validationErrors.householdId && (
+              <span className="field-error">{validationErrors.householdId}</span>
             )}
           </div>
         )}

@@ -8,6 +8,7 @@ import './styles/globals.css';
 import './styles/layout.css';
 import './styles/components.css';
 import './styles/view-switching.css';
+import './styles/household-search.css';
 
 function App() {
   return (

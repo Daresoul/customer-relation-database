@@ -6,6 +6,7 @@ import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   PatientForm,
+  HouseholdSearch,
   ToastContainer,
   ViewToggle,
   SearchView
@@ -23,6 +24,7 @@ import { HouseholdService } from '../services';
 const MainPageContent: React.FC = () => {
   const navigate = useNavigate();
   const [showPatientForm, setShowPatientForm] = useState(false);
+  const [showHouseholdForm, setShowHouseholdForm] = useState(false);
   const [editingPatient, setEditingPatient] = useState<PatientWithOwners | null>(null);
 
   // Hooks
@@ -117,6 +119,10 @@ const MainPageContent: React.FC = () => {
   };
 
   // Household handlers
+  const handleCreateHousehold = () => {
+    setShowHouseholdForm(true);
+  };
+
   const handleEditHousehold = (household: HouseholdSearchResult) => {
     // View-only for now
     console.log('View household:', household);
@@ -125,6 +131,45 @@ const MainPageContent: React.FC = () => {
 
   const handleDeleteHousehold = async (household: HouseholdSearchResult) => {
     showError('Not Available', 'Household deletion is not available');
+  };
+
+  const handleHouseholdFormSubmit = async (householdData: any) => {
+    try {
+      // TODO: Implement proper household creation with multiple people
+      // For now, create as owner using the first person
+      if (householdData.people && householdData.people[0]) {
+        const firstPerson = householdData.people[0];
+        const ownerData = {
+          firstName: firstPerson.firstName,
+          lastName: firstPerson.lastName,
+          email: firstPerson.email || '',
+          phone: firstPerson.phone || '',
+          address: householdData.address || ''
+        };
+
+        // Use the owner service to create
+        const response = await HouseholdService.createHousehold({
+          householdName: householdData.householdName,
+          firstName: ownerData.firstName,
+          lastName: ownerData.lastName,
+          email: ownerData.email,
+          phone: ownerData.phone,
+          address: ownerData.address
+        });
+
+        showSuccess('Household Created', `${householdData.householdName} has been created successfully.`);
+        setShowHouseholdForm(false);
+
+        // Refresh the households list
+        await refreshHouseholds();
+      }
+    } catch (error: any) {
+      showError('Creation Failed', error?.message || 'Failed to create household');
+    }
+  };
+
+  const handleHouseholdFormCancel = () => {
+    setShowHouseholdForm(false);
   };
 
 
@@ -165,6 +210,30 @@ const MainPageContent: React.FC = () => {
     }
   };
 
+  // Show household form if creating household
+  if (showHouseholdForm) {
+    return (
+      <div className="main-page">
+        <div className="page-header">
+          <h1>Veterinary Clinic Manager</h1>
+        </div>
+
+        <div className="page-content">
+          <HouseholdSearch
+            value={undefined}
+            onChange={() => {}}
+            onCreateHousehold={handleHouseholdFormSubmit}
+            onCancel={handleHouseholdFormCancel}
+            startInCreateMode={true}
+            className="standalone-household-form"
+          />
+        </div>
+
+        <ToastContainer toasts={toasts} onClose={removeToast} />
+      </div>
+    );
+  }
+
   // Show patient form if editing/creating patient
   if (showPatientForm) {
     return (
@@ -204,15 +273,13 @@ const MainPageContent: React.FC = () => {
             className="view-toggle-header"
           />
 
-          {isAnimalView && (
-            <button
-              onClick={handleCreatePatient}
-              className="btn btn-primary"
-              disabled={viewLoading}
-            >
-              Add New Patient
-            </button>
-          )}
+          <button
+            onClick={isAnimalView ? handleCreatePatient : handleCreateHousehold}
+            className="btn btn-primary"
+            disabled={viewLoading}
+          >
+            Add New {isAnimalView ? 'Patient' : 'Household'}
+          </button>
         </div>
       </div>
 
@@ -234,7 +301,7 @@ const MainPageContent: React.FC = () => {
             (item: PatientWithOwners | HouseholdSearchResult) => handleDeletePatient(item as PatientWithOwners) :
             (item: PatientWithOwners | HouseholdSearchResult) => handleDeleteHousehold(item as HouseholdSearchResult)
           }
-          onCreateItem={isAnimalView ? handleCreatePatient : undefined}
+          onCreateItem={isAnimalView ? handleCreatePatient : handleCreateHousehold}
         />
       </div>
 
