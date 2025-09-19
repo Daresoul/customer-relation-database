@@ -92,6 +92,7 @@ pub struct HouseholdSearchResult {
     pub household_name: Option<String>,
     pub address: Option<String>,
     pub people: Vec<PersonWithContacts>,
+    pub pet_count: i32,
     pub relevance_score: f64,
     pub snippet: Option<String>,
 }
@@ -108,6 +109,7 @@ pub struct SearchHouseholdsResponse {
 pub struct HouseholdWithPeople {
     pub household: Household,
     pub people: Vec<PersonWithContacts>,
+    pub pet_count: i32,
 }
 
 // For patient creation with household

@@ -2,13 +2,14 @@
  * Main App component with React Router setup
  */
 
-import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MainPage, PatientDetailPage, OwnerDetailPage } from './pages';
 import './styles/globals.css';
 import './styles/layout.css';
 import './styles/components.css';
+import './styles/view-switching.css';
+import './styles/household-search.css';
 
 // Create a client
 const queryClient = new QueryClient({

@@ -110,6 +110,7 @@ pub async fn create_household_with_people(
     Ok(HouseholdWithPeople {
         household,
         people: people_with_contacts,
+        pet_count: 0,  // TODO: Calculate pet count if needed
     })
 }
 
@@ -267,6 +268,7 @@ async fn create_household_with_people_tx(
     Ok(HouseholdWithPeople {
         household,
         people: people_with_contacts,
+        pet_count: 0,  // TODO: Calculate pet count if needed
     })
 }
 
@@ -349,9 +351,24 @@ pub async fn get_household_with_people(
         });
     }
 
+    // Get pet count for this household
+    let pet_count_row = sqlx::query(
+        r#"
+        SELECT COUNT(*) as count
+        FROM patient_households
+        WHERE household_id = ?
+        "#
+    )
+    .bind(household_id)
+    .fetch_one(pool)
+    .await?;
+
+    let pet_count: i64 = pet_count_row.get("count");
+
     Ok(Some(HouseholdWithPeople {
         household,
         people: people_with_contacts,
+        pet_count: pet_count as i32,
     }))
 }
 

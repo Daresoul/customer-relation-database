@@ -313,3 +313,110 @@ export async function rebuildHouseholdSearchIndex(): Promise<void> {
     throw error;
   }
 }
+
+// Backward compatibility wrapper class
+export class HouseholdService {
+  static async searchHouseholdsSimple(query: string): Promise<any[]> {
+    const response = await searchHouseholds(query);
+    return response.results.map(result => ({
+      id: result.id,
+      householdName: result.householdName,
+      address: result.address,
+      contacts: result.people.flatMap(person =>
+        person.contacts.map(contact => ({
+          type: contact.contactType,
+          value: contact.contactValue,
+          isPrimary: contact.isPrimary
+        }))
+      ),
+      petCount: 0 // TODO: Implement pet count
+    }));
+  }
+
+  static async createHousehold(data: any): Promise<any> {
+    // Check if it's the new format with people array
+    if (data.people && Array.isArray(data.people)) {
+      const dto: CreateHouseholdWithPeopleDto = {
+        household: {
+          householdName: data.householdName,
+          address: data.address || undefined,
+          notes: undefined
+        },
+        people: data.people.map((p: any) => ({
+          person: {
+            firstName: p.firstName || '',
+            lastName: p.lastName || '',
+            isPrimary: p.isPrimary || false
+          },
+          contacts: [
+            p.email && {
+              contactType: 'email',
+              contactValue: p.email,
+              isPrimary: true
+            },
+            p.phone && {
+              contactType: 'phone',
+              contactValue: p.phone,
+              isPrimary: !p.email
+            },
+            p.mobile && {
+              contactType: 'mobile',
+              contactValue: p.mobile,
+              isPrimary: false
+            },
+            p.workPhone && {
+              contactType: 'work',
+              contactValue: p.workPhone,
+              isPrimary: false
+            }
+          ].filter(Boolean) as any[]
+        }))
+      };
+
+      const result = await createHouseholdWithPeople(dto);
+      return {
+        id: result.household.id,
+        householdName: result.household.householdName
+      };
+    }
+
+    // Old format for backward compatibility
+    const dto: CreateHouseholdWithPeopleDto = {
+      household: {
+        householdName: data.householdName,
+        address: data.address || undefined,
+        notes: undefined
+      },
+      people: [{
+        person: {
+          firstName: data.firstName || '',
+          lastName: data.lastName || '',
+          isPrimary: true
+        },
+        contacts: []
+      }]
+    };
+
+    if (data.email) {
+      dto.people[0].contacts.push({
+        contactType: 'email',
+        contactValue: data.email,
+        isPrimary: true
+      });
+    }
+
+    if (data.phone) {
+      dto.people[0].contacts.push({
+        contactType: 'phone',
+        contactValue: data.phone,
+        isPrimary: !data.email
+      });
+    }
+
+    const result = await createHouseholdWithPeople(dto);
+    return {
+      id: result.household.id,
+      householdName: result.household.householdName
+    };
+  }
+}

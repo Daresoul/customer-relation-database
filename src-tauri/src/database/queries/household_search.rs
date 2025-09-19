@@ -133,11 +133,26 @@ pub async fn search_households(
             });
         }
 
+        // Get pet count for this household
+        let pet_count_row = sqlx::query(
+            r#"
+            SELECT COUNT(*) as count
+            FROM patient_households
+            WHERE household_id = ?
+            "#
+        )
+        .bind(household_id)
+        .fetch_one(pool)
+        .await?;
+
+        let pet_count: i64 = pet_count_row.get("count");
+
         results.push(HouseholdSearchResult {
             id: household_id as i32,
             household_name: row.get("household_name"),
             address: row.get("address"),
             people: people_with_contacts,
+            pet_count: pet_count as i32,
             relevance_score: row.get::<f64, _>("relevance_score"),
             snippet: row.get("snippet"),
         });
@@ -273,11 +288,26 @@ pub async fn search_households_by_contact(
             });
         }
 
+        // Get pet count for this household
+        let pet_count_row = sqlx::query(
+            r#"
+            SELECT COUNT(*) as count
+            FROM patient_households
+            WHERE household_id = ?
+            "#
+        )
+        .bind(household_id)
+        .fetch_one(pool)
+        .await?;
+
+        let pet_count: i64 = pet_count_row.get("count");
+
         results.push(HouseholdSearchResult {
             id: household_id as i32,
             household_name: household_row.get("household_name"),
             address: household_row.get("address"),
             people: people_with_contacts,
+            pet_count: pet_count as i32,
             relevance_score: 1.0,
             snippet: None,
         });

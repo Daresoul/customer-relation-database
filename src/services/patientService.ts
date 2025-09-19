@@ -39,8 +39,37 @@ export class PatientService {
       medical_notes: input.notes || null,
     };
 
+    console.log('🎯 PatientService: Creating patient with full input:', input);
     console.log('🎯 PatientService: Creating patient with transformed data:', dto);
-    return ApiService.invoke<PatientWithOwners>('create_patient', { dto });
+    console.log('🎯 PatientService: Owner/Household ID from input.ownerId:', input.ownerId);
+
+    // Create the patient
+    const patient = await ApiService.invoke<PatientWithOwners>('create_patient', { dto });
+    console.log('🎯 PatientService: Created patient:', patient);
+
+    // If an owner ID (household ID) was provided, create the relationship
+    if (input.ownerId) {
+      try {
+        console.log('🎯 PatientService: Adding owner relationship for patient:', patient.id, 'owner:', input.ownerId);
+        const relationshipResult = await ApiService.invoke('add_patient_owner', {
+          patientId: patient.id,
+          ownerId: input.ownerId,
+          relationshipType: 'Owner',
+          isPrimary: true
+        });
+        console.log('🎯 PatientService: Relationship created:', relationshipResult);
+
+        // Reload the patient to get the updated owner information
+        const updatedPatient = await ApiService.invoke<PatientWithOwners>('get_patient', { id: patient.id });
+        return updatedPatient;
+      } catch (error) {
+        console.error('Failed to add owner relationship:', error);
+        // Return the patient even if the relationship failed
+        return patient;
+      }
+    }
+
+    return patient;
   }
 
 

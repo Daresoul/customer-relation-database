@@ -79,6 +79,7 @@ export interface HouseholdSearchResult {
   householdName?: string;
   address?: string;
   people: PersonWithContacts[];
+  petCount: number;
   relevanceScore: number;
   snippet?: string;
 }
@@ -93,6 +94,7 @@ export interface SearchHouseholdsResponse {
 export interface HouseholdWithPeople {
   household: Household;
   people: PersonWithContacts[];
+  petCount: number;
 }
 
 // For patient creation with household
