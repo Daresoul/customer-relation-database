@@ -47,6 +47,7 @@ export const HouseholdSearch: React.FC<HouseholdSearchProps> = ({
   const [searchResults, setSearchResults] = useState<HouseholdSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [selectedHousehold, setSelectedHousehold] = useState<HouseholdSearchResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // Creation form state
   const [showCreateForm, setShowCreateForm] = useState(startInCreateMode);
@@ -61,6 +62,7 @@ export const HouseholdSearch: React.FC<HouseholdSearchProps> = ({
       contacts: { email: '', phone: '', mobile: '', workPhone: '' }
     }
   ]);
+  const [fieldErrors, setFieldErrors] = useState<{ [key: string]: string }>({});
 
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
@@ -159,17 +161,50 @@ export const HouseholdSearch: React.FC<HouseholdSearchProps> = ({
 
   // Handle creating the household
   const handleCreate = async () => {
-    // Validate
+    setError(null);
+    const errors: { [key: string]: string } = {};
+
+    // Validate household name
     if (!householdName.trim()) {
-      alert('Household name is required');
+      errors.householdName = 'Household name is required';
+    }
+
+    // Validate people
+    let hasValidPerson = false;
+    people.forEach((person, index) => {
+      if (!person.firstName.trim() && !person.lastName.trim()) {
+        // Skip empty person entries
+        return;
+      }
+      if (!person.firstName.trim()) {
+        errors[`person_${index}_firstName`] = 'First name is required';
+      }
+      if (!person.lastName.trim()) {
+        errors[`person_${index}_lastName`] = 'Last name is required';
+      }
+      if (person.firstName.trim() && person.lastName.trim()) {
+        hasValidPerson = true;
+      }
+
+      // Validate email format if provided
+      if (person.contacts.email && !isValidEmail(person.contacts.email)) {
+        errors[`person_${index}_email`] = 'Invalid email format';
+      }
+    });
+
+    if (!hasValidPerson) {
+      setError('At least one person with first and last name is required');
+      setFieldErrors(errors);
+      return;
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setError('Please fix the errors below');
       return;
     }
 
     const validPeople = people.filter(p => p.firstName.trim() && p.lastName.trim());
-    if (validPeople.length === 0) {
-      alert('At least one person with first and last name is required');
-      return;
-    }
 
     if (!validPeople.some(p => p.isPrimary)) {
       validPeople[0].isPrimary = true;
@@ -193,15 +228,39 @@ export const HouseholdSearch: React.FC<HouseholdSearchProps> = ({
       };
 
       if (onCreateHousehold) {
-        await onCreateHousehold(householdData);
-        // Assume the household was created and select it
-        // In real implementation, onCreateHousehold should return the created household
-        setShowCreateForm(false);
-        resetCreateForm();
+        const result = await onCreateHousehold(householdData);
+        // If creation was successful, select the household and close the form
+        if (result && result.id) {
+          onChange(result.id);
+          setSelectedHousehold({
+            id: result.id,
+            householdName: result.householdName || householdData.householdName,
+            address: householdData.address,
+            contacts: [],
+            petCount: 0
+          });
+          setShowCreateForm(false);
+          resetCreateForm();
+        }
+      } else {
+        // If no onCreateHousehold handler, try to create directly
+        const result = await HouseholdService.createHousehold(householdData);
+        if (result && result.id) {
+          onChange(result.id);
+          setSelectedHousehold({
+            id: result.id,
+            householdName: result.householdName || householdData.householdName,
+            address: householdData.address,
+            contacts: [],
+            petCount: 0
+          });
+          setShowCreateForm(false);
+          resetCreateForm();
+        }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to create household:', error);
-      alert('Failed to create household');
+      setError(error?.message || 'Failed to create household. Please try again.');
     } finally {
       setIsCreating(false);
     }
@@ -217,6 +276,8 @@ export const HouseholdSearch: React.FC<HouseholdSearchProps> = ({
       isPrimary: true,
       contacts: { email: '', phone: '', mobile: '', workPhone: '' }
     }]);
+    setError(null);
+    setFieldErrors({});
   };
 
   // Show selected household
@@ -258,16 +319,42 @@ export const HouseholdSearch: React.FC<HouseholdSearchProps> = ({
             <h3>{startInCreateMode ? 'New Household' : 'Create New Household'}</h3>
           </div>
 
+          {error && (
+            <div className="error-message" style={{
+              padding: '0.75rem',
+              backgroundColor: '#fee',
+              border: '1px solid #fcc',
+              borderRadius: '4px',
+              color: '#c00',
+              marginBottom: '1rem'
+            }}>
+              {error}
+            </div>
+          )}
+
           <div className="form-section">
             <label>
               Household Name *
               <input
                 type="text"
                 value={householdName}
-                onChange={(e) => setHouseholdName(e.target.value)}
+                onChange={(e) => {
+                  setHouseholdName(e.target.value);
+                  if (fieldErrors.householdName) {
+                    setFieldErrors(prev => ({ ...prev, householdName: '' }));
+                  }
+                }}
                 placeholder="e.g., Smith Family"
                 disabled={isCreating}
+                style={{
+                  borderColor: fieldErrors.householdName ? '#c00' : undefined
+                }}
               />
+              {fieldErrors.householdName && (
+                <span style={{ color: '#c00', fontSize: '0.875rem', marginTop: '0.25rem', display: 'block' }}>
+                  {fieldErrors.householdName}
+                </span>
+              )}
             </label>
 
             <label>
@@ -318,15 +405,31 @@ export const HouseholdSearch: React.FC<HouseholdSearchProps> = ({
                     type="text"
                     placeholder="First Name *"
                     value={person.firstName}
-                    onChange={(e) => handleUpdatePerson(index, { firstName: e.target.value })}
+                    onChange={(e) => {
+                      handleUpdatePerson(index, { firstName: e.target.value });
+                      if (fieldErrors[`person_${index}_firstName`]) {
+                        setFieldErrors(prev => ({ ...prev, [`person_${index}_firstName`]: '' }));
+                      }
+                    }}
                     disabled={isCreating}
+                    style={{
+                      borderColor: fieldErrors[`person_${index}_firstName`] ? '#c00' : undefined
+                    }}
                   />
                   <input
                     type="text"
                     placeholder="Last Name *"
                     value={person.lastName}
-                    onChange={(e) => handleUpdatePerson(index, { lastName: e.target.value })}
+                    onChange={(e) => {
+                      handleUpdatePerson(index, { lastName: e.target.value });
+                      if (fieldErrors[`person_${index}_lastName`]) {
+                        setFieldErrors(prev => ({ ...prev, [`person_${index}_lastName`]: '' }));
+                      }
+                    }}
                     disabled={isCreating}
+                    style={{
+                      borderColor: fieldErrors[`person_${index}_lastName`] ? '#c00' : undefined
+                    }}
                   />
                   <label className="checkbox-label">
                     <input
@@ -340,13 +443,29 @@ export const HouseholdSearch: React.FC<HouseholdSearchProps> = ({
                 </div>
 
                 <div className="form-row">
-                  <input
-                    type="email"
-                    placeholder="Email"
-                    value={person.contacts.email || ''}
-                    onChange={(e) => handleUpdatePersonContacts(index, { email: e.target.value })}
-                    disabled={isCreating}
-                  />
+                  <div style={{ flex: 1 }}>
+                    <input
+                      type="email"
+                      placeholder="Email"
+                      value={person.contacts.email || ''}
+                      onChange={(e) => {
+                        handleUpdatePersonContacts(index, { email: e.target.value });
+                        if (fieldErrors[`person_${index}_email`]) {
+                          setFieldErrors(prev => ({ ...prev, [`person_${index}_email`]: '' }));
+                        }
+                      }}
+                      disabled={isCreating}
+                      style={{
+                        borderColor: fieldErrors[`person_${index}_email`] ? '#c00' : undefined,
+                        width: '100%'
+                      }}
+                    />
+                    {fieldErrors[`person_${index}_email`] && (
+                      <span style={{ color: '#c00', fontSize: '0.75rem', display: 'block', marginTop: '0.25rem' }}>
+                        {fieldErrors[`person_${index}_email`]}
+                      </span>
+                    )}
+                  </div>
                   <input
                     type="tel"
                     placeholder="Phone"
@@ -472,6 +591,12 @@ export const HouseholdSearch: React.FC<HouseholdSearchProps> = ({
       </div>
     </div>
   );
+};
+
+// Helper function to validate email
+const isValidEmail = (email: string): boolean => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
 };
 
 export default HouseholdSearch;

@@ -135,43 +135,26 @@ const MainPageContent: React.FC = () => {
 
   const handleHouseholdFormSubmit = async (householdData: any) => {
     try {
-      // TODO: Implement proper household creation with multiple people
-      // For now, create as owner using the first person
-      if (householdData.people && householdData.people[0]) {
-        const firstPerson = householdData.people[0];
-        const ownerData = {
-          firstName: firstPerson.firstName,
-          lastName: firstPerson.lastName,
-          email: firstPerson.email || '',
-          phone: firstPerson.phone || '',
-          address: householdData.address || ''
-        };
+      // Create household with the HouseholdService
+      const response = await HouseholdService.createHousehold(householdData);
 
-        // Use the owner service to create
-        const response = await HouseholdService.createHousehold({
-          householdName: householdData.householdName,
-          firstName: ownerData.firstName,
-          lastName: ownerData.lastName,
-          email: ownerData.email,
-          phone: ownerData.phone,
-          address: ownerData.address
-        });
+      showSuccess('Household Created', `${householdData.householdName} has been created successfully.`);
+      setShowHouseholdForm(false);
 
-        showSuccess('Household Created', `${householdData.householdName} has been created successfully.`);
-        setShowHouseholdForm(false);
+      // Refresh the households list
+      await refreshHouseholds();
 
-        // Refresh the households list
-        await refreshHouseholds();
-      }
+      return response; // Return the created household
     } catch (error: any) {
+      console.error('Failed to create household:', error);
       showError('Creation Failed', error?.message || 'Failed to create household');
+      throw error; // Re-throw to let the form handle it
     }
   };
 
   const handleHouseholdFormCancel = () => {
     setShowHouseholdForm(false);
   };
-
 
   const handleFormSubmit = async (data: CreatePatientInput | UpdatePatientInput) => {
     try {
@@ -187,6 +170,7 @@ const MainPageContent: React.FC = () => {
       setShowPatientForm(false);
       setEditingPatient(null);
     } catch (error: any) {
+      console.error('🎯 MainPage: Patient creation/update failed:', error);
       showError(
         editingPatient ? 'Update Failed' : 'Creation Failed',
         error?.message || `Failed to ${editingPatient ? 'update' : 'create'} patient`
