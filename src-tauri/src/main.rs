@@ -92,6 +92,9 @@ fn main() {
             commands::quick_search_households,
             // Debug commands
             commands::debug_database_info,
+            // Database reset commands
+            commands::reset_database,
+            commands::wipe_database_data,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
