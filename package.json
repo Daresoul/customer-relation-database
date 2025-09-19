@@ -13,7 +13,10 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
     "test": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "db:reset": "./scripts/reset-db.sh --reset",
+    "db:wipe": "./scripts/reset-db.sh --wipe",
+    "db:backup-reset": "./scripts/reset-db.sh --backup"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.89.0",
