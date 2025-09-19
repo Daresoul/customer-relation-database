@@ -15,6 +15,7 @@ interface PatientListProps {
   onEditPatient?: (patient: PatientWithOwners) => void;
   onDeletePatient?: (patient: PatientWithOwners) => void;
   onCreatePatient?: () => void;
+  onPatientClick?: (patient: PatientWithOwners) => void;
   className?: string;
 }
 
@@ -25,6 +26,7 @@ export const PatientList: React.FC<PatientListProps> = ({
   onEditPatient,
   onDeletePatient,
   onCreatePatient,
+  onPatientClick,
   className = ''
 }) => {
   if (loading) {
@@ -81,6 +83,7 @@ export const PatientList: React.FC<PatientListProps> = ({
             patient={patient}
             onEdit={onEditPatient ? () => onEditPatient(patient) : undefined}
             onDelete={onDeletePatient ? () => onDeletePatient(patient) : undefined}
+            onClick={onPatientClick ? () => onPatientClick(patient) : undefined}
           />
         ))}
       </div>

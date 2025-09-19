@@ -11,3 +11,8 @@ export { default as PatientCard } from './PatientCard';
 export { default as PatientList } from './PatientList';
 export { default as PatientForm } from './PatientForm';
 export { default as OwnerForm } from './OwnerForm';
+export { default as ViewToggle } from './ViewToggle';
+export { default as SearchView } from './SearchView';
+export { default as HouseholdList } from './HouseholdList';
+export { default as HouseholdSearch } from './HouseholdSearch';
+export { default as HouseholdForm } from './HouseholdForm';

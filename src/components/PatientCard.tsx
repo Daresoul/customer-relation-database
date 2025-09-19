@@ -10,6 +10,7 @@ interface PatientCardProps {
   patient: PatientWithOwners;
   onEdit?: () => void;
   onDelete?: () => void;
+  onClick?: () => void;
   className?: string;
 }
 
@@ -17,6 +18,7 @@ export const PatientCard: React.FC<PatientCardProps> = ({
   patient,
   onEdit,
   onDelete,
+  onClick,
   className = ''
 }) => {
   const primaryOwner = patient.owners?.find(owner => owner.isPrimary);
@@ -56,7 +58,17 @@ export const PatientCard: React.FC<PatientCardProps> = ({
       <div className="patient-card-header">
         <div className="patient-basic-info">
           <h3 className="patient-name">
-            <Link to={`/patients/${patient.id}`}>{patient.name}</Link>
+            {onClick ? (
+              <button
+                onClick={onClick}
+                className="patient-name-button"
+                type="button"
+              >
+                {patient.name}
+              </button>
+            ) : (
+              <Link to={`/patients/${patient.id}`}>{patient.name}</Link>
+            )}
           </h3>
           <p className="patient-species">
             {patient.species}

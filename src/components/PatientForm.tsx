@@ -4,10 +4,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { Patient, CreatePatientInput, UpdatePatientInput } from '../types';
-import { HouseholdSelector } from './household/HouseholdSelector';
-import { HouseholdSearchResult, CreatePatientDto } from '../types/household';
-import OwnerSelect from './OwnerSelect';
+import HouseholdSearch from './HouseholdSearch';
 import LoadingSpinner from './LoadingSpinner';
+import { HouseholdService } from '../services/householdService';
 
 interface PatientFormProps {
   patient?: Patient;
@@ -16,7 +15,6 @@ interface PatientFormProps {
   loading?: boolean;
   error?: string | null;
   className?: string;
-  useHouseholds?: boolean; // Whether to use new household system vs old owner system
 }
 
 export const PatientForm: React.FC<PatientFormProps> = ({
@@ -25,8 +23,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({
   onCancel,
   loading = false,
   error = null,
-  className = '',
-  useHouseholds = true
+  className = ''
 }) => {
   const [formData, setFormData] = useState({
     name: '',
@@ -38,8 +35,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({
     weight: '',
     microchipId: '',
     notes: '',
-    household: null as HouseholdSearchResult | null,
-    ownerId: null as number | null, // Keep for backward compatibility
+    householdId: null as number | null,
     isActive: true
   });
 
@@ -57,8 +53,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({
         weight: patient.weight?.toString() || '',
         microchipId: patient.microchipId || '',
         notes: patient.notes || '',
-        household: null, // Household selection is separate for edits
-        ownerId: null, // Owner selection is separate for edits
+        householdId: null, // Household selection is separate for edits
         isActive: patient.isActive
       });
     }
@@ -87,13 +82,9 @@ export const PatientForm: React.FC<PatientFormProps> = ({
       }
     }
 
-    // For new patients, require household or owner
-    if (!patient) {
-      if (useHouseholds && !formData.household) {
-        errors.household = 'Please select or create a household for the new patient';
-      } else if (!useHouseholds && !formData.ownerId) {
-        errors.ownerId = 'Please select an owner for the new patient';
-      }
+    // For new patients, require a household
+    if (!patient && !formData.householdId) {
+      errors.householdId = 'Please select or create a household for the new patient';
     }
 
     setValidationErrors(errors);
@@ -108,44 +99,20 @@ export const PatientForm: React.FC<PatientFormProps> = ({
     }
 
     try {
-      if (!patient && useHouseholds && formData.household) {
-        // Creating new patient with existing household
-        console.log('🎯 Patient form: Creating patient with household', formData.household);
+      const submitData: CreatePatientInput | UpdatePatientInput = {
+        name: formData.name.trim(),
+        species: formData.species.trim(),
+        breed: formData.breed.trim() || undefined,
+        dateOfBirth: formData.dateOfBirth || undefined,
+        color: formData.color.trim() || undefined,
+        gender: formData.gender || undefined,
+        weight: formData.weight ? parseFloat(formData.weight) : undefined,
+        microchipId: formData.microchipId.trim() || undefined,
+        notes: formData.notes.trim() || undefined,
+        ...(patient ? { isActive: formData.isActive } : { ownerId: formData.householdId })
+      };
 
-        // For now, create the patient normally and let the backend handle any household associations
-        // TODO: Implement proper household-patient association after basic patient creation works
-        const submitData: CreatePatientInput = {
-          name: formData.name.trim(),
-          species: formData.species.trim(),
-          breed: formData.breed.trim() || undefined,
-          dateOfBirth: formData.dateOfBirth || undefined,
-          color: formData.color.trim() || undefined,
-          gender: formData.gender || undefined,
-          weight: formData.weight ? parseFloat(formData.weight) : undefined,
-          microchipId: formData.microchipId.trim() || undefined,
-          notes: formData.notes.trim() || undefined,
-          ownerId: undefined // Will be handled by household relationship
-        };
-
-        console.log('🎯 Patient form: Submitting patient data', submitData);
-        await onSubmit(submitData);
-      } else {
-        // Regular patient creation/update
-        const submitData: CreatePatientInput | UpdatePatientInput = {
-          name: formData.name.trim(),
-          species: formData.species.trim(),
-          breed: formData.breed.trim() || undefined,
-          dateOfBirth: formData.dateOfBirth || undefined,
-          color: formData.color.trim() || undefined,
-          gender: formData.gender || undefined,
-          weight: formData.weight ? parseFloat(formData.weight) : undefined,
-          microchipId: formData.microchipId.trim() || undefined,
-          notes: formData.notes.trim() || undefined,
-          ...(patient ? { isActive: formData.isActive } : { ownerId: formData.ownerId })
-        };
-
-        await onSubmit(submitData);
-      }
+      await onSubmit(submitData);
     } catch (error) {
       console.error('Form submission error:', error);
     }
@@ -299,33 +266,30 @@ export const PatientForm: React.FC<PatientFormProps> = ({
 
         {!patient && (
           <div className="form-group">
-            {useHouseholds ? (
-              <>
-                <label htmlFor="household">Household *</label>
-                <HouseholdSelector
-                  onSelect={(household) => handleInputChange('household', household)}
-                  selectedHousehold={formData.household}
-                  showCreateButton={true}
-                  className={validationErrors.household ? 'error' : ''}
-                />
-                {validationErrors.household && (
-                  <span className="field-error">{validationErrors.household}</span>
-                )}
-              </>
-            ) : (
-              <>
-                <label htmlFor="owner">Owner *</label>
-                <OwnerSelect
-                  value={formData.ownerId || undefined}
-                  onChange={(ownerId) => handleInputChange('ownerId', ownerId)}
-                  required
-                  allowCreate={true}
-                  className={validationErrors.ownerId ? 'error' : ''}
-                />
-                {validationErrors.ownerId && (
-                  <span className="field-error">{validationErrors.ownerId}</span>
-                )}
-              </>
+            <label>Household *</label>
+            <HouseholdSearch
+              value={formData.householdId || undefined}
+              onChange={(householdId) => {
+                handleInputChange('householdId', householdId);
+                // Clear the error when a household is selected
+                if (householdId && validationErrors.householdId) {
+                  setValidationErrors(prev => ({ ...prev, householdId: '' }));
+                }
+              }}
+              onCreateHousehold={async (householdData) => {
+                try {
+                  const result = await HouseholdService.createHousehold(householdData);
+                  return result;
+                } catch (error: any) {
+                  console.error('Failed to create household:', error);
+                  throw error;
+                }
+              }}
+              required
+              className={validationErrors.householdId ? 'error' : ''}
+            />
+            {validationErrors.householdId && (
+              <span className="field-error">{validationErrors.householdId}</span>
             )}
           </div>
         )}
