@@ -1,54 +1,98 @@
 /**
- * Main page with patient list and search functionality
+ * Main page with dual-mode view: Animals and Households
  */
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  PatientList,
-  SearchBar,
   PatientForm,
-  LoadingSpinner,
-  ToastContainer
+  ToastContainer,
+  ViewToggle,
+  SearchView
 } from '../components';
 import {
   usePatients,
-  useSearch,
   useToast,
-  useOwners
+  useViewState,
+  useHouseholds
 } from '../hooks';
-import { PatientWithOwners, CreatePatientInput } from '../types';
+import { ViewProvider } from '../contexts';
+import { PatientWithOwners, CreatePatientInput, UpdatePatientInput, HouseholdSearchResult } from '../types';
+import { HouseholdService } from '../services';
 
-export const MainPage: React.FC = () => {
+const MainPageContent: React.FC = () => {
   const navigate = useNavigate();
   const [showPatientForm, setShowPatientForm] = useState(false);
   const [editingPatient, setEditingPatient] = useState<PatientWithOwners | null>(null);
 
   // Hooks
-  const { patients, loading, error, createPatient, updatePatient, deletePatient } = usePatients();
-  const { createOwner } = useOwners();
-  const {
-    query,
-    results: searchResults,
-    loading: searchLoading,
-    hasQuery,
-    updateQuery,
-    clearSearch
-  } = useSearch();
+  const { patients, loading: patientsLoading, error: patientsError, createPatient, updatePatient, deletePatient } = usePatients();
+  const { households, loading: householdsLoading, error: householdsError, refreshHouseholds } = useHouseholds();
   const { toasts, removeToast, showSuccess, showError } = useToast();
 
-  // Determine which patients to display
-  const displayPatients = hasQuery ? searchResults : patients;
-  const isLoading = hasQuery ? searchLoading : loading;
+  // View state management
+  const {
+    currentView,
+    isLoading: viewLoading,
+    setCurrentView,
+    householdSearchState,
+    currentSearchState,
+    updateAnimalSearch,
+    updateHouseholdSearch,
+    clearCurrentSearch,
+    isAnimalView,
+  } = useViewState();
 
-  const handleSearch = (searchQuery: string) => {
-    updateQuery(searchQuery);
-  };
+  // Determine loading and error states based on current view
+  const loading = isAnimalView ? patientsLoading : householdsLoading;
+  const error = isAnimalView ? patientsError : householdsError;
 
-  const handleClearSearch = () => {
-    clearSearch();
-  };
+  // Search handlers
+  const handleSearch = useCallback(async (searchQuery: string) => {
+    if (isAnimalView) {
+      // Handle animal search
+      if (!searchQuery || searchQuery.trim().length < 2) {
+        updateAnimalSearch('', [], false);
+        return;
+      }
 
+      updateAnimalSearch(searchQuery, [], true);
+      try {
+        // TODO: Implement actual animal search with backend
+        // For now, filter existing patients
+        const filtered = patients.filter(p =>
+          p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          p.species?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          p.breed?.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+        updateAnimalSearch(searchQuery, filtered, false);
+      } catch (error) {
+        console.error('Search failed:', error);
+        updateAnimalSearch(searchQuery, [], false);
+      }
+    } else {
+      // Handle household search
+      if (!searchQuery || searchQuery.trim().length < 2) {
+        updateHouseholdSearch('', [], false);
+        return;
+      }
+
+      updateHouseholdSearch(searchQuery, [], true);
+      try {
+        const results = await HouseholdService.searchHouseholdsSimple(searchQuery);
+        updateHouseholdSearch(searchQuery, results, false);
+      } catch (error) {
+        console.error('Household search failed:', error);
+        updateHouseholdSearch(searchQuery, [], false);
+      }
+    }
+  }, [isAnimalView, updateAnimalSearch, updateHouseholdSearch, patients]);
+
+  const handleClearSearch = useCallback(() => {
+    clearCurrentSearch();
+  }, [clearCurrentSearch]);
+
+  // Animal/Patient handlers
   const handleCreatePatient = () => {
     setEditingPatient(null);
     setShowPatientForm(true);
@@ -72,16 +116,28 @@ export const MainPage: React.FC = () => {
     }
   };
 
-  const handleFormSubmit = async (data: CreatePatientInput) => {
+  // Household handlers
+  const handleEditHousehold = (household: HouseholdSearchResult) => {
+    // View-only for now
+    console.log('View household:', household);
+    showError('Not Available', 'Household editing is not available');
+  };
+
+  const handleDeleteHousehold = async (household: HouseholdSearchResult) => {
+    showError('Not Available', 'Household deletion is not available');
+  };
+
+
+  const handleFormSubmit = async (data: CreatePatientInput | UpdatePatientInput) => {
     try {
       if (editingPatient) {
         // Update existing patient
-        await updatePatient(editingPatient.id, data);
-        showSuccess('Patient Updated', `${data.name} has been updated successfully.`);
+        await updatePatient(editingPatient.id, data as UpdatePatientInput);
+        showSuccess('Patient Updated', `${(data as UpdatePatientInput).name || editingPatient.name} has been updated successfully.`);
       } else {
         // Create new patient
-        await createPatient(data);
-        showSuccess('Patient Created', `${data.name} has been added successfully.`);
+        await createPatient(data as CreatePatientInput);
+        showSuccess('Patient Created', `${(data as CreatePatientInput).name} has been added successfully.`);
       }
       setShowPatientForm(false);
       setEditingPatient(null);
@@ -98,10 +154,18 @@ export const MainPage: React.FC = () => {
     setEditingPatient(null);
   };
 
-  const handlePatientClick = (patient: PatientWithOwners) => {
-    navigate(`/patients/${patient.id}`);
+  const handleItemClick = (item: PatientWithOwners | HouseholdSearchResult) => {
+    if (isAnimalView) {
+      const patient = item as PatientWithOwners;
+      navigate(`/patients/${patient.id}`);
+    } else {
+      const household = item as HouseholdSearchResult;
+      // TODO: Navigate to household detail page
+      console.log('Navigate to household:', household);
+    }
   };
 
+  // Show patient form if editing/creating patient
   if (showPatientForm) {
     return (
       <div className="main-page">
@@ -114,7 +178,6 @@ export const MainPage: React.FC = () => {
             patient={editingPatient || undefined}
             onSubmit={handleFormSubmit}
             onCancel={handleFormCancel}
-            onCreateOwner={createOwner}
           />
         </div>
 
@@ -129,71 +192,63 @@ export const MainPage: React.FC = () => {
         <div className="header-content">
           <h1>Veterinary Clinic Manager</h1>
           <p className="header-subtitle">
-            Manage patient records and owner information
+            Manage {currentView === 'animal' ? 'patient records' : 'household information'}
           </p>
         </div>
 
         <div className="header-actions">
-          <button
-            onClick={handleCreatePatient}
-            className="btn btn-primary"
-          >
-            Add New Patient
-          </button>
+          <ViewToggle
+            currentView={currentView}
+            isLoading={viewLoading}
+            onViewChange={setCurrentView}
+            className="view-toggle-header"
+          />
+
+          {isAnimalView && (
+            <button
+              onClick={handleCreatePatient}
+              className="btn btn-primary"
+              disabled={viewLoading}
+            >
+              Add New Patient
+            </button>
+          )}
         </div>
       </div>
 
       <div className="page-content">
-        <div className="search-section">
-          <SearchBar
-            placeholder="Search patients by name, species, breed, or owner..."
-            onSearch={handleSearch}
-            onClear={handleClearSearch}
-            initialValue={query}
-          />
-
-          {hasQuery && (
-            <div className="search-info">
-              <p>
-                {searchLoading ? (
-                  'Searching...'
-                ) : (
-                  `Found ${searchResults.length} result${searchResults.length !== 1 ? 's' : ''} for "${query}"`
-                )}
-              </p>
-              {!searchLoading && searchResults.length > 0 && (
-                <button
-                  onClick={handleClearSearch}
-                  className="btn btn-sm btn-secondary"
-                >
-                  Show All Patients
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className="patients-section">
-          {error && !hasQuery && (
-            <div className="error-message">
-              <h3>Error Loading Patients</h3>
-              <p>{error}</p>
-            </div>
-          )}
-
-          <PatientList
-            patients={displayPatients}
-            loading={isLoading}
-            error={hasQuery ? null : error}
-            onEditPatient={handleEditPatient}
-            onDeletePatient={handleDeletePatient}
-            onCreatePatient={handleCreatePatient}
-          />
-        </div>
+        <SearchView
+          mode={currentView}
+          searchState={currentSearchState}
+          allItems={isAnimalView ? patients : households}
+          loading={loading}
+          error={error}
+          onSearch={handleSearch}
+          onClear={handleClearSearch}
+          onItemClick={handleItemClick}
+          onEditItem={isAnimalView ?
+            (item: PatientWithOwners | HouseholdSearchResult) => handleEditPatient(item as PatientWithOwners) :
+            (item: PatientWithOwners | HouseholdSearchResult) => handleEditHousehold(item as HouseholdSearchResult)
+          }
+          onDeleteItem={isAnimalView ?
+            (item: PatientWithOwners | HouseholdSearchResult) => handleDeletePatient(item as PatientWithOwners) :
+            (item: PatientWithOwners | HouseholdSearchResult) => handleDeleteHousehold(item as HouseholdSearchResult)
+          }
+          onCreateItem={isAnimalView ? handleCreatePatient : undefined}
+        />
       </div>
 
       <ToastContainer toasts={toasts} onClose={removeToast} />
     </div>
+  );
+};
+
+// Main component with ViewProvider wrapper
+export const MainPage: React.FC = () => {
+  return (
+    <ViewProvider>
+      <MainPageContent />
+    </ViewProvider>
   );
 };
 

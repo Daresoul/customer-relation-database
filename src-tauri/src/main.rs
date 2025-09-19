@@ -69,6 +69,15 @@ fn main() {
             // Database commands
             commands::init_database,
             commands::test_database_connection,
+            // View preference commands
+            commands::get_view_preference,
+            commands::set_view_preference,
+            // Household commands
+            commands::search_households,
+            commands::create_household,
+            commands::get_household,
+            // Debug commands
+            commands::debug_database_info,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

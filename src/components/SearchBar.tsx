@@ -25,6 +25,12 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   const [query, setQuery] = useState(initialValue);
   const debouncedQuery = useDebounce(query, debounceMs);
 
+  // Update internal state when initialValue changes (e.g., view switch)
+  useEffect(() => {
+    setQuery(initialValue);
+  }, [initialValue]);
+
+  // Only trigger search when debouncedQuery actually changes
   useEffect(() => {
     onSearch(debouncedQuery);
   }, [debouncedQuery, onSearch]);

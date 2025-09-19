@@ -7,3 +7,5 @@ export { default as useToast } from './useToast';
 export { default as usePatients } from './usePatients';
 export { default as useOwners } from './useOwners';
 export { default as useSearch } from './useSearch';
+export { default as useViewState } from './useViewState';
+export { useHouseholds } from './useHouseholds';
