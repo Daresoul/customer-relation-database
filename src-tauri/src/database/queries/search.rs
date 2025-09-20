@@ -10,6 +10,7 @@ pub async fn search_patients(pool: &SqlitePool, query: &str) -> Result<Vec<Patie
             p.name,
             p.species,
             p.breed,
+            p.gender,
             p.date_of_birth,
             CAST(p.weight AS REAL) as weight,
             p.medical_notes,
