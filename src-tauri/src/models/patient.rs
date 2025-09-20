@@ -9,6 +9,7 @@ pub struct Patient {
     pub name: String,
     pub species: String,
     pub breed: Option<String>,
+    pub gender: Option<String>,
     pub date_of_birth: Option<NaiveDate>,
     pub weight: Option<f64>,
     pub medical_notes: Option<String>,
