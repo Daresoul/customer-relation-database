@@ -5,17 +5,28 @@ pub async fn search_patients(pool: &SqlitePool, query: &str) -> Result<Vec<Patie
     let search_pattern = format!("%{}%", query);
 
     sqlx::query_as::<_, Patient>(
-        "SELECT id, name, species, breed, date_of_birth, weight, medical_notes, created_at, updated_at
-         FROM patients
-         WHERE name LIKE ? OR species LIKE ? OR breed LIKE ? OR medical_notes LIKE ?
+        "SELECT
+            p.id,
+            p.name,
+            p.species,
+            p.breed,
+            p.date_of_birth,
+            CAST(p.weight AS REAL) as weight,
+            p.medical_notes,
+            ph.household_id,
+            p.created_at,
+            p.updated_at
+         FROM patients p
+         LEFT JOIN patient_households ph ON p.id = ph.patient_id AND ph.is_primary = 1
+         WHERE p.name LIKE ? OR p.species LIKE ? OR p.breed LIKE ? OR p.medical_notes LIKE ?
          ORDER BY
            CASE
-             WHEN name LIKE ? THEN 1
-             WHEN species LIKE ? THEN 2
-             WHEN breed LIKE ? THEN 3
+             WHEN p.name LIKE ? THEN 1
+             WHEN p.species LIKE ? THEN 2
+             WHEN p.breed LIKE ? THEN 3
              ELSE 4
            END,
-           name"
+           p.name"
     )
     .bind(&search_pattern)
     .bind(&search_pattern)
