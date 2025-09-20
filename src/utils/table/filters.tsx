@@ -2,6 +2,7 @@
  * T024: Table filters and sorters for Ant Design tables
  */
 
+import React from 'react';
 import dayjs from 'dayjs';
 import type { TableProps } from 'antd/es/table';
 import type { Patient } from '../../types';
@@ -139,7 +140,7 @@ export const searchTableData = <T extends Record<string, any>>(
 /**
  * Apply multiple filters to data
  */
-export const applyTableFilters = <T>(
+export const applyTableFilters = <T extends any>(
   data: T[],
   filters: Array<(data: T[]) => T[]>
 ): T[] => {

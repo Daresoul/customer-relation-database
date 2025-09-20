@@ -21,6 +21,7 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, "004_person_contacts", create_person_contacts_table).await?;
     run_migration(pool, "005_patient_households", create_patient_households_table).await?;
     run_migration(pool, "006_household_search_fts5", create_household_search_fts5).await?;
+    run_migration(pool, "007_add_patient_gender", add_patient_gender).await?;
 
     Ok(())
 }
@@ -367,6 +368,21 @@ fn create_household_search_fts5(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std:
             BEGIN
                 DELETE FROM household_search WHERE household_id = OLD.id;
             END;
+        "#)
+        .execute(pool)
+        .await?;
+
+        Ok(())
+    })
+}
+
+// Migration 007: Add gender column to patients table
+fn add_patient_gender(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        // Add gender column to patients table
+        sqlx::query(r#"
+            ALTER TABLE patients
+            ADD COLUMN gender TEXT CHECK(gender IN ('Male', 'Female', 'Unknown') OR gender IS NULL)
         "#)
         .execute(pool)
         .await?;

@@ -8,6 +8,7 @@ pub async fn get_all_patients(pool: &SqlitePool) -> Result<Vec<Patient>, sqlx::E
             p.name,
             p.species,
             p.breed,
+            p.gender,
             p.date_of_birth,
             CAST(p.weight AS REAL) as weight,
             p.medical_notes,
@@ -29,6 +30,7 @@ pub async fn get_patient_by_id(pool: &SqlitePool, id: i64) -> Result<Option<Pati
             p.name,
             p.species,
             p.breed,
+            p.gender,
             p.date_of_birth,
             CAST(p.weight AS REAL) as weight,
             p.medical_notes,
@@ -84,12 +86,13 @@ pub async fn create_patient(pool: &SqlitePool, dto: CreatePatientDto) -> Result<
 
     // Insert the patient
     let result = sqlx::query(
-        "INSERT INTO patients (name, species, breed, date_of_birth, weight, medical_notes)
-         VALUES (?, ?, ?, ?, ?, ?)"
+        "INSERT INTO patients (name, species, breed, gender, date_of_birth, weight, medical_notes)
+         VALUES (?, ?, ?, ?, ?, ?, ?)"
     )
     .bind(&dto.name)
     .bind(&dto.species)
     .bind(&dto.breed)
+    .bind(&dto.gender)
     .bind(&dto.date_of_birth)
     .bind(&dto.weight)
     .bind(&dto.medical_notes)
@@ -133,6 +136,10 @@ pub async fn update_patient(pool: &SqlitePool, id: i64, dto: UpdatePatientDto) -
         updates.push("breed = ?");
         has_updates = true;
     }
+    if dto.gender.is_some() {
+        updates.push("gender = ?");
+        has_updates = true;
+    }
     if dto.date_of_birth.is_some() {
         updates.push("date_of_birth = ?");
         has_updates = true;
@@ -165,6 +172,9 @@ pub async fn update_patient(pool: &SqlitePool, id: i64, dto: UpdatePatientDto) -
     }
     if let Some(breed) = dto.breed {
         query = query.bind(breed);
+    }
+    if let Some(gender) = dto.gender {
+        query = query.bind(gender);
     }
     if let Some(date_of_birth) = dto.date_of_birth {
         query = query.bind(date_of_birth);
@@ -203,6 +213,7 @@ pub async fn get_patients_by_species(pool: &SqlitePool, species: &str) -> Result
             p.name,
             p.species,
             p.breed,
+            p.gender,
             p.date_of_birth,
             CAST(p.weight AS REAL) as weight,
             p.medical_notes,
