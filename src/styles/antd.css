@@ -1,0 +1,457 @@
+/**
+ * Global Ant Design styles and CSS reset
+ * Dark theme optimized for veterinary clinic application
+ */
+
+/* Import Ant Design reset styles */
+@import 'antd/dist/reset.css';
+
+/* CSS Reset and Base Styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  /* Smooth scrolling */
+  scroll-behavior: smooth;
+  /* Prevent text size adjustment on mobile */
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  /* Dark theme background */
+  background-color: #141414;
+  color: #E6E6E6;
+  /* System font stack */
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  /* Better font rendering */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Tauri-specific styles for desktop app */
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Remove default focus outline and add custom */
+*:focus {
+  outline: none;
+}
+
+*:focus-visible {
+  outline: 2px solid #4A90E2;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Custom scrollbar for dark theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1F1F1F;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #404040;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #4A4A4A;
+}
+
+/* Ant Design Component Overrides for Dark Theme */
+
+/* Layout adjustments */
+.ant-layout {
+  min-height: 100vh;
+  background: #141414;
+}
+
+.ant-layout-header {
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #303030;
+  background: #1F1F1F !important;
+}
+
+.ant-layout-content {
+  padding: 24px;
+  background: #141414;
+}
+
+/* Enhanced table styles for medical data */
+.ant-table-wrapper {
+  background: #1F1F1F;
+  border-radius: 8px;
+}
+
+.ant-table-thead > tr > th {
+  font-weight: 600;
+  background: #262626 !important;
+  border-bottom: 1px solid #303030;
+}
+
+.ant-table-tbody > tr:hover > td {
+  background: #2A2A2A !important;
+}
+
+.ant-table-tbody > tr.ant-table-row-selected > td {
+  background: #303030 !important;
+}
+
+/* Form enhancements */
+.ant-form-item-label > label {
+  color: #E6E6E6;
+  font-weight: 500;
+}
+
+.ant-form-item-label > label.ant-form-item-required::before {
+  color: #FF6B6B !important;
+}
+
+.ant-input,
+.ant-select-selector,
+.ant-picker {
+  background: #1F1F1F !important;
+  border-color: #303030 !important;
+  color: #E6E6E6 !important;
+}
+
+.ant-input:hover,
+.ant-select-selector:hover,
+.ant-picker:hover {
+  border-color: #404040 !important;
+}
+
+.ant-input:focus,
+.ant-select-focused .ant-select-selector,
+.ant-picker-focused {
+  border-color: #4A90E2 !important;
+  box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2) !important;
+}
+
+/* Button enhancements */
+.ant-btn {
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.ant-btn-primary {
+  background: #4A90E2;
+  border-color: #4A90E2;
+}
+
+.ant-btn-primary:hover {
+  background: #69A8E8;
+  border-color: #69A8E8;
+}
+
+.ant-btn-default {
+  background: #262626;
+  border-color: #303030;
+  color: #E6E6E6;
+}
+
+.ant-btn-default:hover {
+  background: #303030;
+  border-color: #404040;
+  color: #E6E6E6;
+}
+
+/* Card styles for content sections */
+.ant-card {
+  background: #1F1F1F;
+  border: 1px solid #303030;
+  border-radius: 8px;
+}
+
+.ant-card-head {
+  background: #262626;
+  border-bottom: 1px solid #303030;
+  color: #E6E6E6;
+}
+
+/* Modal adjustments */
+.ant-modal-content {
+  background: #1F1F1F;
+}
+
+.ant-modal-header {
+  background: #1F1F1F;
+  border-bottom: 1px solid #303030;
+}
+
+.ant-modal-footer {
+  background: #1F1F1F;
+  border-top: 1px solid #303030;
+}
+
+/* Tabs for view switching */
+.ant-tabs-tab {
+  color: #A6A6A6;
+}
+
+.ant-tabs-tab:hover {
+  color: #E6E6E6;
+}
+
+.ant-tabs-tab.ant-tabs-tab-active {
+  color: #4A90E2;
+}
+
+.ant-tabs-ink-bar {
+  background: #4A90E2;
+}
+
+/* Menu styles for navigation */
+.ant-menu-dark {
+  background: #1F1F1F;
+}
+
+.ant-menu-dark .ant-menu-item-selected {
+  background: #2A2A2A !important;
+}
+
+/* Dropdown styles */
+.ant-dropdown-menu {
+  background: #262626;
+  border: 1px solid #303030;
+}
+
+.ant-dropdown-menu-item:hover {
+  background: #303030;
+}
+
+/* Select dropdown */
+.ant-select-dropdown {
+  background: #262626;
+  border: 1px solid #303030;
+}
+
+.ant-select-item-option-active {
+  background: #303030 !important;
+}
+
+.ant-select-item-option-selected {
+  background: #2A2A2A !important;
+}
+
+/* DatePicker dropdown */
+.ant-picker-dropdown {
+  background: #262626;
+}
+
+.ant-picker-panel-container {
+  background: #262626;
+  border: 1px solid #303030;
+}
+
+.ant-picker-cell-in-view.ant-picker-cell-selected .ant-picker-cell-inner {
+  background: #4A90E2;
+}
+
+/* Notification styles */
+.ant-notification-notice {
+  background: #262626;
+  border: 1px solid #303030;
+}
+
+/* Message styles */
+.ant-message-notice-content {
+  background: #262626;
+  border: 1px solid #303030;
+  color: #E6E6E6;
+}
+
+/* Alert component */
+.ant-alert {
+  border-radius: 8px;
+}
+
+/* Tooltip styles */
+.ant-tooltip-inner {
+  background: #262626;
+  color: #E6E6E6;
+}
+
+.ant-tooltip-arrow-content {
+  background: #262626;
+}
+
+/* Empty state */
+.ant-empty-description {
+  color: #8C8C8C;
+}
+
+/* Loading spinner */
+.ant-spin-dot-item {
+  background-color: #4A90E2;
+}
+
+/* Pagination */
+.ant-pagination-item {
+  background: #1F1F1F;
+  border-color: #303030;
+}
+
+.ant-pagination-item a {
+  color: #E6E6E6;
+}
+
+.ant-pagination-item-active {
+  background: #4A90E2;
+  border-color: #4A90E2;
+}
+
+.ant-pagination-item-active a {
+  color: #fff;
+}
+
+/* Breadcrumb */
+.ant-breadcrumb {
+  color: #A6A6A6;
+}
+
+.ant-breadcrumb a {
+  color: #4A90E2;
+}
+
+/* Progress indicators */
+.ant-progress-text {
+  color: #E6E6E6;
+}
+
+/* Badges for status indicators */
+.ant-badge-status-dot {
+  width: 8px;
+  height: 8px;
+}
+
+.ant-badge-status-success {
+  background: #52C41A;
+}
+
+.ant-badge-status-warning {
+  background: #FAAD14;
+}
+
+.ant-badge-status-error {
+  background: #FF6B6B;
+}
+
+/* Dividers */
+.ant-divider {
+  border-color: #303030;
+}
+
+/* Steps component */
+.ant-steps-item-title {
+  color: #E6E6E6 !important;
+}
+
+.ant-steps-item-description {
+  color: #A6A6A6 !important;
+}
+
+/* Utility classes for medical app */
+.text-success {
+  color: #52C41A !important;
+}
+
+.text-warning {
+  color: #FAAD14 !important;
+}
+
+.text-error {
+  color: #FF6B6B !important;
+}
+
+.text-info {
+  color: #4A90E2 !important;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+/* Print styles for medical records */
+@media print {
+  body {
+    background: white;
+    color: black;
+  }
+
+  .ant-layout-header,
+  .ant-layout-sider,
+  .ant-btn,
+  .no-print {
+    display: none !important;
+  }
+
+  .ant-table {
+    border: 1px solid #000;
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .ant-layout-content {
+    padding: 16px;
+  }
+
+  .ant-card {
+    border-radius: 0;
+  }
+
+  .ant-table-wrapper {
+    overflow-x: auto;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .ant-btn-primary {
+    background: #0066CC;
+    border: 2px solid #fff;
+  }
+
+  .ant-input,
+  .ant-select-selector {
+    border-width: 2px !important;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

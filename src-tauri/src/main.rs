@@ -83,6 +83,7 @@ fn main() {
             commands::set_view_preference,
             // Household commands
             commands::search_households,
+            commands::create_household,
             commands::create_household_with_people,
             commands::get_household_with_people,
             commands::get_all_households,
