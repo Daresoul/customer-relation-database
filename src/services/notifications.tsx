@@ -2,6 +2,7 @@
  * T036: Centralized notification system using Ant Design
  */
 
+import React from 'react';
 import { notification, message } from 'antd';
 import {
   CheckCircleOutlined,
