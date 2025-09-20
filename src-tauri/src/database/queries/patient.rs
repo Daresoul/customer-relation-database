@@ -3,9 +3,20 @@ use crate::models::{Patient, CreatePatientDto, UpdatePatientDto, PatientWithOwne
 
 pub async fn get_all_patients(pool: &SqlitePool) -> Result<Vec<Patient>, sqlx::Error> {
     sqlx::query_as::<_, Patient>(
-        "SELECT id, name, species, breed, date_of_birth, weight, medical_notes, created_at, updated_at
-         FROM patients
-         ORDER BY created_at DESC"
+        "SELECT
+            p.id,
+            p.name,
+            p.species,
+            p.breed,
+            p.date_of_birth,
+            CAST(p.weight AS REAL) as weight,
+            p.medical_notes,
+            ph.household_id,
+            p.created_at,
+            p.updated_at
+         FROM patients p
+         LEFT JOIN patient_households ph ON p.id = ph.patient_id AND ph.is_primary = 1
+         ORDER BY p.created_at DESC"
     )
     .fetch_all(pool)
     .await
@@ -13,9 +24,20 @@ pub async fn get_all_patients(pool: &SqlitePool) -> Result<Vec<Patient>, sqlx::E
 
 pub async fn get_patient_by_id(pool: &SqlitePool, id: i64) -> Result<Option<Patient>, sqlx::Error> {
     sqlx::query_as::<_, Patient>(
-        "SELECT id, name, species, breed, date_of_birth, weight, medical_notes, created_at, updated_at
-         FROM patients
-         WHERE id = ?"
+        "SELECT
+            p.id,
+            p.name,
+            p.species,
+            p.breed,
+            p.date_of_birth,
+            CAST(p.weight AS REAL) as weight,
+            p.medical_notes,
+            ph.household_id,
+            p.created_at,
+            p.updated_at
+         FROM patients p
+         LEFT JOIN patient_households ph ON p.id = ph.patient_id AND ph.is_primary = 1
+         WHERE p.id = ?"
     )
     .bind(id)
     .fetch_optional(pool)
@@ -57,6 +79,10 @@ pub async fn get_patient_with_owners(pool: &SqlitePool, id: i64) -> Result<Optio
 }
 
 pub async fn create_patient(pool: &SqlitePool, dto: CreatePatientDto) -> Result<Patient, sqlx::Error> {
+    // Start a transaction
+    let mut tx = pool.begin().await?;
+
+    // Insert the patient
     let result = sqlx::query(
         "INSERT INTO patients (name, species, breed, date_of_birth, weight, medical_notes)
          VALUES (?, ?, ?, ?, ?, ?)"
@@ -67,11 +93,27 @@ pub async fn create_patient(pool: &SqlitePool, dto: CreatePatientDto) -> Result<
     .bind(&dto.date_of_birth)
     .bind(&dto.weight)
     .bind(&dto.medical_notes)
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
 
-    let id = result.last_insert_rowid();
-    get_patient_by_id(pool, id).await.map(|p| p.unwrap())
+    let patient_id = result.last_insert_rowid();
+
+    // If household_id is provided, create the relationship
+    if let Some(household_id) = dto.household_id {
+        sqlx::query(
+            "INSERT INTO patient_households (patient_id, household_id, relationship_type, is_primary)
+             VALUES (?, ?, 'Pet', 1)"
+        )
+        .bind(patient_id)
+        .bind(household_id)
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    // Commit the transaction
+    tx.commit().await?;
+
+    get_patient_by_id(pool, patient_id).await.map(|p| p.unwrap())
 }
 
 pub async fn update_patient(pool: &SqlitePool, id: i64, dto: UpdatePatientDto) -> Result<Option<Patient>, sqlx::Error> {
@@ -156,10 +198,21 @@ pub async fn delete_patient(pool: &SqlitePool, id: i64) -> Result<bool, sqlx::Er
 
 pub async fn get_patients_by_species(pool: &SqlitePool, species: &str) -> Result<Vec<Patient>, sqlx::Error> {
     sqlx::query_as::<_, Patient>(
-        "SELECT id, name, species, breed, date_of_birth, weight, medical_notes, created_at, updated_at
-         FROM patients
-         WHERE species = ?
-         ORDER BY name"
+        "SELECT
+            p.id,
+            p.name,
+            p.species,
+            p.breed,
+            p.date_of_birth,
+            CAST(p.weight AS REAL) as weight,
+            p.medical_notes,
+            ph.household_id,
+            p.created_at,
+            p.updated_at
+         FROM patients p
+         LEFT JOIN patient_households ph ON p.id = ph.patient_id AND ph.is_primary = 1
+         WHERE p.species = ?
+         ORDER BY p.name"
     )
     .bind(species)
     .fetch_all(pool)

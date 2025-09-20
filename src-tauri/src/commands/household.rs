@@ -1,8 +1,119 @@
 use tauri::State;
-use sqlx::Row;
+use sqlx::{Row, query, query_as};
+use serde::Deserialize;
 use crate::database::DatabasePool;
 use crate::models::household::*;
 use crate::database::queries::{household, household_search};
+
+#[derive(Debug, Deserialize)]
+pub struct CreateHouseholdRequest {
+    #[serde(rename = "lastName")]
+    pub last_name: String,
+    pub contacts: Option<Vec<ContactInfo>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ContactInfo {
+    pub name: Option<String>,
+    #[serde(rename = "isPrimary")]
+    pub is_primary: Option<bool>,
+    pub email: Option<String>,
+    pub phone: Option<String>,
+}
+
+#[tauri::command]
+pub async fn create_household(
+    pool: State<'_, DatabasePool>,
+    last_name: String,
+    contacts: Option<Vec<ContactInfo>>,
+) -> Result<Household, String> {
+    let pool = pool.lock().await;
+
+    // Create a simple household
+    let result = sqlx::query(
+        "INSERT INTO households (household_name, address, notes) VALUES (?, ?, ?)"
+    )
+    .bind(&last_name)
+    .bind(None::<String>)  // No address initially
+    .bind(None::<String>)  // No notes initially
+    .execute(&*pool)
+    .await
+    .map_err(|e| format!("Failed to create household: {}", e))?;
+
+    let household_id = result.last_insert_rowid();
+
+    // If contacts were provided with a name, create a person for the household
+    if let Some(contact_list) = contacts {
+        if let Some(first_contact) = contact_list.first() {
+            if let Some(contact_name) = &first_contact.name {
+                // Split the contact name into first and last name
+                let parts: Vec<&str> = contact_name.split_whitespace().collect();
+                let (first_name, last_name_person) = if parts.len() >= 2 {
+                    (parts[0].to_string(), parts[1..].join(" "))
+                } else {
+                    (contact_name.clone(), last_name.clone())
+                };
+
+                // Create a person for this household
+                let person_result = sqlx::query(
+                    "INSERT INTO people (household_id, first_name, last_name, is_primary) VALUES (?, ?, ?, ?)"
+                )
+                .bind(household_id)
+                .bind(&first_name)
+                .bind(&last_name_person)
+                .bind(true)  // Primary contact
+                .execute(&*pool)
+                .await
+                .map_err(|e| format!("Failed to create person: {}", e))?;
+
+                let person_id = person_result.last_insert_rowid();
+
+                // Add email if provided
+                if let Some(email) = &first_contact.email {
+                    if !email.is_empty() {
+                        sqlx::query(
+                            "INSERT INTO person_contacts (person_id, contact_type, contact_value, is_primary) VALUES (?, ?, ?, ?)"
+                        )
+                        .bind(person_id)
+                        .bind("email")
+                        .bind(email)
+                        .bind(true)
+                        .execute(&*pool)
+                        .await
+                        .map_err(|e| format!("Failed to create email contact: {}", e))?;
+                    }
+                }
+
+                // Add phone if provided
+                if let Some(phone) = &first_contact.phone {
+                    if !phone.is_empty() {
+                        sqlx::query(
+                            "INSERT INTO person_contacts (person_id, contact_type, contact_value, is_primary) VALUES (?, ?, ?, ?)"
+                        )
+                        .bind(person_id)
+                        .bind("phone")
+                        .bind(phone)
+                        .bind(first_contact.email.is_none())  // Primary if no email
+                        .execute(&*pool)
+                        .await
+                        .map_err(|e| format!("Failed to create phone contact: {}", e))?;
+                    }
+                }
+            }
+        }
+    }
+
+    // Fetch and return the created household
+    let household = sqlx::query_as::<_, Household>(
+        "SELECT id, household_name, address, notes, created_at, updated_at FROM households WHERE id = ?"
+    )
+    .bind(household_id)
+    .fetch_one(&*pool)
+    .await
+    .map_err(|e| format!("Failed to fetch created household: {}", e))?;
+
+    Ok(household)
+}
 
 #[tauri::command]
 pub async fn create_household_with_people(

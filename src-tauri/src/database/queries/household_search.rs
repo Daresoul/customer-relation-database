@@ -4,15 +4,156 @@ use crate::models::household::*;
 // Sanitize query for FTS5 to prevent syntax errors
 fn sanitize_fts5_query(query: &str) -> String {
     // Remove special FTS5 characters and normalize
-    query
+    let terms: Vec<String> = query
         .chars()
         .filter(|c| c.is_alphanumeric() || c.is_whitespace() || *c == '-' || *c == '@' || *c == '.')
         .collect::<String>()
         .split_whitespace()
         .filter(|s| !s.is_empty())
         .map(|s| format!("{}*", s)) // Add wildcard for prefix matching
-        .collect::<Vec<String>>()
-        .join(" OR ")
+        .collect();
+
+    // Join with OR operator, but only if we have multiple terms
+    if terms.is_empty() {
+        String::new()
+    } else if terms.len() == 1 {
+        terms[0].clone()
+    } else {
+        terms.join(" OR ")
+    }
+}
+
+// Helper function to get all households without search
+async fn get_all_households_internal(
+    pool: &SqlitePool,
+    limit: i32,
+    offset: i32,
+) -> Result<SearchHouseholdsResponse, sqlx::Error> {
+    // Get households directly without FTS5
+    let household_rows = sqlx::query(
+        r#"
+        SELECT
+            id,
+            household_name,
+            address
+        FROM households
+        ORDER BY household_name, id
+        LIMIT ? OFFSET ?
+        "#
+    )
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(pool)
+    .await?;
+
+    // Get total count
+    let total_row = sqlx::query(
+        r#"
+        SELECT COUNT(*) as count
+        FROM households
+        "#
+    )
+    .fetch_one(pool)
+    .await?;
+
+    let total: i32 = total_row.get("count");
+
+    let mut results = Vec::new();
+
+    for row in household_rows {
+        let household_id: i64 = row.get("id");
+
+        // Get people for this household
+        let people_rows = sqlx::query(
+            r#"
+            SELECT
+                p.id,
+                p.first_name,
+                p.last_name,
+                p.is_primary
+            FROM people p
+            WHERE p.household_id = ?
+            ORDER BY p.is_primary DESC, p.last_name, p.first_name
+            "#
+        )
+        .bind(household_id)
+        .fetch_all(pool)
+        .await?;
+
+        let mut people_with_contacts = Vec::new();
+
+        for person_row in people_rows {
+            let person_id: i64 = person_row.get("id");
+
+            // Get contacts for this person
+            let contact_rows = sqlx::query(
+                r#"
+                SELECT
+                    id,
+                    person_id,
+                    contact_type,
+                    contact_value,
+                    is_primary,
+                    created_at
+                FROM person_contacts
+                WHERE person_id = ?
+                ORDER BY is_primary DESC, contact_type
+                "#
+            )
+            .bind(person_id)
+            .fetch_all(pool)
+            .await?;
+
+            let contacts: Vec<PersonContact> = contact_rows.into_iter().map(|contact_row| {
+                PersonContact {
+                    id: contact_row.get::<i32, _>("id"),
+                    person_id: contact_row.get::<i32, _>("person_id"),
+                    contact_type: contact_row.get("contact_type"),
+                    contact_value: contact_row.get("contact_value"),
+                    is_primary: contact_row.get::<bool, _>("is_primary"),
+                    created_at: contact_row.get("created_at"),
+                }
+            }).collect();
+
+            people_with_contacts.push(PersonWithContacts {
+                id: person_id as i32,
+                first_name: person_row.get("first_name"),
+                last_name: person_row.get("last_name"),
+                is_primary: person_row.get::<bool, _>("is_primary"),
+                contacts,
+            });
+        }
+
+        // Get pet count for this household
+        let pet_count_row = sqlx::query(
+            r#"
+            SELECT COUNT(*) as count
+            FROM patient_households
+            WHERE household_id = ?
+            "#
+        )
+        .bind(household_id)
+        .fetch_one(pool)
+        .await?;
+
+        let pet_count: i64 = pet_count_row.get("count");
+
+        results.push(HouseholdSearchResult {
+            id: household_id as i32,
+            household_name: row.get("household_name"),
+            address: row.get("address"),
+            people: people_with_contacts,
+            pet_count: pet_count as i32,
+            relevance_score: 0.0,
+            snippet: None,
+        });
+    }
+
+    Ok(SearchHouseholdsResponse {
+        results,
+        total,
+        has_more: (offset + limit) < total,
+    })
 }
 
 // Search households using FTS5
@@ -25,8 +166,10 @@ pub async fn search_households(
     let limit = limit.unwrap_or(10).min(100); // Max 100 results
     let offset = offset.unwrap_or(0);
 
-    if query.len() < 2 {
-        return Err(sqlx::Error::Protocol("Query must be at least 2 characters".to_string()));
+    // Handle empty or too short queries
+    if query.trim().is_empty() || query.trim().len() < 2 {
+        // For empty queries, return all households (without FTS5 search)
+        return get_all_households_internal(pool, limit, offset).await;
     }
 
     let fts_query = sanitize_fts5_query(query);
