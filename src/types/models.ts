@@ -14,6 +14,8 @@ export interface Patient {
   microchipId?: string;
   notes?: string;
   isActive: boolean;
+  ownerId?: number;
+  householdId?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -55,6 +57,14 @@ export interface OwnerWithPatients extends Owner {
     isPrimary: boolean;
     relationshipType: string
   }>;
+}
+
+export interface PatientWithHousehold extends Patient {
+  household?: {
+    id: number;
+    householdName: string;
+    address?: string;
+  };
 }
 
 export interface DatabaseStats {
