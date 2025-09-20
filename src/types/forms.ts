@@ -12,7 +12,7 @@ export interface CreatePatientInput {
   weight?: number;
   microchipId?: string;
   notes?: string;
-  ownerId?: number; // Initial owner assignment
+  householdId?: number; // Initial household assignment
 }
 
 export interface UpdatePatientInput {
@@ -26,39 +26,4 @@ export interface UpdatePatientInput {
   microchipId?: string;
   notes?: string;
   isActive?: boolean;
-}
-
-export interface CreateOwnerInput {
-  firstName: string;
-  lastName: string;
-  email?: string;
-  phone?: string;
-  address?: string;
-  city?: string;
-  state?: string;
-  zipCode?: string;
-  emergencyContact?: string;
-  emergencyPhone?: string;
-  notes?: string;
-}
-
-export interface UpdateOwnerInput {
-  firstName?: string;
-  lastName?: string;
-  email?: string;
-  phone?: string;
-  address?: string;
-  city?: string;
-  state?: string;
-  zipCode?: string;
-  emergencyContact?: string;
-  emergencyPhone?: string;
-  notes?: string;
-}
-
-export interface AddOwnerRelationshipInput {
-  patientId: number;
-  ownerId: number;
-  isPrimary?: boolean;
-  relationshipType?: 'Owner' | 'Guardian' | 'Emergency Contact';
 }
