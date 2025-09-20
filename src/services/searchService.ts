@@ -3,19 +3,19 @@
  */
 
 import { ApiService } from './api';
-import { PatientWithOwners, SearchParams, ViewType, HouseholdSearchResult } from '../types';
+import { Patient, SearchParams, ViewType, HouseholdSearchResult } from '../types';
 import { HouseholdService } from './householdService';
 
 export class SearchService {
   /**
-   * Search patients and owners with debouncing support
+   * Search patients with debouncing support
    */
-  static async searchPatients(params: SearchParams): Promise<PatientWithOwners[]> {
+  static async searchPatients(params: SearchParams): Promise<Patient[]> {
     if (!params.query || params.query.trim().length < 2) {
       return [];
     }
 
-    return ApiService.invoke<PatientWithOwners[]>('search_patients', {
+    return ApiService.invoke<Patient[]>('search_patients', {
       query: params.query.trim(),
       limit: params.limit || 50
     });
@@ -49,14 +49,6 @@ export class SearchService {
         if (patient.breed && patient.breed.toLowerCase().includes(query.toLowerCase())) {
           suggestions.add(patient.breed);
         }
-
-        // Add owner name suggestions
-        patient.owners.forEach(owner => {
-          const fullName = `${owner.firstName} ${owner.lastName}`;
-          if (fullName.toLowerCase().includes(query.toLowerCase())) {
-            suggestions.add(fullName);
-          }
-        });
       });
 
       return Array.from(suggestions).slice(0, 5);
@@ -84,7 +76,7 @@ export class SearchService {
     query: string,
     mode: ViewType,
     options: { limit?: number } = {}
-  ): Promise<PatientWithOwners[] | HouseholdSearchResult[]> {
+  ): Promise<Patient[] | HouseholdSearchResult[]> {
     if (!query || query.trim().length < 2) {
       return [];
     }

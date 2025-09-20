@@ -1,7 +1,7 @@
 use tauri::State;
 use crate::database::connection::DatabasePool;
 use crate::database::queries::patient as patient_queries;
-use crate::models::{Patient, CreatePatientDto, UpdatePatientDto, PatientWithOwners};
+use crate::models::{Patient, CreatePatientDto, UpdatePatientDto};
 
 #[tauri::command]
 pub async fn get_patients(pool: State<'_, DatabasePool>) -> Result<Vec<Patient>, String> {
@@ -15,14 +15,6 @@ pub async fn get_patients(pool: State<'_, DatabasePool>) -> Result<Vec<Patient>,
 pub async fn get_patient(pool: State<'_, DatabasePool>, id: i64) -> Result<Option<Patient>, String> {
     let pool = pool.lock().await;
     patient_queries::get_patient_by_id(&*pool, id)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub async fn get_patient_with_owners(pool: State<'_, DatabasePool>, id: i64) -> Result<Option<PatientWithOwners>, String> {
-    let pool = pool.lock().await;
-    patient_queries::get_patient_with_owners(&*pool, id)
         .await
         .map_err(|e| e.to_string())
 }
@@ -68,26 +60,16 @@ pub async fn get_patients_by_species(pool: State<'_, DatabasePool>, species: Str
 }
 
 #[tauri::command]
-pub async fn search_patients_by_owner(pool: State<'_, DatabasePool>, owner_query: String) -> Result<Vec<Patient>, String> {
-    let pool = pool.lock().await;
-    crate::database::queries::search::search_patients_by_owner(&*pool, &owner_query)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
 pub async fn advanced_patient_search(
     pool: State<'_, DatabasePool>,
     patient_name: Option<String>,
     species: Option<String>,
-    owner_name: Option<String>,
 ) -> Result<Vec<Patient>, String> {
     let pool = pool.lock().await;
     crate::database::queries::search::advanced_search(
         &*pool,
         patient_name.as_deref(),
         species.as_deref(),
-        owner_name.as_deref(),
     )
     .await
     .map_err(|e| e.to_string())

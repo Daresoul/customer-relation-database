@@ -1,5 +1,5 @@
 use sqlx::SqlitePool;
-use crate::models::{Patient, CreatePatientDto, UpdatePatientDto, PatientWithOwners, Owner};
+use crate::models::{Patient, CreatePatientDto, UpdatePatientDto};
 
 pub async fn get_all_patients(pool: &SqlitePool) -> Result<Vec<Patient>, sqlx::Error> {
     sqlx::query_as::<_, Patient>(
@@ -44,40 +44,6 @@ pub async fn get_patient_by_id(pool: &SqlitePool, id: i64) -> Result<Option<Pati
     .bind(id)
     .fetch_optional(pool)
     .await
-}
-
-pub async fn get_patient_with_owners(pool: &SqlitePool, id: i64) -> Result<Option<PatientWithOwners>, sqlx::Error> {
-    let patient = match get_patient_by_id(pool, id).await? {
-        Some(p) => p,
-        None => return Ok(None),
-    };
-
-    let owners = sqlx::query_as::<_, Owner>(
-        "SELECT o.id, o.first_name, o.last_name, o.email, o.phone, o.address, o.created_at, o.updated_at
-         FROM owners o
-         INNER JOIN patient_owners po ON o.id = po.owner_id
-         WHERE po.patient_id = ?
-         ORDER BY po.is_primary DESC, o.last_name, o.first_name"
-    )
-    .bind(id)
-    .fetch_all(pool)
-    .await?;
-
-    let primary_owner = sqlx::query_as::<_, Owner>(
-        "SELECT o.id, o.first_name, o.last_name, o.email, o.phone, o.address, o.created_at, o.updated_at
-         FROM owners o
-         INNER JOIN patient_owners po ON o.id = po.owner_id
-         WHERE po.patient_id = ? AND po.is_primary = 1"
-    )
-    .bind(id)
-    .fetch_optional(pool)
-    .await?;
-
-    Ok(Some(PatientWithOwners {
-        patient,
-        owners,
-        primary_owner,
-    }))
 }
 
 pub async fn create_patient(pool: &SqlitePool, dto: CreatePatientDto) -> Result<Patient, sqlx::Error> {

@@ -17,11 +17,3 @@ pub struct Patient {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PatientWithOwners {
-    #[serde(flatten)]
-    pub patient: Patient,
-    pub owners: Vec<super::owner::Owner>,
-    pub primary_owner: Option<super::owner::Owner>,
-}
