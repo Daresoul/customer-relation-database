@@ -89,7 +89,7 @@ pub async fn create_household_with_people(
     // Fetch the created household
     let household_row = sqlx::query(
         r#"
-        SELECT id, household_name, address, notes, created_at, updated_at
+        SELECT id, household_name, address, city, postal_code, notes, created_at, updated_at
         FROM households
         WHERE id = ?
         "#
@@ -102,6 +102,8 @@ pub async fn create_household_with_people(
         id: household_row.get::<i32, _>("id"),
         household_name: household_row.get("household_name"),
         address: household_row.get("address"),
+        city: household_row.get("city"),
+        postal_code: household_row.get("postal_code"),
         notes: household_row.get("notes"),
         created_at: household_row.get("created_at"),
         updated_at: household_row.get("updated_at"),
@@ -260,6 +262,8 @@ async fn create_household_with_people_tx(
         id: household_id as i32,
         household_name: dto.household.household_name,
         address: dto.household.address,
+        city: None, // Will be added when DTO is updated
+        postal_code: None, // Will be added when DTO is updated
         notes: dto.household.notes,
         created_at: chrono::Utc::now().naive_utc(),
         updated_at: chrono::Utc::now().naive_utc(),
@@ -280,7 +284,7 @@ pub async fn get_household_with_people(
     // Get household
     let household_row = sqlx::query(
         r#"
-        SELECT id, household_name, address, notes, created_at, updated_at
+        SELECT id, household_name, address, city, postal_code, notes, created_at, updated_at
         FROM households
         WHERE id = ?
         "#
@@ -294,6 +298,8 @@ pub async fn get_household_with_people(
             id: row.get::<i32, _>("id"),
             household_name: row.get("household_name"),
             address: row.get("address"),
+            city: row.get("city"),
+            postal_code: row.get("postal_code"),
             notes: row.get("notes"),
             created_at: row.get("created_at"),
             updated_at: row.get("updated_at"),
@@ -415,4 +421,59 @@ pub async fn delete_household(
     .await?;
 
     Ok(())
+}
+
+// Get a single person with their contacts
+pub async fn get_person_with_contacts(
+    pool: &SqlitePool,
+    person_id: i32,
+) -> Result<Option<PersonWithContacts>, sqlx::Error> {
+    // Get person
+    let person_row = sqlx::query(
+        r#"
+        SELECT id, first_name, last_name, is_primary
+        FROM people
+        WHERE id = ?
+        "#
+    )
+    .bind(person_id)
+    .fetch_optional(pool)
+    .await?;
+
+    let person = match person_row {
+        Some(row) => row,
+        None => return Ok(None),
+    };
+
+    // Get contacts
+    let contact_rows = sqlx::query(
+        r#"
+        SELECT id, person_id, contact_type, contact_value, is_primary, created_at
+        FROM person_contacts
+        WHERE person_id = ?
+        ORDER BY is_primary DESC, contact_type
+        "#
+    )
+    .bind(person_id)
+    .fetch_all(pool)
+    .await?;
+
+    let contacts: Vec<PersonContact> = contact_rows.into_iter().map(|row| {
+        PersonContact {
+            id: row.get::<i32, _>("id"),
+            person_id: row.get::<i32, _>("person_id"),
+            contact_type: row.get("contact_type"),
+            contact_value: row.get("contact_value"),
+            is_primary: row.get::<bool, _>("is_primary"),
+            created_at: row.get("created_at"),
+        }
+    }).collect();
+
+    Ok(Some(PersonWithContacts {
+        id: person_id,
+        first_name: person.get("first_name"),
+        last_name: person.get("last_name"),
+        is_primary: person.get::<bool, _>("is_primary"),
+        contacts,
+    }))
 }

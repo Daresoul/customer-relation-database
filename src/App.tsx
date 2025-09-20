@@ -6,6 +6,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { App as AntApp } from 'antd';
 import { MainDashboard } from './pages/MainDashboard';
+import { HouseholdDetail } from './pages/HouseholdDetail';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ViewProvider } from './contexts';
 
@@ -35,6 +36,7 @@ function App() {
               <div className="App">
                 <Routes>
                   <Route path="/" element={<MainDashboard />} />
+                  <Route path="/households/:id" element={<HouseholdDetail />} />
                 </Routes>
               </div>
             </Router>
