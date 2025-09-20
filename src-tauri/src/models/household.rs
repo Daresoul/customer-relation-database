@@ -6,6 +6,8 @@ pub struct Household {
     pub id: i32,
     pub household_name: Option<String>,
     pub address: Option<String>,
+    pub city: Option<String>,
+    pub postal_code: Option<String>,
     pub notes: Option<String>,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,

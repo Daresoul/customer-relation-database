@@ -3,6 +3,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   Table,
   Tag,
@@ -98,7 +99,9 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
         <Space>
           <HomeOutlined style={{ color: '#4A90E2' }} />
           <div>
-            <Text strong>{text}</Text>
+            <RouterLink to={`/households/${record.id}`} style={{ textDecoration: 'none' }}>
+              <Text strong style={{ color: '#1890ff', cursor: 'pointer' }}>{text}</Text>
+            </RouterLink>
             <br />
             <Text type="secondary" style={{ fontSize: '12px' }}>
               ID: #{record.id}

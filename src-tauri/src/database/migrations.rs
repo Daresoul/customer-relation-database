@@ -1,4 +1,4 @@
-use sqlx::SqlitePool;
+use sqlx::{SqlitePool, Row};
 
 pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     // Create migrations tracking table
@@ -22,6 +22,7 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, "005_patient_households", create_patient_households_table).await?;
     run_migration(pool, "006_household_search_fts5", create_household_search_fts5).await?;
     run_migration(pool, "007_add_patient_gender", add_patient_gender).await?;
+    run_migration(pool, "008_add_household_location_fields", add_household_location_fields).await?;
 
     Ok(())
 }
@@ -386,6 +387,48 @@ fn add_patient_gender(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::F
         "#)
         .execute(pool)
         .await?;
+
+        Ok(())
+    })
+}
+
+fn add_household_location_fields(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        // Check if columns already exist first
+        let table_info = sqlx::query("PRAGMA table_info(households)")
+            .fetch_all(pool)
+            .await?;
+
+        let has_city = table_info.iter().any(|row| {
+            row.get::<String, _>("name") == "city"
+        });
+
+        let has_postal_code = table_info.iter().any(|row| {
+            row.get::<String, _>("name") == "postal_code"
+        });
+
+        // Add city column if it doesn't exist
+        if !has_city {
+            sqlx::query("ALTER TABLE households ADD COLUMN city TEXT")
+                .execute(pool)
+                .await?;
+        }
+
+        // Add postal_code column if it doesn't exist
+        if !has_postal_code {
+            sqlx::query("ALTER TABLE households ADD COLUMN postal_code TEXT")
+                .execute(pool)
+                .await?;
+        }
+
+        // Create indexes for new fields
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_households_city ON households(city)")
+            .execute(pool)
+            .await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_households_postal ON households(postal_code)")
+            .execute(pool)
+            .await?;
 
         Ok(())
     })

@@ -3,6 +3,8 @@ export interface Household {
   id: number;
   householdName?: string;
   address?: string;
+  city?: string;
+  postalCode?: string;
   notes?: string;
   createdAt: string;
   updatedAt: string;
@@ -95,6 +97,23 @@ export interface HouseholdWithPeople {
   household: Household;
   people: PersonWithContacts[];
   petCount: number;
+}
+
+// Patient/Animal type for display
+export interface Patient {
+  id: number;
+  name: string;
+  species: string;
+  breed?: string;
+  dateOfBirth?: string;
+  weight?: number;
+  gender?: 'male' | 'female' | 'unknown';
+  status?: 'active' | 'inactive';
+}
+
+// Household detail view with patients
+export interface HouseholdDetailView extends HouseholdWithPeople {
+  patients: Patient[];
 }
 
 // For patient creation with household

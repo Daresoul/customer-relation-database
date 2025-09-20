@@ -56,6 +56,14 @@ fn main() {
             commands::delete_household,
             commands::quick_search_households,
             commands::rebuild_household_search_index,
+            // New household detail view commands
+            commands::get_household_detail,
+            commands::update_household_fields,
+            commands::add_person_to_household,
+            commands::update_person,
+            commands::delete_person,
+            commands::update_person_contacts,
+            commands::get_household_patients,
             // Database commands
             commands::init_database,
             commands::test_database_connection,
