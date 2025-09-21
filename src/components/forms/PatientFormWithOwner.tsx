@@ -480,19 +480,6 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
           </>
         )}
 
-        {/* Notes */}
-        <Row gutter={16}>
-          <Col xs={24}>
-            <Form.Item name="notes" label="Notes">
-              <TextArea
-                rows={4}
-                placeholder="Enter any additional notes..."
-                maxLength={500}
-                showCount
-              />
-            </Form.Item>
-          </Col>
-        </Row>
 
         {/* Form Actions */}
         <Form.Item>

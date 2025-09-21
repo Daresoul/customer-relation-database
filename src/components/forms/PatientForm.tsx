@@ -238,22 +238,6 @@ export const PatientForm: React.FC<PatientFormProps> = ({
           </Col>
         </Row>
 
-        <Row gutter={16}>
-          <Col xs={24}>
-            <Form.Item
-              name="notes"
-              label="Notes"
-              rules={[{ max: 500, message: 'Notes cannot exceed 500 characters' }]}
-            >
-              <TextArea
-                rows={4}
-                placeholder="Enter any additional notes"
-                showCount
-                maxLength={500}
-              />
-            </Form.Item>
-          </Col>
-        </Row>
 
         <Row gutter={16}>
           <Col xs={24}>
