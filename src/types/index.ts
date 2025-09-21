@@ -5,3 +5,4 @@
 export * from './models';
 export * from './forms';
 export * from './api';
+export * from './patient';

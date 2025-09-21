@@ -1,0 +1,359 @@
+openapi: 3.0.0
+info:
+  title: Patient Detail API
+  version: 1.0.0
+  description: API contracts for Pet/Patient detail view operations
+
+paths:
+  /api/patients/{id}:
+    get:
+      summary: Get patient details by ID
+      operationId: getPatientDetail
+      tags:
+        - Patients
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          description: Patient ID
+      responses:
+        '200':
+          description: Patient details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientDetail'
+        '404':
+          description: Patient not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '400':
+          description: Invalid patient ID format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      summary: Update patient information
+      operationId: updatePatient
+      tags:
+        - Patients
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          description: Patient ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePatientInput'
+      responses:
+        '200':
+          description: Patient updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Patient'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '404':
+          description: Patient not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: Delete a patient (soft delete)
+      operationId: deletePatient
+      tags:
+        - Patients
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          description: Patient ID
+      responses:
+        '200':
+          description: Patient deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteResponse'
+        '404':
+          description: Patient not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Cannot delete patient with active records
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    Patient:
+      type: object
+      required:
+        - id
+        - name
+        - species
+        - isActive
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+          description: Unique patient identifier
+        name:
+          type: string
+          maxLength: 100
+          description: Patient name
+        species:
+          type: string
+          enum: [dog, cat, bird, rabbit, hamster, guinea_pig, reptile, other]
+          description: Animal species
+        breed:
+          type: string
+          maxLength: 50
+          nullable: true
+          description: Animal breed
+        gender:
+          type: string
+          enum: [Male, Female, Unknown]
+          nullable: true
+          description: Patient gender
+        dateOfBirth:
+          type: string
+          format: date
+          nullable: true
+          description: Birth date in YYYY-MM-DD format
+        weight:
+          type: number
+          format: float
+          minimum: 0.01
+          maximum: 500
+          nullable: true
+          description: Weight in kilograms
+        color:
+          type: string
+          maxLength: 50
+          nullable: true
+          description: Animal color/markings
+        microchipId:
+          type: string
+          maxLength: 20
+          pattern: '^[A-Za-z0-9]*$'
+          nullable: true
+          description: Microchip identification number
+        medicalNotes:
+          type: string
+          maxLength: 5000
+          nullable: true
+          description: Medical notes and conditions
+        isActive:
+          type: boolean
+          description: Whether the patient record is active
+        householdId:
+          type: integer
+          nullable: true
+          description: Associated household ID
+        createdAt:
+          type: string
+          format: date-time
+          description: Record creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+
+    PatientDetail:
+      allOf:
+        - $ref: '#/components/schemas/Patient'
+        - type: object
+          properties:
+            age:
+              type: object
+              nullable: true
+              properties:
+                years:
+                  type: integer
+                months:
+                  type: integer
+                display:
+                  type: string
+                  description: Human-readable age
+            household:
+              type: object
+              nullable: true
+              properties:
+                id:
+                  type: integer
+                householdName:
+                  type: string
+                address:
+                  type: string
+                  nullable: true
+                city:
+                  type: string
+                  nullable: true
+                postalCode:
+                  type: string
+                  nullable: true
+                primaryContact:
+                  type: object
+                  nullable: true
+                  properties:
+                    id:
+                      type: integer
+                    firstName:
+                      type: string
+                    lastName:
+                      type: string
+                    isPrimary:
+                      type: boolean
+                    contacts:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          id:
+                            type: integer
+                          type:
+                            type: string
+                            enum: [phone, email, mobile]
+                          value:
+                            type: string
+                          isPrimary:
+                            type: boolean
+                people:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      firstName:
+                        type: string
+                      lastName:
+                        type: string
+                      isPrimary:
+                        type: boolean
+
+    UpdatePatientInput:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        species:
+          type: string
+          enum: [dog, cat, bird, rabbit, hamster, guinea_pig, reptile, other]
+        breed:
+          type: string
+          maxLength: 50
+          nullable: true
+        gender:
+          type: string
+          enum: [Male, Female, Unknown]
+          nullable: true
+        dateOfBirth:
+          type: string
+          format: date
+          nullable: true
+        weight:
+          type: number
+          format: float
+          minimum: 0.01
+          maximum: 500
+          nullable: true
+        color:
+          type: string
+          maxLength: 50
+          nullable: true
+        microchipId:
+          type: string
+          maxLength: 20
+          pattern: '^[A-Za-z0-9]*$'
+          nullable: true
+        medicalNotes:
+          type: string
+          maxLength: 5000
+          nullable: true
+        householdId:
+          type: integer
+          nullable: true
+
+    DeleteResponse:
+      type: object
+      required:
+        - success
+        - message
+        - redirectTo
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        redirectTo:
+          type: string
+          description: Path to redirect after deletion
+
+    ErrorResponse:
+      type: object
+      required:
+        - success
+        - message
+      properties:
+        success:
+          type: boolean
+          default: false
+        message:
+          type: string
+        code:
+          type: string
+
+    ValidationErrorResponse:
+      type: object
+      required:
+        - success
+        - errors
+      properties:
+        success:
+          type: boolean
+          default: false
+        errors:
+          type: array
+          items:
+            type: object
+            required:
+              - field
+              - message
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+              value:
+                type: any

@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { App as AntApp } from 'antd';
 import { MainDashboard } from './pages/MainDashboard';
 import { HouseholdDetail } from './pages/HouseholdDetail';
+import { PatientDetail } from './pages/PatientDetail';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ViewProvider } from './contexts';
 
@@ -37,6 +38,7 @@ function App() {
                 <Routes>
                   <Route path="/" element={<MainDashboard />} />
                   <Route path="/households/:id" element={<HouseholdDetail />} />
+                  <Route path="/patients/:id" element={<PatientDetail />} />
                 </Routes>
               </div>
             </Router>

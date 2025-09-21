@@ -3,6 +3,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Table,
   Tag,
@@ -47,6 +48,7 @@ export const PatientTable: React.FC<PatientTableProps> = ({
   onEdit,
   onDelete,
 }) => {
+  const navigate = useNavigate();
   const [searchText, setSearchText] = useState('');
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
@@ -125,10 +127,16 @@ export const PatientTable: React.FC<PatientTableProps> = ({
       width: 150,
       fixed: 'left',
       sorter: (a, b) => (a.name || '').localeCompare(b.name || ''),
-      render: (text) => (
+      render: (text, record) => (
         <Space>
           <HeartOutlined style={{ color: '#ff69b4' }} />
-          <Text strong>{text}</Text>
+          <Button
+            type="link"
+            style={{ padding: 0, fontWeight: 600 }}
+            onClick={() => navigate(`/patients/${record.id}`)}
+          >
+            {text}
+          </Button>
         </Space>
       ),
     },
@@ -259,73 +267,6 @@ export const PatientTable: React.FC<PatientTableProps> = ({
       width: 120,
       render: (date) => dayjs(date).format('MMM D, YYYY'),
       sorter: (a, b) => dayjs(a.createdAt).unix() - dayjs(b.createdAt).unix(),
-    },
-    {
-      title: 'Actions',
-      key: 'actions',
-      fixed: 'right',
-      width: 120,
-      render: (_, record) => {
-        const menuItems = [
-          {
-            key: 'view',
-            icon: <EyeOutlined />,
-            label: 'View Details',
-            onClick: () => onView?.(record),
-          },
-          {
-            key: 'edit',
-            icon: <EditOutlined />,
-            label: 'Edit',
-            onClick: () => onEdit?.(record),
-          },
-          {
-            type: 'divider' as const,
-          },
-          {
-            key: 'delete',
-            icon: <DeleteOutlined />,
-            label: 'Delete',
-            danger: true,
-            onClick: () => onDelete?.(record),
-          },
-        ];
-
-        return (
-          <Space size="small">
-            <Tooltip title="View">
-              <span>
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<EyeOutlined />}
-                  onClick={() => onView?.(record)}
-                />
-              </span>
-            </Tooltip>
-            <Tooltip title="Edit">
-              <span>
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<EditOutlined />}
-                  onClick={() => onEdit?.(record)}
-                />
-              </span>
-            </Tooltip>
-            <Dropdown
-              menu={{ items: menuItems }}
-              trigger={['click']}
-            >
-              <Button
-                type="text"
-                size="small"
-                icon={<MoreOutlined />}
-              />
-            </Dropdown>
-          </Space>
-        );
-      },
     },
   ];
 

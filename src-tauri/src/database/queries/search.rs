@@ -12,8 +12,11 @@ pub async fn search_patients(pool: &SqlitePool, query: &str) -> Result<Vec<Patie
             p.breed,
             p.gender,
             p.date_of_birth,
+            p.color,
             CAST(p.weight AS REAL) as weight,
+            p.microchip_id,
             p.medical_notes,
+            p.is_active,
             ph.household_id,
             p.created_at,
             p.updated_at
@@ -52,8 +55,8 @@ pub async fn advanced_search(
     }
 
     let base_query = "SELECT p.id, p.name, p.species, p.breed, p.gender, p.date_of_birth,
-                      CAST(p.weight AS REAL) as weight, p.medical_notes,
-                      ph.household_id, p.created_at, p.updated_at
+                      p.color, CAST(p.weight AS REAL) as weight, p.microchip_id, p.medical_notes,
+                      p.is_active, ph.household_id, p.created_at, p.updated_at
                       FROM patients p
                       LEFT JOIN patient_households ph ON p.id = ph.patient_id AND ph.is_primary = 1";
 

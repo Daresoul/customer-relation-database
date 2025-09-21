@@ -9,7 +9,52 @@ import {
   UpdatePatientInput
 } from '../types';
 
+// Backend response type (snake_case)
+interface PatientResponse {
+  id: number;
+  name: string;
+  species: string;
+  breed?: string | null;
+  date_of_birth?: string | null;
+  color?: string | null;
+  gender?: string | null;
+  weight?: number | null;
+  microchip_id?: string | null;
+  medical_notes?: string | null;
+  is_active: boolean;
+  household_id?: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export class PatientService {
+  /**
+   * Transform backend response to match frontend Patient type
+   * Note: Some fields don't exist in the current database schema
+   */
+  private static transformResponse(response: any): Patient {
+    // Handle null values explicitly - don't convert null to undefined for dateOfBirth
+    const dateOfBirth = response.dateOfBirth !== undefined ? response.dateOfBirth :
+                        response.date_of_birth !== undefined ? response.date_of_birth :
+                        undefined;
+
+    return {
+      id: response.id,
+      name: response.name,
+      species: response.species,
+      breed: response.breed || undefined,
+      dateOfBirth: dateOfBirth,
+      color: response.color || undefined, // Not in database yet
+      gender: response.gender || undefined, // Not in database yet
+      weight: response.weight || undefined,
+      microchipId: response.microchipId || response.microchip_id || undefined, // Not in database yet
+      notes: response.medicalNotes || response.medical_notes || undefined,
+      isActive: response.isActive ?? response.is_active ?? true, // Not in database yet
+      householdId: response.householdId || response.household_id || undefined,
+      createdAt: response.createdAt || response.created_at,
+      updatedAt: response.updatedAt || response.updated_at
+    };
+  }
   /**
    * Get all patients
    */
@@ -21,7 +66,14 @@ export class PatientService {
    * Get a single patient by ID
    */
   static async getPatient(id: number): Promise<Patient> {
-    return ApiService.invoke<Patient>('get_patient', { id });
+    const response = await ApiService.invoke<any>('get_patient', { id });
+
+    if (!response) {
+      throw new Error('Patient not found');
+    }
+
+    // Always transform to ensure all fields are properly handled
+    return this.transformResponse(response);
   }
 
   /**
@@ -54,20 +106,34 @@ export class PatientService {
    * Update an existing patient
    */
   static async updatePatient(id: number, updates: UpdatePatientInput): Promise<Patient> {
-    // Transform camelCase frontend data to snake_case backend format
-    const dto = {
-      name: updates.name,
-      species: updates.species,
-      breed: updates.breed || null,
-      gender: updates.gender || null,
-      date_of_birth: updates.dateOfBirth || null,
-      weight: updates.weight || null,
-      medical_notes: updates.notes || null,
-      is_active: updates.isActive
-    };
+    // Backend has #[serde(rename_all = "camelCase")] so it expects camelCase!
+    // Only include fields that are actually being updated (not undefined)
+    const dto: any = {};
+
+    if (updates.name !== undefined) dto.name = updates.name;
+    if (updates.species !== undefined) dto.species = updates.species;
+    if (updates.breed !== undefined) dto.breed = updates.breed || null;
+    if (updates.gender !== undefined) dto.gender = updates.gender || null;
+    if (updates.dateOfBirth !== undefined) {
+      // Backend expects dateOfBirth in camelCase, not date_of_birth!
+      dto.dateOfBirth = updates.dateOfBirth || null;
+    }
+    if (updates.weight !== undefined) dto.weight = updates.weight || null;
+    if (updates.notes !== undefined) dto.medicalNotes = updates.notes || null;
+    if (updates.color !== undefined) dto.color = updates.color || null;
+    if (updates.microchipId !== undefined) dto.microchipId = updates.microchipId || null;
+    if (updates.isActive !== undefined) dto.isActive = updates.isActive;
 
     console.log('🎯 PatientService: Updating patient with transformed data:', dto);
-    return ApiService.invoke<Patient>('update_patient', { id, dto });
+    const response = await ApiService.invoke<any>('update_patient', { id, dto });
+    console.log('🎯 PatientService: Raw backend response:', response);
+    console.log('🎯 PatientService: Response keys:', Object.keys(response));
+    console.log('🎯 PatientService: Date fields - dateOfBirth:', response.dateOfBirth, 'date_of_birth:', response.date_of_birth);
+
+    // Always transform to ensure all fields are properly handled
+    const patient = this.transformResponse(response);
+    console.log('🎯 PatientService: Transformed response:', patient);
+    return patient;
   }
 
   /**

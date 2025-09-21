@@ -222,49 +222,6 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
         return dateA - dateB;
       },
     },
-    {
-      title: 'Actions',
-      key: 'actions',
-      fixed: 'right',
-      width: 150,
-      render: (_, record) => (
-        <Space size="small">
-          <Tooltip title="View Details">
-            <Button
-              type="text"
-              size="small"
-              icon={<EyeOutlined />}
-              onClick={() => onView?.(record)}
-            />
-          </Tooltip>
-          <Tooltip title="Edit">
-            <Button
-              type="text"
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => onEdit?.(record)}
-            />
-          </Tooltip>
-          <Tooltip title="Add Pet">
-            <Button
-              type="text"
-              size="small"
-              icon={<HeartOutlined />}
-              onClick={() => onAddPatient?.(record)}
-            />
-          </Tooltip>
-          <Tooltip title="Delete">
-            <Button
-              type="text"
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-              onClick={() => onDelete?.(record)}
-            />
-          </Tooltip>
-        </Space>
-      ),
-    },
   ];
 
   const expandedRowRender = (record: HouseholdTableRecord) => {

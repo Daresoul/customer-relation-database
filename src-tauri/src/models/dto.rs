@@ -22,6 +22,9 @@ pub struct UpdatePatientDto {
     pub breed: Option<String>,
     pub gender: Option<String>,
     pub date_of_birth: Option<NaiveDate>,
+    pub color: Option<String>,
     pub weight: Option<f64>,
+    pub microchip_id: Option<String>,
     pub medical_notes: Option<String>,
+    pub is_active: Option<bool>,
 }
