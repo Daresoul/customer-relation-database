@@ -1,7 +1,15 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Layout, Spin, Alert, Button, Space, Breadcrumb } from 'antd';
-import { ArrowLeftOutlined, HomeOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Layout, Spin, Alert, Button, Space, Breadcrumb, Tabs } from 'antd';
+import {
+  ArrowLeftOutlined,
+  HomeOutlined,
+  DeleteOutlined,
+  UserOutlined,
+  MedicineBoxOutlined,
+  TeamOutlined,
+  CalendarOutlined
+} from '@ant-design/icons';
 import { usePatientDetail, useDeleteConfirmation } from '../../hooks/usePatient';
 import { PatientInfo } from './PatientInfo';
 import { MedicalSection } from './MedicalSection';
@@ -94,6 +102,48 @@ export const PatientDetail: React.FC = () => {
     showDeleteConfirm(patient.id, patient.name);
   };
 
+  const tabItems = [
+    {
+      key: 'overview',
+      label: (
+        <span>
+          <UserOutlined />
+          Overview
+        </span>
+      ),
+      children: (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          <PatientInfo patient={patient} />
+          <HouseholdSection household={patient.household} />
+        </div>
+      ),
+    },
+    {
+      key: 'medical-history',
+      label: (
+        <span>
+          <MedicineBoxOutlined />
+          Medical History
+        </span>
+      ),
+      children: (
+        <div style={{
+          background: '#1f1f1f',
+          padding: 24,
+          borderRadius: 8,
+          minHeight: 400,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          <span style={{ color: '#666', fontSize: 16 }}>
+            Medical history feature coming soon...
+          </span>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <Content style={{ padding: 24, background: '#141414', minHeight: '100vh' }}>
       <div style={{ marginBottom: 16 }}>
@@ -131,11 +181,18 @@ export const PatientDetail: React.FC = () => {
         </Button>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-        <PatientInfo patient={patient} />
-        <MedicalSection patient={patient} />
-        <HouseholdSection household={patient.household} />
-      </div>
+      <Tabs
+        defaultActiveKey="overview"
+        items={tabItems}
+        size="large"
+        style={{
+          background: 'transparent',
+        }}
+        tabBarStyle={{
+          marginBottom: 24,
+          borderBottom: '1px solid #303030',
+        }}
+      />
     </Content>
   );
 };

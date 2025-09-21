@@ -4,7 +4,8 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Modal, App } from 'antd';
+import { Modal, App, ConfigProvider, theme } from 'antd';
+import { ExclamationCircleOutlined } from '@ant-design/icons';
 import { PatientService } from '../services/patientService';
 import { Patient, UpdatePatientInput } from '../types';
 import { PatientDetail, DeletePatientResponse } from '../types/patient';
@@ -68,11 +69,17 @@ export function usePatientDetail(patientId: number) {
             people: householdData.people
           };
 
-          // Find primary contact
+          // Find primary contact with all their contact methods
           const primaryPerson = household.people?.find(p => p.isPrimary);
+
           const primaryContact = primaryPerson ? {
             ...primaryPerson,
-            contacts: primaryPerson.contacts?.filter(c => c.isPrimary) || []
+            contacts: primaryPerson.contacts?.map((c: any) => ({
+              id: c.id,
+              type: c.contactType as 'phone' | 'email' | 'mobile',  // camelCase from service
+              value: c.contactValue || '',  // camelCase from service
+              isPrimary: c.isPrimary || false  // already camelCase
+            })) || []
           } : undefined;
 
           patientDetail.household = {
@@ -231,6 +238,8 @@ export function useDeleteConfirmation() {
       okText: 'Delete',
       okType: 'danger',
       cancelText: 'Cancel',
+      icon: null, // Icon styling is handled by CSS
+      centered: true,
       onOk: async () => {
         await deletePatient.mutateAsync(patientId);
       }
