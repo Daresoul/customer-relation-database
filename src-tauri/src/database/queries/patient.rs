@@ -10,8 +10,11 @@ pub async fn get_all_patients(pool: &SqlitePool) -> Result<Vec<Patient>, sqlx::E
             p.breed,
             p.gender,
             p.date_of_birth,
+            p.color,
             CAST(p.weight AS REAL) as weight,
+            p.microchip_id,
             p.medical_notes,
+            p.is_active,
             ph.household_id,
             p.created_at,
             p.updated_at
@@ -32,8 +35,11 @@ pub async fn get_patient_by_id(pool: &SqlitePool, id: i64) -> Result<Option<Pati
             p.breed,
             p.gender,
             p.date_of_birth,
+            p.color,
             CAST(p.weight AS REAL) as weight,
+            p.microchip_id,
             p.medical_notes,
+            p.is_active,
             ph.household_id,
             p.created_at,
             p.updated_at
@@ -52,8 +58,8 @@ pub async fn create_patient(pool: &SqlitePool, dto: CreatePatientDto) -> Result<
 
     // Insert the patient
     let result = sqlx::query(
-        "INSERT INTO patients (name, species, breed, gender, date_of_birth, weight, medical_notes)
-         VALUES (?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO patients (name, species, breed, gender, date_of_birth, weight, medical_notes, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
     )
     .bind(&dto.name)
     .bind(&dto.species)
@@ -62,6 +68,7 @@ pub async fn create_patient(pool: &SqlitePool, dto: CreatePatientDto) -> Result<
     .bind(&dto.date_of_birth)
     .bind(&dto.weight)
     .bind(&dto.medical_notes)
+    .bind(true)
     .execute(&mut *tx)
     .await?;
 
@@ -118,6 +125,18 @@ pub async fn update_patient(pool: &SqlitePool, id: i64, dto: UpdatePatientDto) -
         updates.push("medical_notes = ?");
         has_updates = true;
     }
+    if dto.color.is_some() {
+        updates.push("color = ?");
+        has_updates = true;
+    }
+    if dto.microchip_id.is_some() {
+        updates.push("microchip_id = ?");
+        has_updates = true;
+    }
+    if dto.is_active.is_some() {
+        updates.push("is_active = ?");
+        has_updates = true;
+    }
 
     if !has_updates {
         return get_patient_by_id(pool, id).await;
@@ -151,6 +170,15 @@ pub async fn update_patient(pool: &SqlitePool, id: i64, dto: UpdatePatientDto) -
     if let Some(medical_notes) = dto.medical_notes {
         query = query.bind(medical_notes);
     }
+    if let Some(color) = dto.color {
+        query = query.bind(color);
+    }
+    if let Some(microchip_id) = dto.microchip_id {
+        query = query.bind(microchip_id);
+    }
+    if let Some(is_active) = dto.is_active {
+        query = query.bind(is_active);
+    }
 
     query = query.bind(id);
 
@@ -181,8 +209,11 @@ pub async fn get_patients_by_species(pool: &SqlitePool, species: &str) -> Result
             p.breed,
             p.gender,
             p.date_of_birth,
+            p.color,
             CAST(p.weight AS REAL) as weight,
+            p.microchip_id,
             p.medical_notes,
+            p.is_active,
             ph.household_id,
             p.created_at,
             p.updated_at
