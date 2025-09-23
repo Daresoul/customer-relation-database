@@ -8,6 +8,7 @@ import { App as AntApp } from 'antd';
 import { MainDashboard } from './pages/MainDashboard';
 import { HouseholdDetail } from './pages/HouseholdDetail';
 import { PatientDetail } from './pages/PatientDetail';
+import { MedicalRecordDetailPage } from './pages/MedicalRecordDetail';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ViewProvider } from './contexts';
 
@@ -39,6 +40,7 @@ function App() {
                   <Route path="/" element={<MainDashboard />} />
                   <Route path="/households/:id" element={<HouseholdDetail />} />
                   <Route path="/patients/:id" element={<PatientDetail />} />
+                  <Route path="/medical-records/:id" element={<MedicalRecordDetailPage />} />
                 </Routes>
               </div>
             </Router>

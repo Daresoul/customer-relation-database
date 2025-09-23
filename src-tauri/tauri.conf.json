@@ -12,16 +12,31 @@
   "tauri": {
     "allowlist": {
       "all": false,
+      "fs": {
+        "all": false,
+        "readFile": true,
+        "scope": [
+          "$TEMP/**",
+          "$RESOURCE/**"
+        ]
+      },
       "shell": {
         "all": false,
         "open": true
+      },
+      "dialog": {
+        "all": false,
+        "save": true
       }
     },
     "bundle": {
       "active": true,
       "identifier": "com.vetclinic.app",
       "targets": "all",
-      "icon": []
+      "icon": [],
+      "resources": [
+        "resources/**"
+      ]
     },
     "security": {
       "csp": null

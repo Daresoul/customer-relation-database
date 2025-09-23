@@ -22,7 +22,7 @@ export const HouseholdDetail: React.FC = () => {
 
   if (!id || isNaN(householdId)) {
     return (
-      <Content style={{ padding: 24, background: '#141414', minHeight: '100vh' }}>
+      <Content style={{ padding: 24, background: '#141414' }}>
         <Alert
           message="Invalid Household ID"
           description="The household ID provided is not valid."
@@ -40,7 +40,7 @@ export const HouseholdDetail: React.FC = () => {
 
   if (isLoading) {
     return (
-      <Content style={{ padding: 24, textAlign: 'center', background: '#141414', minHeight: '100vh' }}>
+      <Content style={{ padding: 24, textAlign: 'center', background: '#141414' }}>
         <Spin size="large" />
         <div style={{ marginTop: 16 }}>Loading household details...</div>
       </Content>
@@ -49,7 +49,7 @@ export const HouseholdDetail: React.FC = () => {
 
   if (error) {
     return (
-      <Content style={{ padding: 24, background: '#141414', minHeight: '100vh' }}>
+      <Content style={{ padding: 24, background: '#141414' }}>
         <Alert
           message="Error Loading Household"
           description={error instanceof Error ? error.message : 'Failed to load household details'}
@@ -72,7 +72,7 @@ export const HouseholdDetail: React.FC = () => {
 
   if (!data) {
     return (
-      <Content style={{ padding: 24, background: '#141414', minHeight: '100vh' }}>
+      <Content style={{ padding: 24, background: '#141414' }}>
         <Alert
           message="Household Not Found"
           description="The requested household could not be found."

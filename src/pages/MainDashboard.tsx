@@ -3,7 +3,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, Statistic, Space, Tabs, Avatar, TabsProps, App } from 'antd';
+import { Card, Row, Col, Statistic, Space, Tabs, Avatar, TabsProps, App, Modal, InputNumber } from 'antd';
 import {
   TeamOutlined,
   HeartOutlined,
@@ -18,6 +18,7 @@ import { HouseholdTable } from '../components/tables/HouseholdTable';
 import { PatientSearch } from '../components/search/PatientSearch';
 import { HouseholdSearch } from '../components/search/HouseholdSearch';
 import { Button } from '../components/common/Button';
+import { invoke } from '@tauri-apps/api/tauri';
 import { FormModal } from '../components/common/Modal';
 import { PatientFormWithOwner } from '../components/forms/PatientFormWithOwner';
 import { HouseholdForm } from '../components/forms/HouseholdForm';
@@ -44,6 +45,9 @@ export const MainDashboard: React.FC = () => {
   const [showHouseholdForm, setShowHouseholdForm] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<PatientWithHousehold | null>(null);
   const [selectedHousehold, setSelectedHousehold] = useState<HouseholdTableRecord | null>(null);
+  const [seedOpen, setSeedOpen] = useState(false);
+  const [seedCount, setSeedCount] = useState<number>(1000);
+  const [seeding, setSeeding] = useState(false);
 
   // Statistics
   const [stats, setStats] = useState({
@@ -105,6 +109,22 @@ export const MainDashboard: React.FC = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSeed = async () => {
+    setSeeding(true);
+    try {
+      const households = Math.max(1, Math.min(5000, Number(seedCount) || 1000));
+      const res = await invoke<string>('populate_database', { households });
+      app.message.success(res || `Seeded ${households} households`);
+      setSeedOpen(false);
+      await loadData();
+    } catch (e: any) {
+      app.message.error(e?.message || 'Failed to seed database');
+      console.error('Seed error:', e);
+    } finally {
+      setSeeding(false);
     }
   };
 
@@ -210,7 +230,7 @@ export const MainDashboard: React.FC = () => {
   // Simplified layout without header
 
   return (
-    <div style={{ minHeight: '100vh', background: '#141414', padding: '24px' }}>
+    <div style={{ background: '#141414', padding: '24px' }}>
       <Space direction="vertical" size="large" style={{ width: '100%' }}>
         {/* Statistics Cards */}
         <Row gutter={16}>
@@ -253,6 +273,14 @@ export const MainDashboard: React.FC = () => {
             onChange={(key) => setCurrentView(key === 'patients' ? 'animal' : 'household')}
             tabBarExtraContent={
               <Space>
+                {import.meta.env.DEV && (
+                  <Button
+                    variant="secondary"
+                    onClick={() => setSeedOpen(true)}
+                  >
+                    Seed DB
+                  </Button>
+                )}
                 <Button
                   variant="primary"
                   iconType="plus"
@@ -353,6 +381,31 @@ export const MainDashboard: React.FC = () => {
           }}
         />
       </FormModal>
+
+      {/* Seed Database Modal (dev only) */}
+      <Modal
+        title="Seed Database"
+        open={seedOpen}
+        onOk={handleSeed}
+        confirmLoading={seeding}
+        onCancel={() => !seeding && setSeedOpen(false)}
+        okText={seeding ? 'Seeding...' : 'Seed'}
+      >
+        <p>Populate the database with demo data:</p>
+        <ul>
+          <li>Households: N (each with 1–5 pets)</li>
+          <li>Each pet: 1–5 procedures and 1–5 notes</li>
+        </ul>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span>Households:</span>
+          <InputNumber
+            min={1}
+            max={5000}
+            value={seedCount}
+            onChange={(v) => setSeedCount(Number(v) || 1000)}
+          />
+        </div>
+      </Modal>
     </div>
   );
 };
