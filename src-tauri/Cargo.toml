@@ -9,13 +9,17 @@ edition = "2021"
 tauri-build = { version = "1.5", features = [] }
 
 [dependencies]
-tauri = { version = "1.5", features = ["shell-open"] }
+tauri = { version = "1.5", features = [ "fs-read-file", "dialog-save", "shell-open"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sqlx = { version = "0.7", features = ["runtime-tokio-native-tls", "sqlite", "chrono"] }
 tokio = { version = "1", features = ["full"] }
 thiserror = "1.0"
 chrono = { version = "0.4", features = ["serde", "clock"] }
+uuid = { version = "1.4", features = ["v4", "serde"] }
+rand = "0.8"
+pdfium-render = { version = "0.8" }
+image = { version = "0.25", default-features = false, features = ["png"] }
 
 [features]
 default = ["custom-protocol"]

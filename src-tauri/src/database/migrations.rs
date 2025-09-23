@@ -23,6 +23,15 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, "006_household_search_fts5", create_household_search_fts5).await?;
     run_migration(pool, "007_add_patient_gender", add_patient_gender).await?;
     run_migration(pool, "008_add_household_location_fields", add_household_location_fields).await?;
+    run_migration(pool, "009_create_currencies_table", create_currencies_table).await?;
+    run_migration(pool, "010_create_medical_records_table", create_medical_records_table).await?;
+    run_migration(pool, "011_create_medical_attachments_table", create_medical_attachments_table).await?;
+    run_migration(pool, "012_create_medical_record_history_table", create_medical_record_history_table).await?;
+    run_migration(pool, "013_create_medical_records_fts", create_medical_records_fts).await?;
+    run_migration(pool, "014_fix_medical_triggers", fix_medical_triggers).await?;
+    // Dev task: drop and recreate ONLY the medical_record_history table to switch to snapshot strategy
+    run_migration(pool, "015_recreate_medical_record_history", recreate_medical_record_history).await?;
+    run_migration(pool, "016_add_missing_patient_columns", add_missing_patient_columns).await?;
 
     Ok(())
 }
@@ -429,6 +438,322 @@ fn add_household_location_fields(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std
         sqlx::query("CREATE INDEX IF NOT EXISTS idx_households_postal ON households(postal_code)")
             .execute(pool)
             .await?;
+
+        Ok(())
+    })
+}
+
+// Migration 009: Create currencies table
+fn create_currencies_table(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        // Create currencies table
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS currencies (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                code TEXT NOT NULL UNIQUE,
+                name TEXT NOT NULL,
+                symbol TEXT
+            )
+        "#)
+        .execute(pool)
+        .await?;
+
+        // Insert default currencies
+        sqlx::query(r#"
+            INSERT OR IGNORE INTO currencies (code, name, symbol) VALUES
+                ('EUR', 'Euro', '€'),
+                ('USD', 'US Dollar', '$'),
+                ('MKD', 'Macedonian Denar', 'ден')
+        "#)
+        .execute(pool)
+        .await?;
+
+        Ok(())
+    })
+}
+
+// Migration 010: Create medical_records table
+fn create_medical_records_table(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS medical_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                patient_id INTEGER NOT NULL,
+                record_type TEXT NOT NULL CHECK(record_type IN ('procedure', 'note')),
+                name TEXT NOT NULL CHECK(length(name) <= 200),
+                procedure_name TEXT CHECK(procedure_name IS NULL OR length(procedure_name) <= 200),
+                description TEXT NOT NULL,
+                price DECIMAL(10,2),
+                currency_id INTEGER,
+                is_archived BOOLEAN DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                created_by TEXT,
+                updated_by TEXT,
+                version INTEGER DEFAULT 1,
+                FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+                FOREIGN KEY (currency_id) REFERENCES currencies(id)
+            )
+        "#)
+        .execute(pool)
+        .await?;
+
+        // Create indexes
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_medical_records_patient_id ON medical_records(patient_id)")
+            .execute(pool)
+            .await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_medical_records_archived ON medical_records(is_archived)")
+            .execute(pool)
+            .await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_medical_records_created_at ON medical_records(created_at DESC)")
+            .execute(pool)
+            .await?;
+
+        // Update trigger for updated_at
+        sqlx::query(r#"
+            CREATE TRIGGER IF NOT EXISTS medical_records_updated_at
+            AFTER UPDATE ON medical_records
+            BEGIN
+                UPDATE medical_records SET updated_at = CURRENT_TIMESTAMP
+                WHERE id = NEW.id;
+            END;
+        "#)
+        .execute(pool)
+        .await?;
+
+        // Version increment trigger
+        sqlx::query(r#"
+            CREATE TRIGGER IF NOT EXISTS medical_records_version
+            AFTER UPDATE ON medical_records
+            WHEN OLD.version = NEW.version
+            BEGIN
+                UPDATE medical_records SET version = version + 1
+                WHERE id = NEW.id;
+            END;
+        "#)
+        .execute(pool)
+        .await?;
+
+        Ok(())
+    })
+}
+
+// Migration 011: Create medical_attachments table
+fn create_medical_attachments_table(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS medical_attachments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                medical_record_id INTEGER NOT NULL,
+                file_id TEXT NOT NULL UNIQUE,
+                original_name TEXT NOT NULL,
+                file_size INTEGER,
+                mime_type TEXT,
+                uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (medical_record_id) REFERENCES medical_records(id) ON DELETE CASCADE
+            )
+        "#)
+        .execute(pool)
+        .await?;
+
+        // Create index
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_medical_attachments_record_id ON medical_attachments(medical_record_id)")
+            .execute(pool)
+            .await?;
+
+        Ok(())
+    })
+}
+
+// Migration 012: Create medical_record_history table
+fn create_medical_record_history_table(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS medical_record_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                medical_record_id INTEGER NOT NULL,
+                version INTEGER NOT NULL,
+                changed_fields TEXT,
+                old_values TEXT,
+                new_values TEXT,
+                changed_by TEXT,
+                changed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (medical_record_id) REFERENCES medical_records(id) ON DELETE CASCADE
+            )
+        "#)
+        .execute(pool)
+        .await?;
+
+        // Create index
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_medical_history_record_id ON medical_record_history(medical_record_id)")
+            .execute(pool)
+            .await?;
+
+        // Create history trigger
+        sqlx::query(r#"
+            CREATE TRIGGER IF NOT EXISTS medical_records_history_log
+            AFTER UPDATE ON medical_records
+            BEGIN
+                INSERT INTO medical_record_history (
+                    medical_record_id, version, changed_by
+                )
+                VALUES (
+                    NEW.id,
+                    NEW.version,
+                    NEW.updated_by
+                );
+            END;
+        "#)
+        .execute(pool)
+        .await?;
+
+        Ok(())
+    })
+}
+
+// Migration 013: Create medical_records_fts FTS5 table
+fn create_medical_records_fts(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        // Create FTS5 virtual table
+        sqlx::query(r#"
+            CREATE VIRTUAL TABLE IF NOT EXISTS medical_records_fts USING fts5(
+                name,
+                procedure_name,
+                description,
+                content=medical_records,
+                content_rowid=id
+            )
+        "#)
+        .execute(pool)
+        .await?;
+
+        // Trigger for INSERT
+        sqlx::query(r#"
+            CREATE TRIGGER IF NOT EXISTS medical_records_fts_insert
+            AFTER INSERT ON medical_records
+            BEGIN
+                INSERT INTO medical_records_fts(rowid, name, procedure_name, description)
+                VALUES (new.id, new.name, new.procedure_name, new.description);
+            END;
+        "#)
+        .execute(pool)
+        .await?;
+
+        // Trigger for UPDATE
+        sqlx::query(r#"
+            CREATE TRIGGER IF NOT EXISTS medical_records_fts_update
+            AFTER UPDATE ON medical_records
+            BEGIN
+                UPDATE medical_records_fts
+                SET name = new.name,
+                    procedure_name = new.procedure_name,
+                    description = new.description
+                WHERE rowid = new.id;
+            END;
+        "#)
+        .execute(pool)
+        .await?;
+
+        // Trigger for DELETE
+        sqlx::query(r#"
+            CREATE TRIGGER IF NOT EXISTS medical_records_fts_delete
+            AFTER DELETE ON medical_records
+            BEGIN
+                DELETE FROM medical_records_fts WHERE rowid = old.id;
+            END;
+        "#)
+        .execute(pool)
+        .await?;
+
+        Ok(())
+    })
+}
+
+// Migration 014: Fix medical triggers (remove updated_at recursion, enrich history)
+fn fix_medical_triggers(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        // Drop old triggers if they exist
+        sqlx::query("DROP TRIGGER IF EXISTS medical_records_updated_at")
+            .execute(pool)
+            .await?;
+
+        sqlx::query("DROP TRIGGER IF EXISTS medical_records_history_log")
+            .execute(pool)
+            .await?;
+        // We rely on the application layer to insert complete snapshot entries into
+        // medical_record_history, so we intentionally do not recreate history triggers here.
+        // FTS triggers remain handled in earlier migrations.
+        Ok(())
+    })
+}
+
+// Migration 015: Recreate medical_record_history table with snapshot-friendly schema
+// This will DROP the table and all its data, then recreate it cleanly.
+fn recreate_medical_record_history(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        // Drop existing table (data loss intended per request)
+        sqlx::query("DROP TABLE IF EXISTS medical_record_history")
+            .execute(pool)
+            .await?;
+
+        // Recreate table
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS medical_record_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                medical_record_id INTEGER NOT NULL,
+                version INTEGER NOT NULL,
+                changed_fields TEXT,
+                old_values TEXT,
+                new_values TEXT,
+                changed_by TEXT,
+                changed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (medical_record_id) REFERENCES medical_records(id) ON DELETE CASCADE
+            )
+        "#)
+        .execute(pool)
+        .await?;
+
+        // Index for lookups by record
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_medical_history_record_id ON medical_record_history(medical_record_id)")
+            .execute(pool)
+            .await?;
+
+        Ok(())
+    })
+}
+
+// Migration 016: Add missing columns to patients table used by queries/models
+fn add_missing_patient_columns(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        // Helper to check and add a column
+        async fn ensure_column(pool: &SqlitePool, table: &str, column: &str, ddl: &str) -> Result<(), sqlx::Error> {
+            let exists: (i64,) = sqlx::query_as(
+                "SELECT COUNT(1) FROM pragma_table_info(?) WHERE name = ?"
+            )
+            .bind(table)
+            .bind(column)
+            .fetch_one(pool)
+            .await?;
+
+            if exists.0 == 0 {
+                let sql = format!("ALTER TABLE {} ADD COLUMN {} {}", table, column, ddl);
+                // NOTE: SQLite only supports limited ALTER; this form is safe for simple adds
+                sqlx::query(&sql).execute(pool).await?;
+            }
+            Ok(())
+        }
+
+        // Add gender (TEXT) if missing
+        ensure_column(pool, "patients", "gender", "TEXT").await?;
+        // Add color (TEXT) if missing
+        ensure_column(pool, "patients", "color", "TEXT").await?;
+        // Add microchip_id (TEXT) if missing
+        ensure_column(pool, "patients", "microchip_id", "TEXT").await?;
+        // Add is_active (BOOLEAN) if missing, default to 1
+        // SQLite treats BOOLEAN as NUMERIC; default only applies to new rows
+        ensure_column(pool, "patients", "is_active", "BOOLEAN DEFAULT 1").await?;
 
         Ok(())
     })

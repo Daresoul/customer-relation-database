@@ -115,10 +115,12 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
             minWidth: '100px',
             maxWidth: '150px'
           },
-          content: { background: '#1f1f1f', color: '#E6E6E6' }
+          content: {
+            background: '#1f1f1f',
+            color: '#E6E6E6',
+            minWidth: '200px'
+          }
         }}
-        labelStyle={{ width: '120px' }}
-        contentStyle={{ minWidth: '200px' }}
       >
         <Descriptions.Item label="Name" span={1}>
           <Text

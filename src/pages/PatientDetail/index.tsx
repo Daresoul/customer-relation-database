@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Layout, Spin, Alert, Button, Space, Breadcrumb, Tabs } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -14,6 +14,7 @@ import { usePatientDetail, useDeleteConfirmation } from '../../hooks/usePatient'
 import { PatientInfo } from './PatientInfo';
 import { MedicalSection } from './MedicalSection';
 import { HouseholdSection } from './HouseholdSection';
+import MedicalHistorySection from './MedicalHistory/MedicalHistorySection';
 import { Link } from 'react-router-dom';
 
 const { Content } = Layout;
@@ -21,15 +22,44 @@ const { Content } = Layout;
 export const PatientDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const patientId = parseInt(id || '0', 10);
+
+  // Restore the active tab if returning from medical record detail
+  const savedActiveTab = sessionStorage.getItem(`patient-detail-active-tab-${patientId}`);
+  const [activeTab, setActiveTab] = useState(savedActiveTab || 'overview');
+
+  // Clear the saved tab after using it
+  useEffect(() => {
+    if (savedActiveTab) {
+      sessionStorage.removeItem(`patient-detail-active-tab-${patientId}`);
+    }
+  }, [savedActiveTab, patientId]);
 
   const { data: patient, isLoading, error } = usePatientDetail(patientId);
   const { showDeleteConfirm, isDeleting } = useDeleteConfirmation();
 
+  // Restore scroll position when returning from medical record detail
+  useEffect(() => {
+    // Only restore scroll if we have patient data
+    if (!patient) return;
+
+    const savedScrollPosition = sessionStorage.getItem(`patient-detail-scroll-${patientId}`);
+    if (savedScrollPosition) {
+      const scrollTop = parseInt(savedScrollPosition, 10);
+      // Small delay to ensure content is fully rendered
+      setTimeout(() => {
+        window.scrollTo(0, scrollTop);
+        // Clear the saved position after restoring
+        sessionStorage.removeItem(`patient-detail-scroll-${patientId}`);
+      }, 100);
+    }
+  }, [patientId, patient]);
+
   // Invalid ID check
   if (!id || isNaN(patientId)) {
     return (
-      <Content style={{ padding: 24, background: '#141414', minHeight: '100vh' }}>
+      <Content style={{ padding: 24, background: '#141414' }}>
         <Alert
           message="Invalid Patient ID"
           description="The patient ID provided is not valid."
@@ -58,7 +88,7 @@ export const PatientDetail: React.FC = () => {
   // Error state
   if (error) {
     return (
-      <Content style={{ padding: 24, background: '#141414', minHeight: '100vh' }}>
+      <Content style={{ padding: 24, background: '#141414' }}>
         <Alert
           message="Error Loading Patient"
           description={error instanceof Error ? error.message : 'Failed to load patient details'}
@@ -82,7 +112,7 @@ export const PatientDetail: React.FC = () => {
   // Patient not found
   if (!patient) {
     return (
-      <Content style={{ padding: 24, background: '#141414', minHeight: '100vh' }}>
+      <Content style={{ padding: 24, background: '#141414' }}>
         <Alert
           message="Patient Not Found"
           description="The requested patient could not be found."
@@ -100,6 +130,21 @@ export const PatientDetail: React.FC = () => {
 
   const handleDelete = () => {
     showDeleteConfirm(patient.id, patient.name);
+  };
+
+  // Save scroll position before navigating away
+  const handleNavigateToMedicalRecord = (recordId: number) => {
+    // Save window scroll position
+    sessionStorage.setItem(
+      `patient-detail-scroll-${patientId}`,
+      window.scrollY.toString()
+    );
+    // Save the current tab state
+    sessionStorage.setItem(
+      `patient-detail-active-tab-${patientId}`,
+      activeTab
+    );
+    navigate(`/medical-records/${recordId}`);
   };
 
   const tabItems = [
@@ -127,25 +172,19 @@ export const PatientDetail: React.FC = () => {
         </span>
       ),
       children: (
-        <div style={{
-          background: '#1f1f1f',
-          padding: 24,
-          borderRadius: 8,
-          minHeight: 400,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }}>
-          <span style={{ color: '#666', fontSize: 16 }}>
-            Medical history feature coming soon...
-          </span>
-        </div>
+        <MedicalHistorySection
+          patientId={patient.id}
+          patientName={patient.name}
+          onNavigateToRecord={handleNavigateToMedicalRecord}
+        />
       ),
     },
   ];
 
   return (
-    <Content style={{ padding: 24, background: '#141414', minHeight: '100vh' }}>
+    <Content
+      style={{ padding: 24, background: '#141414', minHeight: '100vh' }}
+    >
       <div style={{ marginBottom: 16 }}>
         <Breadcrumb
           items={[
@@ -182,7 +221,8 @@ export const PatientDetail: React.FC = () => {
       </div>
 
       <Tabs
-        defaultActiveKey="overview"
+        activeKey={activeTab}
+        onChange={setActiveTab}
         items={tabItems}
         size="large"
         style={{
