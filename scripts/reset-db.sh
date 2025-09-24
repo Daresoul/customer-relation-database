@@ -58,13 +58,14 @@ wipe_data() {
 
     sqlite3 "$DB_PATH" <<EOF
 PRAGMA foreign_keys = OFF;
-DELETE FROM patient_owners;
+DELETE FROM medical_attachments;
+DELETE FROM medical_record_history;
+DELETE FROM medical_records;
 DELETE FROM patient_households;
 DELETE FROM person_contacts;
 DELETE FROM people;
 DELETE FROM households;
 DELETE FROM patients;
-DELETE FROM owners;
 DELETE FROM sqlite_sequence;
 PRAGMA foreign_keys = ON;
 VACUUM;

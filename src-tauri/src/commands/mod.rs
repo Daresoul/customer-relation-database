@@ -5,6 +5,7 @@ pub mod household;
 pub mod debug;
 pub mod database_reset;
 pub mod medical;
+pub mod stats;
 
 pub use patient::*;
 pub use database::*;
@@ -13,3 +14,4 @@ pub use household::*;
 pub use debug::*;
 pub use database_reset::*;
 pub use medical::*;
+pub use stats::*;

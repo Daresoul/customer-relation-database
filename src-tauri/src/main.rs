@@ -100,6 +100,8 @@ fn main() {
             commands::reset_database,
             commands::wipe_database_data,
             commands::populate_database,
+            // Stats commands
+            commands::get_dashboard_stats,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -65,10 +65,19 @@ export const MainDashboard: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      // Use the existing search APIs to get data
-      const [patientsResults, householdsResults] = await Promise.all([
-        api.patient.search('', 1000), // Get all patients
-        api.household.search('', 1000), // Get all households
+      // Get stats efficiently from database counts
+      const statsPromise = invoke<{
+        total_patients: number;
+        active_patients: number;
+        total_households: number;
+        total_medical_records: number;
+      }>('get_dashboard_stats');
+
+      // Get a reasonable amount of data for display (pagination would be better for large datasets)
+      const [patientsResults, householdsResults, statsData] = await Promise.all([
+        api.patient.search('', 1000), // Get first 1000 for display
+        api.household.search('', 1000), // Get first 1000 for display
+        statsPromise
       ]);
 
       // Enhance patients with household names
@@ -89,11 +98,11 @@ export const MainDashboard: React.FC = () => {
       setFilteredPatients(enhancedPatients);
       setFilteredHouseholds(householdsResults);
 
-      // Calculate real statistics
+      // Use actual database counts for statistics
       setStats({
-        totalPatients: patientsResults.length,
-        activePatients: patientsResults.filter(p => p.isActive !== false).length,
-        totalHouseholds: householdsResults.length,
+        totalPatients: statsData.total_patients,
+        activePatients: statsData.active_patients,
+        totalHouseholds: statsData.total_households,
       });
     } catch (error) {
       console.error('Failed to load data:', error);
@@ -114,15 +123,22 @@ export const MainDashboard: React.FC = () => {
 
   const handleSeed = async () => {
     setSeeding(true);
+    console.log('[FRONTEND] Starting seed with input:', seedCount);
+
     try {
-      const households = Math.max(1, Math.min(5000, Number(seedCount) || 1000));
+      const households = Math.max(1, Number(seedCount) || 1000);
+      console.log('[FRONTEND] Parsed households:', households);
+      console.log('[FRONTEND] Calling populate_database with:', { households });
+
       const res = await invoke<string>('populate_database', { households });
+      console.log('[FRONTEND] Seed response:', res);
+
       app.message.success(res || `Seeded ${households} households`);
       setSeedOpen(false);
       await loadData();
     } catch (e: any) {
+      console.error('[FRONTEND] Seed error:', e);
       app.message.error(e?.message || 'Failed to seed database');
-      console.error('Seed error:', e);
     } finally {
       setSeeding(false);
     }
@@ -400,9 +416,14 @@ export const MainDashboard: React.FC = () => {
           <span>Households:</span>
           <InputNumber
             min={1}
-            max={5000}
+            max={100000}
             value={seedCount}
-            onChange={(v) => setSeedCount(Number(v) || 1000)}
+            onChange={(v) => {
+              // v can be null or number from Ant Design InputNumber
+              const value = v === null || v === undefined ? 1000 : Number(v);
+              console.log('[FRONTEND] Seed count changed to:', value, 'from input:', v);
+              setSeedCount(value);
+            }}
           />
         </div>
       </Modal>
