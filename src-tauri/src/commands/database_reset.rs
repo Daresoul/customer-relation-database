@@ -5,6 +5,11 @@ use crate::models::dto::CreatePatientDto;
 use crate::services::medical_record::MedicalRecordService;
 use crate::models::medical::CreateMedicalRecordInput;
 use chrono::Utc;
+use fake::{Fake, faker::{
+    name::en::*,
+    address::en::*,
+    lorem::en::*,
+}};
 
 #[tauri::command]
 pub async fn reset_database(
@@ -114,28 +119,74 @@ pub async fn populate_database(
     seed: Option<u64>,
 ) -> Result<String, String> {
     let households = households.unwrap_or(1000);
-    let mut rng = if let Some(s) = seed { rand::rngs::StdRng::seed_from_u64(s) } else { rand::rngs::StdRng::from_entropy() };
 
-    // Data sources
-    let last_names = ["Smith","Johnson","Williams","Brown","Jones","Garcia","Miller","Davis","Rodriguez","Martinez","Hernandez","Lopez","Gonzalez","Wilson","Anderson","Thomas","Taylor","Moore","Jackson","Martin"]; 
-    let species_list = ["dog","cat","bird","rabbit","hamster","guinea_pig","reptile"];
-    let dog_breeds = ["Labrador","German Shepherd","Poodle","Bulldog","Beagle","Boxer","Dachshund"]; 
-    let cat_breeds = ["Siamese","Persian","Maine Coon","Ragdoll","Sphynx","Bengal"]; 
-    let genders = ["Male","Female","Unknown"];
-    let pet_names = ["Bella","Max","Luna","Charlie","Lucy","Cooper","Milo","Bailey","Daisy","Sadie","Oliver","Buddy","Lola","Rocky","Zoe"]; 
-    let procedures = [
-        "Vaccination","Dental Cleaning","Spay/Neuter","Blood Test","X-Ray","Ultrasound","Deworming","Microchipping","Ear Cleaning","Nail Trimming"
-    ];
-    let note_titles = [
-        "Annual Checkup","Follow-up Note","Observation","Diet Recommendation","Behavioral Note","Allergy Note","Medication Note"
+    println!("\n[SEED] ========================================");
+    println!("[SEED] STARTING DATABASE POPULATION");
+    println!("[SEED] Requested households: {}", households);
+    println!("[SEED] Timestamp: {}", Utc::now());
+    println!("[SEED] ========================================\n");
+
+    // Ensure migrations are run first
+    let pool_guard = pool.lock().await;
+    println!("[SEED] Running migrations to ensure all tables exist...");
+    if let Err(e) = run_migrations(&*pool_guard).await {
+        println!("[SEED] ERROR: Failed to run migrations: {}", e);
+        return Err(format!("Failed to run migrations: {}", e));
+    }
+    println!("[SEED] Migrations completed successfully");
+    drop(pool_guard);  // Release the lock before re-acquiring
+
+    let mut rng = if let Some(s) = seed {
+        rand::rngs::StdRng::seed_from_u64(s)
+    } else {
+        rand::rngs::StdRng::from_entropy()
+    };
+
+    // Use faker for pet names too - gives us thousands of possibilities
+    // We can also mix in some pet-specific names occasionally
+    let special_pet_names = vec![
+        "Shadow", "Smokey", "Oreo", "Tiger", "Mittens", "Whiskers",
+        "Patches", "Socks", "Boots", "Midnight", "Snowball", "Gizmo",
+        "Pixel", "Widget", "Zigzag", "Cosmo", "Storm", "Blaze",
+        "Pepper", "Cookie", "Mochi", "Biscuit", "Peanut", "Waffles", "Nugget", "Pickles"
     ];
 
-    let lorem_sentences = [
-        "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
-        "Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
-        "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.",
-        "Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore.",
-        "Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt.",
+    let dog_breeds = vec![
+        "Labrador Retriever", "German Shepherd", "Golden Retriever", "French Bulldog",
+        "Bulldog", "Poodle", "Beagle", "Rottweiler", "Yorkshire Terrier", "Dachshund",
+        "Boxer", "Siberian Husky", "Great Dane", "Pug", "Boston Terrier", "Shih Tzu",
+        "Pomeranian", "Cocker Spaniel", "Border Collie", "Maltese", "Mixed Breed"
+    ];
+
+    let cat_breeds = vec![
+        "Domestic Shorthair", "Domestic Longhair", "Siamese", "Maine Coon", "Persian",
+        "Ragdoll", "British Shorthair", "Bengal", "Russian Blue", "Scottish Fold",
+        "Sphynx", "Abyssinian", "Birman", "Burmese", "Mixed Breed"
+    ];
+
+    let species = vec!["dog", "cat", "bird", "rabbit", "hamster", "guinea_pig", "ferret"];
+    let genders = vec!["Male", "Female", "Unknown"];
+
+    let medical_procedures = vec![
+        // Common procedures
+        "Annual Wellness Exam", "Vaccination - Rabies", "Vaccination - DHPP",
+        "Vaccination - FVRCP", "Dental Cleaning", "Spay Surgery", "Neuter Surgery",
+        "Microchip Implantation", "Nail Trimming", "Ear Cleaning",
+        // Diagnostic
+        "Blood Test - CBC", "Blood Test - Chemistry", "Urinalysis", "Fecal Exam",
+        "X-Ray", "Ultrasound", "Skin Scraping", "Heartworm Test",
+        // Treatment
+        "Wound Treatment", "Antibiotic Treatment", "Flea Treatment", "Deworming",
+        "Allergy Treatment", "Pain Management", "IV Fluids", "Bandage Change",
+        // Surgery
+        "Mass Removal", "Tooth Extraction", "Wound Repair", "Foreign Body Removal",
+        "Eye Surgery", "Orthopedic Surgery", "Emergency Surgery"
+    ];
+
+    let note_types = vec![
+        "Routine Checkup", "Follow-up Visit", "Behavioral Note", "Diet Consultation",
+        "Phone Consultation", "Emergency Visit", "Post-Surgery Check", "Lab Results Review",
+        "Medication Adjustment", "Weight Check", "Senior Wellness", "New Patient Exam"
     ];
 
     let mut created_households = 0i64;
@@ -143,43 +194,169 @@ pub async fn populate_database(
     let mut created_records = 0i64;
 
     let pool = pool.lock().await;
+    println!("[SEED] Database pool acquired");
 
-    for _ in 0..households {
-        let last_name = last_names.choose(&mut rng).unwrap().to_string();
+    // Check current database state
+    let initial_check: Result<(i64, i64, i64), _> = sqlx::query_as(
+        "SELECT
+            (SELECT COUNT(*) FROM households) as households,
+            (SELECT COUNT(*) FROM patients) as patients,
+            (SELECT COUNT(*) FROM medical_records) as records"
+    )
+    .fetch_one(&*pool)
+    .await;
+
+    match initial_check {
+        Ok((h, p, r)) => {
+            println!("[SEED] Initial DB state: {} households, {} patients, {} records", h, p, r);
+        }
+        Err(e) => {
+            println!("[SEED] WARNING: Could not check initial state: {}", e);
+        }
+    }
+
+    println!("[SEED] Starting main loop for {} households", households);
+
+    for household_num in 0..households {
+        if household_num == 0 {
+            println!("[SEED] Starting first iteration (household_num=0)");
+        }
+
+        // Progress logging with more detail
+        if household_num % 10 == 0 && household_num > 0 {
+            println!("[SEED] Progress: {}/{} households ({} patients, {} records so far)",
+                    household_num, households, created_patients, created_records);
+
+            // Check actual DB state periodically
+            let db_check: Result<(i64, i64, i64), _> = sqlx::query_as(
+                "SELECT
+                    (SELECT COUNT(*) FROM households) as households,
+                    (SELECT COUNT(*) FROM patients) as patients,
+                    (SELECT COUNT(*) FROM medical_records) as records"
+            )
+            .fetch_one(&*pool)
+            .await;
+
+            match db_check {
+                Ok((h, p, r)) => {
+                    println!("[SEED] Actual DB state: {} households, {} patients, {} records", h, p, r);
+                    if h != created_households || p != created_patients || r != created_records {
+                        println!("[SEED] WARNING: Mismatch between counters and DB state!");
+                    }
+                }
+                Err(e) => {
+                    println!("[SEED] WARNING: Could not check DB state: {}", e);
+                }
+            }
+        }
+
+        // Generate realistic household data using faker
+        let last_name: String = LastName().fake_with_rng(&mut rng);
+        let street_name: String = StreetName().fake_with_rng(&mut rng);
+        let building_number: String = BuildingNumber().fake_with_rng(&mut rng);
+        let city: String = CityName().fake_with_rng(&mut rng);
+        let zip: String = ZipCode().fake_with_rng(&mut rng);
+        let address = format!("{} {}", building_number, street_name);
+
         // Create household
-        let res = sqlx::query(
-            "INSERT INTO households (household_name, address, city, postal_code, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        println!("[SEED] Creating household #{}: {}", household_num + 1, last_name);
+        println!("[SEED]   Data: name='{}', address='{}', city='{}', zip='{}'",
+                last_name, address, city, zip);
+
+        let res = match sqlx::query(
+            "INSERT INTO households (household_name, address, city, postal_code, notes, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)"
         )
         .bind(&last_name)
-        .bind(Option::<String>::None)
-        .bind(Option::<String>::None)
-        .bind(Option::<String>::None)
+        .bind(Some(address.clone()))
+        .bind(Some(city.clone()))
+        .bind(Some(zip))
         .bind(Option::<String>::None)
         .bind(Utc::now())
         .bind(Utc::now())
         .execute(&*pool)
-        .await
-        .map_err(|e| format!("Failed to insert household: {}", e))?;
-        let household_id = res.last_insert_rowid() as i32;
-        created_households += 1;
+        .await {
+            Ok(res) => {
+                println!("[SEED]   -> INSERT successful, rows affected: {}", res.rows_affected());
+                res
+            },
+            Err(e) => {
+                println!("[SEED] ERROR: Failed to insert household #{}: {}", household_num + 1, e);
+                println!("[SEED] ERROR Details: {:?}", e);
 
-        // Pets 1..=5
+                // Check if households table exists
+                let table_check: Result<(i64,), _> = sqlx::query_as(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='households'"
+                )
+                .fetch_one(&*pool)
+                .await;
+
+                match table_check {
+                    Ok((count,)) => {
+                        if count == 0 {
+                            println!("[SEED] ERROR: households table does not exist!");
+                        } else {
+                            println!("[SEED] ERROR: households table exists");
+                        }
+                    }
+                    Err(e) => println!("[SEED] ERROR: Could not check table existence: {}", e),
+                }
+
+                return Err(format!("Failed to insert household: {}", e));
+            }
+        };
+
+        let household_id = res.last_insert_rowid() as i32;
+        if household_id == 0 {
+            println!("[SEED] WARNING: Household ID is 0, this might indicate a problem");
+        }
+        created_households += 1;
+        println!("[SEED]   -> Household ID: {} (stored in DB)", household_id);
+
+        // Create 1-5 pets per household
         let pet_count = rng.gen_range(1..=5);
-        for _ in 0..pet_count {
-            let species = species_list.choose(&mut rng).unwrap().to_string();
-            let breed = if species == "dog" {
-                Some(dog_breeds.choose(&mut rng).unwrap().to_string())
-            } else if species == "cat" {
-                Some(cat_breeds.choose(&mut rng).unwrap().to_string())
-            } else { None };
-            let name = pet_names.choose(&mut rng).unwrap().to_string();
+        println!("[SEED]   -> Creating {} pets", pet_count);
+
+        for pet_num in 0..pet_count {
+            let pet_species = species.choose(&mut rng).unwrap();
+            let breed = match *pet_species {
+                "dog" => Some(dog_breeds.choose(&mut rng).unwrap().to_string()),
+                "cat" => Some(cat_breeds.choose(&mut rng).unwrap().to_string()),
+                _ => None
+            };
+
+            // 80% chance to use human first name from faker, 20% chance for special pet name
+            let name = if rng.gen_bool(0.8) {
+                FirstName().fake_with_rng(&mut rng)
+            } else {
+                special_pet_names.choose(&mut rng).unwrap().to_string()
+            };
             let gender = Some(genders.choose(&mut rng).unwrap().to_string());
-            let weight: Option<f64> = Some(rng.gen_range(1.0..=60.0));
-            let notes: Option<String> = Some(lorem_sentences.choose(&mut rng).unwrap().to_string());
+
+            // Realistic weight ranges
+            let weight = Some(match *pet_species {
+                "dog" => rng.gen_range(5.0..=80.0),
+                "cat" => rng.gen_range(3.0..=15.0),
+                "bird" => rng.gen_range(0.02..=2.0),
+                "rabbit" => rng.gen_range(1.0..=10.0),
+                "hamster" => rng.gen_range(0.02..=0.3),
+                "guinea_pig" => rng.gen_range(0.7..=1.5),
+                _ => rng.gen_range(0.5..=5.0),
+            });
+
+            // Use faker for medical notes
+            let notes: Option<String> = if rng.gen_bool(0.3) {
+                let sentences: Vec<String> = (0..rng.gen_range(1..=3))
+                    .map(|_| Sentence(3..10).fake_with_rng(&mut rng))
+                    .collect();
+                Some(sentences.join(" "))
+            } else {
+                None
+            };
 
             let dto = CreatePatientDto {
                 name: name.clone(),
-                species: species.clone(),
+                species: pet_species.to_string(),
                 breed,
                 gender,
                 date_of_birth: None,
@@ -187,59 +364,181 @@ pub async fn populate_database(
                 medical_notes: notes,
                 household_id: Some(household_id),
             };
-            let patient = crate::database::queries::patient::create_patient(&*pool, dto)
-                .await
-                .map_err(|e| format!("Failed to create patient: {}", e))?;
-            created_patients += 1;
 
-            // Medical records: procedures 1..5
-            let proc_count = rng.gen_range(1..=5);
-            for _ in 0..proc_count {
-                let proc_name = procedures.choose(&mut rng).unwrap().to_string();
-                let desc = lorem_sentences.choose(&mut rng).unwrap().to_string();
-                let p: f64 = rng.gen_range(20.0_f64..=300.0_f64);
-                let price = Some((p * 100.0_f64).round() / 100.0_f64);
-                let currency_id = Some([1i64,2,3].choose(&mut rng).copied().unwrap());
+            println!("[SEED]      Pet #{}: {} ({}, {}kg)",
+                    pet_num + 1, name, pet_species,
+                    weight.map_or("?".to_string(), |w| format!("{:.2}", w)));
+
+            let patient = match crate::database::queries::patient::create_patient(&*pool, dto).await {
+                Ok(p) => p,
+                Err(e) => {
+                    println!("[SEED] ERROR: Failed to create patient: {}", e);
+                    return Err(format!("Failed to create patient: {}", e));
+                }
+            };
+            created_patients += 1;
+            println!("[SEED]        -> Patient ID: {}", patient.id);
+
+            // Create medical records - varying amounts per pet
+            let has_many_records = rng.gen_bool(0.2); // 20% have extensive history
+            let procedure_count = if has_many_records {
+                rng.gen_range(5..=15)
+            } else {
+                rng.gen_range(0..=4)
+            };
+
+            if procedure_count > 0 {
+                println!("[SEED]        -> Creating {} procedures", procedure_count);
+            }
+
+            for proc_num in 0..procedure_count {
+                let proc_name = medical_procedures.choose(&mut rng).unwrap();
+
+                // Generate realistic description using faker
+                let sentences: Vec<String> = (0..rng.gen_range(2..=4))
+                    .map(|_| Sentence(5..15).fake_with_rng(&mut rng))
+                    .collect();
+                let description = sentences.join(" ");
+
+                // Realistic pricing
+                let base_price = if proc_name.contains("Surgery") {
+                    rng.gen_range(500.0..=3000.0)
+                } else if proc_name.contains("X-Ray") || proc_name.contains("Ultrasound") {
+                    rng.gen_range(150.0..=500.0)
+                } else if proc_name.contains("Vaccination") || proc_name.contains("Nail") {
+                    rng.gen_range(25.0..=150.0)
+                } else {
+                    rng.gen_range(50.0..=400.0)
+                };
+
+                let price = Some((base_price * 100.0_f64).round() / 100.0_f64);
+                // Use currency IDs that match the migration: 1=MKD, 2=USD, 3=EUR, 4=GBP
+                let currency_id = Some([1i64, 2, 3, 4].choose(&mut rng).copied().unwrap());
+
                 let input = CreateMedicalRecordInput {
                     patient_id: patient.id,
                     record_type: "procedure".to_string(),
-                    name: proc_name,
+                    name: proc_name.to_string(),
                     procedure_name: None,
-                    description: desc,
+                    description,
                     price,
                     currency_id,
                 };
-                let _ = MedicalRecordService::create_medical_record(&*pool, input).await
-                    .map_err(|e| format!("Failed to create procedure: {}", e))?;
-                created_records += 1;
+
+                match MedicalRecordService::create_medical_record(&*pool, input).await {
+                    Ok(_) => {
+                        created_records += 1;
+                        if proc_num == 0 {
+                            println!("[SEED]          Procedure: {} (${:.2})",
+                                    proc_name, price.unwrap_or(0.0));
+                        }
+                    }
+                    Err(e) => {
+                        println!("[SEED] ERROR: Failed to create procedure for patient {}: {}",
+                                patient.id, e);
+                        println!("[SEED] ERROR: Patient exists check...");
+                        let patient_check: Result<(i64,), _> = sqlx::query_as(
+                            "SELECT id FROM patients WHERE id = ?"
+                        )
+                        .bind(patient.id)
+                        .fetch_one(&*pool)
+                        .await;
+                        match patient_check {
+                            Ok((id,)) => println!("[SEED] ERROR: Patient {} exists in DB", id),
+                            Err(e) => println!("[SEED] ERROR: Patient {} NOT FOUND: {}", patient.id, e),
+                        }
+                        return Err(format!("Failed to create procedure: {}", e));
+                    }
+                }
             }
 
-            // Medical records: notes 1..5
-            let note_count = rng.gen_range(1..=5);
+            // Create notes
+            let note_count = if has_many_records {
+                rng.gen_range(3..=10)
+            } else {
+                rng.gen_range(0..=3)
+            };
+
+            if note_count > 0 {
+                println!("[SEED]        -> Creating {} notes", note_count);
+            }
+
             for _ in 0..note_count {
-                let title = note_titles.choose(&mut rng).unwrap().to_string();
-                let desc = format!("{} {}",
-                    lorem_sentences.choose(&mut rng).unwrap(),
-                    lorem_sentences.choose(&mut rng).unwrap()
-                );
+                let title = note_types.choose(&mut rng).unwrap();
+                let sentences: Vec<String> = (0..rng.gen_range(2..=5))
+                    .map(|_| Sentence(5..15).fake_with_rng(&mut rng))
+                    .collect();
+                let description = sentences.join(" ");
+
                 let input = CreateMedicalRecordInput {
                     patient_id: patient.id,
                     record_type: "note".to_string(),
-                    name: title,
+                    name: title.to_string(),
                     procedure_name: None,
-                    description: desc,
+                    description,
                     price: None,
                     currency_id: None,
                 };
-                let _ = MedicalRecordService::create_medical_record(&*pool, input).await
-                    .map_err(|e| format!("Failed to create note: {}", e))?;
-                created_records += 1;
+
+                match MedicalRecordService::create_medical_record(&*pool, input).await {
+                    Ok(_) => {
+                        created_records += 1;
+                    }
+                    Err(e) => {
+                        println!("[SEED] ERROR: Failed to create note for patient {}: {}", patient.id, e);
+                        return Err(format!("Failed to create note: {}", e));
+                    }
+                }
             }
+        }
+
+        // End of household iteration check
+        if household_num == households - 1 {
+            println!("[SEED] Completed last household iteration (#{}/{})", household_num + 1, households);
+        } else if household_num % 100 == 99 {
+            println!("[SEED] Completed {} households, continuing...", household_num + 1);
         }
     }
 
+    println!("[SEED] Main loop completed. Created {} households", created_households);
+
+    // Final database verification
+    let final_check: Result<(i64, i64, i64), _> = sqlx::query_as(
+        "SELECT
+            (SELECT COUNT(*) FROM households) as households,
+            (SELECT COUNT(*) FROM patients) as patients,
+            (SELECT COUNT(*) FROM medical_records) as records"
+    )
+    .fetch_one(&*pool)
+    .await;
+
+    let (actual_households, actual_patients, actual_records) = match final_check {
+        Ok(counts) => counts,
+        Err(e) => {
+            println!("[SEED] ERROR: Could not verify final state: {}", e);
+            (0, 0, 0)
+        }
+    };
+
+    println!("\n[SEED] ========================================");
+    println!("[SEED] SEEDING COMPLETED");
+    println!("[SEED] Counters: {} households, {} patients, {} records",
+            created_households, created_patients, created_records);
+    println!("[SEED] Database: {} households, {} patients, {} records",
+            actual_households, actual_patients, actual_records);
+
+    if actual_households != created_households ||
+       actual_patients != created_patients ||
+       actual_records != created_records {
+        println!("[SEED] WARNING: Mismatch between counters and database!");
+        println!("[SEED] This might indicate uncommitted transactions or other issues");
+    }
+
+    println!("[SEED] ========================================\n");
+
     Ok(format!(
-        "Seed complete: households={}, patients={}, records={}",
-        created_households, created_patients, created_records
+        "Database populated! Expected: {} households, {} patients, {} records. Actual in DB: {} households, {} patients, {} records",
+        created_households, created_patients, created_records,
+        actual_households, actual_patients, actual_records
     ))
 }

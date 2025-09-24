@@ -271,9 +271,6 @@ impl MedicalRecordService {
         pool: &SqlitePool,
         input: CreateMedicalRecordInput,
     ) -> Result<MedicalRecord, String> {
-        println!("DEBUG: Creating medical record with input: {:?}", input);
-        println!("DEBUG: currency_id from input: {:?}", input.currency_id);
-
         let now = Utc::now();
 
         // Development: do not populate procedure_name; use name as the single source of truth
@@ -299,18 +296,6 @@ impl MedicalRecordService {
         .map_err(|e| format!("Failed to create medical record: {}", e))?;
 
         let id = result.last_insert_rowid();
-
-        // Instead of constructing manually, fetch the actual record from the database
-        // to ensure we get what was actually saved (including any defaults or triggers)
-        let saved_record = sqlx::query_as::<_, (i64, String, Option<i64>, Option<i64>)>(
-            "SELECT patient_id, record_type, price, currency_id FROM medical_records WHERE id = ?"
-        )
-        .bind(id)
-        .fetch_one(pool)
-        .await
-        .map_err(|e| format!("Failed to fetch created record: {}", e))?;
-
-        println!("DEBUG: Saved record price: {:?}, currency_id: {:?}", saved_record.2, saved_record.3);
 
         let record = MedicalRecord {
             id,

@@ -18,6 +18,7 @@ thiserror = "1.0"
 chrono = { version = "0.4", features = ["serde", "clock"] }
 uuid = { version = "1.4", features = ["v4", "serde"] }
 rand = "0.8"
+fake = { version = "2.9", features = ["derive"] }
 pdfium-render = { version = "0.8" }
 image = { version = "0.25", default-features = false, features = ["png"] }
 

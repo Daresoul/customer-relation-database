@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 
 /* Seed the database with demo data via Tauri command */
-const { invoke } = require('@tauri-apps/api');
+import { invoke } from '@tauri-apps/api/core.js';
 
 async function main() {
   const households = parseInt(process.argv[2] || '1000', 10);
-  console.log(`Seeding ${households} households (1-5 pets each; 1-5 procedures + 1-5 notes per pet)...`);
+  console.log(`Seeding ${households} households (1-5 pets each)...`);
+  console.log(`This will create approximately ${households * 3} pets and ${households * 10} medical records`);
   try {
     const res = await invoke('populate_database', { households });
     console.log('✅', res);

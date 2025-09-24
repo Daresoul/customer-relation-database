@@ -8,8 +8,8 @@ CREATE TABLE IF NOT EXISTS currencies (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- Insert default currencies
-INSERT INTO currencies (code, name, symbol) VALUES
+-- Insert default currencies (only if they don't exist)
+INSERT OR IGNORE INTO currencies (code, name, symbol) VALUES
     ('MKD', 'Macedonian Denar', 'ден'),
     ('USD', 'US Dollar', '$'),
     ('EUR', 'Euro', '€'),

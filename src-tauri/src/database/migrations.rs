@@ -458,12 +458,13 @@ fn create_currencies_table(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::futu
         .execute(pool)
         .await?;
 
-        // Insert default currencies
+        // Insert default currencies with specific IDs to match the seeding code expectations
         sqlx::query(r#"
-            INSERT OR IGNORE INTO currencies (code, name, symbol) VALUES
-                ('EUR', 'Euro', '€'),
-                ('USD', 'US Dollar', '$'),
-                ('MKD', 'Macedonian Denar', 'ден')
+            INSERT OR IGNORE INTO currencies (id, code, name, symbol) VALUES
+                (1, 'MKD', 'Macedonian Denar', 'ден'),
+                (2, 'USD', 'US Dollar', '$'),
+                (3, 'EUR', 'Euro', '€'),
+                (4, 'GBP', 'British Pound', '£')
         "#)
         .execute(pool)
         .await?;
