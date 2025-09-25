@@ -1,6 +1,7 @@
 import React from 'react';
 import { Table, Typography, Tag, Empty, Button } from 'antd';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Patient } from '../../types/household';
 import { PlusOutlined } from '@ant-design/icons';
 
@@ -12,11 +13,12 @@ interface AnimalsSectionProps {
 }
 
 export const AnimalsSection: React.FC<AnimalsSectionProps> = ({ patients, householdId }) => {
+  const { t } = useTranslation('households');
   console.log(`AnimalsSection: Received ${patients.length} patients for household ${householdId}:`, patients);
 
   const columns = [
     {
-      title: 'Name',
+      title: t('detail.animals.columns.name'),
       dataIndex: 'name',
       key: 'name',
       render: (text: string, record: Patient) => (
@@ -24,19 +26,22 @@ export const AnimalsSection: React.FC<AnimalsSectionProps> = ({ patients, househ
       ),
     },
     {
-      title: 'Species',
+      title: t('detail.animals.columns.species'),
       dataIndex: 'species',
       key: 'species',
-      render: (text: string) => text.charAt(0).toUpperCase() + text.slice(1),
+      render: (text: string) => {
+        const speciesKey = text ? text.toLowerCase() : null;
+        return speciesKey ? t(`entities:species.${speciesKey}`, { defaultValue: text }) : '-';
+      },
     },
     {
-      title: 'Breed',
+      title: t('detail.animals.columns.breed'),
       dataIndex: 'breed',
       key: 'breed',
       render: (text: string | null) => text || '-',
     },
     {
-      title: 'Age',
+      title: t('detail.animals.columns.age'),
       key: 'age',
       render: (record: Patient) => {
         if (!record.dateOfBirth) return '-';
@@ -46,13 +51,13 @@ export const AnimalsSection: React.FC<AnimalsSectionProps> = ({ patients, househ
 
         if (ageInYears < 1) {
           const ageInMonths = Math.floor((today.getTime() - birthDate.getTime()) / (30 * 24 * 60 * 60 * 1000));
-          return `${ageInMonths} month${ageInMonths !== 1 ? 's' : ''}`;
+          return t('detail.animals.age.months', { count: ageInMonths });
         }
-        return `${ageInYears} year${ageInYears !== 1 ? 's' : ''}`;
+        return t('detail.animals.age.years', { count: ageInYears });
       },
     },
     {
-      title: 'Gender',
+      title: t('detail.animals.columns.gender'),
       dataIndex: 'gender',
       key: 'gender',
       render: (gender: string | undefined) => {
@@ -62,18 +67,20 @@ export const AnimalsSection: React.FC<AnimalsSectionProps> = ({ patients, househ
           female: 'pink',
           unknown: 'default'
         };
-        return <Tag color={colors[gender] || 'default'}>{gender.charAt(0).toUpperCase() + gender.slice(1)}</Tag>;
+        const genderKey = gender.toLowerCase();
+        const translatedGender = t(`entities:gender.${genderKey}`, { defaultValue: gender });
+        return <Tag color={colors[gender] || 'default'}>{translatedGender}</Tag>;
       },
     },
     {
-      title: 'Status',
+      title: t('detail.animals.columns.status'),
       dataIndex: 'status',
       key: 'status',
       render: (status: string | undefined) => {
         const isActive = status === 'active' || !status;
         return (
           <Tag color={isActive ? 'green' : 'default'}>
-            {isActive ? 'Active' : 'Inactive'}
+            {isActive ? t('detail.animals.status.active') : t('detail.animals.status.inactive')}
           </Tag>
         );
       },
@@ -83,10 +90,10 @@ export const AnimalsSection: React.FC<AnimalsSectionProps> = ({ patients, househ
   return (
     <div style={{ marginTop: 24 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <Title level={4}>Associated Animals</Title>
+        <Title level={4}>{t('detail.animals.title')}</Title>
         <Link to={`/patients/new?householdId=${householdId}`}>
           <Button type="primary" icon={<PlusOutlined />}>
-            Register New Pet
+            {t('detail.animals.registerNewPet')}
           </Button>
         </Link>
       </div>
@@ -100,11 +107,11 @@ export const AnimalsSection: React.FC<AnimalsSectionProps> = ({ patients, househ
         />
       ) : (
         <Empty
-          description="No pets registered for this household"
+          description={t('detail.animals.noAnimals')}
           style={{ marginBottom: 24 }}
         >
           <Link to={`/patients/new?householdId=${householdId}`}>
-            <Button type="primary">Register First Pet</Button>
+            <Button type="primary">{t('detail.animals.registerFirstPet')}</Button>
           </Link>
         </Empty>
       )}

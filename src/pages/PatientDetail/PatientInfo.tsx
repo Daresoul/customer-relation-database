@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Descriptions, Typography, Spin, App, Select, DatePicker, InputNumber } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { PatientDetail, SPECIES_OPTIONS, GENDER_OPTIONS, PATIENT_FIELD_RULES } from '../../types/patient';
 import { useUpdatePatient } from '../../hooks/usePatient';
 import { useInlineEdit } from '../../hooks/useAutoSave';
 import dayjs from 'dayjs';
+import { formatDateTime, getDatePickerFormat } from '../../utils/dateFormatter';
+import { useThemeColors } from '../../utils/themeStyles';
 
 const { Text } = Typography;
 
@@ -13,7 +16,20 @@ interface PatientInfoProps {
 
 export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
   const { message } = App.useApp();
+  const { t } = useTranslation(['patients', 'entities']);
   const updatePatient = useUpdatePatient();
+  const themeColors = useThemeColors();
+
+  // Create translated options for dropdowns
+  const translatedSpeciesOptions = SPECIES_OPTIONS.map(option => ({
+    value: option.value,
+    label: t(`entities:species.${option.value}`)
+  }));
+
+  const translatedGenderOptions = GENDER_OPTIONS.map(option => ({
+    value: option.value,
+    label: t(`entities:gender.${option.value.toLowerCase()}`)
+  }));
 
   // Local state for optimistic updates
   const [localValues, setLocalValues] = useState({
@@ -55,7 +71,7 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
         setLocalValues(prev => ({ ...prev, [field]: patient[field as keyof typeof patient] }));
       }
       console.error('Update failed:', error);
-      message.error('Failed to save changes');
+      message.error(t('detail.patientInfo.failedToSave'));
     }
   };
 
@@ -64,8 +80,8 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
     value: localValues.name || '',
     onSave: (value) => handleFieldUpdate('name', value),
     validate: (value) => {
-      if (!value || value.trim().length === 0) return 'Name is required';
-      if (value.length > PATIENT_FIELD_RULES.name.max) return PATIENT_FIELD_RULES.name.message;
+      if (!value || value.trim().length === 0) return t('detail.patientInfo.validation.nameRequired');
+      if (value.length > PATIENT_FIELD_RULES.name.max) return t('detail.patientInfo.validation.nameTooLong', { max: PATIENT_FIELD_RULES.name.max });
       return true;
     }
   });
@@ -74,7 +90,7 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
     value: localValues.breed || '',
     onSave: (value) => handleFieldUpdate('breed', value),
     validate: (value) => {
-      if (value && value.length > PATIENT_FIELD_RULES.breed.max) return PATIENT_FIELD_RULES.breed.message;
+      if (value && value.length > PATIENT_FIELD_RULES.breed.max) return t('detail.patientInfo.validation.breedTooLong', { max: PATIENT_FIELD_RULES.breed.max });
       return true;
     }
   });
@@ -82,7 +98,7 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
   const colorEdit = useInlineEdit({
     value: localValues.color || '',
     onSave: (value) => handleFieldUpdate('color', value),
-    validate: (value) => value.length <= 50 || 'Color must be 50 characters or less'
+    validate: (value) => value.length <= 50 || t('detail.patientInfo.validation.colorTooLong')
   });
 
   const microchipEdit = useInlineEdit({
@@ -90,8 +106,8 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
     onSave: (value) => handleFieldUpdate('microchipId', value),
     validate: (value) => {
       if (!value) return true;
-      if (!PATIENT_FIELD_RULES.microchipId.pattern.test(value)) return PATIENT_FIELD_RULES.microchipId.message;
-      if (value.length > PATIENT_FIELD_RULES.microchipId.max) return PATIENT_FIELD_RULES.microchipId.message;
+      if (!PATIENT_FIELD_RULES.microchipId.pattern.test(value)) return t('detail.patientInfo.validation.invalidMicrochip');
+      if (value.length > PATIENT_FIELD_RULES.microchipId.max) return t('detail.patientInfo.validation.invalidMicrochip');
       return true;
     }
   });
@@ -99,9 +115,9 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
   const isSaving = updatePatient.isPending;
 
   return (
-    <div style={{ background: '#1f1f1f', padding: 24, borderRadius: 8 }}>
-      <Typography.Title level={4} style={{ color: '#E6E6E6', marginBottom: 16 }}>
-        Patient Information
+    <div style={{ background: themeColors.cardBg, padding: 24, borderRadius: 8 }}>
+      <Typography.Title level={4} style={{ color: themeColors.text, marginBottom: 16 }}>
+        {t('detail.patientInfo.title')}
       </Typography.Title>
 
       <Descriptions
@@ -109,20 +125,20 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
         column={{ xs: 1, sm: 1, md: 2, lg: 2, xl: 3, xxl: 4 }}
         styles={{
           label: {
-            background: '#262626',
-            color: '#A6A6A6',
+            background: themeColors.hover,
+            color: themeColors.textSecondary,
             width: '120px',
             minWidth: '100px',
             maxWidth: '150px'
           },
           content: {
-            background: '#1f1f1f',
-            color: '#E6E6E6',
+            background: themeColors.cardBg,
+            color: themeColors.text,
             minWidth: '200px'
           }
         }}
       >
-        <Descriptions.Item label="Name" span={1}>
+        <Descriptions.Item label={t('detail.patientInfo.labels.name')} span={1}>
           <Text
             editable={{
               onChange: (value) => {
@@ -135,23 +151,23 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
               },
               triggerType: ['text'],
             }}
-            style={{ color: '#E6E6E6' }}
+            style={{ color: themeColors.text }}
           >
             {localValues.name || '-'}
           </Text>
         </Descriptions.Item>
 
-        <Descriptions.Item label="Species" span={1}>
+        <Descriptions.Item label={t('detail.patientInfo.labels.species')} span={1}>
           <Select
             value={patient.species}
             onChange={(value) => handleFieldUpdate('species', value)}
-            options={SPECIES_OPTIONS}
+            options={translatedSpeciesOptions}
             style={{ width: '100%' }}
             disabled={isSaving}
           />
         </Descriptions.Item>
 
-        <Descriptions.Item label="Breed" span={1}>
+        <Descriptions.Item label={t('detail.patientInfo.labels.breed')} span={1}>
           <Text
             editable={{
               onChange: (value) => {
@@ -164,23 +180,23 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
               },
               triggerType: ['text'],
             }}
-            style={{ color: '#E6E6E6' }}
+            style={{ color: themeColors.text }}
           >
             {localValues.breed || '-'}
           </Text>
         </Descriptions.Item>
 
-        <Descriptions.Item label="Gender" span={1}>
+        <Descriptions.Item label={t('detail.patientInfo.labels.gender')} span={1}>
           <Select
             value={patient.gender || 'Unknown'}
             onChange={(value) => handleFieldUpdate('gender', value)}
-            options={GENDER_OPTIONS}
+            options={translatedGenderOptions}
             style={{ width: '100%' }}
             disabled={isSaving}
           />
         </Descriptions.Item>
 
-        <Descriptions.Item label="Date of Birth" span={1}>
+        <Descriptions.Item label={t('detail.patientInfo.labels.dateOfBirth')} span={1}>
           <DatePicker
             value={localValues.dateOfBirth ? dayjs(localValues.dateOfBirth) : undefined}
             onChange={(date) => {
@@ -189,18 +205,18 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
               setLocalValues(prev => ({ ...prev, dateOfBirth: dateString }));
               handleFieldUpdate('dateOfBirth', dateString);
             }}
-            format="YYYY-MM-DD"
+            format={getDatePickerFormat()}
             style={{ width: '100%' }}
             disabled={isSaving}
             disabledDate={(current) => current && current > dayjs().endOf('day')}
           />
         </Descriptions.Item>
 
-        <Descriptions.Item label="Age" span={1}>
-          <Text style={{ color: '#E6E6E6' }}>{patient.age?.display || '-'}</Text>
+        <Descriptions.Item label={t('detail.patientInfo.labels.age')} span={1}>
+          <Text style={{ color: themeColors.text }}>{patient.age?.display || '-'}</Text>
         </Descriptions.Item>
 
-        <Descriptions.Item label="Weight (kg)" span={1}>
+        <Descriptions.Item label={t('detail.patientInfo.labels.weight')} span={1}>
           <InputNumber
             value={patient.weight}
             onChange={(value) => handleFieldUpdate('weight', value)}
@@ -213,7 +229,7 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
           />
         </Descriptions.Item>
 
-        <Descriptions.Item label="Color" span={1}>
+        <Descriptions.Item label={t('detail.patientInfo.labels.color')} span={1}>
           <Text
             editable={{
               onChange: (value) => {
@@ -226,13 +242,13 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
               },
               triggerType: ['text'],
             }}
-            style={{ color: '#E6E6E6' }}
+            style={{ color: themeColors.text }}
           >
             {localValues.color || '-'}
           </Text>
         </Descriptions.Item>
 
-        <Descriptions.Item label="Microchip ID" span={1}>
+        <Descriptions.Item label={t('detail.patientInfo.labels.microchipId')} span={1}>
           <Text
             editable={{
               onChange: (value) => {
@@ -245,27 +261,27 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
               },
               triggerType: ['text'],
             }}
-            style={{ color: '#E6E6E6' }}
+            style={{ color: themeColors.text }}
           >
             {localValues.microchipId || '-'}
           </Text>
         </Descriptions.Item>
 
-        <Descriptions.Item label="Status" span={1}>
+        <Descriptions.Item label={t('detail.patientInfo.labels.status')} span={1}>
           <Text style={{ color: patient.isActive ? '#52c41a' : '#ff4d4f' }}>
-            {patient.isActive ? 'Active' : 'Inactive'}
+            {patient.isActive ? t('detail.patientInfo.status.active') : t('detail.patientInfo.status.inactive')}
           </Text>
         </Descriptions.Item>
 
-        <Descriptions.Item label="Created" span={1}>
-          <Text style={{ color: '#A6A6A6' }}>
-            {dayjs(patient.createdAt).format('YYYY-MM-DD HH:mm')}
+        <Descriptions.Item label={t('detail.patientInfo.labels.created')} span={1}>
+          <Text style={{ color: themeColors.textSecondary }}>
+            {formatDateTime(patient.createdAt)}
           </Text>
         </Descriptions.Item>
 
-        <Descriptions.Item label="Last Updated" span={1}>
-          <Text style={{ color: '#A6A6A6' }}>
-            {dayjs(patient.updatedAt).format('YYYY-MM-DD HH:mm')}
+        <Descriptions.Item label={t('detail.patientInfo.labels.lastUpdated')} span={1}>
+          <Text style={{ color: themeColors.textSecondary }}>
+            {formatDateTime(patient.updatedAt)}
           </Text>
         </Descriptions.Item>
       </Descriptions>

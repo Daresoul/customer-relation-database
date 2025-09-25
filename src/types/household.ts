@@ -46,15 +46,15 @@ export interface CreateHouseholdDto {
 }
 
 export interface CreatePersonDto {
-  firstName: string;
-  lastName: string;
-  isPrimary?: boolean;
+  first_name: string;
+  last_name: string;
+  is_primary?: boolean;
 }
 
 export interface CreateContactDto {
-  contactType: 'phone' | 'email' | 'mobile' | 'work_phone';
-  contactValue: string;
-  isPrimary?: boolean;
+  contact_type: 'phone' | 'email' | 'mobile' | 'work_phone';
+  contact_value: string;
+  is_primary?: boolean;
 }
 
 export interface CreatePersonWithContactsDto {

@@ -3,6 +3,7 @@
  */
 
 import React, { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Form,
   Input,
@@ -24,6 +25,7 @@ import {
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
+import { getDatePickerFormat } from '../../utils/dateFormatter';
 import { Patient, CreatePatientInput, UpdatePatientInput } from '../../types';
 import type { BaseFormProps } from '../../types/ui.types';
 
@@ -44,6 +46,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({
   mode = 'create',
   householdId,
 }) => {
+  const { t } = useTranslation(['entities', 'forms']);
   const [form] = Form.useForm();
 
   useEffect(() => {
@@ -125,14 +128,14 @@ export const PatientForm: React.FC<PatientFormProps> = ({
               rules={[{ required: true, message: 'Please select species' }]}
             >
               <Select placeholder="Select species">
-                <Select.Option value="Dog">Dog</Select.Option>
-                <Select.Option value="Cat">Cat</Select.Option>
-                <Select.Option value="Bird">Bird</Select.Option>
-                <Select.Option value="Rabbit">Rabbit</Select.Option>
-                <Select.Option value="Hamster">Hamster</Select.Option>
-                <Select.Option value="Guinea Pig">Guinea Pig</Select.Option>
-                <Select.Option value="Reptile">Reptile</Select.Option>
-                <Select.Option value="Other">Other</Select.Option>
+                <Select.Option value="Dog">{t('entities:species.dog')}</Select.Option>
+                <Select.Option value="Cat">{t('entities:species.cat')}</Select.Option>
+                <Select.Option value="Bird">{t('entities:species.bird')}</Select.Option>
+                <Select.Option value="Rabbit">{t('entities:species.rabbit')}</Select.Option>
+                <Select.Option value="Hamster">{t('entities:species.hamster')}</Select.Option>
+                <Select.Option value="Guinea Pig">{t('entities:species.guineaPig')}</Select.Option>
+                <Select.Option value="Reptile">{t('entities:species.reptile')}</Select.Option>
+                <Select.Option value="Other">{t('entities:species.other')}</Select.Option>
               </Select>
             </Form.Item>
           </Col>
@@ -159,7 +162,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({
                 style={{ width: '100%' }}
                 placeholder="Select date of birth"
                 disabledDate={(current) => current && current > dayjs()}
-                format="YYYY-MM-DD"
+                format={getDatePickerFormat()}
               />
             </Form.Item>
           </Col>
@@ -172,9 +175,9 @@ export const PatientForm: React.FC<PatientFormProps> = ({
               label="Gender"
             >
               <Select placeholder="Select gender" allowClear>
-                <Select.Option value="Male">Male</Select.Option>
-                <Select.Option value="Female">Female</Select.Option>
-                <Select.Option value="Unknown">Unknown</Select.Option>
+                <Select.Option value="Male">{t('entities:gender.male')}</Select.Option>
+                <Select.Option value="Female">{t('entities:gender.female')}</Select.Option>
+                <Select.Option value="Unknown">{t('entities:gender.unknown')}</Select.Option>
               </Select>
             </Form.Item>
           </Col>

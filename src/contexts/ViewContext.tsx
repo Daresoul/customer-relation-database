@@ -52,28 +52,25 @@ export const ViewProvider: React.FC<ViewProviderProps> = ({ children }) => {
     hasQuery: false,
   });
 
-  // Load initial view preference
+  // Load initial view preference - always default to animal (patients) view
   useEffect(() => {
     const loadViewPreference = async () => {
       try {
-        // Try to get from localStorage first for immediate UI response
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) {
-          const preference = JSON.parse(stored) as ViewPreference;
-          setCurrentViewState(preference.activeView);
-        }
-
-        // Then sync with Tauri backend
-        const preference = await invoke<ViewPreference>('get_view_preference');
-        setCurrentViewState(preference.activeView);
-
-        // Update localStorage to stay in sync
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(preference));
-      } catch (error) {
-        console.warn('Failed to load view preference, using default:', error);
-        // Default to animal view on error
+        // Always start with animal view (patients)
         setCurrentViewState('animal');
+
+        // Clear any stored preference to ensure patients is default
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ activeView: 'animal' }));
+
+        // Update backend to match
+        try {
+          await invoke('set_view_preference', { activeView: 'animal' });
+        } catch (e) {
+          // Ignore backend errors on initialization
+        }
+      } catch (error) {
+        console.warn('Failed to initialize view preference:', error);
+        setCurrentViewState('animal');
       } finally {
         setIsLoading(false);
       }

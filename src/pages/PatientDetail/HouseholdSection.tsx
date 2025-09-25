@@ -2,6 +2,7 @@ import React from 'react';
 import { Card, Typography, Empty, Descriptions, Tag, Space } from 'antd';
 import { HomeOutlined, UserOutlined, PhoneOutlined, MailOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { HouseholdSummary } from '../../types/patient';
 
 const { Title, Text } = Typography;
@@ -11,6 +12,7 @@ interface HouseholdSectionProps {
 }
 
 export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household }) => {
+  const { t } = useTranslation('patients');
   if (!household) {
     return (
       <Card
@@ -21,7 +23,7 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household })
         title={
           <Title level={4} style={{ color: '#E6E6E6', margin: 0 }}>
             <HomeOutlined style={{ marginRight: 8 }} />
-            Household Information
+            {t('detail.householdInfo.title')}
           </Title>
         }
       >
@@ -29,7 +31,7 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household })
           image={Empty.PRESENTED_IMAGE_SIMPLE}
           description={
             <Text type="secondary">
-              No household assigned
+              {t('detail.householdInfo.noHousehold')}
             </Text>
           }
           style={{ padding: '40px 0' }}
@@ -53,7 +55,7 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household })
       title={
         <Title level={4} style={{ color: '#E6E6E6', margin: 0 }}>
           <HomeOutlined style={{ marginRight: 8 }} />
-          Household Information
+          {t('detail.householdInfo.title')}
         </Title>
       }
     >
@@ -71,30 +73,30 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household })
         }}
         bordered
       >
-        <Descriptions.Item label="Household Name">
+        <Descriptions.Item label={t('detail.householdInfo.householdName')}>
           <Link to={`/households/${household.id}`} style={{ color: '#4A90E2' }}>
             {household.householdName}
           </Link>
         </Descriptions.Item>
 
-        <Descriptions.Item label="Address">
+        <Descriptions.Item label={t('detail.householdInfo.address')}>
           <Text style={{ color: '#E6E6E6' }}>{fullAddress || '-'}</Text>
         </Descriptions.Item>
 
         {household.primaryContact && (
           <>
-            <Descriptions.Item label="Primary Contact">
+            <Descriptions.Item label={t('detail.householdInfo.primaryContact')}>
               <Space>
                 <UserOutlined />
                 <Text style={{ color: '#E6E6E6' }}>
                   {household.primaryContact.firstName} {household.primaryContact.lastName}
                 </Text>
-                <Tag color="blue">Primary</Tag>
+                <Tag color="blue">{t('detail.householdInfo.primary')}</Tag>
               </Space>
             </Descriptions.Item>
 
             {household.primaryContact.contacts && household.primaryContact.contacts.length > 0 && (
-              <Descriptions.Item label="Contact Info">
+              <Descriptions.Item label={t('detail.householdInfo.contactInfo')}>
                 <Space direction="vertical" size="small">
                   {household.primaryContact.contacts.map((contact) => (
                     <Space key={contact.id}>
@@ -107,7 +109,7 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household })
                         {contact.value}
                       </Text>
                       {contact.isPrimary && (
-                        <Tag color="green" style={{ marginLeft: 8 }}>Primary</Tag>
+                        <Tag color="green" style={{ marginLeft: 8 }}>{t('detail.householdInfo.primary')}</Tag>
                       )}
                     </Space>
                   ))}
@@ -118,7 +120,7 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household })
         )}
 
         {household.people && household.people.length > 1 && (
-          <Descriptions.Item label="Other Members">
+          <Descriptions.Item label={t('detail.householdInfo.otherMembers')}>
             <Space wrap>
               {household.people
                 .filter(person => !person.isPrimary)
@@ -135,7 +137,7 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household })
       <div style={{ marginTop: 16 }}>
         <Link to={`/households/${household.id}`}>
           <Text style={{ color: '#4A90E2' }}>
-            View Household Details →
+            {t('detail.householdInfo.viewDetails')}
           </Text>
         </Link>
       </div>

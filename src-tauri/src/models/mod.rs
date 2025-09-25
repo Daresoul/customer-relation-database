@@ -2,6 +2,7 @@ pub mod patient;
 pub mod dto;
 pub mod household;
 pub mod medical;
+pub mod settings;
 
 pub use patient::Patient;
 pub use dto::{CreatePatientDto, UpdatePatientDto};
@@ -18,4 +19,7 @@ pub use medical::{
     MedicalRecordFilter, PaginationParams,
     MedicalRecordsResponse, MedicalRecordDetail,
     SearchMedicalRecordsResponse, AttachmentData
+};
+pub use settings::{
+    AppSettings, SettingsResponse, UpdateSettingsRequest
 };

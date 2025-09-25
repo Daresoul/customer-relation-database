@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Form, Input, Select, Button, Space, Divider, InputNumber, List, Typography, Upload, message } from 'antd';
 import { SaveOutlined, CloseOutlined, UploadOutlined, DeleteOutlined, InboxOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import FileUpload from '../FileUpload/FileUpload';
 import FileAttachmentList from '../FileUpload/FileAttachmentList';
 import { useCurrencies, useMedicalRecord } from '@/hooks/useMedicalRecords';
+import { useAppSettings } from '@/hooks/useAppSettings';
 import { MedicalService } from '@/services/medicalService';
 import type { MedicalRecord, CreateMedicalRecordInput, UpdateMedicalRecordInput } from '@/types/medical';
 import type { UploadFile } from 'antd';
@@ -32,14 +34,14 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
   patientId,
   recordId,
 }) => {
+  const { t } = useTranslation(['medical', 'common', 'forms']);
   const [form] = Form.useForm();
-  const [recordType, setRecordType] = useState<string>(initialValues?.recordType || 'note');
+  const [recordType, setRecordType] = useState<string>(initialValues?.recordType || 'procedure');
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const { data: currencies } = useCurrencies();
+  const { settings } = useAppSettings();
 
-  useEffect(() => {
-    console.log('Available currencies:', currencies);
-  }, [currencies]);
+  // Removed debug log to avoid circular reference issues
   const { data: recordDetail, refetch: refetchRecord } = useMedicalRecord(
     recordId || 0,
     false
@@ -57,7 +59,10 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
       });
       setRecordType(initialValues.recordType);
     }
-  }, [initialValues, form]);
+  }, [initialValues?.id]); // Only depend on the ID to avoid circular references
+
+  // Removed useEffect that was causing circular reference warning
+  // Default currency is now set in the form's initialValues instead
 
   const handleFinish = (values: any) => {
     console.log('Form values before submit:', values);
@@ -88,6 +93,9 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
       form.setFieldValue('procedureName', undefined);
       form.setFieldValue('price', undefined);
       form.setFieldValue('currencyId', undefined);
+    } else if (value === 'procedure' && settings?.currencyId) {
+      // Set default currency when switching to procedure
+      form.setFieldValue('currencyId', settings.currencyId);
     }
   };
 
@@ -96,40 +104,43 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
       form={form}
       layout="vertical"
       onFinish={handleFinish}
-      initialValues={{ recordType: 'note' }}
+      initialValues={{
+        recordType: 'procedure',
+        ...(settings?.currencyId ? { currencyId: settings.currencyId } : {})
+      }}
     >
       {!isEdit && (
         <Form.Item
           name="recordType"
-          label="Record Type"
-          rules={[{ required: true, message: 'Please select a record type' }]}
+          label={t('medical:fields.recordType')}
+          rules={[{ required: true, message: t('forms:validation.required') }]}
         >
           <Select onChange={handleRecordTypeChange}>
-            <Option value="note">Note</Option>
-            <Option value="procedure">Procedure</Option>
+            <Option value="note">{t('medical:recordTypes.note')}</Option>
+            <Option value="procedure">{t('medical:recordTypes.procedure')}</Option>
           </Select>
         </Form.Item>
       )}
 
       <Form.Item
         name="name"
-        label={recordType === 'procedure' ? 'Procedure Name' : 'Title'}
+        label={recordType === 'procedure' ? t('medical:fields.procedureName') : t('medical:fields.title')}
         rules={[
-          { required: true, message: recordType === 'procedure' ? 'Please enter the procedure name' : 'Please enter a title' },
-          { max: 200, message: recordType === 'procedure' ? 'Procedure name must be less than 200 characters' : 'Title must be less than 200 characters' },
+          { required: true, message: t('forms:validation.required') },
+          { max: 200, message: t('forms:validation.maxLength', { max: 200 }) },
         ]}
       >
-        <Input placeholder={recordType === 'procedure' ? "e.g., Spay/Neuter, Dental Cleaning, Blood Test" : "e.g., Annual Checkup, Follow-up Note, Observation"} />
+        <Input placeholder={recordType === 'procedure' ? t('medical:placeholders.procedureName') : t('medical:placeholders.noteTitle')} />
       </Form.Item>
 
       <Form.Item
         name="description"
-        label="Description/Notes"
-        rules={[{ required: true, message: 'Please enter a description' }]}
+        label={t('medical:fields.description')}
+        rules={[{ required: true, message: t('forms:validation.required') }]}
       >
         <TextArea
           rows={6}
-          placeholder="Enter detailed notes about the procedure or observation..."
+          placeholder={t('medical:placeholders.description')}
           showCount
           maxLength={5000}
         />
@@ -139,7 +150,7 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
         <Space size="middle" style={{ width: '100%' }}>
           <Form.Item
             name="price"
-            label="Price (Optional)"
+            label={t('medical:fields.price')}
             style={{ marginBottom: 0, flex: 1 }}
           >
             <InputNumber
@@ -152,10 +163,10 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
 
           <Form.Item
             name="currencyId"
-            label="Currency"
+            label={t('medical:fields.currency')}
             style={{ marginBottom: 0, minWidth: 120 }}
           >
-            <Select placeholder="Select" allowClear>
+            <Select placeholder={t('common:selectPlaceholder')} allowClear>
               {currencies?.map(currency => (
                 <Option key={currency.id} value={currency.id}>
                   {currency.symbol} {currency.code}
@@ -171,14 +182,14 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
       {/* File Attachments Section */}
       {isEdit && recordId && (
         <div style={{ marginBottom: 24 }}>
-          <h4>File Attachments</h4>
+          <h4>{t('medical:fileAttachments')}</h4>
           {recordDetail?.attachments && recordDetail.attachments.length > 0 ? (
             <FileAttachmentList
               attachments={recordDetail.attachments}
               onDelete={() => refetchRecord()}
             />
           ) : (
-            <Text type="secondary">No attachments</Text>
+            <Text type="secondary">{t('medical:noAttachments')}</Text>
           )}
           <div style={{ marginTop: 16 }}>
             <FileUpload
@@ -191,31 +202,61 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
 
       {!isEdit && (
         <div style={{ marginBottom: 24 }}>
-          <h4>File Attachments</h4>
+          <h4>{t('medical:fileAttachments')}</h4>
           <Dragger
             beforeUpload={(file) => {
+              console.log('[Dragger] beforeUpload called with file:', file.name, file.size, file.type);
               const error = MedicalService.validateFile(file);
               if (error) {
+                console.log('[Dragger] File validation failed:', error);
                 message.error(error);
-                return false;
+                return Upload.LIST_IGNORE;
               }
-              setPendingFiles([...pendingFiles, file]);
+              console.log('[Dragger] File validation passed, returning false to prevent auto-upload');
+              // Don't add to state here, let onChange handle it
               return false;
             }}
-            onRemove={(file) => {
-              const index = pendingFiles.indexOf(file as any);
-              if (index > -1) {
-                const newFiles = [...pendingFiles];
-                newFiles.splice(index, 1);
-                setPendingFiles(newFiles);
-              }
+            customRequest={({ file, onSuccess, onError }) => {
+              console.log('[Dragger] customRequest called for file:', (file as File).name);
+              // Immediately mark as success to trigger proper onChange
+              setTimeout(() => {
+                console.log('[Dragger] Calling onSuccess for file:', (file as File).name);
+                onSuccess?.(null);
+              }, 0);
+            }}
+            onChange={({ file, fileList: newFileList }) => {
+              console.log('[Dragger] onChange called, file status:', file.status);
+              console.log('[Dragger] onChange fileList:', newFileList.map(f => ({
+                name: f.name,
+                status: f.status,
+                hasOriginFileObj: !!f.originFileObj
+              })));
+
+              // Get all valid files from the fileList
+              const validFiles: File[] = [];
+
+              newFileList.forEach(file => {
+                // Only include files that have originFileObj and aren't errors
+                if (file.originFileObj && file.status !== 'error') {
+                  validFiles.push(file.originFileObj as File);
+                }
+              });
+
+              console.log('[Dragger] Valid files to set in state:', validFiles.map(f => f.name));
+              // Update the pending files state
+              setPendingFiles(validFiles);
+            }}
+            onDrop={(e) => {
+              console.log('[Dragger] onDrop event triggered');
+              console.log('[Dragger] Dropped files:', e.dataTransfer.files);
             }}
             fileList={pendingFiles.map((file, index) => ({
-              uid: String(index),
+              uid: `-${index}-${file.name}-${file.size}`,
               name: file.name,
               size: file.size,
               type: file.type,
               status: 'done',
+              originFileObj: file,
             } as UploadFile))}
             multiple
             accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.jpg,.jpeg,.png,.gif,.bmp"
@@ -224,14 +265,12 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
             <p className="ant-upload-drag-icon">
               <InboxOutlined style={{ fontSize: 48, color: '#4A90E2' }} />
             </p>
-            <p className="ant-upload-text">Click or drag files to this area to upload</p>
-            <p className="ant-upload-hint">
-              Support for PDF, Word, Excel, images and text files. Max 100MB per file.
-            </p>
+            <p className="ant-upload-text">{t('medical:form.dropFile')}</p>
+            <p className="ant-upload-hint">{t('medical:form.supportedFormats')}</p>
           </Dragger>
           {pendingFiles.length > 0 && (
             <Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
-              {pendingFiles.length} file(s) will be uploaded when you create the record
+              {t('medical:fileUploadPending', { count: pendingFiles.length })}
             </Text>
           )}
         </div>
@@ -245,10 +284,10 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
             loading={loading}
             icon={<SaveOutlined />}
           >
-            {isEdit ? 'Update' : 'Create'}
+            {isEdit ? t('common:buttons.update') : t('common:buttons.create')}
           </Button>
           <Button onClick={onCancel} icon={<CloseOutlined />}>
-            Cancel
+            {t('common:buttons.cancel')}
           </Button>
         </Space>
       </Form.Item>

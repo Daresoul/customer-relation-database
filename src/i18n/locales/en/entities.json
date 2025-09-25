@@ -1,0 +1,87 @@
+{
+  "species": {
+    "dog": "Dog",
+    "cat": "Cat",
+    "bird": "Bird",
+    "rabbit": "Rabbit",
+    "hamster": "Hamster",
+    "guineaPig": "Guinea Pig",
+    "guinea_pig": "Guinea Pig",
+    "guinea pig": "Guinea Pig",
+    "ferret": "Ferret",
+    "reptile": "Reptile",
+    "fish": "Fish",
+    "other": "Other"
+  },
+  "gender": {
+    "male": "Male",
+    "female": "Female",
+    "unknown": "Unknown",
+    "neutered": "Neutered",
+    "spayed": "Spayed"
+  },
+  "appointmentTypes": {
+    "checkup": "Routine Checkup",
+    "vaccination": "Vaccination",
+    "surgery": "Surgery",
+    "emergency": "Emergency",
+    "dental": "Dental",
+    "grooming": "Grooming",
+    "consultation": "Consultation",
+    "followUp": "Follow-up"
+  },
+  "recordTypes": {
+    "procedure": "Procedure",
+    "note": "Note"
+  },
+  "currencies": {
+    "USD": "US Dollar",
+    "EUR": "Euro",
+    "GBP": "British Pound",
+    "MKD": "Macedonian Denar"
+  },
+  "themes": {
+    "light": "Light",
+    "dark": "Dark"
+  },
+  "languages": {
+    "en": "English",
+    "mk": "Macedonian"
+  },
+  "relationshipTypes": {
+    "owner": "Owner",
+    "caretaker": "Caretaker",
+    "emergencyContact": "Emergency Contact",
+    "veterinarian": "Veterinarian"
+  },
+  "contactTypes": {
+    "phone": "Phone",
+    "email": "Email",
+    "address": "Address",
+    "mobile": "Mobile",
+    "work": "Work",
+    "home": "Home"
+  },
+  "status": {
+    "active": "Active",
+    "inactive": "Inactive",
+    "recent": "Recent",
+    "archived": "Archived"
+  },
+  "roles": {
+    "primaryContact": "Primary Contact",
+    "familyMember": "Family Member",
+    "owner": "Owner"
+  },
+  "defaults": {
+    "noName": "No name",
+    "noAddress": "No address",
+    "noHousehold": "No household",
+    "noPrimaryContact": "No primary contact",
+    "noContactInfo": "No contact info",
+    "noNotes": "No notes",
+    "noActivity": "No activity",
+    "unknown": "Unknown",
+    "none": "None"
+  }
+}

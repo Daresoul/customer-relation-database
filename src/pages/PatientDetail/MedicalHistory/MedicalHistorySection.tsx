@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Card, Button, Space, Input, Select, Badge, Empty, Spin } from 'antd';
 import { PlusOutlined, SearchOutlined, FilterOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { useMedicalRecords } from '@/hooks/useMedicalRecords';
 import MedicalRecordCards from './MedicalRecordCards';
 import MedicalRecordModal from '@/components/MedicalRecordModal/MedicalRecordModal';
@@ -20,6 +21,7 @@ const MedicalHistorySection: React.FC<MedicalHistorySectionProps> = ({
   patientName,
   onNavigateToRecord,
 }) => {
+  const { t } = useTranslation('patients');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedRecordId, setSelectedRecordId] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -65,14 +67,14 @@ const MedicalHistorySection: React.FC<MedicalHistorySectionProps> = ({
 
   return (
     <Card
-      title="Medical History"
+      title={t('detail.medicalHistory.title')}
       extra={
         <Button
           type="primary"
           icon={<PlusOutlined />}
           onClick={handleCreateNew}
         >
-          Add Record
+          {t('detail.medicalHistory.addRecord')}
         </Button>
       }
       style={{ marginTop: 16 }}
@@ -81,10 +83,10 @@ const MedicalHistorySection: React.FC<MedicalHistorySectionProps> = ({
         {/* Search and Filters */}
         <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
           <Search
-            placeholder="Search medical records..."
+            placeholder={t('detail.medicalHistory.searchPlaceholder')}
             prefix={<SearchOutlined />}
             allowClear
-            enterButton="Search"
+            enterButton={t('detail.medicalHistory.search')}
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
             onSearch={handleSearch}
@@ -97,9 +99,9 @@ const MedicalHistorySection: React.FC<MedicalHistorySectionProps> = ({
             onChange={handleTypeFilter}
             suffixIcon={<FilterOutlined />}
           >
-            <Option value="all">All Types</Option>
-            <Option value="procedure">Procedures</Option>
-            <Option value="note">Notes</Option>
+            <Option value="all">{t('detail.medicalHistory.filters.allTypes')}</Option>
+            <Option value="procedure">{t('detail.medicalHistory.filters.procedures')}</Option>
+            <Option value="note">{t('detail.medicalHistory.filters.notes')}</Option>
           </Select>
 
           <Select
@@ -107,8 +109,8 @@ const MedicalHistorySection: React.FC<MedicalHistorySectionProps> = ({
             style={{ width: 150 }}
             onChange={handleArchiveFilter}
           >
-            <Option value={false}>Active</Option>
-            <Option value={true}>Archived</Option>
+            <Option value={false}>{t('detail.medicalHistory.filters.active')}</Option>
+            <Option value={true}>{t('detail.medicalHistory.filters.archived')}</Option>
           </Select>
         </div>
 
@@ -128,13 +130,13 @@ const MedicalHistorySection: React.FC<MedicalHistorySectionProps> = ({
           <Empty
             description={
               searchTerm || filter.recordType || filter.isArchived
-                ? 'No records found matching your filters'
-                : 'No medical records yet'
+                ? t('detail.medicalHistory.empty.noMatchingRecords')
+                : t('detail.medicalHistory.empty.noRecords')
             }
           >
             {!searchTerm && !filter.recordType && !filter.isArchived && (
               <Button type="primary" onClick={handleCreateNew}>
-                Create First Record
+                {t('detail.medicalHistory.createFirstRecord')}
               </Button>
             )}
           </Empty>

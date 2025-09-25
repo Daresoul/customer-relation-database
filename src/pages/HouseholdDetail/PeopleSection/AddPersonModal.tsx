@@ -1,6 +1,7 @@
 import React from 'react';
 import { Modal, Form, Input, Select, Button, Space, Radio } from 'antd';
 import { PlusOutlined, MinusCircleOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { CreatePersonWithContactsDto } from '../../../types/household';
 
 interface AddPersonModalProps {
@@ -10,12 +11,6 @@ interface AddPersonModalProps {
   loading?: boolean;
 }
 
-const contactTypeOptions = [
-  { label: 'Phone', value: 'phone' },
-  { label: 'Email', value: 'email' },
-  { label: 'Mobile', value: 'mobile' },
-  { label: 'Work Phone', value: 'work_phone' }
-];
 
 export const AddPersonModal: React.FC<AddPersonModalProps> = ({
   visible,
@@ -24,17 +19,29 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({
   loading
 }) => {
   const [form] = Form.useForm();
+  const { t } = useTranslation('households');
+
+  const contactTypeOptions = [
+    { label: t('detail.people.modal.contactTypes.phone'), value: 'phone' },
+    { label: t('detail.people.modal.contactTypes.email'), value: 'email' },
+    { label: t('detail.people.modal.contactTypes.mobile'), value: 'mobile' },
+    { label: t('detail.people.modal.contactTypes.workPhone'), value: 'work_phone' }
+  ];
 
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
       const personData: CreatePersonWithContactsDto = {
         person: {
-          firstName: values.firstName,
-          lastName: values.lastName,
-          isPrimary: values.isPrimary || false
+          first_name: values.firstName,
+          last_name: values.lastName,
+          is_primary: values.isPrimary || false
         },
-        contacts: values.contacts || []
+        contacts: (values.contacts || []).map((contact: any) => ({
+          contact_type: contact.contactType,
+          contact_value: contact.contactValue,
+          is_primary: contact.isPrimary || false
+        }))
       };
 
       await onAdd(personData);
@@ -47,7 +54,7 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({
   const validateEmail = (_: any, value: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (value && !emailRegex.test(value)) {
-      return Promise.reject('Please enter a valid email address');
+      return Promise.reject(t('detail.people.modal.validation.invalidEmail'));
     }
     return Promise.resolve();
   };
@@ -55,7 +62,7 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({
   const validatePhone = (_: any, value: string) => {
     const phoneRegex = /^[\d\s\-\+\(\)]+$/;
     if (value && !phoneRegex.test(value)) {
-      return Promise.reject('Please enter a valid phone number');
+      return Promise.reject(t('detail.people.modal.validation.invalidPhone'));
     }
     // Removed length validation - allow any number of digits
     return Promise.resolve();
@@ -63,12 +70,12 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({
 
   return (
     <Modal
-      title="Add New Person"
+      title={t('detail.people.modal.title')}
       open={visible}
       onCancel={onCancel}
       footer={[
         <Button key="cancel" onClick={onCancel}>
-          Cancel
+          {t('detail.people.modal.cancel')}
         </Button>,
         <Button
           key="submit"
@@ -76,7 +83,7 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({
           loading={loading}
           onClick={handleSubmit}
         >
-          Add Person
+          {t('detail.people.modal.submit')}
         </Button>
       ]}
       // Modal content will reset on close
@@ -91,31 +98,31 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({
       >
         <Form.Item
           name="firstName"
-          label="First Name"
-          rules={[{ required: true, message: 'First name is required' }]}
+          label={t('detail.people.modal.labels.firstName')}
+          rules={[{ required: true, message: t('detail.people.modal.validation.firstNameRequired') }]}
         >
-          <Input placeholder="Enter first name" autoFocus />
+          <Input placeholder={t('detail.people.modal.placeholders.firstName')} autoFocus />
         </Form.Item>
 
         <Form.Item
           name="lastName"
-          label="Last Name"
-          rules={[{ required: true, message: 'Last name is required' }]}
+          label={t('detail.people.modal.labels.lastName')}
+          rules={[{ required: true, message: t('detail.people.modal.validation.lastNameRequired') }]}
         >
-          <Input placeholder="Enter last name" />
+          <Input placeholder={t('detail.people.modal.placeholders.lastName')} />
         </Form.Item>
 
         <Form.Item
           name="isPrimary"
-          label="Primary Contact"
+          label={t('detail.people.modal.labels.primaryContact')}
         >
           <Radio.Group>
-            <Radio value={true}>Yes</Radio>
-            <Radio value={false}>No</Radio>
+            <Radio value={true}>{t('detail.people.modal.labels.yes')}</Radio>
+            <Radio value={false}>{t('detail.people.modal.labels.no')}</Radio>
           </Radio.Group>
         </Form.Item>
 
-        <Form.Item label="Contact Methods">
+        <Form.Item label={t('detail.people.modal.labels.contactMethods')}>
           <Form.List name="contacts">
             {(fields, { add, remove }) => (
               <>
@@ -124,17 +131,17 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({
                     <Form.Item
                       {...restField}
                       name={[name, 'contactType']}
-                      rules={[{ required: true, message: 'Select type' }]}
+                      rules={[{ required: true, message: t('detail.people.modal.validation.selectType') }]}
                       style={{ marginBottom: 0, width: 150 }}
                     >
-                      <Select placeholder="Type" options={contactTypeOptions} />
+                      <Select placeholder={t('detail.people.modal.placeholders.contactType')} options={contactTypeOptions} />
                     </Form.Item>
                     <Form.Item
                       {...restField}
                       name={[name, 'contactValue']}
                       dependencies={[['contacts', name, 'contactType']]}
                       rules={[
-                        { required: true, message: 'Required' },
+                        { required: true, message: t('detail.people.modal.validation.required') },
                         ({ getFieldValue }) => ({
                           validator(_, value) {
                             const type = getFieldValue(['contacts', name, 'contactType']);
@@ -149,7 +156,7 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({
                       ]}
                       style={{ marginBottom: 0, flex: 1 }}
                     >
-                      <Input placeholder="Contact value" />
+                      <Input placeholder={t('detail.people.modal.placeholders.contactValue')} />
                     </Form.Item>
                     <MinusCircleOutlined onClick={() => remove(name)} />
                   </Space>
@@ -160,7 +167,7 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({
                   block
                   icon={<PlusOutlined />}
                 >
-                  Add Contact Method
+                  {t('detail.people.modal.addContactMethod')}
                 </Button>
               </>
             )}

@@ -1,0 +1,87 @@
+{
+  "species": {
+    "dog": "Куче",
+    "cat": "Мачка",
+    "bird": "Птица",
+    "rabbit": "Зајак",
+    "hamster": "Хрчак",
+    "guineaPig": "Морско прасе",
+    "guinea_pig": "Морско прасе",
+    "guinea pig": "Морско прасе",
+    "ferret": "Ласица",
+    "reptile": "Рептил",
+    "fish": "Риба",
+    "other": "Друго"
+  },
+  "gender": {
+    "male": "Машки",
+    "female": "Женски",
+    "unknown": "Непознат",
+    "neutered": "Кастриран",
+    "spayed": "Стерилизирана"
+  },
+  "appointmentTypes": {
+    "checkup": "Рутинска контрола",
+    "vaccination": "Вакцинација",
+    "surgery": "Операција",
+    "emergency": "Итен случај",
+    "dental": "Стоматологија",
+    "grooming": "Нега",
+    "consultation": "Консултација",
+    "followUp": "Контролен преглед"
+  },
+  "recordTypes": {
+    "procedure": "Процедура",
+    "note": "Белешка"
+  },
+  "currencies": {
+    "USD": "Американски долар",
+    "EUR": "Евро",
+    "GBP": "Британска фунта",
+    "MKD": "Македонски денар"
+  },
+  "themes": {
+    "light": "Светла",
+    "dark": "Темна"
+  },
+  "languages": {
+    "en": "Англиски",
+    "mk": "Македонски"
+  },
+  "relationshipTypes": {
+    "owner": "Сопственик",
+    "caretaker": "Негувател",
+    "emergencyContact": "Контакт за итни случаи",
+    "veterinarian": "Ветеринар"
+  },
+  "contactTypes": {
+    "phone": "Телефон",
+    "email": "Е-пошта",
+    "address": "Адреса",
+    "mobile": "Мобилен",
+    "work": "Работа",
+    "home": "Дома"
+  },
+  "status": {
+    "active": "Активен",
+    "inactive": "Неактивен",
+    "recent": "Неодамнешен",
+    "archived": "Архивиран"
+  },
+  "roles": {
+    "primaryContact": "Примарен контакт",
+    "familyMember": "Член на семејство",
+    "owner": "Сопственик"
+  },
+  "defaults": {
+    "noName": "Без име",
+    "noAddress": "Без адреса",
+    "noHousehold": "Без домаќинство",
+    "noPrimaryContact": "Без примарен контакт",
+    "noContactInfo": "Без контакт информации",
+    "noNotes": "Без белешки",
+    "noActivity": "Без активност",
+    "unknown": "Непознато",
+    "none": "Ниту едно"
+  }
+}

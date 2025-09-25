@@ -1,0 +1,172 @@
+{
+  "title": "Пациенти",
+  "listTitle": "Листа на пациенти",
+  "addButton": "Додај нов пациент",
+  "searchPlaceholder": "Пребарај пациенти...",
+  "searchHouseholdsPlaceholder": "Пребарај домаќинства...",
+  "noPatients": "Не се пронајдени пациенти",
+  "totalPatients": "Вкупно пациенти",
+  "activePatients": "Активни пациенти",
+  "addPatient": "Додај пациент",
+  "editPatient": "Уреди пациент",
+  "deletePatient": "Избриши пациент",
+  "addHousehold": "Додај домаќинство",
+  "editHousehold": "Уреди домаќинство",
+  "confirmDelete": "Дали сте сигурни дека сакате да го избришете {{name}}?",
+  "confirmDeleteHousehold": "Дали сте сигурни дека сакате да го избришете домаќинството {{name}}?",
+  "notChipped": "Не е чипуван",
+  "unknownAge": "Непознато",
+  "bornOn": "Роден: {{date}}",
+  "loadingPatient": "Се вчитуваат деталите за пациентот...",
+  "selectedCount_one": "{{count}} пациент избран",
+  "selectedCount_other": "{{count}} пациенти избрани",
+  "familyMembers": "Членови на семејство ({{count}})",
+  "fields": {
+    "name": "Име",
+    "species": "Вид",
+    "breed": "Раса",
+    "gender": "Пол",
+    "dateOfBirth": "Датум на раѓање",
+    "age": "Возраст",
+    "color": "Боја",
+    "weight": "Тежина",
+    "microchipId": "ID на микрочип",
+    "medicalNotes": "Медицински белешки",
+    "household": "Домаќинство",
+    "owner": "Сопственик",
+    "phone": "Телефон",
+    "email": "Е-пошта",
+    "address": "Адреса",
+    "isActive": "Активен",
+    "createdAt": "Создаден",
+    "updatedAt": "Ажуриран"
+  },
+  "form": {
+    "title": "Информации за пациент",
+    "createTitle": "Создај нов пациент",
+    "editTitle": "Уреди пациент",
+    "basicInfo": "Основни информации",
+    "medicalInfo": "Медицински информации",
+    "contactInfo": "Контакт информации",
+    "requiredField": "Ова поле е задолжително",
+    "invalidEmail": "Внесете валидна е-пошта",
+    "invalidPhone": "Внесете валиден телефонски број"
+  },
+  "actions": {
+    "view": "Види детали",
+    "edit": "Уреди пациент",
+    "delete": "Избриши пациент",
+    "archive": "Архивирај пациент",
+    "restore": "Врати пациент",
+    "viewMedicalHistory": "Види медицинска историја",
+    "scheduleAppointment": "Закажи термин",
+    "printRecord": "Печати запис"
+  },
+  "messages": {
+    "createSuccess": "Пациентот е успешно создаден",
+    "updateSuccess": "Пациентот е успешно ажуриран",
+    "deleteSuccess": "Пациентот е успешно избришан",
+    "archiveSuccess": "Пациентот е успешно архивиран",
+    "restoreSuccess": "Пациентот е успешно вратен",
+    "confirmDelete": "Дали сте сигурни дека сакате да го избришете овој пациент?",
+    "confirmArchive": "Дали сте сигурни дека сакате да го архивирате овој пациент?"
+  },
+  "filters": {
+    "all": "Сите пациенти",
+    "active": "Само активни",
+    "archived": "Само архивирани",
+    "bySpecies": "По вид",
+    "byHousehold": "По домаќинство",
+    "recentlyAdded": "Неодамна додадени"
+  },
+  "statistics": {
+    "totalPatients": "Вкупно пациенти",
+    "activePatients": "Активни пациенти",
+    "totalHouseholds": "Вкупно домаќинства"
+  },
+  "errors": {
+    "invalidId": "Невалиден ID на пациент",
+    "invalidIdDescription": "Дадениот ID на пациент не е валиден.",
+    "loadingError": "Грешка при вчитување на пациент",
+    "loadingErrorDescription": "Неуспешно вчитување на деталите за пациентот",
+    "notFound": "Пациентот не е пронајден",
+    "notFoundDescription": "Бараниот пациент не може да се пронајде."
+  },
+  "tableColumns": {
+    "status": "Статус",
+    "name": "Име",
+    "species": "Вид",
+    "breed": "Раса",
+    "age": "Возраст",
+    "gender": "Пол",
+    "weight": "Тежина (кг)",
+    "microchip": "Микрочип",
+    "household": "Домаќинство",
+    "created": "Создаден",
+    "primaryContact": "Примарен контакт",
+    "contactInfo": "Контакт информации",
+    "pets": "Миленици",
+    "address": "Адреса",
+    "lastActivity": "Последна активност"
+  },
+  "detail": {
+    "patientInfo": {
+      "title": "Информации за пациент",
+      "failedToSave": "Неуспешно зачувување на промените",
+      "labels": {
+        "name": "Име",
+        "species": "Вид",
+        "breed": "Раса",
+        "gender": "Пол",
+        "dateOfBirth": "Датум на раѓање",
+        "age": "Возраст",
+        "weight": "Тежина (кг)",
+        "color": "Боја",
+        "microchipId": "ID на микрочип",
+        "status": "Статус",
+        "created": "Создаден",
+        "lastUpdated": "Последно ажурирано"
+      },
+      "validation": {
+        "nameRequired": "Името е задолжително",
+        "nameTooLong": "Името мора да биде {{max}} карактери или помалку",
+        "breedTooLong": "Расата мора да биде {{max}} карактери или помалку",
+        "colorTooLong": "Бојата мора да биде 50 карактери или помалку",
+        "invalidMicrochip": "Невалиден формат на микрочип"
+      },
+      "status": {
+        "active": "Активен",
+        "inactive": "Неактивен"
+      }
+    },
+    "householdInfo": {
+      "title": "Информации за домаќинство",
+      "noHousehold": "Нема доделено домаќинство",
+      "householdName": "Име на домаќинство",
+      "address": "Адреса",
+      "primaryContact": "Примарен контакт",
+      "contactInfo": "Контакт информации",
+      "otherMembers": "Други членови",
+      "viewDetails": "Види детали за домаќинството →",
+      "primary": "Примарен"
+    },
+    "medicalHistory": {
+      "title": "Медицинска историја",
+      "addRecord": "Додај запис",
+      "createFirstRecord": "Создај прв запис",
+      "searchPlaceholder": "Пребарај медицински записи...",
+      "search": "Пребарај",
+      "filters": {
+        "allTypes": "Сите типови",
+        "procedures": "Процедури",
+        "notes": "Белешки",
+        "active": "Активни",
+        "archived": "Архивирани"
+      },
+      "empty": {
+        "noRecords": "Сè уште нема медицински записи",
+        "noMatchingRecords": "Не се пронајдени записи што одговараат на вашите филтри"
+      }
+    }
+  }
+}

@@ -10,9 +10,11 @@ import {
   PaperClipOutlined,
   DownloadOutlined
 } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import type { MedicalRecord } from '@/types/medical';
 import { useArchiveMedicalRecord, useDownloadAttachment, useCurrencies } from '@/hooks/useMedicalRecords';
 import { Link, useNavigate } from 'react-router-dom';
+import { formatDate } from '@/utils/dateFormatter';
 import MedicalRecordDetailDrawer from '@/components/MedicalRecordDetail/MedicalRecordDetailDrawer';
 
 const { Text, Title, Paragraph } = Typography;
@@ -29,6 +31,7 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
   onRefresh,
   onNavigateToRecord,
 }) => {
+  const { t } = useTranslation('medical');
   const [archiveModalVisible, setArchiveModalVisible] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<MedicalRecord | null>(null);
   const archiveMutation = useArchiveMedicalRecord();
@@ -54,7 +57,7 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
       setSelectedRecord(null);
       onRefresh();
     } catch (error) {
-      message.error('Failed to archive/restore record');
+      message.error(selectedRecord.isArchived ? t('messages.restoreFailed') : t('messages.archiveFailed'));
     }
   };
 
@@ -65,7 +68,7 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
         fileName,
       });
     } catch (error) {
-      message.error('Failed to download attachment');
+      message.error(t('messages.downloadFailed'));
     }
   };
 
@@ -81,7 +84,7 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
     const menuItems = [
       {
         key: 'archive',
-        label: record.isArchived ? 'Restore' : 'Archive',
+        label: record.isArchived ? t('actions.restore') : t('actions.archive'),
         icon: <DeleteOutlined />,
         onClick: () => handleArchiveClick(record),
       },
@@ -117,9 +120,9 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
             </Space>
             <Space>
               <Tag color={isProcedure ? 'blue' : 'green'}>
-                {isProcedure ? 'Procedure' : 'Note'}
+                {isProcedure ? t('recordTypes.procedure') : t('recordTypes.note')}
               </Tag>
-              {record.isArchived && <Tag color="orange">Archived</Tag>}
+              {record.isArchived && <Tag color="orange">{t('status.archived')}</Tag>}
               <Dropdown
                 menu={{ items: menuItems }}
                 trigger={['click']}
@@ -131,14 +134,14 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
         }
         extra={
           <Text type="secondary">
-            <CalendarOutlined /> {new Date(record.createdAt).toLocaleDateString()}
+            <CalendarOutlined /> {formatDate(record.createdAt)}
           </Text>
         }
       >
         <Descriptions column={1} size="small">
           {isProcedure && (
             <>
-              <Descriptions.Item label="Procedure">
+              <Descriptions.Item label={t('fields.procedureName')}>
                 <Link
                   to={`/medical-records/${record.id}`}
                   style={{ color: 'inherit' }}
@@ -156,7 +159,7 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
                 <Descriptions.Item label={
                   <Space>
                     <DollarOutlined />
-                    <span>Price</span>
+                    <span>{t('fields.price')}</span>
                   </Space>
                 }>
                   <Text strong>
@@ -167,13 +170,13 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
             </>
           )}
 
-          <Descriptions.Item label="Description">
+          <Descriptions.Item label={t('fields.description')}>
             <Paragraph style={{ margin: 0, whiteSpace: 'pre-wrap' }} ellipsis={{ rows: 4, expandable: true }}>
               {record.description}
             </Paragraph>
           </Descriptions.Item>
 
-          <Descriptions.Item label="Created">
+          <Descriptions.Item label={t('fields.createdAt')}>
             <Text type="secondary">{new Date(record.createdAt).toLocaleString()}</Text>
             {record.createdBy && (
               <Text type="secondary"> by {record.createdBy}</Text>
@@ -184,7 +187,7 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
             <Descriptions.Item label={
               <Space>
                 <PaperClipOutlined />
-                <span>Attachments</span>
+                <span>{t('fields.attachments')}</span>
               </Space>
             }>
               <Space wrap>
@@ -229,7 +232,7 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
             </Descriptions.Item>
           )}
 
-          <Descriptions.Item label="Last Updated">
+          <Descriptions.Item label={t('fields.updatedAt')}>
             <Text type="secondary">{new Date(record.updatedAt).toLocaleString()}</Text>
             {record.updatedBy && (
               <Text type="secondary"> by {record.updatedBy}</Text>
@@ -237,8 +240,8 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
           </Descriptions.Item>
 
           {record.version > 1 && (
-            <Descriptions.Item label="Version">
-              <Text type="secondary">Version {record.version}</Text>
+            <Descriptions.Item label={t('fields.version')}>
+              <Text type="secondary">{t('versionLabel', { version: record.version })}</Text>
             </Descriptions.Item>
           )}
         </Descriptions>
@@ -253,24 +256,24 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
       </div>
 
       <Modal
-        title={selectedRecord?.isArchived ? 'Restore Record' : 'Archive Record'}
+        title={selectedRecord?.isArchived ? t('modal.restoreTitle') : t('modal.archiveTitle')}
         open={archiveModalVisible}
         onOk={handleArchiveConfirm}
         onCancel={() => {
           setArchiveModalVisible(false);
           setSelectedRecord(null);
         }}
-        okText={selectedRecord?.isArchived ? 'Restore' : 'Archive'}
+        okText={selectedRecord?.isArchived ? t('actions.restore') : t('actions.archive')}
         okType={selectedRecord?.isArchived ? 'primary' : 'danger'}
       >
         <p>
-          Are you sure you want to {selectedRecord?.isArchived ? 'restore' : 'archive'} this medical record?
+          {selectedRecord?.isArchived ? t('messages.confirmRestore') : t('messages.confirmArchive')}
         </p>
         <p>
           <strong>{selectedRecord?.name}</strong>
         </p>
         {!selectedRecord?.isArchived && (
-          <p>Archived records will be hidden from the main view but can be restored later.</p>
+          <p>{t('messages.archiveInfo')}</p>
         )}
       </Modal>
 
