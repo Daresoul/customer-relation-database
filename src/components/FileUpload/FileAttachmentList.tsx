@@ -15,6 +15,7 @@ import { useDeleteAttachment } from '@/hooks/useMedicalRecords';
 import { MedicalService } from '@/services/medicalService';
 import type { MedicalAttachment } from '@/types/medical';
 import dayjs from 'dayjs';
+import { formatDate } from '@/utils/dateFormatter';
 
 const { Text } = Typography;
 
@@ -130,7 +131,7 @@ const FileAttachmentList: React.FC<FileAttachmentListProps> = ({
                 </Text>
                 <Text type="secondary">•</Text>
                 <Text type="secondary">
-                  {dayjs(item.uploadedAt).format('MMM DD, YYYY')}
+                  {formatDate(item.uploadedAt)}
                 </Text>
               </Space>
             }

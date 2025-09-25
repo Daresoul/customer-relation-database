@@ -508,6 +508,281 @@ body {
   }
 }
 
+/* Light theme overrides */
+[data-theme="light"] {
+  background-color: #f5f5f5 !important;
+  color: #262626 !important;
+}
+
+[data-theme="light"] body {
+  background-color: #f5f5f5 !important;
+  color: #262626 !important;
+}
+
+[data-theme="light"] .ant-layout {
+  background: #f5f5f5 !important;
+}
+
+[data-theme="light"] .ant-layout-content {
+  background: #f5f5f5 !important;
+}
+
+[data-theme="light"] .ant-card {
+  background: #ffffff !important;
+  border-color: #d9d9d9 !important;
+  color: #262626 !important;
+}
+
+[data-theme="light"] .ant-card-head {
+  background: #fafafa !important;
+  border-bottom: 1px solid #d9d9d9 !important;
+  color: #262626 !important;
+}
+
+[data-theme="light"] .ant-table-wrapper {
+  background: #ffffff !important;
+}
+
+[data-theme="light"] .ant-table-thead > tr > th {
+  background: #fafafa !important;
+  color: #262626 !important;
+  border-bottom: 1px solid #d9d9d9 !important;
+}
+
+[data-theme="light"] .ant-table-tbody > tr > td {
+  background: #ffffff !important;
+  color: #262626 !important;
+  border-bottom: 1px solid #f0f0f0 !important;
+}
+
+[data-theme="light"] .ant-table-tbody > tr:hover > td {
+  background: #f5f5f5 !important;
+}
+
+[data-theme="light"] .ant-table-tbody > tr.ant-table-row-selected > td {
+  background: #e6f4ff !important;
+}
+
+[data-theme="light"] .ant-input,
+[data-theme="light"] .ant-select-selector,
+[data-theme="light"] .ant-picker,
+[data-theme="light"] .ant-input-number-input {
+  background: #ffffff !important;
+  border-color: #d9d9d9 !important;
+  color: #262626 !important;
+}
+
+[data-theme="light"] .ant-input:hover,
+[data-theme="light"] .ant-select-selector:hover,
+[data-theme="light"] .ant-picker:hover {
+  border-color: #40a9ff !important;
+}
+
+[data-theme="light"] .ant-input:focus,
+[data-theme="light"] .ant-select-focused .ant-select-selector,
+[data-theme="light"] .ant-picker-focused {
+  border-color: #1890ff !important;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2) !important;
+}
+
+[data-theme="light"] .ant-btn-default {
+  background: #ffffff !important;
+  border-color: #d9d9d9 !important;
+  color: #262626 !important;
+}
+
+[data-theme="light"] .ant-btn-default:hover {
+  background: #ffffff !important;
+  border-color: #40a9ff !important;
+  color: #40a9ff !important;
+}
+
+[data-theme="light"] .ant-modal-content {
+  background: #ffffff !important;
+}
+
+[data-theme="light"] .ant-modal-header {
+  background: #ffffff !important;
+  border-bottom: 1px solid #f0f0f0 !important;
+}
+
+[data-theme="light"] .ant-modal-footer {
+  background: #ffffff !important;
+  border-top: 1px solid #f0f0f0 !important;
+}
+
+[data-theme="light"] .ant-modal-title {
+  color: #262626 !important;
+}
+
+[data-theme="light"] .ant-modal-close {
+  color: #595959 !important;
+}
+
+[data-theme="light"] .ant-modal-body {
+  color: #262626 !important;
+}
+
+[data-theme="light"] .ant-select-dropdown {
+  background: #ffffff !important;
+  border: 1px solid #d9d9d9 !important;
+}
+
+[data-theme="light"] .ant-select-item {
+  color: #262626 !important;
+}
+
+[data-theme="light"] .ant-select-item-option-active {
+  background: #f5f5f5 !important;
+}
+
+[data-theme="light"] .ant-select-item-option-selected {
+  background: #e6f4ff !important;
+}
+
+[data-theme="light"] .ant-picker-dropdown {
+  background: #ffffff !important;
+}
+
+[data-theme="light"] .ant-picker-panel-container {
+  background: #ffffff !important;
+  border: 1px solid #d9d9d9 !important;
+}
+
+[data-theme="light"] .ant-picker-cell {
+  color: #262626 !important;
+}
+
+[data-theme="light"] .ant-picker-cell-in-view.ant-picker-cell-selected .ant-picker-cell-inner {
+  background: #1890ff !important;
+  color: #ffffff !important;
+}
+
+[data-theme="light"] .ant-picker-header {
+  color: #262626 !important;
+}
+
+[data-theme="light"] .ant-dropdown-menu {
+  background: #ffffff !important;
+  border: 1px solid #d9d9d9 !important;
+}
+
+[data-theme="light"] .ant-dropdown-menu-item {
+  color: #262626 !important;
+}
+
+[data-theme="light"] .ant-dropdown-menu-item:hover {
+  background: #f5f5f5 !important;
+}
+
+[data-theme="light"] .ant-tabs-tab {
+  color: #595959 !important;
+}
+
+[data-theme="light"] .ant-tabs-tab:hover {
+  color: #262626 !important;
+}
+
+[data-theme="light"] .ant-tabs-tab.ant-tabs-tab-active {
+  color: #1890ff !important;
+}
+
+[data-theme="light"] .ant-tabs-ink-bar {
+  background: #1890ff !important;
+}
+
+[data-theme="light"] .ant-breadcrumb {
+  color: #595959 !important;
+}
+
+[data-theme="light"] .ant-breadcrumb a {
+  color: #1890ff !important;
+}
+
+[data-theme="light"] .ant-statistic-title {
+  color: #595959 !important;
+}
+
+[data-theme="light"] .ant-statistic-content {
+  color: #262626 !important;
+}
+
+[data-theme="light"] .ant-typography {
+  color: #262626 !important;
+}
+
+[data-theme="light"] .ant-descriptions-item-label {
+  color: #595959 !important;
+}
+
+[data-theme="light"] .ant-descriptions-item-content {
+  color: #262626 !important;
+}
+
+[data-theme="light"] .ant-tag {
+  background: #fafafa !important;
+  border-color: #d9d9d9 !important;
+  color: #262626 !important;
+}
+
+[data-theme="light"] .ant-form-item-label > label {
+  color: #262626 !important;
+}
+
+[data-theme="light"] .ant-checkbox-wrapper {
+  color: #262626 !important;
+}
+
+[data-theme="light"] .ant-radio-wrapper {
+  color: #262626 !important;
+}
+
+/* Light theme scrollbars */
+[data-theme="light"] ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+  background-color: #f0f0f0;
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background-color: #bfbfbf;
+  border-radius: 4px;
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background-color: #999999;
+}
+
+[data-theme="light"] ::-webkit-scrollbar-track {
+  background-color: #f0f0f0;
+  border-radius: 4px;
+}
+
+/* Danger buttons should stay red in light theme */
+[data-theme="light"] .ant-btn-dangerous.ant-btn-default {
+  background-color: #ffffff !important;
+  border-color: #ff4d4f !important;
+  color: #ff4d4f !important;
+}
+
+[data-theme="light"] .ant-btn-dangerous.ant-btn-default:hover {
+  background-color: #fff1f0 !important;
+  border-color: #ff7875 !important;
+  color: #ff7875 !important;
+}
+
+[data-theme="light"] .ant-btn-dangerous.ant-btn-primary {
+  background-color: #ff4d4f !important;
+  border-color: #ff4d4f !important;
+  color: #ffffff !important;
+}
+
+[data-theme="light"] .ant-btn-dangerous.ant-btn-primary:hover {
+  background-color: #ff7875 !important;
+  border-color: #ff7875 !important;
+  color: #ffffff !important;
+}
+
 /* Reduced motion support */
 @media (prefers-reduced-motion: reduce) {
   * {

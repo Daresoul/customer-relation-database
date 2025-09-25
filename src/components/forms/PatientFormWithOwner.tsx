@@ -3,6 +3,7 @@
  */
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Form,
   Input,
@@ -63,6 +64,7 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
   onCancel,
   loading = false,
 }) => {
+  const { t } = useTranslation(['entities', 'forms']);
   const [form] = Form.useForm();
   const [owners, setOwners] = useState<Owner[]>([]);
   const [households, setHouseholds] = useState<Household[]>([]);
@@ -338,9 +340,9 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
           <Col xs={24} sm={8}>
             <Form.Item name="gender" label="Gender">
               <Select placeholder="Select gender">
-                <Option value="Male">Male</Option>
-                <Option value="Female">Female</Option>
-                <Option value="Unknown">Unknown</Option>
+                <Option value="Male">{t('entities:gender.male')}</Option>
+                <Option value="Female">{t('entities:gender.female')}</Option>
+                <Option value="Unknown">{t('entities:gender.unknown')}</Option>
               </Select>
             </Form.Item>
           </Col>

@@ -32,6 +32,7 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     // Dev task: drop and recreate ONLY the medical_record_history table to switch to snapshot strategy
     run_migration(pool, "015_recreate_medical_record_history", recreate_medical_record_history).await?;
     run_migration(pool, "016_add_missing_patient_columns", add_missing_patient_columns).await?;
+    run_migration(pool, "017_create_app_settings_table", create_app_settings_table).await?;
 
     Ok(())
 }
@@ -756,6 +757,67 @@ fn add_missing_patient_columns(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::
         // SQLite treats BOOLEAN as NUMERIC; default only applies to new rows
         ensure_column(pool, "patients", "is_active", "BOOLEAN DEFAULT 1").await?;
 
+        Ok(())
+    })
+}
+
+fn create_app_settings_table(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        // Create app_settings table
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS app_settings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL DEFAULT 'default',
+                language TEXT NOT NULL DEFAULT 'en' CHECK(language IN ('en', 'mk')),
+                currency_id INTEGER,
+                theme TEXT DEFAULT 'light' CHECK(theme IN ('light', 'dark')),
+                date_format TEXT DEFAULT 'MM/DD/YYYY',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (currency_id) REFERENCES currencies(id),
+                UNIQUE(user_id)
+            )
+            "#,
+        )
+        .execute(pool)
+        .await?;
+
+        // Create index for fast user lookups
+        sqlx::query(
+            r#"
+            CREATE INDEX IF NOT EXISTS idx_app_settings_user_id ON app_settings(user_id)
+            "#,
+        )
+        .execute(pool)
+        .await?;
+
+        // Insert default settings with USD currency if available
+        sqlx::query(
+            r#"
+            INSERT INTO app_settings (user_id, language, currency_id)
+            SELECT 'default', 'en', id
+            FROM currencies
+            WHERE code = 'USD'
+            LIMIT 1
+            ON CONFLICT(user_id) DO NOTHING
+            "#,
+        )
+        .execute(pool)
+        .await?;
+
+        // If USD not found, insert without default currency
+        sqlx::query(
+            r#"
+            INSERT INTO app_settings (user_id, language)
+            SELECT 'default', 'en'
+            WHERE NOT EXISTS (SELECT 1 FROM app_settings WHERE user_id = 'default')
+            "#,
+        )
+        .execute(pool)
+        .await?;
+
+        println!("Created app_settings table");
         Ok(())
     })
 }

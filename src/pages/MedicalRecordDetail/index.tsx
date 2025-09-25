@@ -2,10 +2,11 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Layout, Card, Typography, Space, Button, Alert, Spin, Table, Tag, Descriptions, App, Switch, Breadcrumb } from 'antd';
 import { invoke, convertFileSrc } from '@tauri-apps/api/tauri';
+import { useTranslation } from 'react-i18next';
 import PdfInlineViewer from '@/components/PdfInlineViewer';
 import PdfMultiPagePreview from '@/components/PdfMultiPagePreview';
 import { HomeOutlined, ArrowLeftOutlined, EditOutlined, SaveOutlined, CloseOutlined } from '@ant-design/icons';
-import { useMedicalRecord, useUpdateMedicalRecord } from '@/hooks/useMedicalRecords';
+import { useMedicalRecord, useUpdateMedicalRecord, useCurrencies } from '@/hooks/useMedicalRecords';
 import { MedicalService } from '@/services/medicalService';
 import MedicalRecordForm from '@/components/MedicalRecordModal/MedicalRecordForm';
 // Inline PDF viewer handled by PdfInlineViewer with reliable fallbacks
@@ -15,6 +16,7 @@ const { Content } = Layout;
 const { Title, Text, Paragraph } = Typography;
 
 export const MedicalRecordDetailPage: React.FC = () => {
+  const { t } = useTranslation(['medical', 'common', 'navigation']);
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -24,6 +26,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
 
   const { data, isLoading, isError, error, refetch } = useMedicalRecord(recordId, true);
   const updateMutation = useUpdateMedicalRecord();
+  const { data: currencies } = useCurrencies();
   const [isEditing, setIsEditing] = useState(false);
   const [selectedVersion, setSelectedVersion] = useState<number | null>(null);
   const [selectedHistory, setSelectedHistory] = useState<MedicalRecordHistory | null>(null);
@@ -159,7 +162,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
 
   const columns = [
     {
-      title: 'Version',
+      title: t('medical:fields.version'),
       dataIndex: 'version',
       key: 'version',
       width: 120,
@@ -169,10 +172,10 @@ export const MedicalRecordDetailPage: React.FC = () => {
         </Button>
       )
     },
-    { title: 'Changed At', dataIndex: 'changedAt', key: 'changedAt', render: (v: string) => new Date(v).toLocaleString() },
-    { title: 'Changed By', dataIndex: 'changedBy', key: 'changedBy', render: (v: string) => v || '-' },
+    { title: t('medical:detail.changedAt'), dataIndex: 'changedAt', key: 'changedAt', render: (v: string) => new Date(v).toLocaleString() },
+    { title: t('medical:detail.changedBy'), dataIndex: 'changedBy', key: 'changedBy', render: (v: string) => v || '-' },
     {
-      title: 'Fields', key: 'fields', render: (_: any, row: any) => {
+      title: t('medical:detail.fields'), key: 'fields', render: (_: any, row: any) => {
         const cf = (row as any).changedFields;
         let fields: string[] = [];
         if (Array.isArray(cf)) fields = cf;
@@ -213,7 +216,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
     console.log('[Attachments] onExpand ->', { expanded, id: row.id, key, mime: row.mimeType, name: row.originalName });
     if (expanded) {
       if (!isPreviewable(row.mimeType, row.originalName)) {
-        message.info('Inline preview not available for this file type. Use Open in App.');
+        message.info(t('medical:detail.previewNotAvailable'));
         return;
       }
       // Only one open at a time
@@ -305,7 +308,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
   if (!id || isNaN(recordId)) {
     return (
       <Content style={{ padding: 24, background: '#141414' }}>
-        <Alert message="Invalid Record ID" type="error" showIcon />
+        <Alert message={t('medical:detail.invalidRecordId')} type="error" showIcon />
       </Content>
     );
   } 
@@ -314,7 +317,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
     return (
       <Content style={{ padding: 24, textAlign: 'center', background: '#141414', minHeight: '100vh' }}>
         <Spin size="large" />
-        <div style={{ marginTop: 16, color: '#E6E6E6' }}>Loading record...</div>
+        <div style={{ marginTop: 16, color: '#E6E6E6' }}>{t('medical:detail.loadingRecord')}</div>
       </Content>
     );
   }
@@ -323,11 +326,11 @@ export const MedicalRecordDetailPage: React.FC = () => {
     return (
       <Content style={{ padding: 24, background: '#141414' }}>
         <Alert
-          message="Failed to load record"
-          description={error instanceof Error ? error.message : 'Unknown error'}
+          message={t('medical:messages.loadError')}
+          description={error instanceof Error ? error.message : t('common:error')}
           type="error"
           showIcon
-          action={<Button onClick={() => window.location.reload()}>Retry</Button>}
+          action={<Button onClick={() => window.location.reload()}>{t('medical:actions.retry')}</Button>}
         />
       </Content>
     );
@@ -353,10 +356,10 @@ export const MedicalRecordDetailPage: React.FC = () => {
         <Breadcrumb
           items={[
             {
-              title: <Link to="/" style={{ color: '#4A90E2' }}><HomeOutlined /> Home</Link>,
+              title: <Link to="/" style={{ color: '#4A90E2' }}><HomeOutlined /> {t('navigation:home')}</Link>,
             },
             {
-              title: <Link to="/" style={{ color: '#4A90E2' }}>Dashboard</Link>,
+              title: <Link to="/" style={{ color: '#4A90E2' }}>{t('navigation:dashboard')}</Link>,
             },
             {
               title: record?.patientId ? (
@@ -371,14 +374,14 @@ export const MedicalRecordDetailPage: React.FC = () => {
                     );
                   }}
                 >
-                  Patient
+                  {t('navigation:patients')}
                 </Link>
               ) : (
-                <span style={{ color: '#E6E6E6' }}>Patient</span>
+                <span style={{ color: '#E6E6E6' }}>{t('navigation:patients')}</span>
               ),
             },
             {
-              title: <span style={{ color: '#E6E6E6' }}>Medical Record</span>,
+              title: <span style={{ color: '#E6E6E6' }}>{t('medical:title')}</span>,
             },
           ]}
         />
@@ -399,7 +402,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
             }
           }}
         >
-          Back to Patient
+          {t('medical:detail.backToPatient')}
         </Button>
       </div>
 
@@ -409,7 +412,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
         }</Title>}
         extra={
           !isEditing ? (
-            <Button type="primary" icon={<EditOutlined />} onClick={() => setIsEditing(true)}>Edit</Button>
+            <Button type="primary" icon={<EditOutlined />} onClick={() => setIsEditing(true)}>{t('common:edit')}</Button>
           ) : undefined
         }
       >
@@ -421,7 +424,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
               onChange={setShowDiffs}
               disabled={!selectedEntry}
             />
-            <Text type={selectedEntry ? 'secondary' : undefined}>Show differences</Text>
+            <Text type={selectedEntry ? 'secondary' : undefined}>{t('medical:detail.showDifferences')}</Text>
           </Space>
         </div>
         {!isEditing ? (
@@ -431,26 +434,40 @@ export const MedicalRecordDetailPage: React.FC = () => {
               const nameVal = displayRecord?.name || record.name;
               const procVal = typeVal === 'procedure' ? nameVal : undefined;
               const priceVal = (typeof displayRecord?.price !== 'undefined') ? displayRecord?.price : record.price;
+              const currencyId = displayRecord?.currencyId || record.currencyId;
               const descVal = displayRecord?.description || record.description;
+
+              // Get currency symbol
+              const getCurrencyDisplay = () => {
+                if (!currencyId || !currencies) return '';
+                const currency = currencies.find(c => c.id === currencyId);
+                return currency ? `${currency.symbol || currency.code} ` : '';
+              };
               return (
                 <>
                   <Descriptions column={2} size="middle">
-                    <Descriptions.Item label="Type">
-                      <Tag color={typeVal === 'procedure' ? 'blue' : 'green'}>{typeVal}</Tag>
+                    <Descriptions.Item label={t('medical:fields.recordType')}>
+                      <Tag color={typeVal === 'procedure' ? 'blue' : 'green'}>
+                        {typeVal === 'procedure' ? t('medical:recordTypes.procedure') : t('medical:recordTypes.note')}
+                      </Tag>
                     </Descriptions.Item>
                     {typeVal === 'procedure' && (
-                      <Descriptions.Item label="Procedure">{procVal}</Descriptions.Item>
+                      <Descriptions.Item label={t('medical:fields.procedureName')}>{procVal}</Descriptions.Item>
                     )}
                     {typeof priceVal !== 'undefined' && (
-                      <Descriptions.Item label="Price">{priceVal as any}</Descriptions.Item>
+                      <Descriptions.Item label={t('medical:fields.price')}>
+                        <Text strong style={{ color: '#E6E6E6' }}>
+                          {getCurrencyDisplay()}{priceVal}
+                        </Text>
+                      </Descriptions.Item>
                     )}
-                    <Descriptions.Item label="Created">{new Date(record.createdAt).toLocaleString()}</Descriptions.Item>
-                    <Descriptions.Item label="Updated">{new Date(((selectedEntry as any)?.changedAt) || record.updatedAt).toLocaleString()}</Descriptions.Item>
-                    <Descriptions.Item label="Version">{selectedVersion || record.version}</Descriptions.Item>
+                    <Descriptions.Item label={t('medical:fields.createdAt')}>{new Date(record.createdAt).toLocaleString()}</Descriptions.Item>
+                    <Descriptions.Item label={t('medical:fields.updatedAt')}>{new Date(((selectedEntry as any)?.changedAt) || record.updatedAt).toLocaleString()}</Descriptions.Item>
+                    <Descriptions.Item label={t('medical:fields.version')}>{selectedVersion || record.version}</Descriptions.Item>
                   </Descriptions>
 
                   <div style={{ marginTop: 16 }}>
-                    <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>Description</Text>
+                    <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>{t('medical:fields.description')}</Text>
                     <Paragraph style={{ margin: 0, whiteSpace: 'pre-wrap', color: '#E6E6E6' }}>{descVal as any}</Paragraph>
                   </div>
 
@@ -483,12 +500,15 @@ export const MedicalRecordDetailPage: React.FC = () => {
       </Card>
 
       {/* Attachments Card */}
-      <Card title="Attachments" style={{ marginTop: 16 }}>
+      <Card title={t('medical:fields.attachments')} style={{ marginTop: 16 }}>
         <Table
           size="small"
           rowKey={(r: any) => String(r.id)}
           dataSource={attachments}
           pagination={false}
+          locale={{
+            emptyText: t('medical:detail.noAttachments') || t('common:noData')
+          }}
           onRow={(record: any) => ({
             onClick: () => {
               if (isPreviewable(record.mimeType, record.originalName)) {
@@ -510,7 +530,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
               const isPdf = mime === 'application/pdf' || String(row.originalName).toLowerCase().endsWith('.pdf');
               const isTauri = typeof (window as any).__TAURI__ !== 'undefined';
               if (!isPreviewable(mime, row.originalName)) {
-                return <Text type="secondary">Preview not available for this file type.</Text>;
+                return <Text type="secondary">{t('medical:detail.previewNotAvailable')}</Text>;
               }
               // PDF branch first
               if (isPdf) {
@@ -524,17 +544,17 @@ export const MedicalRecordDetailPage: React.FC = () => {
                     console.log('[Attachments] rendering PDF preview (pdf.js fallback)', { id: row.id });
                     return <PdfInlineViewer blob={pblob} fileName={row.originalName} />;
                   }
-                  return <Text type="secondary">Loading preview...</Text>;
+                  return <Text type="secondary">{t('medical:detail.loadingPreview')}</Text>;
                 } else {
                   // In browsers, prefer native PDF viewer for reliability
                   if (url) return <iframe src={url} title={row.originalName} style={{ width: '100%', height: 480, border: 0 }} />;
-                  if (!pblob) return <Text type="secondary">Loading preview...</Text>;
+                  if (!pblob) return <Text type="secondary">{t('medical:detail.loadingPreview')}</Text>;
                   console.log('[Attachments] rendering PDF preview (pdf.js)', { id: row.id });
                   return <PdfInlineViewer blob={pblob} fileName={row.originalName} />;
                 }
               }
               if (!url) {
-                return <Text type="secondary">Loading preview...</Text>;
+                return <Text type="secondary">{t('medical:detail.loadingPreview')}</Text>;
               }
               if (mime.startsWith('image/')) {
                 return <img src={url} alt={row.originalName} style={{ maxWidth: '100%', display: 'block' }} />;
@@ -542,12 +562,12 @@ export const MedicalRecordDetailPage: React.FC = () => {
               if (mime.startsWith('text/')) {
                 return <iframe src={url} title={row.originalName} style={{ width: '100%', height: 480, border: 0 }} />;
               }
-              return <Text type="secondary">Preview not available for this file type.</Text>;
+              return <Text type="secondary">{t('medical:detail.previewNotAvailable')}</Text>;
             }
           }}
           columns={[
             {
-              title: 'File',
+              title: t('medical:detail.file'),
               dataIndex: 'originalName',
               key: 'originalName',
               render: (v: string, row: any) => (
@@ -560,21 +580,21 @@ export const MedicalRecordDetailPage: React.FC = () => {
               )
             },
             {
-              title: 'Size',
+              title: t('medical:detail.size'),
               dataIndex: 'fileSize',
               key: 'fileSize',
               width: 140,
               render: (size?: number) => MedicalService.formatFileSize(size)
             },
             {
-              title: 'Uploaded',
+              title: t('medical:detail.uploaded'),
               dataIndex: 'uploadedAt',
               key: 'uploadedAt',
               width: 200,
               render: (v: string) => new Date(v).toLocaleString()
             },
             {
-              title: 'Actions',
+              title: t('common:actions.actions') || t('common:actionsLabel'),
               key: 'actions',
               width: 150,
               render: (_: any, row: any) => (
@@ -586,7 +606,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
                       MedicalService.openAttachmentExternally(row.id);
                     }}
                   >
-                    Open in App
+                    {t('medical:detail.openInApp')}
                   </Button>
                   <Button
                     size="small"
@@ -595,7 +615,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
                       MedicalService.saveAttachmentAs(row.id, row.originalName);
                     }}
                   >
-                    Download
+                    {t('common:download')}
                   </Button>
                 </Space>
               )
@@ -604,7 +624,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
         />
       </Card>
 
-      <Card title="Version History" style={{ marginTop: 16 }}>
+      <Card title={t('medical:detail.versionHistory')} style={{ marginTop: 16 }}>
         <Table
           dataSource={sortedHistory}
           rowKey={(r) => String(r.id)}
@@ -614,7 +634,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
           pagination={false}
         />
         {sortedHistory.length === 0 && (
-          <Text type="secondary">No history yet.</Text>
+          <Text type="secondary">{t('medical:detail.noHistory')}</Text>
         )}
       </Card>
     </Content>

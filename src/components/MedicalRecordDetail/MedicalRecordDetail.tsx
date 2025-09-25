@@ -13,6 +13,7 @@ import { MedicalService } from '@/services/medicalService';
 import type { MedicalRecord } from '@/types/medical';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
+import { formatDateTime } from '@/utils/dateFormatter';
 
 dayjs.extend(relativeTime);
 
@@ -88,13 +89,13 @@ const MedicalRecordDetail: React.FC<MedicalRecordDetailProps> = ({
           )}
           <Descriptions.Item label="Created">
             <Space direction="vertical" size={0}>
-              <Text>{dayjs(record.createdAt).format('MMM DD, YYYY HH:mm')}</Text>
+              <Text>{formatDateTime(record.createdAt)}</Text>
               <Text type="secondary">{dayjs(record.createdAt).fromNow()}</Text>
             </Space>
           </Descriptions.Item>
           <Descriptions.Item label="Last Modified">
             <Space direction="vertical" size={0}>
-              <Text>{dayjs(record.updatedAt).format('MMM DD, YYYY HH:mm')}</Text>
+              <Text>{formatDateTime(record.updatedAt)}</Text>
               <Text type="secondary">{dayjs(record.updatedAt).fromNow()}</Text>
             </Space>
           </Descriptions.Item>
@@ -137,7 +138,7 @@ const MedicalRecordDetail: React.FC<MedicalRecordDetailProps> = ({
               mode="left"
               items={[
                 {
-                  label: dayjs(record.updatedAt).format('MMM DD, YYYY HH:mm'),
+                  label: formatDateTime(record.updatedAt),
                   color: 'green',
                   children: (
                     <Space direction="vertical">
@@ -147,7 +148,7 @@ const MedicalRecordDetail: React.FC<MedicalRecordDetailProps> = ({
                   ),
                 },
                 ...history.map((item) => ({
-                  label: dayjs(item.modifiedAt).format('MMM DD, YYYY HH:mm'),
+                  label: formatDateTime(item.modifiedAt),
                   color: 'gray',
                   children: (
                     <Space direction="vertical">

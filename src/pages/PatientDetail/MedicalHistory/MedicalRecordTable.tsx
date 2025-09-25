@@ -14,6 +14,7 @@ import { MedicalService } from '@/services/medicalService';
 import type { MedicalRecord } from '@/types/medical';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
+import { formatDate } from '@/utils/dateFormatter';
 import { Link } from 'react-router-dom';
 
 interface MedicalRecordTableProps {
@@ -67,7 +68,7 @@ const MedicalRecordTable: React.FC<MedicalRecordTableProps> = ({
       dataIndex: 'createdAt',
       key: 'createdAt',
       width: 100,
-      render: (date: string) => dayjs(date).format('MMM DD, YYYY'),
+      render: (date: string) => formatDate(date),
       sorter: (a, b) => dayjs(a.createdAt).unix() - dayjs(b.createdAt).unix(),
     },
     {

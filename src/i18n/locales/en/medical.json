@@ -1,0 +1,141 @@
+{
+  "title": "Medical Records",
+  "listTitle": "Medical History",
+  "addButton": "Add Record",
+  "searchPlaceholder": "Search medical records...",
+  "noRecords": "No medical records found",
+  "recordTypes": {
+    "procedure": "Procedure",
+    "note": "Note"
+  },
+  "types": {
+    "procedure": "Procedure",
+    "note": "Note",
+    "examination": "Examination",
+    "vaccination": "Vaccination",
+    "surgery": "Surgery",
+    "medication": "Medication",
+    "labResult": "Lab Result",
+    "imaging": "Imaging"
+  },
+  "fields": {
+    "recordType": "Type",
+    "procedureName": "Procedure Name",
+    "title": "Title",
+    "name": "Name",
+    "description": "Description",
+    "price": "Price",
+    "date": "Date",
+    "cost": "Cost",
+    "currency": "Currency",
+    "veterinarian": "Veterinarian",
+    "attachments": "Attachments",
+    "notes": "Notes",
+    "diagnosis": "Diagnosis",
+    "treatment": "Treatment",
+    "prescription": "Prescription",
+    "followUp": "Follow-up",
+    "isArchived": "Archived",
+    "version": "Version",
+    "createdAt": "Created",
+    "updatedAt": "Updated",
+    "createdBy": "Created By",
+    "updatedBy": "Updated By"
+  },
+  "form": {
+    "createTitle": "Create Medical Record",
+    "editTitle": "Edit Medical Record",
+    "selectType": "Select Record Type",
+    "basicInfo": "Basic Information",
+    "details": "Details",
+    "attachments": "Attachments",
+    "uploadFile": "Upload File",
+    "dropFile": "Drop files here or click to upload",
+    "maxFileSize": "Maximum file size: 10MB",
+    "supportedFormats": "Supported formats: PDF, JPG, PNG"
+  },
+  "actions": {
+    "view": "View Details",
+    "edit": "Edit Record",
+    "delete": "Delete Record",
+    "archive": "Archive Record",
+    "restore": "Restore Record",
+    "download": "Download Attachment",
+    "preview": "Preview",
+    "print": "Print",
+    "share": "Share",
+    "viewHistory": "View History",
+    "revert": "Revert to Version",
+    "retry": "Retry"
+  },
+  "messages": {
+    "createSuccess": "Medical record created successfully",
+    "updateSuccess": "Medical record updated successfully",
+    "deleteSuccess": "Medical record deleted successfully",
+    "archiveSuccess": "Medical record archived successfully",
+    "restoreSuccess": "Medical record restored successfully",
+    "uploadSuccess": "File uploaded successfully",
+    "uploadFailed": "Some files failed to upload. You can try uploading them again by editing the record",
+    "confirmDelete": "Are you sure you want to delete this medical record?",
+    "confirmArchive": "Are you sure you want to archive this medical record?",
+    "confirmRestore": "Are you sure you want to restore this medical record?",
+    "loadError": "Failed to load medical record",
+    "archiveFailed": "Failed to archive record",
+    "restoreFailed": "Failed to restore record",
+    "downloadFailed": "Failed to download attachment",
+    "archiveInfo": "Archived records will be hidden from the main view but can be restored later."
+  },
+  "filters": {
+    "all": "All Records",
+    "procedures": "Procedures",
+    "notes": "Notes",
+    "archived": "Archived",
+    "recent": "Recent",
+    "byDate": "By Date",
+    "byCost": "By Cost"
+  },
+  "statistics": {
+    "totalRecords": "Total Records",
+    "totalProcedures": "Total Procedures",
+    "totalCost": "Total Cost",
+    "averageCost": "Average Cost",
+    "thisMonth": "This Month",
+    "thisYear": "This Year"
+  },
+  "placeholders": {
+    "noteTitle": "Enter note title",
+    "procedureName": "Enter procedure name",
+    "description": "Enter detailed description of the procedure or notes"
+  },
+  "fileAttachments": "File Attachments",
+  "noAttachments": "No attachments yet",
+  "fileUploadPending_one": "{{count}} file will be uploaded when you create the record",
+  "fileUploadPending_other": "{{count}} files will be uploaded when you create the record",
+  "status": {
+    "archived": "Archived",
+    "active": "Active"
+  },
+  "modal": {
+    "archiveTitle": "Archive Record",
+    "restoreTitle": "Restore Record"
+  },
+  "versionLabel": "Version {{version}}",
+  "detail": {
+    "changedAt": "Changed At",
+    "changedBy": "Changed By",
+    "fields": "Fields",
+    "invalidRecordId": "Invalid Record ID",
+    "loadingRecord": "Loading record...",
+    "backToPatient": "Back to Patient",
+    "showDifferences": "Show differences",
+    "previewNotAvailable": "Preview not available for this file type",
+    "loadingPreview": "Loading preview...",
+    "file": "File",
+    "size": "Size",
+    "uploaded": "Uploaded",
+    "openInApp": "Open in App",
+    "versionHistory": "Version History",
+    "noHistory": "No history yet",
+    "noAttachments": "No attachments"
+  }
+}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Layout, Spin, Alert, Button, Space, Breadcrumb, Tabs } from 'antd';
+import { useTranslation } from 'react-i18next';
 import {
   ArrowLeftOutlined,
   HomeOutlined,
@@ -16,14 +17,17 @@ import { MedicalSection } from './MedicalSection';
 import { HouseholdSection } from './HouseholdSection';
 import MedicalHistorySection from './MedicalHistory/MedicalHistorySection';
 import { Link } from 'react-router-dom';
+import { useThemeColors } from '../../utils/themeStyles';
 
 const { Content } = Layout;
 
 export const PatientDetail: React.FC = () => {
+  const { t } = useTranslation(['patients', 'common', 'navigation']);
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
   const patientId = parseInt(id || '0', 10);
+  const themeColors = useThemeColors();
 
   // Restore the active tab if returning from medical record detail
   const savedActiveTab = sessionStorage.getItem(`patient-detail-active-tab-${patientId}`);
@@ -59,15 +63,15 @@ export const PatientDetail: React.FC = () => {
   // Invalid ID check
   if (!id || isNaN(patientId)) {
     return (
-      <Content style={{ padding: 24, background: '#141414' }}>
+      <Content style={{ padding: 24, background: themeColors.background }}>
         <Alert
-          message="Invalid Patient ID"
-          description="The patient ID provided is not valid."
+          message={t('patients:errors.invalidId')}
+          description={t('patients:errors.invalidIdDescription')}
           type="error"
           showIcon
           action={
             <Button onClick={() => navigate('/')}>
-              Back to Dashboard
+              {t('navigation:backToDashboard')}
             </Button>
           }
         />
@@ -78,9 +82,9 @@ export const PatientDetail: React.FC = () => {
   // Loading state
   if (isLoading) {
     return (
-      <Content style={{ padding: 24, textAlign: 'center', background: '#141414', minHeight: '100vh' }}>
+      <Content style={{ padding: 24, textAlign: 'center', background: themeColors.background, minHeight: '100vh' }}>
         <Spin size="large" />
-        <div style={{ marginTop: 16, color: '#E6E6E6' }}>Loading patient details...</div>
+        <div style={{ marginTop: 16, color: themeColors.text }}>{t('patients:loadingPatient')}</div>
       </Content>
     );
   }
@@ -88,19 +92,19 @@ export const PatientDetail: React.FC = () => {
   // Error state
   if (error) {
     return (
-      <Content style={{ padding: 24, background: '#141414' }}>
+      <Content style={{ padding: 24, background: themeColors.background }}>
         <Alert
-          message="Error Loading Patient"
-          description={error instanceof Error ? error.message : 'Failed to load patient details'}
+          message={t('patients:errors.loadingError')}
+          description={error instanceof Error ? error.message : t('patients:errors.loadingErrorDescription')}
           type="error"
           showIcon
           action={
             <Space>
               <Button onClick={() => window.location.reload()}>
-                Retry
+                {t('common:retry')}
               </Button>
               <Button onClick={() => navigate('/')}>
-                Back to Dashboard
+                {t('navigation:backToDashboard')}
               </Button>
             </Space>
           }
@@ -112,15 +116,15 @@ export const PatientDetail: React.FC = () => {
   // Patient not found
   if (!patient) {
     return (
-      <Content style={{ padding: 24, background: '#141414' }}>
+      <Content style={{ padding: 24, background: themeColors.background }}>
         <Alert
-          message="Patient Not Found"
-          description="The requested patient could not be found."
+          message={t('patients:errors.notFound')}
+          description={t('patients:errors.notFoundDescription')}
           type="warning"
           showIcon
           action={
             <Button onClick={() => navigate('/')}>
-              Back to Dashboard
+              {t('navigation:backToDashboard')}
             </Button>
           }
         />
@@ -153,7 +157,7 @@ export const PatientDetail: React.FC = () => {
       label: (
         <span>
           <UserOutlined />
-          Overview
+          {t('navigation:overview')}
         </span>
       ),
       children: (
@@ -168,7 +172,7 @@ export const PatientDetail: React.FC = () => {
       label: (
         <span>
           <MedicineBoxOutlined />
-          Medical History
+          {t('navigation:medicalHistory')}
         </span>
       ),
       children: (
@@ -183,19 +187,19 @@ export const PatientDetail: React.FC = () => {
 
   return (
     <Content
-      style={{ padding: 24, background: '#141414', minHeight: '100vh' }}
+      style={{ padding: 24, background: themeColors.background, minHeight: '100vh' }}
     >
       <div style={{ marginBottom: 16 }}>
         <Breadcrumb
           items={[
             {
-              title: <Link to="/" style={{ color: '#4A90E2' }}><HomeOutlined /> Home</Link>,
+              title: <Link to="/" style={{ color: '#4A90E2' }}><HomeOutlined /> {t('navigation:home')}</Link>,
             },
             {
-              title: <Link to="/" style={{ color: '#4A90E2' }}>Dashboard</Link>,
+              title: <Link to="/" style={{ color: '#4A90E2' }}>{t('navigation:dashboard')}</Link>,
             },
             {
-              title: <span style={{ color: '#E6E6E6' }}>{patient.name}</span>,
+              title: <span style={{ color: themeColors.text }}>{patient.name}</span>,
             },
           ]}
         />
@@ -207,7 +211,7 @@ export const PatientDetail: React.FC = () => {
           onClick={() => navigate(-1)}
           style={{ marginRight: 8 }}
         >
-          Back
+          {t('common:back')}
         </Button>
         <Button
           danger
@@ -216,7 +220,7 @@ export const PatientDetail: React.FC = () => {
           loading={isDeleting}
           style={{ float: 'right' }}
         >
-          Delete Patient
+          {t('patients:deletePatient')}
         </Button>
       </div>
 

@@ -3,6 +3,8 @@
  */
 
 import React, { useState, useMemo } from 'react';
+import { formatDate } from '../../utils/dateFormatter';
+import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
 import {
   Table,
@@ -50,9 +52,9 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
   onDelete,
   onAddPatient,
 }) => {
+  const { t } = useTranslation(['patients', 'entities', 'common']);
   const [searchText, setSearchText] = useState('');
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const [expandedRowKeys, setExpandedRowKeys] = useState<React.Key[]>([]);
 
   // Filter data based on search
   const filteredData = useMemo(() => {
@@ -70,26 +72,20 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
 
   // Get activity status color
   const getActivityStatus = (lastActivity?: string) => {
-    if (!lastActivity) return { color: 'default', text: 'No activity' };
+    if (!lastActivity) return { color: 'default', text: t('entities:defaults.noActivity') };
 
     const daysSince = Math.floor(
       (Date.now() - new Date(lastActivity).getTime()) / (1000 * 60 * 60 * 24)
     );
 
-    if (daysSince <= 30) return { color: 'success', text: 'Active' };
-    if (daysSince <= 90) return { color: 'warning', text: 'Recent' };
-    return { color: 'default', text: 'Inactive' };
+    if (daysSince <= 30) return { color: 'success', text: t('entities:status.active') };
+    if (daysSince <= 90) return { color: 'warning', text: t('entities:status.recent') };
+    return { color: 'default', text: t('entities:status.inactive') };
   };
 
   const columns: ColumnsType<HouseholdTableRecord> = [
     {
-      title: '',
-      key: 'expand',
-      width: 50,
-      render: () => null,
-    },
-    {
-      title: 'Household',
+      title: t('patients:tableColumns.household'),
       dataIndex: 'lastName',
       key: 'lastName',
       width: 200,
@@ -111,7 +107,7 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
       ),
     },
     {
-      title: 'Primary Contact',
+      title: t('patients:tableColumns.primaryContact'),
       dataIndex: 'primaryContact',
       key: 'primaryContact',
       width: 180,
@@ -120,13 +116,13 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
           <Avatar size="small" icon={<UserOutlined />} style={{ background: '#4A90E2' }}>
             {text?.charAt(0)}
           </Avatar>
-          <Text>{text || 'No primary contact'}</Text>
+          <Text>{text || t('entities:defaults.noPrimaryContact')}</Text>
         </Space>
       ),
       sorter: (a, b) => (a.primaryContact || '').localeCompare(b.primaryContact || ''),
     },
     {
-      title: 'Contact Info',
+      title: t('patients:tableColumns.contactInfo'),
       key: 'contactInfo',
       width: 250,
       render: (_, record) => (
@@ -146,13 +142,13 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
             </Space>
           )}
           {!record.phone && !record.email && (
-            <Text type="secondary">No contact info</Text>
+            <Text type="secondary">{t('entities:defaults.noContactInfo')}</Text>
           )}
         </Space>
       ),
     },
     {
-      title: 'Pets',
+      title: t('patients:tableColumns.pets'),
       dataIndex: 'petCount',
       key: 'petCount',
       width: 100,
@@ -171,7 +167,7 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
       sorter: (a, b) => (a.petCount || 0) - (b.petCount || 0),
     },
     {
-      title: 'Address',
+      title: t('patients:tableColumns.address'),
       dataIndex: 'address',
       key: 'address',
       width: 200,
@@ -186,7 +182,7 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
         ),
     },
     {
-      title: 'Status',
+      title: t('patients:tableColumns.status'),
       key: 'status',
       width: 100,
       render: (_, record) => {
@@ -194,9 +190,9 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
         return <Tag color={status.color}>{status.text}</Tag>;
       },
       filters: [
-        { text: 'Active', value: 'active' },
-        { text: 'Recent', value: 'recent' },
-        { text: 'Inactive', value: 'inactive' },
+        { text: t('entities:status.active'), value: 'active' },
+        { text: t('entities:status.recent'), value: 'recent' },
+        { text: t('entities:status.inactive'), value: 'inactive' },
       ],
       onFilter: (value, record) => {
         const status = getActivityStatus(record.lastActivity);
@@ -204,17 +200,17 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
       },
     },
     {
-      title: 'Last Activity',
+      title: t('patients:tableColumns.lastActivity'),
       dataIndex: 'lastActivity',
       key: 'lastActivity',
       width: 120,
       render: (date) =>
         date ? (
           <Tooltip title={new Date(date).toLocaleString()}>
-            <Text>{new Date(date).toLocaleDateString()}</Text>
+            <Text>{formatDate(date)}</Text>
           </Tooltip>
         ) : (
-          <Text type="secondary">Never</Text>
+          <Text type="secondary">{t('common:never')}</Text>
         ),
       sorter: (a, b) => {
         const dateA = a.lastActivity ? new Date(a.lastActivity).getTime() : 0;
@@ -229,8 +225,8 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
     const contacts = record.contacts && record.contacts.length > 0
       ? record.contacts.map((c, index) => ({
           id: index,
-          name: `${c.firstName || ''} ${c.lastName || ''}`.trim() || 'Unknown',
-          role: c.isPrimary ? 'Primary Contact' : 'Family Member',
+          name: `${c.firstName || ''} ${c.lastName || ''}`.trim() || t('entities:defaults.unknown'),
+          role: c.isPrimary ? t('entities:roles.primaryContact') : t('entities:roles.familyMember'),
           phone: c.phone,
           email: c.email,
           relationship: c.relationship
@@ -238,7 +234,7 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
       : record.primaryContact ? [{
           id: 1,
           name: record.primaryContact,
-          role: 'Primary Contact',
+          role: t('entities:roles.primaryContact'),
           phone: record.phone,
           email: record.email,
           relationship: null
@@ -251,7 +247,7 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
           <div>
             <Space direction="vertical" style={{ width: '100%' }} size="middle">
               <Text strong style={{ fontSize: '16px' }}>
-                <TeamOutlined /> Family Members ({contacts.length})
+                <TeamOutlined /> {t('patients:familyMembers', { count: contacts.length })}
               </Text>
               <List
                 size="small"
@@ -263,7 +259,7 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
                         <Avatar
                           icon={<UserOutlined />}
                           style={{
-                            background: contact.role === 'Primary Contact' ? '#52C41A' : '#4A90E2',
+                            background: contact.role === t('entities:roles.primaryContact') ? '#52C41A' : '#4A90E2',
                             fontSize: '18px'
                           }}
                           size={42}
@@ -273,8 +269,8 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
                       }
                       title={
                         <Space>
-                          <Text strong>{contact.name || 'No name'}</Text>
-                          <Tag color={contact.role === 'Primary Contact' ? 'green' : 'blue'}>
+                          <Text strong>{contact.name || t('entities:defaults.noName')}</Text>
+                          <Tag color={contact.role === t('entities:roles.primaryContact') ? 'green' : 'blue'}>
                             {contact.role}
                           </Tag>
                           {contact.relationship && (
@@ -300,7 +296,7 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
                           )}
                           {!contact.phone && !contact.email && (
                             <Text type="secondary" style={{ fontStyle: 'italic' }}>
-                              No contact information
+                              {t('entities:defaults.noContactInfo')}
                             </Text>
                           )}
                         </Space>
@@ -353,7 +349,7 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
                   <div>
                     <Text type="secondary">Last Activity:</Text>
                     <br />
-                    <Text>{record.lastActivity ? new Date(record.lastActivity).toLocaleDateString() : 'Never'}</Text>
+                    <Text>{record.lastActivity ? formatDate(record.lastActivity) : 'Never'}</Text>
                   </div>
 
                   <div>
@@ -418,7 +414,7 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
       <div style={{ marginBottom: 16 }}>
         <Space>
           <Input
-            placeholder="Search households..."
+            placeholder={t('patients:searchHouseholdsPlaceholder')}
             prefix={<SearchOutlined />}
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
@@ -439,12 +435,6 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
         rowKey="id"
         loading={loading}
         rowSelection={rowSelection}
-        expandable={{
-          expandedRowRender,
-          expandedRowKeys,
-          onExpandedRowsChange: setExpandedRowKeys,
-          expandRowByClick: true,
-        }}
         pagination={{
           defaultPageSize: 10,
           showSizeChanger: true,

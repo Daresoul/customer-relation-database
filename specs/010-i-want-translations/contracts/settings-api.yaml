@@ -1,0 +1,219 @@
+openapi: 3.0.0
+info:
+  title: Settings API
+  version: 1.0.0
+  description: API for managing application settings including language and currency preferences
+
+paths:
+  /api/settings:
+    get:
+      summary: Get current application settings
+      operationId: getSettings
+      tags:
+        - Settings
+      responses:
+        '200':
+          description: Current settings retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettingsResponse'
+        '404':
+          description: Settings not found (will use defaults)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      summary: Update application settings
+      operationId: updateSettings
+      tags:
+        - Settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSettingsRequest'
+      responses:
+        '200':
+          description: Settings updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettingsResponse'
+        '400':
+          description: Invalid settings data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+
+  /api/currencies:
+    get:
+      summary: Get list of available currencies
+      operationId: getCurrencies
+      tags:
+        - Settings
+      responses:
+        '200':
+          description: List of currencies retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrenciesResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    AppSettings:
+      type: object
+      required:
+        - id
+        - userId
+        - language
+        - theme
+        - dateFormat
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+          example: 1
+        userId:
+          type: string
+          example: "default"
+        language:
+          type: string
+          enum: [en, mk]
+          example: "en"
+        currencyId:
+          type: integer
+          nullable: true
+          example: 1
+        theme:
+          type: string
+          enum: [light, dark]
+          example: "light"
+        dateFormat:
+          type: string
+          example: "MM/DD/YYYY"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2025-01-24T10:00:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2025-01-24T10:00:00Z"
+
+    Currency:
+      type: object
+      required:
+        - id
+        - code
+        - name
+      properties:
+        id:
+          type: integer
+          example: 1
+        code:
+          type: string
+          example: "USD"
+        name:
+          type: string
+          example: "US Dollar"
+        symbol:
+          type: string
+          nullable: true
+          example: "$"
+
+    SettingsResponse:
+      type: object
+      required:
+        - settings
+      properties:
+        settings:
+          $ref: '#/components/schemas/AppSettings'
+        currency:
+          $ref: '#/components/schemas/Currency'
+          nullable: true
+          description: The selected currency details (null if no currency selected)
+
+    UpdateSettingsRequest:
+      type: object
+      properties:
+        language:
+          type: string
+          enum: [en, mk]
+          example: "mk"
+        currencyId:
+          type: integer
+          example: 2
+        theme:
+          type: string
+          enum: [light, dark]
+          example: "dark"
+        dateFormat:
+          type: string
+          example: "DD/MM/YYYY"
+
+    CurrenciesResponse:
+      type: object
+      required:
+        - currencies
+      properties:
+        currencies:
+          type: array
+          items:
+            $ref: '#/components/schemas/Currency'
+
+    Error:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          example: "NOT_FOUND"
+        message:
+          type: string
+          example: "Settings not found"
+
+    ValidationError:
+      type: object
+      required:
+        - error
+        - message
+        - details
+      properties:
+        error:
+          type: string
+          example: "VALIDATION_ERROR"
+        message:
+          type: string
+          example: "Invalid settings data"
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+                example: "language"
+              error:
+                type: string
+                example: "Invalid language code"

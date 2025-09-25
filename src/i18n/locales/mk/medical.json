@@ -1,0 +1,136 @@
+{
+  "title": "Медицински записи",
+  "listTitle": "Медицинска историја",
+  "addButton": "Додај запис",
+  "searchPlaceholder": "Пребарај медицински записи...",
+  "noRecords": "Не се пронајдени медицински записи",
+  "recordTypes": {
+    "procedure": "Процедура",
+    "note": "Белешка"
+  },
+  "types": {
+    "procedure": "Процедура",
+    "note": "Белешка",
+    "examination": "Преглед",
+    "vaccination": "Вакцинација",
+    "surgery": "Операција",
+    "medication": "Лекување",
+    "labResult": "Лабораториски резултат",
+    "imaging": "Снимање"
+  },
+  "fields": {
+    "recordType": "Тип",
+    "procedureName": "Име на процедура",
+    "title": "Наслов",
+    "name": "Име",
+    "description": "Опис",
+    "price": "Цена",
+    "date": "Датум",
+    "cost": "Цена",
+    "currency": "Валута",
+    "veterinarian": "Ветеринар",
+    "attachments": "Прилози",
+    "notes": "Белешки",
+    "diagnosis": "Дијагноза",
+    "treatment": "Третман",
+    "prescription": "Рецепт",
+    "followUp": "Следење",
+    "isArchived": "Архивиран",
+    "version": "Верзија",
+    "createdAt": "Создаден",
+    "updatedAt": "Ажуриран",
+    "createdBy": "Создаден од",
+    "updatedBy": "Ажуриран од"
+  },
+  "form": {
+    "createTitle": "Создај медицински запис",
+    "editTitle": "Уреди медицински запис",
+    "selectType": "Избери тип на запис",
+    "basicInfo": "Основни информации",
+    "details": "Детали",
+    "attachments": "Прилози",
+    "uploadFile": "Прикачи датотека",
+    "dropFile": "Пуштете датотеки тука или кликнете за прикачување",
+    "maxFileSize": "Максимална големина на датотека: 10MB",
+    "supportedFormats": "Поддржани формати: PDF, JPG, PNG"
+  },
+  "actions": {
+    "view": "Види детали",
+    "edit": "Уреди запис",
+    "delete": "Избриши запис",
+    "archive": "Архивирај запис",
+    "restore": "Врати запис",
+    "download": "Преземи прилог",
+    "preview": "Преглед",
+    "print": "Печати",
+    "share": "Сподели",
+    "viewHistory": "Види историја",
+    "revert": "Врати на верзија",
+    "retry": "Обиди се повторно"
+  },
+  "messages": {
+    "createSuccess": "Медицинскиот запис е успешно создаден",
+    "updateSuccess": "Медицинскиот запис е успешно ажуриран",
+    "deleteSuccess": "Медицинскиот запис е успешно избришан",
+    "archiveSuccess": "Медицинскиот запис е успешно архивиран",
+    "restoreSuccess": "Медицинскиот запис е успешно вратен",
+    "uploadSuccess": "Датотеката е успешно прикачена",
+    "uploadFailed": "Некои датотеки не се прикачија. Може да пробате повторно со уредување на записот",
+    "confirmDelete": "Дали сте сигурни дека сакате да го избришете овој медицински запис?",
+    "confirmArchive": "Дали сте сигурни дека сакате да го архивирате овој медицински запис?",
+    "loadError": "Неуспешно вчитување на медицинскиот запис"
+  },
+  "filters": {
+    "all": "Сите записи",
+    "procedures": "Процедури",
+    "notes": "Белешки",
+    "archived": "Архивирани",
+    "recent": "Неодамнешни",
+    "byDate": "По датум",
+    "byCost": "По цена"
+  },
+  "statistics": {
+    "totalRecords": "Вкупно записи",
+    "totalProcedures": "Вкупно процедури",
+    "totalCost": "Вкупна цена",
+    "averageCost": "Просечна цена",
+    "thisMonth": "Овој месец",
+    "thisYear": "Оваа година"
+  },
+  "placeholders": {
+    "noteTitle": "Внесете наслов на белешката",
+    "procedureName": "Внесете име на процедурата",
+    "description": "Внесете детален опис на процедурата или белешките"
+  },
+  "fileAttachments": "Прикачени датотеки",
+  "noAttachments": "Сè уште нема прикачувања",
+  "fileUploadPending_one": "{{count}} датотека ќе биде прикачена кога ќе го создадете записот",
+  "fileUploadPending_other": "{{count}} датотеки ќе бидат прикачени кога ќе го создадете записот",
+  "status": {
+    "archived": "Архивиран",
+    "active": "Активен"
+  },
+  "modal": {
+    "archiveTitle": "Архивирај запис",
+    "restoreTitle": "Врати запис"
+  },
+  "versionLabel": "Верзија {{version}}",
+  "detail": {
+    "changedAt": "Променето на",
+    "changedBy": "Променето од",
+    "fields": "Полиња",
+    "invalidRecordId": "Невалиден ID на запис",
+    "loadingRecord": "Се вчитува записот...",
+    "backToPatient": "Назад кон пациентот",
+    "showDifferences": "Покажи разлики",
+    "previewNotAvailable": "Прегледот не е достапен за овој тип на датотека",
+    "loadingPreview": "Се вчитува преглед...",
+    "file": "Датотека",
+    "size": "Големина",
+    "uploaded": "Прикачено",
+    "openInApp": "Отвори во апликација",
+    "versionHistory": "Историја на верзии",
+    "noHistory": "Сè уште нема историја",
+    "noAttachments": "Нема прикачувања"
+  }
+}

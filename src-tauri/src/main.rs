@@ -88,6 +88,10 @@ fn main() {
             commands::render_medical_attachment_pdf_page_png,
             commands::get_medical_attachment_pdf_page_count,
             commands::revert_medical_record,
+            // Settings commands
+            commands::get_app_settings,
+            commands::update_app_settings,
+            // Note: get_currencies is already registered above for medical
             // Database commands
             commands::init_database,
             commands::test_database_connection,

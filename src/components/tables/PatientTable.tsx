@@ -3,6 +3,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
   Table,
@@ -30,6 +31,7 @@ import {
 import { Patient, PatientWithHousehold } from '../../types';
 import type { BaseTableProps } from '../../types/ui.types';
 import dayjs from 'dayjs';
+import { formatDate } from '../../utils/dateFormatter';
 
 const { Text } = Typography;
 
@@ -48,6 +50,7 @@ export const PatientTable: React.FC<PatientTableProps> = ({
   onEdit,
   onDelete,
 }) => {
+  const { t } = useTranslation(['patients', 'entities', 'common']);
   const navigate = useNavigate();
   const [searchText, setSearchText] = useState('');
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -87,7 +90,7 @@ export const PatientTable: React.FC<PatientTableProps> = ({
 
   // Calculate age from date of birth
   const calculateAge = (dateOfBirth: string | undefined) => {
-    if (!dateOfBirth) return 'Unknown';
+    if (!dateOfBirth) return t('patients:unknownAge');
     const years = dayjs().diff(dayjs(dateOfBirth), 'year');
     const months = dayjs().diff(dayjs(dateOfBirth), 'month') % 12;
 
@@ -99,29 +102,7 @@ export const PatientTable: React.FC<PatientTableProps> = ({
 
   const columns: ColumnsType<PatientWithHousehold> = [
     {
-      title: 'Status',
-      key: 'status',
-      width: 80,
-      align: 'center',
-      fixed: 'left',
-      render: (_, record) => (
-        <Tooltip title={record.isActive !== false ? 'Active' : 'Inactive'}>
-          <span>
-            <Badge
-              status={record.isActive !== false ? 'success' : 'default'}
-              text=""
-            />
-          </span>
-        </Tooltip>
-      ),
-      filters: [
-        { text: 'Active', value: true },
-        { text: 'Inactive', value: false },
-      ],
-      onFilter: (value, record) => (record.isActive !== false) === value,
-    },
-    {
-      title: 'Name',
+      title: t('patients:tableColumns.name'),
       dataIndex: 'name',
       key: 'name',
       width: 150,
@@ -141,26 +122,51 @@ export const PatientTable: React.FC<PatientTableProps> = ({
       ),
     },
     {
-      title: 'Species',
+      title: t('patients:tableColumns.species'),
       dataIndex: 'species',
       key: 'species',
       width: 100,
-      render: (species) => (
-        <Tag color={getSpeciesColor(species)}>
-          {species}
-        </Tag>
-      ),
+      render: (species) => {
+        if (!species) return null;
+
+        // Convert species to translation key format
+        // Try different formats to find a matching translation
+        let speciesKey = species.toLowerCase();
+
+        // For species with spaces, also try with underscore
+        if (species.includes(' ')) {
+          const underscoreKey = species.toLowerCase().replace(/\s+/g, '_');
+          // Try underscore version first, then space version, then camelCase
+          const camelKey = species === 'Guinea Pig' ? 'guineaPig' : speciesKey;
+
+          // Try to find which key has a translation
+          if (t(`entities:species.${underscoreKey}`, { defaultValue: '' }) !== '') {
+            speciesKey = underscoreKey;
+          } else if (t(`entities:species.${camelKey}`, { defaultValue: '' }) !== '') {
+            speciesKey = camelKey;
+          }
+        }
+
+        // Try to get the translation, fallback to original species name if not found
+        const translatedSpecies = t(`entities:species.${speciesKey}`, { defaultValue: species });
+
+        return (
+          <Tag color={getSpeciesColor(species)}>
+            {translatedSpecies}
+          </Tag>
+        );
+      },
       filters: [
-        { text: 'Dog', value: 'Dog' },
-        { text: 'Cat', value: 'Cat' },
-        { text: 'Bird', value: 'Bird' },
-        { text: 'Rabbit', value: 'Rabbit' },
-        { text: 'Other', value: 'Other' },
+        { text: t('entities:species.dog'), value: 'Dog' },
+        { text: t('entities:species.cat'), value: 'Cat' },
+        { text: t('entities:species.bird'), value: 'Bird' },
+        { text: t('entities:species.rabbit'), value: 'Rabbit' },
+        { text: t('entities:species.other'), value: 'Other' },
       ],
       onFilter: (value, record) => record.species === value,
     },
     {
-      title: 'Breed',
+      title: t('patients:tableColumns.breed'),
       dataIndex: 'breed',
       key: 'breed',
       width: 120,
@@ -168,11 +174,11 @@ export const PatientTable: React.FC<PatientTableProps> = ({
       render: (text) => text || <Text type="secondary">-</Text>,
     },
     {
-      title: 'Age',
+      title: t('patients:tableColumns.age'),
       key: 'age',
       width: 100,
       render: (_, record) => (
-        <Tooltip title={`Born: ${record.dateOfBirth || 'Unknown'}`}>
+        <Tooltip title={t('patients:bornOn', { date: record.dateOfBirth || t('patients:unknownAge') })}>
           <span>
             <Space>
               <CalendarOutlined />
@@ -188,7 +194,7 @@ export const PatientTable: React.FC<PatientTableProps> = ({
       },
     },
     {
-      title: 'Gender',
+      title: t('patients:tableColumns.gender'),
       dataIndex: 'gender',
       key: 'gender',
       width: 90,
@@ -198,23 +204,26 @@ export const PatientTable: React.FC<PatientTableProps> = ({
           'Female': 'pink',
           'Unknown': 'default',
         };
+        const genderKey = gender ? gender.toLowerCase() : null;
+        const translatedGender = genderKey ? t(`entities:gender.${genderKey}`) : null;
+
         return gender ? (
           <Tag color={genderColors[gender] || 'default'}>
-            {gender}
+            {translatedGender || gender}
           </Tag>
         ) : (
           <Text type="secondary">-</Text>
         );
       },
       filters: [
-        { text: 'Male', value: 'Male' },
-        { text: 'Female', value: 'Female' },
-        { text: 'Unknown', value: 'Unknown' },
+        { text: t('entities:gender.male'), value: 'Male' },
+        { text: t('entities:gender.female'), value: 'Female' },
+        { text: t('entities:gender.unknown'), value: 'Unknown' },
       ],
       onFilter: (value, record) => record.gender === value,
     },
     {
-      title: 'Weight (kg)',
+      title: t('patients:tableColumns.weight'),
       dataIndex: 'weight',
       key: 'weight',
       width: 100,
@@ -224,7 +233,7 @@ export const PatientTable: React.FC<PatientTableProps> = ({
       sorter: (a, b) => (a.weight || 0) - (b.weight || 0),
     },
     {
-      title: 'Microchip',
+      title: t('patients:tableColumns.microchip'),
       dataIndex: 'microchipId',
       key: 'microchipId',
       width: 140,
@@ -236,18 +245,18 @@ export const PatientTable: React.FC<PatientTableProps> = ({
           </span>
         </Tooltip>
       ) : (
-        <Text type="secondary">Not chipped</Text>
+        <Text type="secondary">{t('patients:notChipped')}</Text>
       ),
     },
     {
-      title: 'Household',
+      title: t('patients:tableColumns.household'),
       key: 'household',
       width: 150,
       ellipsis: true,
       render: (_, record) => {
         if (record.household) {
           return (
-            <Tooltip title={record.household.address || 'No address'}>
+            <Tooltip title={record.household.address || t('entities:defaults.noAddress')}>
               <span>
                 <Space>
                   <HomeOutlined />
@@ -257,15 +266,15 @@ export const PatientTable: React.FC<PatientTableProps> = ({
             </Tooltip>
           );
         }
-        return <Text type="secondary">No household</Text>;
+        return <Text type="secondary">{t('entities:defaults.noHousehold')}</Text>;
       },
     },
     {
-      title: 'Created',
+      title: t('patients:tableColumns.created'),
       dataIndex: 'createdAt',
       key: 'createdAt',
       width: 120,
-      render: (date) => dayjs(date).format('MMM D, YYYY'),
+      render: (date) => formatDate(date),
       sorter: (a, b) => dayjs(a.createdAt).unix() - dayjs(b.createdAt).unix(),
     },
   ];
@@ -282,7 +291,7 @@ export const PatientTable: React.FC<PatientTableProps> = ({
       <div style={{ marginBottom: 16 }}>
         <Space>
           <Input
-            placeholder="Search patients..."
+            placeholder={t('patients:searchPlaceholder')}
             prefix={<SearchOutlined />}
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
@@ -291,7 +300,7 @@ export const PatientTable: React.FC<PatientTableProps> = ({
           />
           {selectedRowKeys.length > 0 && (
             <Text>
-              {selectedRowKeys.length} patient{selectedRowKeys.length > 1 ? 's' : ''} selected
+              {t('patients:selectedCount', { count: selectedRowKeys.length })}
             </Text>
           )}
         </Space>

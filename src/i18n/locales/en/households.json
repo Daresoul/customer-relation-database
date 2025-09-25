@@ -1,0 +1,112 @@
+{
+  "title": "Households",
+  "detail": {
+    "invalidId": "Invalid Household ID",
+    "invalidIdDescription": "The household ID provided is not valid.",
+    "backToDashboard": "Back to Dashboard",
+    "loading": "Loading household details...",
+    "errorLoading": "Error Loading Household",
+    "failedToLoad": "Failed to load household details",
+    "retry": "Retry",
+    "notFound": "Household Not Found",
+    "notFoundDescription": "The requested household could not be found.",
+    "breadcrumb": {
+      "home": "Home",
+      "dashboard": "Dashboard"
+    },
+    "backToHouseholds": "Back to Households",
+    "householdInfo": {
+      "title": "Household Information",
+      "saved": "Saved",
+      "failedToSave": "Failed to save changes",
+      "labels": {
+        "householdName": "Household Name",
+        "address": "Address",
+        "city": "City",
+        "postalCode": "Postal Code",
+        "created": "Created",
+        "lastUpdated": "Last Updated"
+      },
+      "placeholders": {
+        "name": "Click to add name",
+        "address": "Click to add address",
+        "city": "Click to add city",
+        "postalCode": "Click to add"
+      },
+      "validation": {
+        "nameTooLong": "Name must be 100 characters or less",
+        "invalidPostalCode": "Invalid postal code format"
+      }
+    },
+    "people": {
+      "title": "People & Contacts",
+      "addPerson": "Add Person",
+      "addFirstPerson": "Add First Person",
+      "noPeople": "No people in this household",
+      "personAdded": "Person added successfully",
+      "personRemoved": "Person removed from household",
+      "failedToAdd": "Failed to add person",
+      "failedToDelete": "Failed to delete person",
+      "confirmDeleteTitle": "Delete this person?",
+      "confirmDeleteDescription": "This will remove the person and all their contact information.",
+      "modal": {
+        "title": "Add New Person",
+        "cancel": "Cancel",
+        "submit": "Add Person",
+        "labels": {
+          "firstName": "First Name",
+          "lastName": "Last Name",
+          "primaryContact": "Primary Contact",
+          "yes": "Yes",
+          "no": "No",
+          "contactMethods": "Contact Methods"
+        },
+        "placeholders": {
+          "firstName": "Enter first name",
+          "lastName": "Enter last name",
+          "contactType": "Type",
+          "contactValue": "Contact value"
+        },
+        "validation": {
+          "firstNameRequired": "First name is required",
+          "lastNameRequired": "Last name is required",
+          "selectType": "Select type",
+          "required": "Required",
+          "invalidEmail": "Please enter a valid email address",
+          "invalidPhone": "Please enter a valid phone number"
+        },
+        "contactTypes": {
+          "phone": "Phone",
+          "email": "Email",
+          "mobile": "Mobile",
+          "workPhone": "Work Phone"
+        },
+        "addContactMethod": "Add Contact Method"
+      }
+    },
+    "animals": {
+      "title": "Associated Animals",
+      "registerNewPet": "Register New Pet",
+      "registerFirstPet": "Register First Pet",
+      "noAnimals": "No pets registered for this household",
+      "columns": {
+        "name": "Name",
+        "species": "Species",
+        "breed": "Breed",
+        "age": "Age",
+        "gender": "Gender",
+        "status": "Status"
+      },
+      "status": {
+        "active": "Active",
+        "inactive": "Inactive"
+      },
+      "age": {
+        "months_one": "{{count}} month",
+        "months_other": "{{count}} months",
+        "years_one": "{{count}} year",
+        "years_other": "{{count}} years"
+      }
+    }
+  }
+}

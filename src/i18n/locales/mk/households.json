@@ -1,0 +1,112 @@
+{
+  "title": "Домаќинства",
+  "detail": {
+    "invalidId": "Невалиден ID на домаќинство",
+    "invalidIdDescription": "Дадениот ID на домаќинство не е валиден.",
+    "backToDashboard": "Назад кон контролна табла",
+    "loading": "Се вчитуваат деталите за домаќинството...",
+    "errorLoading": "Грешка при вчитување на домаќинство",
+    "failedToLoad": "Неуспешно вчитување на деталите за домаќинството",
+    "retry": "Обиди се повторно",
+    "notFound": "Домаќинството не е пронајдено",
+    "notFoundDescription": "Бараното домаќинство не може да се пронајде.",
+    "breadcrumb": {
+      "home": "Дома",
+      "dashboard": "Контролна табла"
+    },
+    "backToHouseholds": "Назад кон домаќинства",
+    "householdInfo": {
+      "title": "Информации за домаќинството",
+      "saved": "Зачувано",
+      "failedToSave": "Неуспешно зачувување на промените",
+      "labels": {
+        "householdName": "Име на домаќинство",
+        "address": "Адреса",
+        "city": "Град",
+        "postalCode": "Поштенски код",
+        "created": "Создадено",
+        "lastUpdated": "Последно ажурирано"
+      },
+      "placeholders": {
+        "name": "Кликни за додавање име",
+        "address": "Кликни за додавање адреса",
+        "city": "Кликни за додавање град",
+        "postalCode": "Кликни за додавање"
+      },
+      "validation": {
+        "nameTooLong": "Името мора да биде 100 карактери или помалку",
+        "invalidPostalCode": "Невалиден формат на поштенски код"
+      }
+    },
+    "people": {
+      "title": "Луѓе и контакти",
+      "addPerson": "Додај личност",
+      "addFirstPerson": "Додај прва личност",
+      "noPeople": "Нема луѓе во ова домаќинство",
+      "personAdded": "Личноста е успешно додадена",
+      "personRemoved": "Личноста е отстранета од домаќинството",
+      "failedToAdd": "Неуспешно додавање на личност",
+      "failedToDelete": "Неуспешно бришење на личност",
+      "confirmDeleteTitle": "Избриши ја оваа личност?",
+      "confirmDeleteDescription": "Ова ќе ја отстрани личноста и сите нејзини контакт информации.",
+      "modal": {
+        "title": "Додај нова личност",
+        "cancel": "Откажи",
+        "submit": "Додај личност",
+        "labels": {
+          "firstName": "Име",
+          "lastName": "Презиме",
+          "primaryContact": "Примарен контакт",
+          "yes": "Да",
+          "no": "Не",
+          "contactMethods": "Методи за контакт"
+        },
+        "placeholders": {
+          "firstName": "Внеси име",
+          "lastName": "Внеси презиме",
+          "contactType": "Тип",
+          "contactValue": "Вредност на контакт"
+        },
+        "validation": {
+          "firstNameRequired": "Името е задолжително",
+          "lastNameRequired": "Презимето е задолжително",
+          "selectType": "Избери тип",
+          "required": "Задолжително",
+          "invalidEmail": "Внесете валидна е-пошта",
+          "invalidPhone": "Внесете валиден телефонски број"
+        },
+        "contactTypes": {
+          "phone": "Телефон",
+          "email": "Е-пошта",
+          "mobile": "Мобилен",
+          "workPhone": "Работен телефон"
+        },
+        "addContactMethod": "Додај метод за контакт"
+      }
+    },
+    "animals": {
+      "title": "Поврзани животни",
+      "registerNewPet": "Регистрирај нов миленик",
+      "registerFirstPet": "Регистрирај прв миленик",
+      "noAnimals": "Нема регистрирани миленици за ова домаќинство",
+      "columns": {
+        "name": "Име",
+        "species": "Вид",
+        "breed": "Раса",
+        "age": "Возраст",
+        "gender": "Пол",
+        "status": "Статус"
+      },
+      "status": {
+        "active": "Активен",
+        "inactive": "Неактивен"
+      },
+      "age": {
+        "months_one": "{{count}} месец",
+        "months_other": "{{count}} месеци",
+        "years_one": "{{count}} година",
+        "years_other": "{{count}} години"
+      }
+    }
+  }
+}

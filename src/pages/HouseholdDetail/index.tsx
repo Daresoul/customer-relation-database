@@ -2,6 +2,7 @@ import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Layout, Spin, Alert, Button, Space, Breadcrumb } from 'antd';
 import { ArrowLeftOutlined, HomeOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { useHouseholdDetail, useHouseholdPatients } from '../../hooks/useHousehold';
 import { HouseholdInfo } from './HouseholdInfo';
 import { PeopleSection } from './PeopleSection';
@@ -13,6 +14,7 @@ const { Content } = Layout;
 export const HouseholdDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { t } = useTranslation('households');
   const householdId = parseInt(id || '0', 10);
 
   const { data, isLoading, error } = useHouseholdDetail(householdId);
@@ -24,13 +26,13 @@ export const HouseholdDetail: React.FC = () => {
     return (
       <Content style={{ padding: 24, background: '#141414' }}>
         <Alert
-          message="Invalid Household ID"
-          description="The household ID provided is not valid."
+          message={t('detail.invalidId')}
+          description={t('detail.invalidIdDescription')}
           type="error"
           showIcon
           action={
             <Button onClick={() => navigate('/')}>
-              Back to Dashboard
+              {t('detail.backToDashboard')}
             </Button>
           }
         />
@@ -42,7 +44,7 @@ export const HouseholdDetail: React.FC = () => {
     return (
       <Content style={{ padding: 24, textAlign: 'center', background: '#141414' }}>
         <Spin size="large" />
-        <div style={{ marginTop: 16 }}>Loading household details...</div>
+        <div style={{ marginTop: 16 }}>{t('detail.loading')}</div>
       </Content>
     );
   }
@@ -51,17 +53,17 @@ export const HouseholdDetail: React.FC = () => {
     return (
       <Content style={{ padding: 24, background: '#141414' }}>
         <Alert
-          message="Error Loading Household"
-          description={error instanceof Error ? error.message : 'Failed to load household details'}
+          message={t('detail.errorLoading')}
+          description={error instanceof Error ? error.message : t('detail.failedToLoad')}
           type="error"
           showIcon
           action={
             <Space>
               <Button onClick={() => window.location.reload()}>
-                Retry
+                {t('detail.retry')}
               </Button>
               <Button onClick={() => navigate('/')}>
-                Back to Dashboard
+                {t('detail.backToDashboard')}
               </Button>
             </Space>
           }
@@ -74,13 +76,13 @@ export const HouseholdDetail: React.FC = () => {
     return (
       <Content style={{ padding: 24, background: '#141414' }}>
         <Alert
-          message="Household Not Found"
-          description="The requested household could not be found."
+          message={t('detail.notFound')}
+          description={t('detail.notFoundDescription')}
           type="warning"
           showIcon
           action={
             <Button onClick={() => navigate('/')}>
-              Back to Dashboard
+              {t('detail.backToDashboard')}
             </Button>
           }
         />
@@ -94,10 +96,10 @@ export const HouseholdDetail: React.FC = () => {
         <Breadcrumb
           items={[
             {
-              title: <Link to="/"><HomeOutlined /> Home</Link>,
+              title: <Link to="/"><HomeOutlined /> {t('detail.breadcrumb.home')}</Link>,
             },
             {
-              title: <Link to="/">Dashboard</Link>,
+              title: <Link to="/">{t('detail.breadcrumb.dashboard')}</Link>,
             },
             {
               title: data.household.householdName || `Household ${householdId}`,
@@ -111,7 +113,7 @@ export const HouseholdDetail: React.FC = () => {
           icon={<ArrowLeftOutlined />}
           onClick={() => navigate('/')}
         >
-          Back to Households
+          {t('detail.backToHouseholds')}
         </Button>
       </div>
 

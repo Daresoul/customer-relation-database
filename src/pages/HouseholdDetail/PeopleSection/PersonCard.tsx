@@ -25,6 +25,7 @@ import {
   PhoneOutlined,
   MailOutlined
 } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { PersonWithContacts, PersonContact } from '../../../types/household';
 import { useUpdatePerson, useDeletePerson, useUpdatePersonContacts } from '../../../hooks/useHousehold';
 
@@ -37,12 +38,6 @@ interface PersonCardProps {
   onPrimaryChange?: (personId: number) => void;
 }
 
-const contactTypeOptions = [
-  { label: 'Phone', value: 'phone', icon: <PhoneOutlined /> },
-  { label: 'Email', value: 'email', icon: <MailOutlined /> },
-  { label: 'Mobile', value: 'mobile', icon: <PhoneOutlined /> },
-  { label: 'Work Phone', value: 'work_phone', icon: <PhoneOutlined /> }
-];
 
 const getContactIcon = (type: string) => {
   return type === 'email' ? <MailOutlined /> : <PhoneOutlined />;
@@ -55,11 +50,29 @@ export const PersonCard: React.FC<PersonCardProps> = ({
   onPrimaryChange
 }) => {
   const { message } = App.useApp();
+  const { t } = useTranslation('households');
   const [isEditing, setIsEditing] = useState(false);
   const [form] = Form.useForm();
   const updatePerson = useUpdatePerson();
   const deletePerson = useDeletePerson();
   const updateContacts = useUpdatePersonContacts();
+
+  const contactTypeOptions = [
+    { label: t('detail.people.modal.contactTypes.phone'), value: 'phone', icon: <PhoneOutlined /> },
+    { label: t('detail.people.modal.contactTypes.email'), value: 'email', icon: <MailOutlined /> },
+    { label: t('detail.people.modal.contactTypes.mobile'), value: 'mobile', icon: <PhoneOutlined /> },
+    { label: t('detail.people.modal.contactTypes.workPhone'), value: 'work_phone', icon: <PhoneOutlined /> }
+  ];
+
+  const getContactTypeLabel = (type: string) => {
+    switch (type) {
+      case 'phone': return t('detail.people.modal.contactTypes.phone');
+      case 'email': return t('detail.people.modal.contactTypes.email');
+      case 'mobile': return t('detail.people.modal.contactTypes.mobile');
+      case 'work_phone': return t('detail.people.modal.contactTypes.workPhone');
+      default: return type;
+    }
+  };
 
   const handleEdit = () => {
     form.setFieldsValue({
@@ -105,13 +118,13 @@ export const PersonCard: React.FC<PersonCardProps> = ({
       }
 
       setIsEditing(false);
-      message.success('Person updated successfully');
+      message.success(t('detail.people.personAdded'));
 
       if (values.isPrimary && !person.isPrimary) {
         onPrimaryChange?.(person.id);
       }
     } catch (error) {
-      message.error('Failed to save changes');
+      message.error(t('detail.householdInfo.failedToSave'));
       console.error('Save failed:', error);
     }
   };
@@ -122,9 +135,9 @@ export const PersonCard: React.FC<PersonCardProps> = ({
         personId: person.id,
         householdId
       });
-      message.success('Person removed from household');
+      message.success(t('detail.people.personRemoved'));
     } catch (error) {
-      message.error('Failed to delete person');
+      message.error(t('detail.people.failedToDelete'));
       console.error('Delete failed:', error);
     }
   };
@@ -132,7 +145,7 @@ export const PersonCard: React.FC<PersonCardProps> = ({
   const validateEmail = (_: any, value: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (value && !emailRegex.test(value)) {
-      return Promise.reject('Please enter a valid email address');
+      return Promise.reject(t('detail.people.modal.validation.invalidEmail'));
     }
     return Promise.resolve();
   };
@@ -140,7 +153,7 @@ export const PersonCard: React.FC<PersonCardProps> = ({
   const validatePhone = (_: any, value: string) => {
     const phoneRegex = /^[\d\s\-\+\(\)]+$/;
     if (value && !phoneRegex.test(value)) {
-      return Promise.reject('Please enter a valid phone number');
+      return Promise.reject(t('detail.people.modal.validation.invalidPhone'));
     }
     // Removed length validation - allow any number of digits
     return Promise.resolve();
@@ -166,34 +179,34 @@ export const PersonCard: React.FC<PersonCardProps> = ({
             <Col span={12}>
               <Form.Item
                 name="firstName"
-                label="First Name"
-                rules={[{ required: true, message: 'First name is required' }]}
+                label={t('detail.people.modal.labels.firstName')}
+                rules={[{ required: true, message: t('detail.people.modal.validation.firstNameRequired') }]}
               >
-                <Input placeholder="First Name" />
+                <Input placeholder={t('detail.people.modal.placeholders.firstName')} />
               </Form.Item>
             </Col>
             <Col span={12}>
               <Form.Item
                 name="lastName"
-                label="Last Name"
-                rules={[{ required: true, message: 'Last name is required' }]}
+                label={t('detail.people.modal.labels.lastName')}
+                rules={[{ required: true, message: t('detail.people.modal.validation.lastNameRequired') }]}
               >
-                <Input placeholder="Last Name" />
+                <Input placeholder={t('detail.people.modal.placeholders.lastName')} />
               </Form.Item>
             </Col>
           </Row>
 
           <Form.Item
             name="isPrimary"
-            label="Primary Contact"
+            label={t('detail.people.modal.labels.primaryContact')}
           >
             <Radio.Group>
-              <Radio value={true}>Yes</Radio>
-              <Radio value={false}>No</Radio>
+              <Radio value={true}>{t('detail.people.modal.labels.yes')}</Radio>
+              <Radio value={false}>{t('detail.people.modal.labels.no')}</Radio>
             </Radio.Group>
           </Form.Item>
 
-          <Form.Item label="Contact Methods">
+          <Form.Item label={t('detail.people.modal.labels.contactMethods')}>
             <Form.List name="contacts">
               {(fields, { add, remove }) => (
                 <>
@@ -202,17 +215,17 @@ export const PersonCard: React.FC<PersonCardProps> = ({
                       <Form.Item
                         {...restField}
                         name={[name, 'contactType']}
-                        rules={[{ required: true, message: 'Select type' }]}
+                        rules={[{ required: true, message: t('detail.people.modal.validation.selectType') }]}
                         style={{ marginBottom: 0, width: 150 }}
                       >
-                        <Select placeholder="Type" options={contactTypeOptions} />
+                        <Select placeholder={t('detail.people.modal.placeholders.contactType')} options={contactTypeOptions} />
                       </Form.Item>
                       <Form.Item
                         {...restField}
                         name={[name, 'contactValue']}
                         dependencies={[['contacts', name, 'contactType']]}
                         rules={[
-                          { required: true, message: 'Required' },
+                          { required: true, message: t('detail.people.modal.validation.required') },
                           ({ getFieldValue }) => ({
                             validator(_, value) {
                               const type = getFieldValue(['contacts', name, 'contactType']);
@@ -227,7 +240,7 @@ export const PersonCard: React.FC<PersonCardProps> = ({
                         ]}
                         style={{ marginBottom: 0, flex: 1 }}
                       >
-                        <Input placeholder="Contact value" />
+                        <Input placeholder={t('detail.people.modal.placeholders.contactValue')} />
                       </Form.Item>
                       <MinusCircleOutlined onClick={() => remove(name)} />
                     </Space>
@@ -238,7 +251,7 @@ export const PersonCard: React.FC<PersonCardProps> = ({
                     block
                     icon={<PlusOutlined />}
                   >
-                    Add Contact Method
+                    {t('detail.people.modal.addContactMethod')}
                   </Button>
                 </>
               )}
@@ -252,13 +265,13 @@ export const PersonCard: React.FC<PersonCardProps> = ({
               onClick={handleSave}
               loading={updatePerson.isPending || updateContacts.isPending}
             >
-              Save
+              {t('detail.householdInfo.saved')}
             </Button>
             <Button
               icon={<CloseOutlined />}
               onClick={handleCancel}
             >
-              Cancel
+              {t('detail.people.modal.cancel')}
             </Button>
           </Space>
         </Form>
@@ -274,7 +287,7 @@ export const PersonCard: React.FC<PersonCardProps> = ({
         <Space>
           <UserOutlined />
           <Text strong>{`${person.firstName} ${person.lastName}`}</Text>
-          {person.isPrimary && <Tag color="blue">Primary</Tag>}
+          {person.isPrimary && <Tag color="blue">{t('entities:roles.primaryContact')}</Tag>}
         </Space>
       }
       extra={
@@ -284,22 +297,22 @@ export const PersonCard: React.FC<PersonCardProps> = ({
             onClick={handleEdit}
             size="small"
           >
-            Edit
+            {t('common:actions.edit')}
           </Button>
           {canDelete && (
             <Popconfirm
-              title="Delete this person?"
-              description="This will remove the person and all their contact information."
+              title={t('detail.people.confirmDeleteTitle')}
+              description={t('detail.people.confirmDeleteDescription')}
               onConfirm={handleDelete}
-              okText="Yes"
-              cancelText="No"
+              okText={t('detail.people.modal.labels.yes')}
+              cancelText={t('detail.people.modal.labels.no')}
             >
               <Button
                 icon={<DeleteOutlined />}
                 danger
                 size="small"
               >
-                Delete
+                {t('common:actions.delete')}
               </Button>
             </Popconfirm>
           )}
@@ -311,14 +324,14 @@ export const PersonCard: React.FC<PersonCardProps> = ({
           {person.contacts.map(contact => (
             <Space key={contact.id}>
               {getContactIcon(contact.contactType)}
-              <Text type="secondary">{contact.contactType}:</Text>
+              <Text type="secondary">{getContactTypeLabel(contact.contactType)}:</Text>
               <Text copyable>{contact.contactValue}</Text>
-              {contact.isPrimary && <Tag color="green" style={{ marginLeft: 8 }}>Primary</Tag>}
+              {contact.isPrimary && <Tag color="green" style={{ marginLeft: 8 }}>{t('entities:roles.primaryContact')}</Tag>}
             </Space>
           ))}
         </Space>
       ) : (
-        <Text type="secondary">No contact information</Text>
+        <Text type="secondary">{t('entities:defaults.noContactInfo')}</Text>
       )}
     </Card>
   );

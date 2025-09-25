@@ -11,7 +11,10 @@ import {
   RiseOutlined,
   UserOutlined,
   HomeOutlined,
+  SettingOutlined,
 } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 // Removed AppLayout - using simpler layout
 import { PatientTable } from '../components/tables/PatientTable';
 import { HouseholdTable } from '../components/tables/HouseholdTable';
@@ -29,12 +32,16 @@ import api, { setAppInstance } from '../services/api.integration';
 import notifications from '../services/notifications';
 import type { Patient, PatientWithHousehold } from '../types';
 import type { HouseholdTableRecord } from '../types/ui.types';
+import { useThemeColors } from '../utils/themeStyles';
 
 // Removed TabPane - using items prop instead
 
 export const MainDashboard: React.FC = () => {
+  const { t } = useTranslation(['patients', 'common', 'navigation']);
+  const navigate = useNavigate();
   const { currentView, setCurrentView } = useViewContext();
   const app = App.useApp();
+  const themeColors = useThemeColors();
   const activeView = currentView === 'animal' ? 'patients' : 'households';
   const [loading, setLoading] = useState(true);
   const [patients, setPatients] = useState<PatientWithHousehold[]>([]);
@@ -191,7 +198,7 @@ export const MainDashboard: React.FC = () => {
   };
 
   const handleDeletePatient = async (patient: PatientWithHousehold) => {
-    if (!window.confirm(`Are you sure you want to delete ${patient.name}?`)) {
+    if (!window.confirm(t('patients:confirmDelete', { name: patient.name }))) {
       return;
     }
     await api.patient.delete(patient.id);
@@ -221,7 +228,7 @@ export const MainDashboard: React.FC = () => {
   };
 
   const handleDeleteHousehold = async (household: HouseholdTableRecord) => {
-    if (!window.confirm(`Are you sure you want to delete ${household.lastName} household?`)) {
+    if (!window.confirm(t('patients:confirmDeleteHousehold', { name: household.lastName }))) {
       return;
     }
     await api.household.delete(household.id);
@@ -240,20 +247,20 @@ export const MainDashboard: React.FC = () => {
   };
 
   if (loading) {
-    return <PageLoader message="Loading dashboard..." />;
+    return <PageLoader message={t('common:loading')} />;
   }
 
   // Simplified layout without header
 
   return (
-    <div style={{ background: '#141414', padding: '24px' }}>
+    <div style={{ background: themeColors.background, padding: '24px' }}>
       <Space direction="vertical" size="large" style={{ width: '100%' }}>
         {/* Statistics Cards */}
         <Row gutter={16}>
           <Col span={8}>
             <Card>
               <Statistic
-                title="Total Patients"
+                title={t('patients:statistics.totalPatients')}
                 value={stats.totalPatients}
                 prefix={<HeartOutlined />}
                 valueStyle={{ color: '#ff69b4' }}
@@ -263,7 +270,7 @@ export const MainDashboard: React.FC = () => {
           <Col span={8}>
             <Card>
               <Statistic
-                title="Active Patients"
+                title={t('patients:statistics.activePatients')}
                 value={stats.activePatients}
                 prefix={<RiseOutlined />}
                 valueStyle={{ color: '#52c41a' }}
@@ -273,7 +280,7 @@ export const MainDashboard: React.FC = () => {
           <Col span={8}>
             <Card>
               <Statistic
-                title="Total Households"
+                title={t('patients:statistics.totalHouseholds')}
                 value={stats.totalHouseholds}
                 prefix={<HomeOutlined />}
                 valueStyle={{ color: '#4A90E2' }}
@@ -289,6 +296,13 @@ export const MainDashboard: React.FC = () => {
             onChange={(key) => setCurrentView(key === 'patients' ? 'animal' : 'household')}
             tabBarExtraContent={
               <Space>
+                <Button
+                  variant="secondary"
+                  iconType="setting"
+                  onClick={() => navigate('/settings')}
+                >
+                  {t('navigation:settings')}
+                </Button>
                 {import.meta.env.DEV && (
                   <Button
                     variant="secondary"
@@ -308,7 +322,7 @@ export const MainDashboard: React.FC = () => {
                     }
                   }}
                 >
-                  Add {activeView === 'patients' ? 'Patient' : 'Household'}
+                  {activeView === 'patients' ? t('patients:addPatient') : t('patients:addHousehold')}
                 </Button>
               </Space>
             }
@@ -318,7 +332,7 @@ export const MainDashboard: React.FC = () => {
                 label: (
                   <span>
                     <HeartOutlined />
-                    Patients
+                    {t('navigation:patients')}
                   </span>
                 ),
                 children: filteredPatients.length > 0 || patients.length > 0 ? (
@@ -337,7 +351,7 @@ export const MainDashboard: React.FC = () => {
                 label: (
                   <span>
                     <TeamOutlined />
-                    Households
+                    {t('navigation:households')}
                   </span>
                 ),
                 children: filteredHouseholds.length > 0 || households.length > 0 ? (
@@ -358,7 +372,7 @@ export const MainDashboard: React.FC = () => {
 
       {/* Patient Form Modal */}
       <FormModal
-        title={selectedPatient ? 'Edit Patient' : 'Add New Patient'}
+        title={selectedPatient ? t('patients:editPatient') : t('patients:addPatient')}
         open={showPatientForm}
         onCancel={() => {
           setShowPatientForm(false);
@@ -379,7 +393,7 @@ export const MainDashboard: React.FC = () => {
 
       {/* Household Form Modal */}
       <FormModal
-        title={selectedHousehold ? 'Edit Household' : 'Add New Household'}
+        title={selectedHousehold ? t('patients:editHousehold') : t('patients:addHousehold')}
         open={showHouseholdForm}
         onCancel={() => {
           setShowHouseholdForm(false);

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Button, Space, Typography, Empty, App } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { PersonWithContacts, CreatePersonWithContactsDto } from '../../../types/household';
 import { PersonCard } from './PersonCard';
 import { AddPersonModal } from './AddPersonModal';
@@ -15,6 +16,7 @@ interface PeopleSectionProps {
 
 export const PeopleSection: React.FC<PeopleSectionProps> = ({ people, householdId }) => {
   const { message } = App.useApp();
+  const { t } = useTranslation('households');
   const [isAddingPerson, setIsAddingPerson] = useState(false);
   const addPerson = useAddPerson();
 
@@ -25,9 +27,9 @@ export const PeopleSection: React.FC<PeopleSectionProps> = ({ people, householdI
         person: personData
       });
       setIsAddingPerson(false);
-      message.success('Person added successfully');
+      message.success(t('detail.people.personAdded'));
     } catch (error) {
-      message.error('Failed to add person');
+      message.error(t('detail.people.failedToAdd'));
       console.error('Add person failed:', error);
     }
   };
@@ -40,13 +42,13 @@ export const PeopleSection: React.FC<PeopleSectionProps> = ({ people, householdI
   return (
     <div style={{ marginTop: 24 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <Title level={4}>People & Contacts</Title>
+        <Title level={4}>{t('detail.people.title')}</Title>
         <Button
           type="primary"
           icon={<PlusOutlined />}
           onClick={() => setIsAddingPerson(true)}
         >
-          Add Person
+          {t('detail.people.addPerson')}
         </Button>
       </div>
 
@@ -64,11 +66,11 @@ export const PeopleSection: React.FC<PeopleSectionProps> = ({ people, householdI
         </div>
       ) : (
         <Empty
-          description="No people in this household"
+          description={t('detail.people.noPeople')}
           style={{ marginBottom: 24 }}
         >
           <Button type="primary" onClick={() => setIsAddingPerson(true)}>
-            Add First Person
+            {t('detail.people.addFirstPerson')}
           </Button>
         </Empty>
       )}

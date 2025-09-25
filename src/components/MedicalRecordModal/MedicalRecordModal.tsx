@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Modal, Spin, message, Alert, Button, Divider, List, Typography, Space } from 'antd';
+import { useTranslation } from 'react-i18next';
 import MedicalRecordForm from './MedicalRecordForm';
 import { useMedicalRecord, useCreateMedicalRecord, useUpdateMedicalRecord, useUploadAttachment } from '@/hooks/useMedicalRecords';
 import type { CreateMedicalRecordInput, UpdateMedicalRecordInput, MedicalRecordHistory } from '@/types/medical';
@@ -19,6 +20,7 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
   patientName,
   recordId,
 }) => {
+  const { t } = useTranslation('medical');
   const [loading, setLoading] = useState(false);
   const { data: recordDetail, isLoading: isLoadingRecord, isError, error, refetch } = useMedicalRecord(
     recordId || 0,
@@ -30,8 +32,8 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
 
   const isEdit = !!recordId;
   const title = isEdit
-    ? `Edit Medical Record for ${patientName}`
-    : `New Medical Record for ${patientName}`;
+    ? `${t('form.editTitle')} - ${patientName}`
+    : `${t('form.createTitle')} - ${patientName}`;
 
   // Debugging: log modal state and fetch status
   useEffect(() => {
@@ -80,9 +82,9 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
 
           try {
             await Promise.all(uploadPromises);
-            message.success(`${files.length} file(s) uploaded successfully`);
+            message.success(t('messages.uploadSuccess'));
           } catch (uploadError) {
-            message.error('Some files failed to upload. You can try uploading them again by editing the record.');
+            message.error(t('messages.uploadFailed'));
             console.error('Upload error:', uploadError);
           }
         }
@@ -113,7 +115,7 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
           <Alert
             type="error"
             showIcon
-            message="Failed to load medical record"
+            message={t('messages.loadError')}
             description={
               typeof error === 'string'
                 ? error
@@ -123,7 +125,7 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
             }
             action={
               <Button size="small" onClick={() => refetch()}>
-                Retry
+                {t('actions.retry')}
               </Button>
             }
           />
