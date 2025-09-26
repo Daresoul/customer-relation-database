@@ -70,9 +70,12 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
     []
   );
 
+  // Determine modal visibility
+  const isModalVisible = visible !== undefined ? visible : open;
+
   // Initialize form values
   useEffect(() => {
-    if (visible) {
+    if (isModalVisible) {
       if (mode === 'edit' && appointment) {
         form.setFieldsValue({
           patient_id: appointment.patient_id,
@@ -106,7 +109,7 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
         });
       }
     }
-  }, [visible, appointment, mode, initialDate, initialEndDate, form]);
+  }, [isModalVisible, appointment, mode, initialDate, initialEndDate, form]);
 
   // Check for conflicts when room or time changes
   const checkConflicts = async () => {
@@ -235,7 +238,7 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
           {mode === 'create' ? 'New Appointment' : 'Edit Appointment'}
         </Space>
       }
-      open={visible ?? open}
+      open={isModalVisible}
       onCancel={handleCancel}
       width={700}
       footer={[

@@ -261,8 +261,8 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
             appointments={appointments || []}
             onSelectAppointment={onSelectAppointment}
             onCreateAppointment={(startDate, endDate) => {
-              // Pass the start date for now, modal will handle end time
-              onCreateAppointment(startDate);
+              // Pass both dates to parent
+              onCreateAppointment(startDate, endDate);
             }}
           />
         );
