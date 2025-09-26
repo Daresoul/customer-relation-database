@@ -213,7 +213,7 @@ const DayViewDraggable: React.FC<DayViewDraggableProps> = ({
       top: startSlot * slotHeight,
       height: (endSlot - startSlot + 1) * slotHeight,
       backgroundColor: 'rgba(24, 144, 255, 0.15)',
-      border: '2px dashed #1890ff',
+      border: `2px dashed ${themeColors.primary || '#1890ff'}`,
       borderRadius: '4px',
       pointerEvents: 'none' as const,
       zIndex: 100,
