@@ -41,6 +41,7 @@ interface AppointmentModalProps {
   visible: boolean;
   appointment?: Appointment | null;
   initialDate?: Date;
+  initialEndDate?: Date;
   onCancel: () => void;
   onSave: (data: CreateAppointmentInput | UpdateAppointmentInput) => Promise<void>;
   mode: 'create' | 'edit';
@@ -50,6 +51,7 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
   visible,
   appointment,
   initialDate,
+  initialEndDate,
   onCancel,
   onSave,
   mode,
@@ -84,12 +86,18 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
         });
       } else if (mode === 'create') {
         const defaultDate = initialDate ? dayjs(initialDate) : dayjs();
-        const defaultStartTime = defaultDate
+        let defaultStartTime = defaultDate
           .hour(9)
           .minute(0)
           .second(0)
           .millisecond(0);
-        const defaultEndTime = defaultStartTime.add(30, 'minutes');
+        let defaultEndTime = defaultStartTime.add(30, 'minutes');
+
+        // If dragged from calendar, use the exact times
+        if (initialDate && initialEndDate) {
+          defaultStartTime = dayjs(initialDate);
+          defaultEndTime = dayjs(initialEndDate);
+        }
 
         form.setFieldsValue({
           date: defaultDate,
@@ -98,7 +106,7 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
         });
       }
     }
-  }, [visible, appointment, mode, initialDate, form]);
+  }, [visible, appointment, mode, initialDate, initialEndDate, form]);
 
   // Check for conflicts when room or time changes
   const checkConflicts = async () => {
@@ -227,7 +235,7 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
           {mode === 'create' ? 'New Appointment' : 'Edit Appointment'}
         </Space>
       }
-      open={visible}
+      open={visible ?? open}
       onCancel={handleCancel}
       width={700}
       footer={[

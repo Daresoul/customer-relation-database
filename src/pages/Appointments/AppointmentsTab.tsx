@@ -41,6 +41,7 @@ const AppointmentsTab: React.FC = () => {
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [filterDrawerVisible, setFilterDrawerVisible] = useState(false);
   const [initialDate, setInitialDate] = useState<Date>(new Date());
+  const [initialEndDate, setInitialEndDate] = useState<Date | undefined>();
   const [filter, setFilter] = useState<AppointmentFilter>({});
 
   const {
@@ -62,8 +63,9 @@ const AppointmentsTab: React.FC = () => {
   );
 
   // Handle create appointment
-  const handleCreateAppointment = useCallback((date?: Date) => {
+  const handleCreateAppointment = useCallback((date?: Date, endDate?: Date) => {
     setInitialDate(date || new Date());
+    setInitialEndDate(endDate);
     setModalMode('create');
     setSelectedAppointment(null);
     setModalVisible(true);
@@ -295,9 +297,11 @@ const AppointmentsTab: React.FC = () => {
         onCancel={() => {
           setModalVisible(false);
           setSelectedAppointment(null);
+          setInitialEndDate(undefined);
         }}
         onSave={handleSaveAppointment}
         initialDate={modalMode === 'create' ? initialDate : undefined}
+        initialEndDate={modalMode === 'create' ? initialEndDate : undefined}
         rooms={rooms}
       />
     </div>

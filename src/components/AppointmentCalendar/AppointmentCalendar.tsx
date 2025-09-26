@@ -9,11 +9,12 @@ import { useCalendarAppointments } from '../../hooks/useAppointments';
 import appointmentService from '../../services/appointmentService';
 import WeekView from './WeekView';
 import DayView from './DayView';
+import DayViewDraggable from './DayViewDraggable';
 import './AppointmentCalendar.css';
 
 interface AppointmentCalendarProps {
   onSelectAppointment: (appointment: Appointment) => void;
-  onCreateAppointment: (date: Date) => void;
+  onCreateAppointment: (date: Date, endDate?: Date) => void;
   selectedRoomId?: number;
   view: CalendarView;
   onViewChange: (view: CalendarView) => void;
@@ -255,11 +256,14 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
         );
       case 'day':
         return (
-          <DayView
+          <DayViewDraggable
             selectedDate={selectedDate}
             appointments={appointments || []}
             onSelectAppointment={onSelectAppointment}
-            onCreateAppointment={onCreateAppointment}
+            onCreateAppointment={(startDate, endDate) => {
+              // Pass the start date for now, modal will handle end time
+              onCreateAppointment(startDate);
+            }}
           />
         );
       default:
