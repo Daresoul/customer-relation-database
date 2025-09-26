@@ -1,0 +1,484 @@
+openapi: 3.0.0
+info:
+  title: Appointments API
+  version: 1.0.0
+  description: Tauri commands for appointment management
+
+paths:
+  /appointments:
+    get:
+      operationId: get_appointments
+      summary: List appointments with optional filters
+      parameters:
+        - name: start_date
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: end_date
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: patient_id
+          in: query
+          schema:
+            type: integer
+        - name: room_id
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [scheduled, in_progress, completed, cancelled]
+        - name: include_deleted
+          in: query
+          schema:
+            type: boolean
+            default: false
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of appointments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  appointments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Appointment'
+                  total:
+                    type: integer
+                  has_more:
+                    type: boolean
+
+    post:
+      operationId: create_appointment
+      summary: Create a new appointment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppointmentCreate'
+      responses:
+        '201':
+          description: Appointment created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Appointment'
+        '409':
+          description: Conflict with existing appointment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConflictError'
+
+  /appointments/{id}:
+    get:
+      operationId: get_appointment
+      summary: Get appointment by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Appointment details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentDetail'
+        '404':
+          description: Appointment not found
+
+    put:
+      operationId: update_appointment
+      summary: Update an existing appointment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppointmentUpdate'
+      responses:
+        '200':
+          description: Appointment updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Appointment'
+        '409':
+          description: Conflict with existing appointment
+
+    delete:
+      operationId: delete_appointment
+      summary: Soft delete an appointment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Appointment deleted
+        '404':
+          description: Appointment not found
+
+  /appointments/{id}/duplicate:
+    post:
+      operationId: duplicate_appointment
+      summary: Duplicate appointment to another date
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                target_date:
+                  type: string
+                  format: date-time
+                  description: New appointment start date/time
+      responses:
+        '201':
+          description: Duplicate created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Appointment'
+
+  /appointments/conflicts:
+    post:
+      operationId: check_conflicts
+      summary: Check for scheduling conflicts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                start_time:
+                  type: string
+                  format: date-time
+                end_time:
+                  type: string
+                  format: date-time
+                room_id:
+                  type: integer
+                exclude_appointment_id:
+                  type: integer
+      responses:
+        '200':
+          description: Conflict check result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  has_conflicts:
+                    type: boolean
+                  conflicts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Appointment'
+
+  /rooms:
+    get:
+      operationId: get_rooms
+      summary: List available rooms
+      parameters:
+        - name: active_only
+          in: query
+          schema:
+            type: boolean
+            default: true
+      responses:
+        '200':
+          description: List of rooms
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Room'
+
+    post:
+      operationId: create_room
+      summary: Create a new room
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoomCreate'
+      responses:
+        '201':
+          description: Room created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Room'
+
+  /settings/google-calendar:
+    get:
+      operationId: get_google_calendar_settings
+      summary: Get Google Calendar settings
+      responses:
+        '200':
+          description: Current settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoogleCalendarSettings'
+
+    post:
+      operationId: configure_google_calendar
+      summary: Configure Google Calendar integration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                auth_code:
+                  type: string
+                  description: OAuth authorization code
+      responses:
+        '200':
+          description: Configuration successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoogleCalendarSettings'
+
+    put:
+      operationId: update_google_calendar_settings
+      summary: Update Google Calendar settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sync_enabled:
+                  type: boolean
+                calendar_id:
+                  type: string
+      responses:
+        '200':
+          description: Settings updated
+
+  /appointments/sync:
+    post:
+      operationId: sync_appointments
+      summary: Sync appointments with Google Calendar
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                force:
+                  type: boolean
+                  default: false
+      responses:
+        '200':
+          description: Sync completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  synced_count:
+                    type: integer
+                  failed_count:
+                    type: integer
+                  errors:
+                    type: array
+                    items:
+                      type: string
+
+components:
+  schemas:
+    Appointment:
+      type: object
+      properties:
+        id:
+          type: integer
+        patient_id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        start_time:
+          type: string
+          format: date-time
+        end_time:
+          type: string
+          format: date-time
+        room_id:
+          type: integer
+          nullable: true
+        status:
+          type: string
+          enum: [scheduled, in_progress, completed, cancelled]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    AppointmentDetail:
+      allOf:
+        - $ref: '#/components/schemas/Appointment'
+        - type: object
+          properties:
+            patient:
+              $ref: '#/components/schemas/PatientInfo'
+            room:
+              $ref: '#/components/schemas/Room'
+
+    AppointmentCreate:
+      type: object
+      required:
+        - patient_id
+        - title
+        - start_time
+        - end_time
+      properties:
+        patient_id:
+          type: integer
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+        start_time:
+          type: string
+          format: date-time
+        end_time:
+          type: string
+          format: date-time
+        room_id:
+          type: integer
+          nullable: true
+
+    AppointmentUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+        start_time:
+          type: string
+          format: date-time
+        end_time:
+          type: string
+          format: date-time
+        room_id:
+          type: integer
+          nullable: true
+        status:
+          type: string
+          enum: [scheduled, in_progress, completed, cancelled]
+
+    Room:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        capacity:
+          type: integer
+        is_active:
+          type: boolean
+
+    RoomCreate:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        description:
+          type: string
+        capacity:
+          type: integer
+          minimum: 1
+          default: 1
+
+    PatientInfo:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        species:
+          type: string
+        breed:
+          type: string
+
+    GoogleCalendarSettings:
+      type: object
+      properties:
+        sync_enabled:
+          type: boolean
+        calendar_id:
+          type: string
+        last_sync:
+          type: string
+          format: date-time
+        is_authenticated:
+          type: boolean
+
+    ConflictError:
+      type: object
+      properties:
+        error:
+          type: string
+        conflicts:
+          type: array
+          items:
+            $ref: '#/components/schemas/Appointment'

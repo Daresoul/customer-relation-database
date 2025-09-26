@@ -106,6 +106,21 @@ fn main() {
             commands::populate_database,
             // Stats commands
             commands::get_dashboard_stats,
+            // Appointment commands
+            commands::get_appointments,
+            commands::get_appointment,
+            commands::create_appointment,
+            commands::update_appointment,
+            commands::delete_appointment,
+            commands::check_conflicts,
+            commands::duplicate_appointment,
+            // Room commands
+            commands::get_rooms,
+            commands::get_room,
+            commands::create_room,
+            commands::update_room,
+            commands::delete_room,
+            commands::get_room_availability,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

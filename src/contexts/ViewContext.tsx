@@ -19,6 +19,7 @@ interface ViewContextType {
   // Actions
   switchToAnimalView: () => Promise<void>;
   switchToHouseholdView: () => Promise<void>;
+  switchToAppointmentsView: () => Promise<void>;
   updateAnimalSearch: (query: string, results: PatientWithOwners[], loading: boolean) => void;
   updateHouseholdSearch: (query: string, results: HouseholdSearchResult[], loading: boolean) => void;
   clearAnimalSearch: () => void;
@@ -113,6 +114,10 @@ export const ViewProvider: React.FC<ViewProviderProps> = ({ children }) => {
     await setCurrentView('household');
   }, [setCurrentView]);
 
+  const switchToAppointmentsView = useCallback(async () => {
+    await setCurrentView('appointments');
+  }, [setCurrentView]);
+
   const updateAnimalSearch = useCallback((query: string, results: PatientWithOwners[], loading: boolean) => {
     setAnimalSearchState({
       query,
@@ -157,6 +162,7 @@ export const ViewProvider: React.FC<ViewProviderProps> = ({ children }) => {
     householdSearchState,
     switchToAnimalView,
     switchToHouseholdView,
+    switchToAppointmentsView,
     updateAnimalSearch,
     updateHouseholdSearch,
     clearAnimalSearch,

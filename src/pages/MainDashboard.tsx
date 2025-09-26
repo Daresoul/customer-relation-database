@@ -27,6 +27,7 @@ import { PatientFormWithOwner } from '../components/forms/PatientFormWithOwner';
 import { HouseholdForm } from '../components/forms/HouseholdForm';
 import { Loading, PageLoader } from '../components/common/Loading';
 import { NoData } from '../components/common/EmptyState';
+import AppointmentsTab from './Appointments/AppointmentsTab';
 import { useViewContext } from '../contexts/ViewContext';
 import api, { setAppInstance } from '../services/api.integration';
 import notifications from '../services/notifications';
@@ -42,7 +43,7 @@ export const MainDashboard: React.FC = () => {
   const { currentView, setCurrentView } = useViewContext();
   const app = App.useApp();
   const themeColors = useThemeColors();
-  const activeView = currentView === 'animal' ? 'patients' : 'households';
+  const activeView = currentView === 'animal' ? 'patients' : currentView === 'household' ? 'households' : 'appointments';
   const [loading, setLoading] = useState(true);
   const [patients, setPatients] = useState<PatientWithHousehold[]>([]);
   const [households, setHouseholds] = useState<HouseholdTableRecord[]>([]);
@@ -293,7 +294,11 @@ export const MainDashboard: React.FC = () => {
         <Card>
           <Tabs
             activeKey={activeView}
-            onChange={(key) => setCurrentView(key === 'patients' ? 'animal' : 'household')}
+            onChange={(key) => {
+              if (key === 'patients') setCurrentView('animal');
+              else if (key === 'households') setCurrentView('household');
+              else if (key === 'appointments') setCurrentView('appointments');
+            }}
             tabBarExtraContent={
               <Space>
                 <Button
@@ -317,10 +322,11 @@ export const MainDashboard: React.FC = () => {
                   onClick={() => {
                     if (activeView === 'patients') {
                       setShowPatientForm(true);
-                    } else {
+                    } else if (activeView === 'households') {
                       setShowHouseholdForm(true);
                     }
                   }}
+                  style={{ display: activeView === 'appointments' ? 'none' : 'inline-flex' }}
                 >
                   {activeView === 'patients' ? t('patients:addPatient') : t('patients:addHousehold')}
                 </Button>
@@ -364,6 +370,16 @@ export const MainDashboard: React.FC = () => {
                 ) : (
                   <NoData />
                 ),
+              },
+              {
+                key: 'appointments',
+                label: (
+                  <span>
+                    <CalendarOutlined />
+                    {t('navigation:appointments')}
+                  </span>
+                ),
+                children: <AppointmentsTab />,
               },
             ]}
           />
