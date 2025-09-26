@@ -38,30 +38,35 @@ const { Text } = Typography;
 const { Option } = Select;
 
 interface AppointmentModalProps {
-  visible: boolean;
+  visible?: boolean; // For backward compatibility
+  open?: boolean; // Preferred prop name
   appointment?: Appointment | null;
   initialDate?: Date;
   initialEndDate?: Date;
   onCancel: () => void;
   onSave: (data: CreateAppointmentInput | UpdateAppointmentInput) => Promise<void>;
-  mode: 'create' | 'edit';
+  mode?: 'create' | 'edit';
+  rooms?: any[];
 }
 
 const AppointmentModal: React.FC<AppointmentModalProps> = ({
   visible,
+  open,
   appointment,
   initialDate,
   initialEndDate,
   onCancel,
   onSave,
-  mode,
+  mode = 'create',
+  rooms: propsRooms,
 }) => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [conflicts, setConflicts] = useState<Appointment[]>([]);
   const [checkingConflicts, setCheckingConflicts] = useState(false);
 
-  const { rooms } = useRooms({ active_only: true });
+  const { rooms: hookRooms } = useRooms({ active_only: true });
+  const rooms = propsRooms || hookRooms;
   const { patients } = usePatients();
 
   // Time slot options (15-minute intervals)
@@ -70,8 +75,9 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
     []
   );
 
-  // Determine modal visibility
-  const isModalVisible = visible !== undefined ? visible : open;
+  // Determine modal visibility - prefer 'open' prop, fall back to 'visible' for backward compatibility
+  const isModalVisible = open ?? visible ?? false;
+  console.log('AppointmentModal: isModalVisible =', isModalVisible, 'open =', open, 'visible =', visible);
 
   // Initialize form values
   useEffect(() => {
@@ -220,6 +226,7 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
 
   // Handle cancel
   const handleCancel = () => {
+    console.log('AppointmentModal: handleCancel called');
     form.resetFields();
     setConflicts([]);
     onCancel();
@@ -239,6 +246,7 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
         </Space>
       }
       open={isModalVisible}
+      destroyOnClose
       onCancel={handleCancel}
       width={700}
       footer={[
