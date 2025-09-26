@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Card, Tag, Button, Empty, Space } from 'antd';
 import { PlusOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import dayjs, { Dayjs } from 'dayjs';
@@ -28,10 +28,26 @@ const DayViewDraggable: React.FC<DayViewDraggableProps> = ({
   const [resizingAppointment, setResizingAppointment] = useState<number | null>(null);
   const [resizeEdge, setResizeEdge] = useState<'top' | 'bottom' | null>(null);
 
+  // Track if component is mounted to prevent stale events
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      // Clean up any lingering state
+      setIsDragging(false);
+      setDragStart(null);
+      setDragEnd(null);
+      setResizingAppointment(null);
+      setResizeEdge(null);
+    };
+  }, []);
+
   // Generate 15-minute time slots from 8 AM to 8 PM
   const timeSlots = Array.from({ length: 49 }, (_, i) => {
-    const hour = Math.floor(i / 4) + 8;
-    const minute = (i % 4) * 15;
+    const hour = Math.floor(i / 4) + 8; // 8 AM start
+    const minute = (i % 4) * 15; // 0, 15, 30, 45 minutes
     return {
       time: `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`,
       hour,
@@ -68,27 +84,30 @@ const DayViewDraggable: React.FC<DayViewDraggableProps> = ({
   };
 
   // Get slot index from mouse position
-  const getSlotFromMouseY = (clientY: number): number => {
+  const getSlotFromMouseY = useCallback((clientY: number): number => {
     if (!containerRef.current) return 0;
     const rect = containerRef.current.getBoundingClientRect();
     const scrollTop = containerRef.current.scrollTop;
     const relativeY = clientY - rect.top + scrollTop;
     const slotHeight = 60;
     return Math.max(0, Math.min(48, Math.floor(relativeY / slotHeight)));
-  };
+  }, []);
 
   // Handle mouse down for drag start
-  const handleMouseDown = (e: React.MouseEvent, slotIndex: number) => {
+  const handleMouseDown = useCallback((e: React.MouseEvent, slotIndex: number) => {
     if (e.target !== e.currentTarget) return; // Ignore if clicking on appointment
     e.preventDefault();
     const slot = getSlotFromMouseY(e.clientY);
     setIsDragging(true);
     setDragStart({ slot, y: e.clientY });
     setDragEnd({ slot, y: e.clientY });
-  };
+    console.log('DayViewDraggable: Started dragging at slot', slot);
+  }, [getSlotFromMouseY]);
 
   // Handle mouse move for dragging
-  const handleMouseMove = (e: MouseEvent) => {
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (!isMountedRef.current) return;
+
     if (!isDragging && !resizingAppointment) return;
 
     if (isDragging && dragStart) {
@@ -99,10 +118,14 @@ const DayViewDraggable: React.FC<DayViewDraggableProps> = ({
       const slot = getSlotFromMouseY(e.clientY);
       // Update preview of resize (would need state management for this)
     }
-  };
+  }, [isDragging, dragStart, resizingAppointment, getSlotFromMouseY]);
 
   // Handle mouse up for drag end
-  const handleMouseUp = (e: MouseEvent) => {
+  const handleMouseUp = useCallback((e: MouseEvent) => {
+    if (!isMountedRef.current) return;
+
+    console.log('DayViewDraggable: Mouse up, isDragging:', isDragging, 'dragStart:', dragStart, 'dragEnd:', dragEnd);
+
     if (isDragging && dragStart && dragEnd) {
       const startSlot = Math.min(dragStart.slot, dragEnd.slot);
       const endSlot = Math.max(dragStart.slot, dragEnd.slot) + 1; // +1 to include the end slot
@@ -113,6 +136,7 @@ const DayViewDraggable: React.FC<DayViewDraggableProps> = ({
 
       if (dragDistance < minDragDistance) {
         // Just a click, not a drag - do nothing
+        console.log('DayViewDraggable: Click detected (not drag), distance:', dragDistance);
         setIsDragging(false);
         setDragStart(null);
         setDragEnd(null);
@@ -130,35 +154,39 @@ const DayViewDraggable: React.FC<DayViewDraggableProps> = ({
         .second(0);
 
       if (endTime.diff(startTime, 'minutes') >= 15) {
+        console.log('DayViewDraggable: Creating appointment from', startTime.format(), 'to', endTime.format());
         onCreateAppointment(startTime.toDate(), endTime.toDate());
       }
     }
 
+    // Reset all drag states
     setIsDragging(false);
     setDragStart(null);
     setDragEnd(null);
     setResizingAppointment(null);
     setResizeEdge(null);
-  };
+  }, [isDragging, dragStart, dragEnd, selectedDate, onCreateAppointment]);
 
   // Add/remove global mouse event listeners
   useEffect(() => {
     if (isDragging || resizingAppointment !== null) {
+      console.log('DayViewDraggable: Adding event listeners');
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
       return () => {
+        console.log('DayViewDraggable: Removing event listeners');
         document.removeEventListener('mousemove', handleMouseMove);
         document.removeEventListener('mouseup', handleMouseUp);
       };
     }
-  }, [isDragging, dragStart, dragEnd, resizingAppointment]);
+  }, [isDragging, resizingAppointment, handleMouseMove, handleMouseUp]);
 
   // Handle appointment resize start
-  const handleResizeStart = (e: React.MouseEvent, appointmentId: number, edge: 'top' | 'bottom') => {
+  const handleResizeStart = useCallback((e: React.MouseEvent, appointmentId: number, edge: 'top' | 'bottom') => {
     e.stopPropagation();
     setResizingAppointment(appointmentId);
     setResizeEdge(edge);
-  };
+  }, []);
 
   const getStatusColor = (status: string): string => {
     const colors: Record<string, string> = {

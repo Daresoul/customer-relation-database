@@ -64,6 +64,7 @@ const AppointmentsTab: React.FC = () => {
 
   // Handle create appointment
   const handleCreateAppointment = useCallback((date?: Date, endDate?: Date) => {
+    console.log('AppointmentsTab: handleCreateAppointment called with date:', date, 'endDate:', endDate);
     setInitialDate(date || new Date());
     setInitialEndDate(endDate);
     setModalMode('create');
@@ -295,6 +296,7 @@ const AppointmentsTab: React.FC = () => {
         open={modalVisible}
         appointment={selectedAppointment}
         onCancel={() => {
+          console.log('AppointmentsTab: Modal onCancel called');
           setModalVisible(false);
           setSelectedAppointment(null);
           setInitialEndDate(undefined);
