@@ -14,6 +14,7 @@ pub struct ViewPreference {
 pub enum ViewType {
     Animal,
     Household,
+    Appointments,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

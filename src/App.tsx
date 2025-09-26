@@ -11,6 +11,7 @@ import { HouseholdDetail } from './pages/HouseholdDetail';
 import { PatientDetail } from './pages/PatientDetail';
 import { MedicalRecordDetailPage } from './pages/MedicalRecordDetail';
 import Settings from './pages/Settings';
+import Appointments from './pages/Appointments/Appointments';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ViewProvider } from './contexts';
 import { AppWrapper } from './components/AppWrapper';
@@ -45,6 +46,7 @@ function App() {
                     <Route path="/households/:id" element={<HouseholdDetail />} />
                     <Route path="/patients/:id" element={<PatientDetail />} />
                     <Route path="/medical-records/:id" element={<MedicalRecordDetailPage />} />
+                    <Route path="/appointments" element={<Appointments />} />
                     <Route path="/settings" element={<Settings />} />
                   </Routes>
                 </AppWrapper>

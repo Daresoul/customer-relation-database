@@ -7,6 +7,8 @@ pub mod database_reset;
 pub mod medical;
 pub mod stats;
 pub mod settings;
+pub mod appointments;
+pub mod rooms;
 
 pub use patient::*;
 pub use database::*;
@@ -17,3 +19,5 @@ pub use database_reset::*;
 pub use medical::*;
 pub use stats::*;
 pub use settings::*;
+pub use appointments::*;
+pub use rooms::*;

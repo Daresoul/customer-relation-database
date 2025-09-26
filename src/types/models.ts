@@ -34,7 +34,7 @@ export interface DatabaseStats {
 }
 
 // View switching types
-export type ViewType = 'animal' | 'household';
+export type ViewType = 'animal' | 'household' | 'appointments';
 
 export interface ViewPreference {
   activeView: ViewType;

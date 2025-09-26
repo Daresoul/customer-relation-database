@@ -21,6 +21,10 @@ rand = "0.8"
 fake = { version = "2.9", features = ["derive"] }
 pdfium-render = { version = "0.8" }
 image = { version = "0.25", default-features = false, features = ["png"] }
+# Google Calendar OAuth2 dependencies
+oauth2 = "4.4"
+reqwest = { version = "0.11", features = ["json"] }
+base64 = "0.21"
 
 [features]
 default = ["custom-protocol"]
