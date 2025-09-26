@@ -107,6 +107,18 @@ const DayViewDraggable: React.FC<DayViewDraggableProps> = ({
       const startSlot = Math.min(dragStart.slot, dragEnd.slot);
       const endSlot = Math.max(dragStart.slot, dragEnd.slot) + 1; // +1 to include the end slot
 
+      // Check if there was actual dragging (not just a click)
+      const dragDistance = Math.abs(dragEnd.y - dragStart.y);
+      const minDragDistance = 10; // Minimum pixels to consider it a drag
+
+      if (dragDistance < minDragDistance) {
+        // Just a click, not a drag - do nothing
+        setIsDragging(false);
+        setDragStart(null);
+        setDragEnd(null);
+        return;
+      }
+
       const startTime = selectedDate
         .hour(Math.floor(startSlot / 4) + 8)
         .minute((startSlot % 4) * 15)
@@ -201,6 +213,18 @@ const DayViewDraggable: React.FC<DayViewDraggableProps> = ({
         .time-slot-row:hover {
           background: #fafafa;
         }
+        .time-slot-row.empty:hover::after {
+          content: 'Drag to create';
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          transform: translate(-50%, -50%);
+          font-size: 11px;
+          color: #999;
+          pointer-events: none;
+          opacity: 0.6;
+          white-space: nowrap;
+        }
         .time-label {
           width: 80px;
           display: flex;
@@ -256,7 +280,7 @@ const DayViewDraggable: React.FC<DayViewDraggableProps> = ({
             description="No appointments scheduled for this day"
           >
             <div style={{ fontSize: '12px', color: themeColors.textSecondary, marginTop: '8px' }}>
-              Click and drag on the timeline below to create an appointment
+              <strong>Drag vertically</strong> on the timeline below to create an appointment
             </div>
           </Empty>
         </Card>
@@ -268,16 +292,25 @@ const DayViewDraggable: React.FC<DayViewDraggableProps> = ({
         style={{ position: 'relative' }}
       >
         {/* Time slots */}
-        {timeSlots.map((slot) => (
-          <div
-            key={slot.time}
-            className="time-slot-row"
-            onMouseDown={(e) => handleMouseDown(e, slot.slotIndex)}
-          >
-            <div className="time-label">{slot.time}</div>
-            <div className="slot-content" />
-          </div>
-        ))}
+        {timeSlots.map((slot) => {
+          const hasAppointments = dayAppointments.some(apt => {
+            const start = dayjs(apt.start_time);
+            return start.hour() === slot.hour &&
+                   start.minute() >= slot.minute &&
+                   start.minute() < slot.minute + 15;
+          });
+
+          return (
+            <div
+              key={slot.time}
+              className={`time-slot-row ${!hasAppointments ? 'empty' : ''}`}
+              onMouseDown={(e) => handleMouseDown(e, slot.slotIndex)}
+            >
+              <div className="time-label">{slot.time}</div>
+              <div className="slot-content" />
+            </div>
+          );
+        })}
 
         {/* Drag preview */}
         {isDragging && dragStart && dragEnd && (
