@@ -10,6 +10,7 @@ import appointmentService from '../../services/appointmentService';
 import WeekView from './WeekView';
 import DayView from './DayView';
 import DayViewDraggable from './DayViewDraggable';
+import WeekViewDraggable from './WeekViewDraggable';
 import './AppointmentCalendar.css';
 
 interface AppointmentCalendarProps {
@@ -228,17 +229,7 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
           />
         </div>
 
-        <Space size="small">
-          <Button size="small" onClick={handleToday}>Today</Button>
-          <Button
-            type="primary"
-            size="small"
-            icon={<PlusOutlined />}
-            onClick={() => onCreateAppointment(selectedDate.toDate())}
-          >
-            New Appointment
-          </Button>
-        </Space>
+        <Button size="small" onClick={handleToday}>Today</Button>
       </div>
     );
   };
@@ -247,7 +238,7 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
     switch (view) {
       case 'week':
         return (
-          <WeekView
+          <WeekViewDraggable
             selectedDate={selectedDate}
             appointments={appointments || []}
             onSelectAppointment={onSelectAppointment}
