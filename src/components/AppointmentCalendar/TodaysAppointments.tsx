@@ -7,7 +7,7 @@ import { useThemeColors } from '../../utils/themeStyles';
 interface TodaysAppointmentsProps {
   appointments: Appointment[];
   onSelectAppointment: (appointment: Appointment) => void;
-  onCreateAppointment: (startDate: Date, endDate: Date) => void;
+  onCreateAppointment: (startDate: Date, endDate?: Date) => void;
 }
 
 const TodaysAppointments: React.FC<TodaysAppointmentsProps> = ({
@@ -20,15 +20,11 @@ const TodaysAppointments: React.FC<TodaysAppointmentsProps> = ({
 
   // Filter appointments to only show today's appointments
   const todaysAppointments = useMemo(() => {
-    const todayStart = today.startOf('day');
-    const todayEnd = today.endOf('day');
-
     return allAppointments.filter(appointment => {
       const appointmentDate = dayjs(appointment.start_time);
-      return appointmentDate.isBetween(todayStart, todayEnd, null, '[]');
+      return appointmentDate.isSame(today, 'day');
     });
   }, [allAppointments, today]);
-
 
   return (
     <div style={{

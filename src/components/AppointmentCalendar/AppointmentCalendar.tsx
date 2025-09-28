@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { Calendar, Badge, Button, Space, Tooltip, Tag, Radio } from 'antd';
+import { Calendar, Badge, Button, Space, Tooltip, Tag, Radio, ConfigProvider } from 'antd';
 import { CalendarMode } from 'antd/es/calendar/generateCalendar';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
+import updateLocale from 'dayjs/plugin/updateLocale';
 import { LeftOutlined, RightOutlined, PlusOutlined } from '@ant-design/icons';
 import { Appointment, CalendarView } from '../../types/appointments';
 import { useRooms } from '../../hooks/useRooms';
@@ -11,7 +12,14 @@ import appointmentService from '../../services/appointmentService';
 import WeekView from './WeekView';
 import DayView from './DayView';
 import DayViewSimple from './DayViewSimple';
+import enUS from 'antd/es/locale/en_US';
 import './AppointmentCalendar.css';
+
+// Configure dayjs to start week on Monday
+dayjs.extend(updateLocale);
+dayjs.updateLocale('en', {
+  weekStart: 1, // Monday as first day of week
+});
 
 interface AppointmentCalendarProps {
   appointments: Appointment[];
@@ -34,6 +42,7 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
 }) => {
   const [selectedDate, setSelectedDate] = useState<Dayjs>(dayjs());
   const themeColors = useThemeColors();
+
 
   // Fetch room data for colors
   const { data: rooms = [] } = useRooms({ active_only: true });
@@ -113,8 +122,10 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
 
   // Filter appointments by room if selected
   const filteredAppointments = useMemo(() => {
-    if (!selectedRoomId) return allAppointments;
-    return allAppointments.filter((apt) => apt.room_id === selectedRoomId);
+    const filtered = !selectedRoomId ? allAppointments : allAppointments.filter((apt) => apt.room_id === selectedRoomId);
+
+
+    return filtered;
   }, [allAppointments, selectedRoomId]);
 
   // Group appointments by date
@@ -145,7 +156,7 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
               title={getTooltipContent(apt)}
               placement="top"
               mouseEnterDelay={0.5}
-              overlayStyle={{ maxWidth: '300px' }}
+              styles={{ root: { maxWidth: '300px' } }}
             >
               <div
                 className={`appointment-badge ${apt.status === 'cancelled' ? 'appointment-cancelled' : ''}`}
@@ -182,7 +193,7 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
             title={getTooltipContent(apt)}
             placement="right"
             mouseEnterDelay={0.5}
-            overlayStyle={{ maxWidth: '300px' }}
+            styles={{ root: { maxWidth: '300px' } }}
           >
             <div
               className={`appointment-item ${apt.status === 'cancelled' ? 'appointment-cancelled' : ''}`}
@@ -333,15 +344,29 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
           />
         );
       default:
+        // Configure locale to start week on Monday
+        const customLocale = {
+          ...enUS,
+          Calendar: {
+            ...enUS.Calendar,
+            lang: {
+              ...enUS.Calendar?.lang,
+              weekStart: 1, // Monday
+            },
+          },
+        };
+
         return (
-          <Calendar
-            value={selectedDate}
-            onSelect={handleSelect}
-            cellRender={cellRender}
-            mode="month"
-            headerRender={() => null} // We use custom header
-            fullscreen={true}
-          />
+          <ConfigProvider locale={customLocale}>
+            <Calendar
+              value={selectedDate}
+              onSelect={handleSelect}
+              cellRender={cellRender}
+              mode="month"
+              headerRender={() => null} // We use custom header
+              fullscreen={true}
+            />
+          </ConfigProvider>
         );
     }
   };

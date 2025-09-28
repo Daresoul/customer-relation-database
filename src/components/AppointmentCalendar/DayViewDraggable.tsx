@@ -348,7 +348,6 @@ const DayViewDraggable: React.FC<DayViewDraggableProps> = ({
           left: 0;
           right: 0;
           height: 1px;
-          background: ${themeColors.background};
           border-top: 1px dashed ${themeColors.border};
         }
         .day-time-label {
@@ -432,7 +431,6 @@ const DayViewDraggable: React.FC<DayViewDraggableProps> = ({
                 <div className="day-time-label">
                   <span style={{
                     position: 'absolute',
-                    top: '-12px',
                     left: '50%',
                     transform: 'translateX(-50%)',
                     background: themeColors.background,
@@ -468,7 +466,7 @@ const DayViewDraggable: React.FC<DayViewDraggableProps> = ({
                         title={getTooltipContent(apt)}
                         placement="top"
                         mouseEnterDelay={0.5}
-                        overlayStyle={{ maxWidth: '300px' }}
+                        styles={{ root: { maxWidth: '300px' } }}
                       >
                         <Card
                           size="small"

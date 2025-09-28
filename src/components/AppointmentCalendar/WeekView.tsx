@@ -335,7 +335,7 @@ const WeekView: React.FC<WeekViewProps> = ({
         title={getTooltipContent(apt)}
         placement="top"
         mouseEnterDelay={0.5}
-        overlayStyle={{ maxWidth: '300px' }}
+        styles={{ root: { maxWidth: '300px' } }}
       >
         <Card
           size="small"
@@ -440,7 +440,6 @@ const WeekView: React.FC<WeekViewProps> = ({
           left: 0;
           right: 0;
           height: 1px;
-          background: ${themeColors.background};
           border-top: 1px dashed ${themeColors.border};
         }
         .week-time-label {
@@ -466,7 +465,7 @@ const WeekView: React.FC<WeekViewProps> = ({
           background: ${themeColors.hover};
         }
         .today-column {
-          background: ${themeColors.selected};
+          background: ${themeColors.primary}08;
         }
         .current-time-line {
           position: absolute;
@@ -506,7 +505,8 @@ const WeekView: React.FC<WeekViewProps> = ({
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                background: isToday ? `${themeColors.border}` : 'transparent',
+                background: isToday ? `${themeColors.primary || '#1890ff'}15` : 'transparent',
+                borderTop: isToday ? `2px solid ${themeColors.primary || '#1890ff'}` : 'none',
                 cursor: onDayHeaderClick ? 'pointer' : 'default',
                 transition: 'background-color 0.2s',
               }}
@@ -517,7 +517,7 @@ const WeekView: React.FC<WeekViewProps> = ({
               }}
               onMouseLeave={(e) => {
                 if (onDayHeaderClick) {
-                  e.currentTarget.style.background = isToday ? `${themeColors.border}` : 'transparent';
+                  e.currentTarget.style.background = isToday ? `${themeColors.primary || '#1890ff'}15` : 'transparent';
                 }
               }}
             >
@@ -527,7 +527,7 @@ const WeekView: React.FC<WeekViewProps> = ({
               <div style={{
                 fontSize: '16px',
                 fontWeight: isToday ? 'bold' : 'normal',
-                color: isToday ? themeColors.text : themeColors.text
+                color: isToday ? themeColors.primary || '#1890ff' : themeColors.text
               }}>
                 {day.format('D')}
               </div>
@@ -544,7 +544,6 @@ const WeekView: React.FC<WeekViewProps> = ({
             <div className="week-time-label">
               <span style={{
                 position: 'absolute',
-                top: '-12px',
                 left: '50%',
                 transform: 'translateX(-50%)',
                 background: themeColors.background,

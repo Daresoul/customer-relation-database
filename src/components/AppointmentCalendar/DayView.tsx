@@ -20,10 +20,12 @@ const DayView: React.FC<DayViewProps> = ({
 }) => {
   const themeColors = useThemeColors();
 
+
   // Filter appointments for the selected day
   const dayAppointments = appointments
     .filter(apt => dayjs(apt.start_time).isSame(selectedDate, 'day'))
     .sort((a, b) => dayjs(a.start_time).valueOf() - dayjs(b.start_time).valueOf());
+
 
   // Generate 15-minute time slots from 8 AM to 8 PM
   const timeSlots = Array.from({ length: 49 }, (_, i) => {
