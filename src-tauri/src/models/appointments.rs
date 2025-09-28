@@ -16,9 +16,14 @@ pub struct Appointment {
     pub updated_at: DateTime<Utc>,
     pub deleted_at: Option<DateTime<Utc>>,
     pub created_by: String,
+    // Patient fields (populated by JOIN queries)
+    pub patient_name: Option<String>,
+    pub species: Option<String>,
+    pub breed: Option<String>,
+    pub microchip_id: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(type_name = "TEXT")]
 pub enum AppointmentStatus {
     #[serde(rename = "scheduled")]
@@ -90,6 +95,7 @@ pub struct AppointmentFilter {
     pub room_id: Option<i64>,
     pub status: Option<AppointmentStatus>,
     pub include_deleted: bool,
+    pub include_cancelled: Option<bool>,
 }
 
 impl Default for AppointmentFilter {
@@ -101,6 +107,7 @@ impl Default for AppointmentFilter {
             room_id: None,
             status: None,
             include_deleted: false,
+            include_cancelled: None,
         }
     }
 }

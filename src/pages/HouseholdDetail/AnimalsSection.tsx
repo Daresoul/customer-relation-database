@@ -14,7 +14,6 @@ interface AnimalsSectionProps {
 
 export const AnimalsSection: React.FC<AnimalsSectionProps> = ({ patients, householdId }) => {
   const { t } = useTranslation('households');
-  console.log(`AnimalsSection: Received ${patients.length} patients for household ${householdId}:`, patients);
 
   const columns = [
     {

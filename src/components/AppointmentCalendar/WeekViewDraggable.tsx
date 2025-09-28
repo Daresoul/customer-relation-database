@@ -94,7 +94,6 @@ const WeekViewDraggable: React.FC<WeekViewDraggableProps> = ({
     setIsDragging(true);
     setDragStart({ day: dayIndex, slot: slotIndex, y: e.clientY });
     setDragEnd({ day: dayIndex, slot: slotIndex, y: e.clientY });
-    console.log('WeekViewDraggable: Started dragging at day', dayIndex, 'slot', slotIndex);
   }, []);
 
   // Handle mouse move
@@ -116,7 +115,6 @@ const WeekViewDraggable: React.FC<WeekViewDraggableProps> = ({
   const handleMouseUp = useCallback((e: MouseEvent) => {
     if (!isMountedRef.current) return;
 
-    console.log('WeekViewDraggable: Mouse up, isDragging:', isDragging);
 
     if (isDragging && dragStart && dragEnd) {
       // Check if there was actual dragging
@@ -124,7 +122,6 @@ const WeekViewDraggable: React.FC<WeekViewDraggableProps> = ({
       const minDragDistance = 10;
 
       if (dragDistance < minDragDistance) {
-        console.log('WeekViewDraggable: Click detected (not drag)');
         setIsDragging(false);
         setDragStart(null);
         setDragEnd(null);
@@ -146,7 +143,6 @@ const WeekViewDraggable: React.FC<WeekViewDraggableProps> = ({
         .second(0);
 
       if (endTime.diff(startTime, 'minutes') >= 15) {
-        console.log('WeekViewDraggable: Creating appointment');
         onCreateAppointment(startTime.toDate(), endTime.toDate());
       }
     }
@@ -159,11 +155,9 @@ const WeekViewDraggable: React.FC<WeekViewDraggableProps> = ({
   // Add/remove event listeners
   useEffect(() => {
     if (isDragging) {
-      console.log('WeekViewDraggable: Adding event listeners');
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
       return () => {
-        console.log('WeekViewDraggable: Removing event listeners');
         document.removeEventListener('mousemove', handleMouseMove);
         document.removeEventListener('mouseup', handleMouseUp);
       };

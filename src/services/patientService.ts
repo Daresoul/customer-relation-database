@@ -92,8 +92,6 @@ export class PatientService {
       household_id: input.householdId || null
     };
 
-    console.log('🎯 PatientService: Creating patient with transformed data:', dto);
-
     // Create the patient
     const patient = await ApiService.invoke<Patient>('create_patient', { dto });
     console.log('🎯 PatientService: Created patient:', patient);
@@ -124,15 +122,11 @@ export class PatientService {
     if (updates.microchipId !== undefined) dto.microchipId = updates.microchipId || null;
     if (updates.isActive !== undefined) dto.isActive = updates.isActive;
 
-    console.log('🎯 PatientService: Updating patient with transformed data:', dto);
     const response = await ApiService.invoke<any>('update_patient', { id, dto });
-    console.log('🎯 PatientService: Raw backend response:', response);
-    console.log('🎯 PatientService: Response keys:', Object.keys(response));
-    console.log('🎯 PatientService: Date fields - dateOfBirth:', response.dateOfBirth, 'date_of_birth:', response.date_of_birth);
 
     // Always transform to ensure all fields are properly handled
     const patient = this.transformResponse(response);
-    console.log('🎯 PatientService: Transformed response:', patient);
+    console.log('🎯 PatientService: Updated patient:', patient);
     return patient;
   }
 

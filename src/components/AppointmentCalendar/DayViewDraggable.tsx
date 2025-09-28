@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Card, Tag, Button, Empty, Space } from 'antd';
+import { Card, Tag, Button, Empty, Space, Tooltip } from 'antd';
 import { PlusOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import dayjs, { Dayjs } from 'dayjs';
 import { Appointment } from '../../types/appointments';
 import { useThemeColors } from '../../utils/themeStyles';
+import { useRooms } from '../../hooks/useRooms';
 
 interface DayViewDraggableProps {
   selectedDate: Dayjs;
@@ -21,6 +22,7 @@ const DayViewDraggable: React.FC<DayViewDraggableProps> = ({
   onUpdateAppointment,
 }) => {
   const themeColors = useThemeColors();
+  const { data: rooms = [] } = useRooms({ active_only: true });
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState<{ slot: number; y: number } | null>(null);
@@ -44,38 +46,32 @@ const DayViewDraggable: React.FC<DayViewDraggableProps> = ({
     };
   }, []);
 
-  // Generate 15-minute time slots from 8 AM to 8 PM
-  const timeSlots = Array.from({ length: 49 }, (_, i) => {
-    const hour = Math.floor(i / 4) + 8; // 8 AM start
-    const minute = (i % 4) * 15; // 0, 15, 30, 45 minutes
-    return {
-      time: `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`,
-      hour,
-      minute,
-      slotIndex: i,
-    };
-  });
+  // Generate hourly slots from 00:00 to 23:59 (24 hours) - same as WeekView
+  const hourSlots = Array.from({ length: 24 }, (_, i) => ({
+    hour: i,
+    time: `${i.toString().padStart(2, '0')}:00`,
+  }));
 
   // Filter appointments for the selected day
   const dayAppointments = appointments
     .filter(apt => dayjs(apt.start_time).isSame(selectedDate, 'day'))
     .sort((a, b) => dayjs(a.start_time).valueOf() - dayjs(b.start_time).valueOf());
 
-  // Calculate slot index from time
+  // Calculate slot index from time (15-minute precision) - same as WeekView
   const getSlotFromTime = (date: Dayjs): number => {
     const hour = date.hour();
     const minute = date.minute();
     const minuteSlot = Math.floor(minute / 15);
-    return Math.max(0, Math.min(48, (hour - 8) * 4 + minuteSlot));
+    return hour * 4 + minuteSlot;
   };
 
-  // Calculate appointment position and height
+  // Calculate appointment position and height - same as WeekView
   const getAppointmentStyle = (apt: Appointment) => {
     const start = dayjs(apt.start_time);
     const end = dayjs(apt.end_time);
     const startSlot = getSlotFromTime(start);
     const endSlot = getSlotFromTime(end);
-    const slotHeight = 60; // Height of each 15-minute slot
+    const slotHeight = 20; // Height of each 15-minute slot (80px hour / 4)
 
     return {
       top: startSlot * slotHeight,
@@ -83,83 +79,131 @@ const DayViewDraggable: React.FC<DayViewDraggableProps> = ({
     };
   };
 
-  // Get slot index from mouse position
-  const getSlotFromMouseY = useCallback((clientY: number): number => {
+  // Calculate layout for overlapping appointments - same as WeekView
+  const calculateAppointmentLayout = (appointments: Appointment[]) => {
+    const appointmentsWithLayout = appointments.map(apt => ({
+      ...apt,
+      startSlot: getSlotFromTime(dayjs(apt.start_time)),
+      endSlot: getSlotFromTime(dayjs(apt.end_time)),
+      column: 0,
+      totalColumns: 1,
+    }));
+
+    // Group overlapping appointments
+    const groups: typeof appointmentsWithLayout[][] = [];
+
+    appointmentsWithLayout.forEach(apt => {
+      // Find existing group that overlaps with this appointment
+      let addedToGroup = false;
+
+      for (const group of groups) {
+        const overlaps = group.some(existing =>
+          apt.startSlot < existing.endSlot && apt.endSlot > existing.startSlot
+        );
+
+        if (overlaps) {
+          group.push(apt);
+          addedToGroup = true;
+          break;
+        }
+      }
+
+      if (!addedToGroup) {
+        groups.push([apt]);
+      }
+    });
+
+    // Assign columns within each group
+    groups.forEach(group => {
+      group.sort((a, b) => a.startSlot - b.startSlot);
+
+      const columns: typeof appointmentsWithLayout[] = [];
+
+      group.forEach(apt => {
+        // Find the first column where this appointment can fit
+        let columnIndex = 0;
+
+        while (columnIndex < columns.length) {
+          const lastInColumn = columns[columnIndex];
+          if (!lastInColumn || lastInColumn.endSlot <= apt.startSlot) {
+            break;
+          }
+          columnIndex++;
+        }
+
+        apt.column = columnIndex;
+        columns[columnIndex] = apt;
+
+        // Update total columns for all appointments in this group
+        group.forEach(groupApt => {
+          groupApt.totalColumns = Math.max(groupApt.totalColumns, columnIndex + 1);
+        });
+      });
+    });
+
+    return appointmentsWithLayout;
+  };
+
+  // Get slot from mouse position - exactly like WeekView but for single day
+  const getSlotFromMouse = useCallback((clientX: number, clientY: number): number => {
     if (!containerRef.current) return 0;
+
     const rect = containerRef.current.getBoundingClientRect();
     const scrollTop = containerRef.current.scrollTop;
-    const relativeY = clientY - rect.top + scrollTop;
-    const slotHeight = 60;
-    return Math.max(0, Math.min(48, Math.floor(relativeY / slotHeight)));
+    const relativeY = clientY - rect.top + scrollTop - 60; // Subtract header height (60px)
+
+    const slotHeight = 20; // 15-minute slot height (80px hour / 4 slots)
+
+    const slot = Math.max(0, Math.min(95, Math.floor(relativeY / slotHeight))); // 24 * 4 - 1
+
+    return slot;
   }, []);
 
-  // Handle mouse down for drag start
-  const handleMouseDown = useCallback((e: React.MouseEvent, slotIndex: number) => {
-    if (e.target !== e.currentTarget) return; // Ignore if clicking on appointment
+  // Handle mouse down for drag start - exactly like WeekView
+  const handleMouseDown = useCallback((e: React.MouseEvent, hourIndex: number) => {
+    if (e.target !== e.currentTarget) return;
     e.preventDefault();
-    const slot = getSlotFromMouseY(e.clientY);
+
+    const slot = getSlotFromMouse(e.clientX, e.clientY);
+
     setIsDragging(true);
     setDragStart({ slot, y: e.clientY });
     setDragEnd({ slot, y: e.clientY });
-    console.log('DayViewDraggable: Started dragging at slot', slot);
-  }, [getSlotFromMouseY]);
+  }, [getSlotFromMouse]);
 
-  // Handle mouse move for dragging
+  // Handle mouse move for dragging - exactly like WeekView
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isMountedRef.current) return;
-
     if (!isDragging && !resizingAppointment) return;
 
-    if (isDragging && dragStart) {
-      const slot = getSlotFromMouseY(e.clientY);
-      setDragEnd({ slot, y: e.clientY });
-    } else if (resizingAppointment !== null) {
-      // Handle appointment resizing
-      const slot = getSlotFromMouseY(e.clientY);
-      // Update preview of resize (would need state management for this)
-    }
-  }, [isDragging, dragStart, resizingAppointment, getSlotFromMouseY]);
+    const slot = getSlotFromMouse(e.clientX, e.clientY);
 
-  // Handle mouse up for drag end
+    if (isDragging && dragStart) {
+      setDragEnd({ slot, y: e.clientY });
+    }
+  }, [isDragging, dragStart, resizingAppointment, getSlotFromMouse]);
+
+  // Handle mouse up for drag end - exactly like WeekView
   const handleMouseUp = useCallback((e: MouseEvent) => {
     if (!isMountedRef.current) return;
 
-    console.log('DayViewDraggable: Mouse up, isDragging:', isDragging, 'dragStart:', dragStart, 'dragEnd:', dragEnd);
 
     if (isDragging && dragStart && dragEnd) {
       const startSlot = Math.min(dragStart.slot, dragEnd.slot);
-      const endSlot = Math.max(dragStart.slot, dragEnd.slot) + 1; // +1 to include the end slot
+      const endSlot = Math.max(dragStart.slot, dragEnd.slot) + 1; // Add 1 for minimum duration
 
-      // Check if there was actual dragging (not just a click)
-      const dragDistance = Math.abs(dragEnd.y - dragStart.y);
-      const minDragDistance = 10; // Minimum pixels to consider it a drag
+      const startHour = Math.floor(startSlot / 4);
+      const startMinute = (startSlot % 4) * 15;
+      const endHour = Math.floor(endSlot / 4);
+      const endMinute = (endSlot % 4) * 15;
 
-      if (dragDistance < minDragDistance) {
-        // Just a click, not a drag - do nothing
-        console.log('DayViewDraggable: Click detected (not drag), distance:', dragDistance);
-        setIsDragging(false);
-        setDragStart(null);
-        setDragEnd(null);
-        return;
-      }
+      const startDate = selectedDate.hour(startHour).minute(startMinute).second(0).millisecond(0);
+      const endDate = selectedDate.hour(endHour).minute(endMinute).second(0).millisecond(0);
 
-      const startTime = selectedDate
-        .hour(Math.floor(startSlot / 4) + 8)
-        .minute((startSlot % 4) * 15)
-        .second(0);
 
-      const endTime = selectedDate
-        .hour(Math.floor(endSlot / 4) + 8)
-        .minute((endSlot % 4) * 15)
-        .second(0);
-
-      if (endTime.diff(startTime, 'minutes') >= 15) {
-        console.log('DayViewDraggable: Creating appointment from', startTime.format(), 'to', endTime.format());
-        onCreateAppointment(startTime.toDate(), endTime.toDate());
-      }
+      onCreateAppointment(startDate.toDate(), endDate.toDate());
     }
 
-    // Reset all drag states
     setIsDragging(false);
     setDragStart(null);
     setDragEnd(null);
@@ -170,11 +214,9 @@ const DayViewDraggable: React.FC<DayViewDraggableProps> = ({
   // Add/remove global mouse event listeners
   useEffect(() => {
     if (isDragging || resizingAppointment !== null) {
-      console.log('DayViewDraggable: Adding event listeners');
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
       return () => {
-        console.log('DayViewDraggable: Removing event listeners');
         document.removeEventListener('mousemove', handleMouseMove);
         document.removeEventListener('mouseup', handleMouseUp);
       };
@@ -188,96 +230,149 @@ const DayViewDraggable: React.FC<DayViewDraggableProps> = ({
     setResizeEdge(edge);
   }, []);
 
-  const getStatusColor = (status: string): string => {
-    const colors: Record<string, string> = {
-      scheduled: 'blue',
-      in_progress: 'orange',
-      completed: 'green',
-      cancelled: 'red',
-    };
-    return colors[status] || 'default';
+  // Get room color for appointment
+  const getRoomColor = (appointment: Appointment): string => {
+    if (!appointment.room_id) {
+      return '#1890ff'; // Default blue color for appointments without rooms
+    }
+
+    const room = rooms.find(r => r.id === appointment.room_id);
+    return room?.color || '#1890ff'; // Fallback to default blue
   };
 
-  // Calculate drag preview style
-  const getDragPreviewStyle = () => {
+  // Create tooltip content for appointment
+  const getTooltipContent = (apt: Appointment) => {
+    const room = rooms.find(r => r.id === apt.room_id);
+
+    return (
+      <div>
+        <div style={{ marginBottom: '2px' }}>
+          <strong>Patient:</strong> {apt.patient_name || 'Unknown Patient'}
+        </div>
+        <div style={{ marginBottom: '2px' }}>
+          <strong>Microchip ID:</strong> {apt.microchip_id || '-'}
+        </div>
+        <div style={{ marginBottom: '2px' }}>
+          <strong>Time:</strong> {dayjs(apt.start_time).format('HH:mm')} - {dayjs(apt.end_time).format('HH:mm')}
+        </div>
+        <div style={{ marginBottom: '2px' }}>
+          <strong>Date:</strong> {dayjs(apt.start_time).format('MMM DD, YYYY')}
+        </div>
+        {room && (
+          <div style={{ marginBottom: '2px' }}>
+            <strong>Room:</strong> {room.name}
+          </div>
+        )}
+        <div style={{ marginBottom: '2px' }}>
+          <strong>Status:</strong> {apt.status.replace('_', ' ')}
+        </div>
+        <div style={{ fontWeight: 'bold', marginTop: '4px', marginBottom: '4px' }}>{apt.title}</div>
+        {apt.description && (
+          <div style={{ fontStyle: 'italic' }}>
+            {apt.description}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Render drag selection overlay - same as WeekView
+  const renderDragOverlay = () => {
     if (!isDragging || !dragStart || !dragEnd) return null;
 
     const startSlot = Math.min(dragStart.slot, dragEnd.slot);
     const endSlot = Math.max(dragStart.slot, dragEnd.slot);
-    const slotHeight = 60;
+    const slotHeight = 20;
 
-    return {
-      position: 'absolute' as const,
-      left: 80,
-      right: 16,
-      top: startSlot * slotHeight,
-      height: (endSlot - startSlot + 1) * slotHeight,
-      backgroundColor: 'rgba(24, 144, 255, 0.15)',
-      border: `2px dashed ${themeColors.primary || '#1890ff'}`,
-      borderRadius: '4px',
-      pointerEvents: 'none' as const,
-      zIndex: 100,
-    };
+    return (
+      <div
+        style={{
+          position: 'absolute',
+          left: 80,
+          right: 16,
+          top: 60 + startSlot * slotHeight, // Add header height
+          height: (endSlot - startSlot + 1) * slotHeight,
+          background: 'rgba(24, 144, 255, 0.2)',
+          border: '2px solid #1890ff',
+          borderRadius: '4px',
+          pointerEvents: 'none',
+          zIndex: 10,
+        }}
+      />
+    );
   };
 
   return (
-    <div className="day-view-draggable" style={{ padding: '16px', background: '#fff', borderRadius: '8px' }}>
+    <div className="day-view-draggable" style={{ padding: '16px', background: themeColors.cardBg, borderRadius: '8px' }}>
       <style>{`
         .day-view-draggable {
           user-select: none;
+          background: ${themeColors.cardBg};
         }
-        .time-grid {
-          position: relative;
-          overflow-y: auto;
-          max-height: 600px;
+        .day-view {
+          background: ${themeColors.cardBg};
+          border-radius: 8px;
         }
-        .time-slot-row {
-          position: relative;
+        .day-header {
+          position: sticky;
+          top: 0;
+          background: ${themeColors.cardBg};
+          z-index: 20;
+          border-bottom: 2px solid ${themeColors.border};
           height: 60px;
-          border-bottom: 1px solid #f0f0f0;
           display: flex;
-          cursor: crosshair;
         }
-        .time-slot-row:hover {
-          background: #fafafa;
-        }
-        .time-slot-row.empty:hover::after {
-          content: 'Drag to create';
-          position: absolute;
-          left: 50%;
-          top: 50%;
-          transform: translate(-50%, -50%);
-          font-size: 11px;
-          color: #999;
-          pointer-events: none;
-          opacity: 0.6;
-          white-space: nowrap;
-        }
-        .time-label {
+        .day-time-column {
           width: 80px;
+          background: ${themeColors.background};
+          border-right: 1px solid ${themeColors.border};
+          flex-shrink: 0;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-weight: 500;
-          color: ${themeColors.textSecondary};
-          pointer-events: none;
         }
-        .slot-content {
+        .day-content-column {
           flex: 1;
           position: relative;
+          background: ${themeColors.cardBg};
         }
-        .appointment-card {
+        .day-hour-row {
+          height: 80px;
+          border-bottom: 1px solid ${themeColors.border};
+          position: relative;
+          display: flex;
+        }
+        .day-half-hour-line {
           position: absolute;
-          left: 80px;
-          right: 16px;
-          cursor: pointer;
-          transition: transform 0.2s, box-shadow 0.2s;
-          z-index: 10;
+          top: 40px;
+          left: 0;
+          right: 0;
+          height: 1px;
+          background: ${themeColors.background};
+          border-top: 1px dashed ${themeColors.border};
         }
-        .appointment-card:hover {
-          transform: translateX(2px);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-          z-index: 20;
+        .day-time-label {
+          width: 80px;
+          height: 80px;
+          display: flex;
+          align-items: flex-start;
+          justify-content: center;
+          padding-top: 0px;
+          font-size: 12px;
+          color: ${themeColors.textSecondary};
+          background: ${themeColors.background};
+          border-right: 1px solid ${themeColors.border};
+          flex-shrink: 0;
+          position: relative;
+        }
+        .day-cell {
+          height: 80px;
+          cursor: crosshair;
+          position: relative;
+          flex: 1;
+        }
+        .day-cell:hover {
+          background: ${themeColors.hover};
         }
         .resize-handle {
           position: absolute;
@@ -294,118 +389,147 @@ const DayViewDraggable: React.FC<DayViewDraggableProps> = ({
           bottom: 0;
         }
         .resize-handle:hover {
-          background: rgba(24, 144, 255, 0.3);
+          background: ${themeColors.selected};
         }
         .dragging {
           cursor: grabbing !important;
         }
       `}</style>
 
-      {dayAppointments.length === 0 && (
-        <Card style={{ marginBottom: '16px', background: '#e6f7ff', borderColor: '#1890ff' }}>
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description="No appointments scheduled for this day"
-          >
-            <div style={{ fontSize: '12px', color: themeColors.textSecondary, marginTop: '8px' }}>
-              <strong>Drag vertically</strong> on the timeline below to create an appointment
+      <div className="day-view" style={{ height: '600px', overflow: 'auto', position: 'relative' }}>
+        {/* Header with day label */}
+        <div className="day-header">
+          <div className="day-time-column">
+            <span style={{ fontSize: '12px', color: themeColors.textSecondary }}>Time</span>
+          </div>
+          <div className="day-content-column" style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            <div style={{ fontSize: '12px', color: themeColors.textSecondary }}>
+              {selectedDate.format('ddd')}
             </div>
-          </Empty>
-        </Card>
-      )}
-
-      <div
-        ref={containerRef}
-        className={`time-grid ${isDragging ? 'dragging' : ''}`}
-        style={{ position: 'relative' }}
-      >
-        {/* Time slots */}
-        {timeSlots.map((slot) => {
-          const hasAppointments = dayAppointments.some(apt => {
-            const start = dayjs(apt.start_time);
-            return start.hour() === slot.hour &&
-                   start.minute() >= slot.minute &&
-                   start.minute() < slot.minute + 15;
-          });
-
-          return (
-            <div
-              key={slot.time}
-              className={`time-slot-row ${!hasAppointments ? 'empty' : ''}`}
-              onMouseDown={(e) => handleMouseDown(e, slot.slotIndex)}
-            >
-              <div className="time-label">{slot.time}</div>
-              <div className="slot-content" />
-            </div>
-          );
-        })}
-
-        {/* Drag preview */}
-        {isDragging && dragStart && dragEnd && (
-          <div style={getDragPreviewStyle()!}>
-            <div style={{ padding: '8px', color: '#1890ff', fontWeight: 500 }}>
-              New Appointment
+            <div style={{
+              fontSize: '16px',
+              fontWeight: 'bold',
+              color: themeColors.text
+            }}>
+              {selectedDate.format('D')}
             </div>
           </div>
-        )}
+        </div>
 
-        {/* Appointments */}
-        {dayAppointments.map((apt) => {
-          const style = getAppointmentStyle(apt);
-          return (
-            <Card
-              key={apt.id}
-              className="appointment-card"
-              size="small"
-              hoverable
-              onClick={() => onSelectAppointment(apt)}
-              style={{
-                ...style,
-                borderLeft: `4px solid ${getStatusColor(apt.status) === 'blue' ? '#1890ff' :
-                  getStatusColor(apt.status) === 'orange' ? '#faad14' :
-                  getStatusColor(apt.status) === 'green' ? '#52c41a' : '#ff4d4f'}`
-              }}
-            >
-              {onUpdateAppointment && (
-                <>
-                  <div
-                    className="resize-handle resize-handle-top"
-                    onMouseDown={(e) => handleResizeStart(e, apt.id, 'top')}
-                  />
-                  <div
-                    className="resize-handle resize-handle-bottom"
-                    onMouseDown={(e) => handleResizeStart(e, apt.id, 'bottom')}
-                  />
-                </>
-              )}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-                <div>
-                  <div style={{ fontWeight: 500, fontSize: '14px', marginBottom: '4px' }}>
-                    {apt.title}
-                  </div>
-                  <Space size="small">
-                    <span style={{ fontSize: '12px', color: themeColors.textSecondary }}>
-                      <ClockCircleOutlined /> {dayjs(apt.start_time).format('HH:mm')} - {dayjs(apt.end_time).format('HH:mm')}
-                    </span>
-                    {apt.room_name && (
-                      <span style={{ fontSize: '12px', color: themeColors.textSecondary }}>
-                        📍 {apt.room_name}
-                      </span>
-                    )}
-                  </Space>
+        {/* Time grid */}
+        <div style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
+          {hourSlots.map((hour) => {
+            const appointmentsWithLayout = calculateAppointmentLayout(dayAppointments);
+
+            return (
+              <div key={hour.hour} className="day-hour-row" style={{ display: 'flex' }}>
+                {/* Time label */}
+                <div className="day-time-label">
+                  <span style={{
+                    position: 'absolute',
+                    top: '-12px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    background: themeColors.background,
+                    padding: '0 4px',
+                    fontWeight: 500
+                  }}>
+                    {hour.time}
+                  </span>
                 </div>
-                <Tag color={getStatusColor(apt.status)} style={{ marginLeft: '8px' }}>
-                  {apt.status}
-                </Tag>
+
+                {/* Day column */}
+                <div
+                  className="day-cell"
+                  onMouseDown={(e) => handleMouseDown(e, hour.hour)}
+                  style={{ position: 'relative' }}
+                >
+                  {/* Half-hour divider line */}
+                  <div className="day-half-hour-line" />
+
+                  {/* Appointments for this day */}
+                  {hour.hour === 0 && appointmentsWithLayout.map(apt => {
+                    const style = getAppointmentStyle(apt);
+                    const roomColor = getRoomColor(apt);
+
+                    // Calculate position and width based on column layout - positioned from container edge
+                    const availableWidth = containerRef.current ? containerRef.current.clientWidth - 80 - 16 : 400; // Container width minus time column and padding
+                    const columnWidth = availableWidth / apt.totalColumns;
+                    const leftOffset = 80 + apt.column * columnWidth;
+
+                    return (
+                      <Tooltip
+                        key={apt.id}
+                        title={getTooltipContent(apt)}
+                        placement="top"
+                        mouseEnterDelay={0.5}
+                        overlayStyle={{ maxWidth: '300px' }}
+                      >
+                        <Card
+                          size="small"
+                          hoverable
+                          onClick={() => {
+                            onSelectAppointment(apt);
+                          }}
+                          style={{
+                            position: 'absolute',
+                            left: leftOffset,
+                            width: columnWidth - 2, // Subtract 2px for spacing
+                            top: style.top,
+                            height: style.height,
+                            minHeight: '20px',
+                            zIndex: 15,
+                            cursor: 'pointer',
+                            borderLeft: `4px solid ${roomColor}`,
+                            backgroundColor: `${roomColor}10`, // Very light tint of room color
+                            fontSize: '12px',
+                            overflow: 'hidden',
+                          }}
+                          styles={{
+                            body: {
+                              padding: '4px 8px',
+                              height: '100%',
+                              overflow: 'hidden',
+                            }
+                          }}
+                        >
+                          <div style={{
+                            fontWeight: 500,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            lineHeight: '14px',
+                          }}>
+                            {apt.title}
+                          </div>
+                          {style.height > 40 && (
+                            <div style={{
+                              fontSize: '10px',
+                              color: themeColors.textSecondary,
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                            }}>
+                              {dayjs(apt.start_time).format('HH:mm')} - {dayjs(apt.end_time).format('HH:mm')}
+                            </div>
+                          )}
+                        </Card>
+                      </Tooltip>
+                    );
+                  })}
+                </div>
               </div>
-              {apt.description && (
-                <div style={{ fontSize: '12px', color: themeColors.textSecondary, marginTop: '8px' }}>
-                  {apt.description}
-                </div>
-              )}
-            </Card>
-          );
-        })}
+            );
+          })}
+        </div>
+
+        {/* Drag overlay */}
+        {renderDragOverlay()}
       </div>
     </div>
   );

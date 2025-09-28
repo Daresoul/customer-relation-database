@@ -44,8 +44,6 @@ const showSuccess = (msg: string, description?: string) => {
       placement: 'bottomRight',
       duration: 4,
     });
-  } else {
-    console.log(`Success: ${msg}`, description);
   }
 };
 
@@ -54,7 +52,6 @@ const showLoading = (text: string) => {
   if (appInstance?.message) {
     return appInstance.message.loading(text, 0);
   } else {
-    console.log(`Loading: ${text}`);
     return () => {}; // Return a no-op function
   }
 };

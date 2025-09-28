@@ -38,20 +38,16 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
   // Debugging: log modal state and fetch status
   useEffect(() => {
     if (isEdit) {
-      console.log('[MedicalRecordModal] Open edit for recordId:', recordId);
     } else {
-      console.log('[MedicalRecordModal] Open create for patientId:', patientId);
     }
   }, [isEdit, recordId, patientId]);
 
   useEffect(() => {
     if (isEdit) {
-      console.log('[MedicalRecordModal] isLoadingRecord:', isLoadingRecord, 'isError:', isError);
       if (isError) {
         console.error('[MedicalRecordModal] Load error:', error);
       }
       if (recordDetail) {
-        console.log('[MedicalRecordModal] Loaded record detail:', recordDetail);
       }
     }
   }, [isEdit, isLoadingRecord, isError, error, recordDetail]);

@@ -77,7 +77,6 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
 
   // Determine modal visibility - prefer 'open' prop, fall back to 'visible' for backward compatibility
   const isModalVisible = open ?? visible ?? false;
-  console.log('AppointmentModal: isModalVisible =', isModalVisible, 'open =', open, 'visible =', visible);
 
   // Initialize form values
   useEffect(() => {
@@ -170,7 +169,7 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
         .millisecond(0);
 
       // Validate time range
-      if (endDateTime.isSameOrBefore(startDateTime)) {
+      if (endDateTime.isBefore(startDateTime) || endDateTime.isSame(startDateTime)) {
         message.error('End time must be after start time');
         setLoading(false);
         return;
@@ -226,7 +225,6 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
 
   // Handle cancel
   const handleCancel = () => {
-    console.log('AppointmentModal: handleCancel called');
     form.resetFields();
     setConflicts([]);
     onCancel();
@@ -246,7 +244,7 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
         </Space>
       }
       open={isModalVisible}
-      destroyOnClose
+      destroyOnHidden
       onCancel={handleCancel}
       width={700}
       footer={[

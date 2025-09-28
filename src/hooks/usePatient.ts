@@ -167,7 +167,6 @@ export function useUpdatePatient() {
       console.error('Update patient error:', error);
     },
     onSuccess: (updatedPatient, { patientId }) => {
-      console.log('🔍 usePatient: Backend returned updated patient:', updatedPatient);
       // Update cache with server response
       queryClient.setQueryData(['patient', patientId], (old: PatientDetail | undefined) => {
         if (!old) return old;
@@ -176,7 +175,6 @@ export function useUpdatePatient() {
           age: calculateAge(updatedPatient.dateOfBirth),
           household: old.household // Preserve household data
         };
-        console.log('🔍 usePatient: Updating cache with:', updated);
         return updated;
       });
 

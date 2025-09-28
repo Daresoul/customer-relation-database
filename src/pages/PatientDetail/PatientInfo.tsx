@@ -53,7 +53,6 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
   }, [patient.name, patient.breed, patient.color, patient.microchipId, patient.dateOfBirth]);
 
   const handleFieldUpdate = async (field: string, value: any) => {
-    console.log('🔍 PatientInfo: Updating field:', field, 'with value:', value);
 
     // Optimistic update for text fields
     if (field in localValues) {
@@ -201,7 +200,6 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
             value={localValues.dateOfBirth ? dayjs(localValues.dateOfBirth) : undefined}
             onChange={(date) => {
               const dateString = date ? date.format('YYYY-MM-DD') : undefined;
-              console.log('🔍 DatePicker onChange - date:', date, 'dateString:', dateString);
               setLocalValues(prev => ({ ...prev, dateOfBirth: dateString }));
               handleFieldUpdate('dateOfBirth', dateString);
             }}

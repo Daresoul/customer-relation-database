@@ -61,13 +61,14 @@ impl RoomService {
         // Insert room
         let result = sqlx::query(
             r#"
-            INSERT INTO rooms (name, description, capacity, is_active)
-            VALUES (?, ?, ?, 1)
+            INSERT INTO rooms (name, description, capacity, color, is_active)
+            VALUES (?, ?, ?, ?, 1)
             "#
         )
         .bind(&input.name)
         .bind(&input.description)
         .bind(input.capacity.unwrap_or(1))
+        .bind(input.color.as_deref().unwrap_or("#1890ff"))
         .execute(pool)
         .await
         .map_err(|e| format!("Failed to create room: {}", e))?;
@@ -102,7 +103,7 @@ impl RoomService {
         }
 
         if input.name.is_none() && input.description.is_none()
-            && input.capacity.is_none() && input.is_active.is_none() {
+            && input.capacity.is_none() && input.color.is_none() && input.is_active.is_none() {
             return Ok(existing);
         }
 
@@ -113,6 +114,7 @@ impl RoomService {
             SET name = CASE WHEN ? IS NOT NULL THEN ? ELSE name END,
                 description = CASE WHEN ? IS NOT NULL THEN ? ELSE description END,
                 capacity = CASE WHEN ? IS NOT NULL THEN ? ELSE capacity END,
+                color = CASE WHEN ? IS NOT NULL THEN ? ELSE color END,
                 is_active = CASE WHEN ? IS NOT NULL THEN ? ELSE is_active END,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
@@ -126,6 +128,8 @@ impl RoomService {
             .bind(&input.description)
             .bind(&input.capacity)
             .bind(&input.capacity)
+            .bind(&input.color)
+            .bind(&input.color)
             .bind(&input.is_active)
             .bind(&input.is_active)
             .bind(id);

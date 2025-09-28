@@ -65,8 +65,6 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
   // Default currency is now set in the form's initialValues instead
 
   const handleFinish = (values: any) => {
-    console.log('Form values before submit:', values);
-    console.log('Selected currencyId:', values.currencyId);
 
     const formData = isEdit
       ? {
@@ -205,32 +203,21 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
           <h4>{t('medical:fileAttachments')}</h4>
           <Dragger
             beforeUpload={(file) => {
-              console.log('[Dragger] beforeUpload called with file:', file.name, file.size, file.type);
               const error = MedicalService.validateFile(file);
               if (error) {
-                console.log('[Dragger] File validation failed:', error);
                 message.error(error);
                 return Upload.LIST_IGNORE;
               }
-              console.log('[Dragger] File validation passed, returning false to prevent auto-upload');
               // Don't add to state here, let onChange handle it
               return false;
             }}
             customRequest={({ file, onSuccess, onError }) => {
-              console.log('[Dragger] customRequest called for file:', (file as File).name);
               // Immediately mark as success to trigger proper onChange
               setTimeout(() => {
-                console.log('[Dragger] Calling onSuccess for file:', (file as File).name);
                 onSuccess?.(null);
               }, 0);
             }}
             onChange={({ file, fileList: newFileList }) => {
-              console.log('[Dragger] onChange called, file status:', file.status);
-              console.log('[Dragger] onChange fileList:', newFileList.map(f => ({
-                name: f.name,
-                status: f.status,
-                hasOriginFileObj: !!f.originFileObj
-              })));
 
               // Get all valid files from the fileList
               const validFiles: File[] = [];
@@ -242,13 +229,10 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
                 }
               });
 
-              console.log('[Dragger] Valid files to set in state:', validFiles.map(f => f.name));
               // Update the pending files state
               setPendingFiles(validFiles);
             }}
             onDrop={(e) => {
-              console.log('[Dragger] onDrop event triggered');
-              console.log('[Dragger] Dropped files:', e.dataTransfer.files);
             }}
             fileList={pendingFiles.map((file, index) => ({
               uid: `-${index}-${file.name}-${file.size}`,

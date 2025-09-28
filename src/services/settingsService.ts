@@ -7,6 +7,8 @@ export interface AppSettings {
   currencyId: number | null;
   theme: 'light' | 'dark';
   dateFormat: string;
+  // Google Calendar integration
+  googleCalendarSync?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -28,6 +30,8 @@ export interface UpdateSettingsRequest {
   currencyId?: number;
   theme?: 'light' | 'dark';
   dateFormat?: string;
+  // Google Calendar integration
+  googleCalendarSync?: boolean;
 }
 
 export class SettingsService {
@@ -53,8 +57,6 @@ export class SettingsService {
   }
 
   static async updateSettings(updates: UpdateSettingsRequest): Promise<SettingsResponse> {
-    console.log('SettingsService.updateSettings called with:', updates);
-
     // Wrap the updates in an object to match the Tauri command's expected parameter
     return await invoke<SettingsResponse>('update_app_settings', {
       updates: {

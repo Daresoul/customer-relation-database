@@ -12,12 +12,9 @@ import {
 export async function createHouseholdWithPeople(
   dto: CreateHouseholdWithPeopleDto
 ): Promise<HouseholdWithPeople> {
-  console.log('🔧 Service: Starting household creation with:', dto);
-
   // Validate before sending
   const error = validateHouseholdDto(dto);
   if (error) {
-    console.log('🔧 Service: Validation failed:', error);
     throw new Error(error);
   }
 
@@ -42,15 +39,10 @@ export async function createHouseholdWithPeople(
     })),
   };
 
-  console.log('🔧 Service: Transformed data for backend:', transformedDto);
-  console.log('🔧 Service: Validation passed, calling Tauri backend...');
   try {
     const backendResult = await invoke<any>('create_household_with_people', { dto: transformedDto });
-    console.log('🔧 Service: Raw backend response:', backendResult);
 
     // Transform snake_case response back to camelCase for frontend
-    console.log('🔧 Service: Backend household keys:', Object.keys(backendResult.household || {}));
-    console.log('🔧 Service: Backend people sample:', backendResult.people?.[0] ? Object.keys(backendResult.people[0]) : 'No people');
 
     const result: HouseholdWithPeople = {
       household: {
@@ -62,16 +54,12 @@ export async function createHouseholdWithPeople(
         updatedAt: backendResult.household?.updated_at || new Date().toISOString(),
       },
       people: (backendResult.people || []).map((person: any) => {
-        console.log('🔧 Service: Transforming person:', person);
-        console.log('🔧 Service: Person keys:', Object.keys(person || {}));
-
         return {
           id: person?.id || 0,
           firstName: person?.first_name || '',
           lastName: person?.last_name || '',
           isPrimary: person?.is_primary || false,
           contacts: (person?.contacts || []).map((contact: any) => {
-            console.log('🔧 Service: Transforming contact:', contact);
             return {
               id: contact?.id || 0,
               personId: contact?.person_id || person?.id || 0,
@@ -85,17 +73,14 @@ export async function createHouseholdWithPeople(
       }),
     };
 
-    console.log('🔧 Service: Final transformed result:', result);
-    console.log('🔧 Service: First person after transform:', result.people[0]);
+    console.log('🔧 Service: Created household:', result);
 
     // Validate transformation was successful
     if (!result.household || result.household.id === 0) {
-      console.error('🔧 Service: Invalid household in transformation result');
       throw new Error('Failed to transform household data - invalid household');
     }
 
     if (!result.people || result.people.length === 0) {
-      console.error('🔧 Service: No people in transformation result');
       throw new Error('Failed to transform household data - no people found');
     }
 
@@ -107,16 +92,12 @@ export async function createHouseholdWithPeople(
     );
 
     if (invalidPeople.length > 0) {
-      console.error('🔧 Service: People with invalid names found:', invalidPeople);
-      console.error('🔧 Service: Backend response had keys:', backendResult.people?.[0] ? Object.keys(backendResult.people[0]) : 'No people');
-      console.error('🔧 Service: Transformed result has keys:', result.people[0] ? Object.keys(result.people[0]) : 'No people');
       throw new Error('Failed to transform household data - invalid person names after transformation');
     }
 
-    console.log('🔧 Service: Validation passed, returning transformed data');
     return result;
   } catch (error) {
-    console.error('🔧 Service: Backend call failed:', error);
+    console.error('Failed to create household:', error);
     throw error;
   }
 }
@@ -164,8 +145,6 @@ export async function searchHouseholds(
       offset: offset || 0,
     });
 
-    console.log('🔧 Service: searchHouseholds backend response:', backendResult);
-
     // Transform snake_case response back to camelCase for frontend
     const result: SearchHouseholdsResponse = {
       results: (backendResult.results || []).map((household: any) => ({
@@ -193,7 +172,6 @@ export async function searchHouseholds(
       hasMore: backendResult.has_more || false,
     };
 
-    console.log('🔧 Service: searchHouseholds transformed result:', result);
     return result;
   } catch (error) {
     console.error('Failed to search households:', error);
@@ -236,8 +214,6 @@ export async function getHouseholdWithPeople(
       return null;
     }
 
-    console.log('🔧 Service: getHouseholdWithPeople backend response:', backendResult);
-
     // Transform snake_case response back to camelCase for frontend
     const result: HouseholdWithPeople = {
       household: {
@@ -264,7 +240,6 @@ export async function getHouseholdWithPeople(
       })),
     };
 
-    console.log('🔧 Service: getHouseholdWithPeople transformed result:', result);
     return result;
   } catch (error) {
     console.error('Failed to get household:', error);

@@ -131,21 +131,16 @@ export const MainDashboard: React.FC = () => {
 
   const handleSeed = async () => {
     setSeeding(true);
-    console.log('[FRONTEND] Starting seed with input:', seedCount);
 
     try {
       const households = Math.max(1, Number(seedCount) || 1000);
-      console.log('[FRONTEND] Parsed households:', households);
-      console.log('[FRONTEND] Calling populate_database with:', { households });
 
       const res = await invoke<string>('populate_database', { households });
-      console.log('[FRONTEND] Seed response:', res);
 
       app.message.success(res || `Seeded ${households} households`);
       setSeedOpen(false);
       await loadData();
     } catch (e: any) {
-      console.error('[FRONTEND] Seed error:', e);
       app.message.error(e?.message || 'Failed to seed database');
     } finally {
       setSeeding(false);
@@ -451,7 +446,6 @@ export const MainDashboard: React.FC = () => {
             onChange={(v) => {
               // v can be null or number from Ant Design InputNumber
               const value = v === null || v === undefined ? 1000 : Number(v);
-              console.log('[FRONTEND] Seed count changed to:', value, 'from input:', v);
               setSeedCount(value);
             }}
           />

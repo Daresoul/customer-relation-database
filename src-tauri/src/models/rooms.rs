@@ -8,6 +8,7 @@ pub struct Room {
     pub name: String,
     pub description: Option<String>,
     pub capacity: i32,
+    pub color: String,
     pub is_active: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -18,6 +19,7 @@ pub struct CreateRoomInput {
     pub name: String,
     pub description: Option<String>,
     pub capacity: Option<i32>,
+    pub color: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -25,6 +27,7 @@ pub struct UpdateRoomInput {
     pub name: Option<String>,
     pub description: Option<String>,
     pub capacity: Option<i32>,
+    pub color: Option<String>,
     pub is_active: Option<bool>,
 }
 

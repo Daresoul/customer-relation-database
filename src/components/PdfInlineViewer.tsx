@@ -63,7 +63,6 @@ const PdfInlineViewer: React.FC<PdfInlineViewerProps> = ({ blob, fileName }) => 
           pdf = await loadingTaskNoWorker.promise;
         }
         const page = await pdf.getPage(1);
-        console.log('[PDF Viewer] Loaded doc with', (pdf as any).numPages, 'pages. Rendering page 1...');
 
         const viewport = page.getViewport({ scale: 1.0 });
         const canvas = canvasRef.current;
@@ -91,7 +90,6 @@ const PdfInlineViewer: React.FC<PdfInlineViewerProps> = ({ blob, fileName }) => 
         await renderTask.promise;
         rendered = true;
         if (watchdog) clearTimeout(watchdog);
-        console.log('[PDF Viewer] Rendered first page for', fileName, 'bytes=', uint8.length, 'vp=', viewport.width, 'x', viewport.height, 'dpr=', dpr);
       } catch (e: any) {
         if (watchdog) clearTimeout(watchdog);
         if (e?.name === 'RenderingCancelledException' || /cancel/i.test(String(e?.message || ''))) {

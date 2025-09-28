@@ -17,7 +17,7 @@ impl AppointmentService {
         offset: i64,
     ) -> Result<AppointmentListResponse, String> {
         let mut query = String::from(
-            "SELECT a.*, p.name as patient_name, p.species, p.breed
+            "SELECT a.*, p.name as patient_name, p.species, p.breed, p.microchip_id
              FROM appointments a
              JOIN patients p ON a.patient_id = p.id
              WHERE 1=1"
@@ -44,8 +44,14 @@ impl AppointmentService {
             query.push_str(&format!(" AND a.room_id = {}", room_id));
         }
 
-        if let Some(status) = filter.status {
+        if let Some(ref status) = filter.status {
             query.push_str(&format!(" AND a.status = '{}'", status));
+        }
+
+        // Exclude cancelled appointments by default unless explicitly included
+        // or when filtering by cancelled status specifically
+        if filter.include_cancelled != Some(true) && filter.status != Some(crate::models::AppointmentStatus::Cancelled) {
+            query.push_str(" AND a.status != 'cancelled'");
         }
 
         // Count total
@@ -80,7 +86,10 @@ impl AppointmentService {
         id: i64,
     ) -> Result<AppointmentDetail, String> {
         let appointment = sqlx::query_as::<_, Appointment>(
-            "SELECT * FROM appointments WHERE id = ? AND deleted_at IS NULL"
+            "SELECT a.*, p.name as patient_name, p.species, p.breed, p.microchip_id
+             FROM appointments a
+             JOIN patients p ON a.patient_id = p.id
+             WHERE a.id = ? AND a.deleted_at IS NULL"
         )
         .bind(id)
         .fetch_optional(pool)
@@ -367,7 +376,10 @@ impl AppointmentService {
         id: i64,
     ) -> Result<Appointment, String> {
         sqlx::query_as::<_, Appointment>(
-            "SELECT * FROM appointments WHERE id = ?"
+            "SELECT a.*, p.name as patient_name, p.species, p.breed, p.microchip_id
+             FROM appointments a
+             JOIN patients p ON a.patient_id = p.id
+             WHERE a.id = ?"
         )
         .bind(id)
         .fetch_optional(pool)

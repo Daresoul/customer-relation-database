@@ -30,7 +30,6 @@ export class MedicalService {
     recordId: number,
     includeHistory = false
   ): Promise<MedicalRecordDetail> {
-    console.log('[MedicalService] getMedicalRecord -> recordId:', recordId, 'includeHistory:', includeHistory);
     try {
       const result = await invoke<MedicalRecordDetail>('get_medical_record', {
         // Send both snake_case and camelCase to be compatible with backend variants
@@ -39,7 +38,6 @@ export class MedicalService {
         include_history: includeHistory,
         includeHistory: includeHistory as any,
       });
-      console.log('[MedicalService] getMedicalRecord <- success');
       return result;
     } catch (e) {
       console.error('[MedicalService] getMedicalRecord <- error:', e);
@@ -50,9 +48,7 @@ export class MedicalService {
   static async createMedicalRecord(
     input: CreateMedicalRecordInput
   ): Promise<MedicalRecord> {
-    console.log('[MedicalService] Creating medical record with input:', input);
     const result = await invoke<MedicalRecord>('create_medical_record', { input });
-    console.log('[MedicalService] Created medical record:', result);
     return result;
   }
 
@@ -97,11 +93,9 @@ export class MedicalService {
   static async downloadAttachment(
     attachmentId: number
   ): Promise<Blob> {
-    console.log('[MedicalService] downloadAttachment ->', attachmentId);
     const response = await invoke<DownloadAttachmentResponse>('download_medical_attachment', { attachment_id: attachmentId, attachmentId: attachmentId as any });
     const uint8Array = new Uint8Array(response.fileData);
     const blob = new Blob([uint8Array], { type: response.mimeType });
-    console.log('[MedicalService] downloadAttachment <-', { id: attachmentId, bytes: uint8Array.byteLength, mime: response.mimeType });
     return blob;
   }
 
@@ -166,15 +160,12 @@ export class MedicalService {
 
   static async getCurrencies(): Promise<Currency[]> {
     const currencies = await invoke<Currency[]>('get_currencies');
-    console.log('[MedicalService] getCurrencies response from backend:', currencies);
     return currencies;
   }
 
   static async getMedicalRecordAtVersion(recordId: number, version: number): Promise<MedicalRecord> {
-    console.log('[MedicalService] getMedicalRecordAtVersion ->', { recordId, version });
     try {
       const res = await invoke<MedicalRecord>('get_medical_record_at_version', { record_id: recordId, recordId: recordId as any, version });
-      console.log('[MedicalService] getMedicalRecordAtVersion <- snapshot', res);
       return res;
     } catch (e) {
       console.error('[MedicalService] getMedicalRecordAtVersion <- error', e);

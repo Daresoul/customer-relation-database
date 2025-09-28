@@ -114,14 +114,11 @@ export const MedicalRecordDetailPage: React.FC = () => {
         return;
       }
       try {
-        console.log('[MR Detail] Fetching snapshot for version', selectedVersion);
         const snap = await MedicalService.getMedicalRecordAtVersion(record.id, selectedVersion);
         if (active) {
           setDisplayRecord(snap);
-          console.log('[MR Detail] displayRecord <-', snap);
         }
       } catch (e) {
-        console.warn('[MR Detail] Snapshot fetch failed, fallback to local snapshot/current', e);
         if (active) setDisplayRecord(snapshot || record);
       }
     })();
@@ -138,20 +135,8 @@ export const MedicalRecordDetailPage: React.FC = () => {
 
   useEffect(() => {
     if (selectedVersion) {
-      console.log('[MR Detail] Selected version:', selectedVersion);
-      console.log('[MR Detail] Selected entry (raw):', selectedEntry);
       if (selectedNew) {
-        console.log('[MR Detail] newValues keys:', Object.keys(selectedNew));
-        console.log('[MR Detail] newValues sample:', {
-          record_type: (selectedNew as any).record_type,
-          name: (selectedNew as any).name,
-          procedure_name: (selectedNew as any).procedure_name,
-          price: (selectedNew as any).price,
-          description: (selectedNew as any).description,
-        });
-      }
-      if (selectedOld) {
-        console.log('[MR Detail] oldValues keys:', Object.keys(selectedOld));
+        // Selected version handling logic would go here
       }
     }
   }, [selectedVersion, selectedEntry, selectedNew, selectedOld]);
@@ -213,7 +198,6 @@ export const MedicalRecordDetailPage: React.FC = () => {
 
   const onExpand = async (expanded: boolean, row: any) => {
     const key = String(row.id);
-    console.log('[Attachments] onExpand ->', { expanded, id: row.id, key, mime: row.mimeType, name: row.originalName });
     if (expanded) {
       if (!isPreviewable(row.mimeType, row.originalName)) {
         message.info(t('medical:detail.previewNotAvailable'));
@@ -239,18 +223,15 @@ export const MedicalRecordDetailPage: React.FC = () => {
                 fr.onload = () => resolve(fr.result as string);
                 fr.readAsDataURL(blob);
               });
-              console.log('[Attachments] created PDFium PNG preview', { key, pngPath, bytes: (bytes as any).length });
               setPreviewUrls(prev => ({ ...prev, [key]: dataUrl }));
               setPreviewKinds(prev => ({ ...prev, [key]: 'pdfium' }));
               return;
             } catch (pdfiumErr: any) {
-              console.warn('[Attachments] PDFium preview failed, falling back to pdf.js blob:', pdfiumErr?.message || pdfiumErr);
               // Fall through to pdf.js path
             }
           }
           const blob = await MedicalService.downloadAttachment(row.id);
           const url = URL.createObjectURL(blob);
-          console.log('[Attachments] created object URL', { key, bytes: blob.size, mime: row.mimeType, isPdf });
           setPreviewUrls(prev => ({ ...prev, [key]: url }));
           setPreviewBlobs(prev => ({ ...prev, [key]: blob }));
           setPreviewKinds(prev => ({ ...prev, [key]: 'blob' }));
@@ -541,7 +522,6 @@ export const MedicalRecordDetailPage: React.FC = () => {
                   }
                   // Otherwise fall back to pdf.js inline viewer using the Blob
                   if (pblob) {
-                    console.log('[Attachments] rendering PDF preview (pdf.js fallback)', { id: row.id });
                     return <PdfInlineViewer blob={pblob} fileName={row.originalName} />;
                   }
                   return <Text type="secondary">{t('medical:detail.loadingPreview')}</Text>;
@@ -549,7 +529,6 @@ export const MedicalRecordDetailPage: React.FC = () => {
                   // In browsers, prefer native PDF viewer for reliability
                   if (url) return <iframe src={url} title={row.originalName} style={{ width: '100%', height: 480, border: 0 }} />;
                   if (!pblob) return <Text type="secondary">{t('medical:detail.loadingPreview')}</Text>;
-                  console.log('[Attachments] rendering PDF preview (pdf.js)', { id: row.id });
                   return <PdfInlineViewer blob={pblob} fileName={row.originalName} />;
                 }
               }

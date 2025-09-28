@@ -14,10 +14,18 @@ pub async fn get_appointments(
     limit: i64,
     offset: i64,
 ) -> Result<AppointmentListResponse, String> {
+    println!("get_appointments called with filter: {:?}, limit: {}, offset: {}", filter, limit, offset);
     let pool = pool.lock().await;
-    AppointmentService::get_appointments(&*pool, filter, limit, offset)
-        .await
-        .map_err(|e| e.to_string())
+    let result = AppointmentService::get_appointments(&*pool, filter, limit, offset).await;
+    match &result {
+        Ok(response) => {
+            println!("get_appointments returning {} appointments, total: {}", response.appointments.len(), response.total);
+        }
+        Err(e) => {
+            println!("get_appointments error: {}", e);
+        }
+    }
+    result.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
