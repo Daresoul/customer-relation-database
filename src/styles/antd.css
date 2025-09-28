@@ -3,16 +3,28 @@
  * Dark theme optimized for veterinary clinic application
  */
 
-/* Import Ant Design reset styles */
-@import 'antd/dist/reset.css';
+/* Commented out - may not be needed with Ant Design v5 CSS-in-JS
+   @import 'antd/dist/reset.css'; */
 
-/* CSS Reset and Base Styles */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+/* Minimal checkbox fixes - let Ant Design handle most styling */
+.ant-checkbox-wrapper {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap; /* Prevent text wrapping */
 }
 
+.ant-checkbox {
+  flex-shrink: 0; /* Prevent checkbox from shrinking */
+}
+
+/* Fix for checkbox label positioning */
+.ant-checkbox-wrapper .ant-checkbox + span {
+  padding-left: 8px;
+  display: inline-block;
+}
+
+
+/* Base Styles */
 html {
   /* Smooth scrolling */
   scroll-behavior: smooth;

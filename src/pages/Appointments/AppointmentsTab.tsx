@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   Tabs,
   Button,
@@ -33,6 +33,7 @@ import {
   useAppointments,
   useAppointmentDetail,
   useRooms,
+  useCalendarAppointments,
 } from '../../hooks/useAppointments';
 
 const { RangePicker } = DatePicker;
@@ -49,7 +50,7 @@ const AppointmentsTab: React.FC = () => {
   const [filter, setFilter] = useState<AppointmentFilter>({});
 
   const {
-    appointments,
+    appointments: listAppointments,
     createAppointment,
     updateAppointment,
     deleteAppointment,
@@ -58,7 +59,43 @@ const AppointmentsTab: React.FC = () => {
     isCreating,
     isUpdating,
     isDeleting,
+    isLoading: listLoading,
+    error: listError,
   } = useAppointments(filter);
+
+  // Use different data strategies based on view
+  const { startDate, endDate } = useMemo(() => {
+    if (activeView === 'calendar') {
+      const start = new Date();
+      start.setMonth(start.getMonth() - 1); // Look back 1 month
+      const end = new Date();
+      end.setMonth(end.getMonth() + 2); // Look ahead 2 months
+      return { startDate: start, endDate: end };
+    } else {
+      // For list view, just show today's appointments
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+      const end = new Date();
+      end.setHours(23, 59, 59, 999);
+      return { startDate: start, endDate: end };
+    }
+  }, [activeView]);
+
+  const { data: calendarData, isLoading: calendarLoading, error: calendarError } = useCalendarAppointments(
+    startDate,
+    endDate,
+    {
+      include_cancelled: filter.include_cancelled,
+      status: filter.status,
+      room_id: filter.room_id,
+    }
+  );
+
+  // Use calendar data for both views now, as it's more efficient
+  const appointments = calendarData?.appointments || [];
+  const isLoading = calendarLoading;
+  const error = calendarError;
+
 
 
   const { rooms } = useRooms();
@@ -212,39 +249,15 @@ const AppointmentsTab: React.FC = () => {
         placement="right"
         onClose={() => setFilterDrawerVisible(false)}
         open={filterDrawerVisible}
-        width={400}
+        width={500}
       >
-        <Space direction="vertical" style={{ width: '100%' }} size="middle">
-          {/* Date Range - Only show for Calendar view */}
-          {activeView === 'calendar' && (
-            <div>
-              <label>Date Range</label>
-              <RangePicker
-                style={{ width: '100%' }}
-                onChange={(dates) => {
-                  if (dates && dates[0] && dates[1]) {
-                    setFilter({
-                      ...filter,
-                      start_date: dates[0].toDate(),
-                      end_date: dates[1].toDate(),
-                    });
-                  } else {
-                    const { start_date, end_date, ...rest } = filter;
-                    setFilter(rest);
-                  }
-                }}
-              />
-            </div>
-          )}
-
+        <Space direction="vertical" style={{ width: '100%' }} size="large">
           <div>
-            <label>Status</label>
+            <div style={{ marginBottom: '8px', fontWeight: 500 }}>Status</div>
             <Select
               style={{ width: '100%' }}
-              placeholder="All statuses"
-              allowClear
               onChange={(value) => {
-                if (value) {
+                if (value && value !== 'all') {
                   setFilter({
                     ...filter,
                     status: value,
@@ -256,8 +269,9 @@ const AppointmentsTab: React.FC = () => {
                   setFilter(rest);
                 }
               }}
-              value={filter.status}
+              value={filter.status || 'all'}
             >
+              <Select.Option value="all">All statuses</Select.Option>
               <Select.Option value="scheduled">Scheduled</Select.Option>
               <Select.Option value="in_progress">In Progress</Select.Option>
               <Select.Option value="completed">Completed</Select.Option>
@@ -266,21 +280,20 @@ const AppointmentsTab: React.FC = () => {
           </div>
 
           <div>
-            <label>Room</label>
+            <div style={{ marginBottom: '8px', fontWeight: 500 }}>Room</div>
             <Select
               style={{ width: '100%' }}
-              placeholder="All rooms"
-              allowClear
               onChange={(value) => {
-                if (value) {
+                if (value && value !== 'all') {
                   setFilter({ ...filter, room_id: value });
                 } else {
                   const { room_id, ...rest } = filter;
                   setFilter(rest);
                 }
               }}
-              value={filter.room_id}
+              value={filter.room_id || 'all'}
             >
+              <Select.Option value="all">All rooms</Select.Option>
               {rooms?.map((room) => (
                 <Select.Option key={room.id} value={room.id}>
                   {room.name}
@@ -291,26 +304,21 @@ const AppointmentsTab: React.FC = () => {
 
           {/* Include cancelled - Only show when not filtering by cancelled status specifically */}
           {filter.status !== 'cancelled' && (
-            <div>
-              <Checkbox
-                checked={filter.include_cancelled || false}
-                onChange={(e) => {
-                  if (e.target.checked) {
-                    setFilter({ ...filter, include_cancelled: true });
-                  } else {
-                    const { include_cancelled, ...rest } = filter;
-                    setFilter(rest);
-                  }
-                }}
-              >
-                Include cancelled appointments
-              </Checkbox>
-            </div>
+            <Checkbox
+              checked={filter.include_cancelled || false}
+              onChange={(e) => {
+                if (e.target.checked) {
+                  setFilter({ ...filter, include_cancelled: true });
+                } else {
+                  const { include_cancelled, ...rest } = filter;
+                  setFilter(rest);
+                }
+              }}
+            >
+              Include cancelled appointments
+            </Checkbox>
           )}
 
-          <Button type="primary" onClick={() => setFilterDrawerVisible(false)} block>
-            Apply Filters
-          </Button>
           <Button
             onClick={() => {
               setFilter({});

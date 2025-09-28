@@ -47,10 +47,12 @@ const DayViewSimple: React.FC<DayViewSimpleProps> = ({
     time: `${i.toString().padStart(2, '0')}:00`,
   }));
 
+
   // Filter appointments for the selected day
   const dayAppointments = appointments
     .filter(apt => dayjs(apt.start_time).isSame(selectedDate, 'day'))
     .sort((a, b) => dayjs(a.start_time).valueOf() - dayjs(b.start_time).valueOf());
+
 
 
   // Calculate slot index from time (15-minute precision) - same as WeekView
@@ -305,7 +307,7 @@ const DayViewSimple: React.FC<DayViewSimpleProps> = ({
         title={getTooltipContent(apt)}
         placement="top"
         mouseEnterDelay={0.5}
-        overlayStyle={{ maxWidth: '300px' }}
+        styles={{ root: { maxWidth: '300px' } }}
       >
         <Card
           size="small"
@@ -399,7 +401,6 @@ const DayViewSimple: React.FC<DayViewSimpleProps> = ({
           left: 0;
           right: 0;
           height: 1px;
-          background: ${themeColors.background};
           border-top: 1px dashed ${themeColors.border};
         }
         .day-time-label {
@@ -492,7 +493,6 @@ const DayViewSimple: React.FC<DayViewSimpleProps> = ({
             <div className="day-time-label">
               <span style={{
                 position: 'absolute',
-                top: '-12px',
                 left: '50%',
                 transform: 'translateX(-50%)',
                 background: themeColors.background,

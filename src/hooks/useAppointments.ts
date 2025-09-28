@@ -36,8 +36,9 @@ export const useAppointments = (filter: AppointmentFilter = {}) => {
     refetch,
   } = useInfiniteQuery({
     queryKey: [APPOINTMENTS_KEY, currentFilter],
-    queryFn: ({ pageParam = 0 }) =>
-      appointmentService.getAppointments(currentFilter, PAGE_SIZE, pageParam),
+    queryFn: ({ pageParam = 0 }) => {
+      return appointmentService.getAppointments(currentFilter, PAGE_SIZE, pageParam);
+    },
     getNextPageParam: (lastPage, allPages) => {
       const totalFetched = allPages.length * PAGE_SIZE;
       return lastPage.has_more ? totalFetched : undefined;
@@ -194,11 +195,12 @@ export const useRoomAvailability = (roomId: number | undefined, checkTime: strin
 };
 
 // Hook for calendar view appointments
-export const useCalendarAppointments = (startDate: Date, endDate: Date) => {
+export const useCalendarAppointments = (startDate: Date, endDate: Date, additionalFilter?: Partial<AppointmentFilter>) => {
   const filter: AppointmentFilter = {
     start_date: startDate.toISOString(),
     end_date: endDate.toISOString(),
     include_deleted: false,
+    ...additionalFilter, // Allow overriding filters like include_cancelled
   };
 
   return useQuery({
