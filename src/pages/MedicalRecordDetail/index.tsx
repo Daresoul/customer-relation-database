@@ -133,13 +133,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
   const selectedOld = useMemo(() => parseMaybeJson((selectedEntry as any)?.oldValues), [selectedEntry]);
   const selectedNew = useMemo(() => parseMaybeJson((selectedEntry as any)?.newValues), [selectedEntry]);
 
-  useEffect(() => {
-    if (selectedVersion) {
-      if (selectedNew) {
-        // Selected version handling logic would go here
-      }
-    }
-  }, [selectedVersion, selectedEntry, selectedNew, selectedOld]);
+  // useEffect removed - was only used for debug logging
 
   function camelize(s: string) {
     return s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
