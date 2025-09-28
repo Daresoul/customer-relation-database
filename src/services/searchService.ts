@@ -151,7 +151,6 @@ export class SearchService {
    */
   static clearSearchCache(): void {
     // Implementation would depend on if we add caching later
-    console.log('Search cache cleared');
   }
 }
 

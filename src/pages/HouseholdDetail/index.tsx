@@ -20,7 +20,6 @@ export const HouseholdDetail: React.FC = () => {
   const { data, isLoading, error } = useHouseholdDetail(householdId);
   const { data: patients = [], isLoading: patientsLoading, error: patientsError } = useHouseholdPatients(householdId);
 
-  console.log(`HouseholdDetail: Loading patients for household ${householdId}:`, { patients, patientsLoading, patientsError });
 
   if (!id || isNaN(householdId)) {
     return (

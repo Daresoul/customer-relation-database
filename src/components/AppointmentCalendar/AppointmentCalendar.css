@@ -43,7 +43,7 @@
 }
 
 .appointment-badge:hover {
-  background-color: #f5f5f5;
+  background-color: var(--theme-hover, #f5f5f5);
   border-radius: 4px;
 }
 
@@ -69,14 +69,14 @@
 .appointment-item {
   padding: 8px;
   margin-bottom: 8px;
-  background: #fafafa;
+  background: var(--theme-card-bg, #fafafa);
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .appointment-item:hover {
-  background: #f0f0f0;
+  background: var(--theme-hover, #f0f0f0);
   transform: translateX(2px);
 }
 
@@ -233,4 +233,55 @@
 .appointment-calendar.loading {
   opacity: 0.6;
   pointer-events: none;
+}
+
+/* Cancelled appointment styling with diagonal stripes */
+.appointment-cancelled {
+  position: relative;
+  opacity: 0.7;
+}
+
+.appointment-cancelled::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 3px,
+    rgba(255, 77, 79, 0.3) 3px,
+    rgba(255, 77, 79, 0.3) 6px
+  );
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+/* Dark theme cancelled appointments */
+[data-theme="dark"] .appointment-cancelled::before {
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 3px,
+    rgba(255, 120, 120, 0.4) 3px,
+    rgba(255, 120, 120, 0.4) 6px
+  );
+}
+
+/* Cancelled badge styling */
+.appointment-badge.appointment-cancelled .ant-badge-status-dot {
+  background-color: #ff4d4f !important;
+}
+
+/* Cancelled item styling */
+.appointment-item.appointment-cancelled {
+  border: 1px dashed #ff4d4f;
+  background-color: rgba(255, 77, 79, 0.05);
+}
+
+[data-theme="dark"] .appointment-item.appointment-cancelled {
+  background-color: rgba(255, 120, 120, 0.1);
+  border-color: rgba(255, 120, 120, 0.6);
 }

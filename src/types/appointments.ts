@@ -17,6 +17,7 @@ export interface Appointment {
   patient_name?: string;
   species?: string;
   breed?: string;
+  microchip_id?: string;
 }
 
 export interface AppointmentDetail {
@@ -37,6 +38,7 @@ export interface Room {
   name: string;
   description?: string;
   capacity: number;
+  color: string;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -67,6 +69,7 @@ export interface AppointmentFilter {
   room_id?: number;
   status?: AppointmentStatus;
   include_deleted?: boolean;
+  include_cancelled?: boolean;
 }
 
 export interface AppointmentListResponse {

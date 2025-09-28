@@ -5,30 +5,84 @@ import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import { LeftOutlined, RightOutlined, PlusOutlined } from '@ant-design/icons';
 import { Appointment, CalendarView } from '../../types/appointments';
-import { useCalendarAppointments } from '../../hooks/useAppointments';
+import { useRooms } from '../../hooks/useRooms';
+import { useThemeColors } from '../../utils/themeStyles';
 import appointmentService from '../../services/appointmentService';
 import WeekView from './WeekView';
 import DayView from './DayView';
-import DayViewDraggable from './DayViewDraggable';
-import WeekViewDraggable from './WeekViewDraggable';
+import DayViewSimple from './DayViewSimple';
 import './AppointmentCalendar.css';
 
 interface AppointmentCalendarProps {
+  appointments: Appointment[];
   onSelectAppointment: (appointment: Appointment) => void;
   onCreateAppointment: (date: Date, endDate?: Date) => void;
   selectedRoomId?: number;
   view: CalendarView;
   onViewChange: (view: CalendarView) => void;
+  onDateChange?: (date: Dayjs) => void;
 }
 
 const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
+  appointments: allAppointments,
   onSelectAppointment,
   onCreateAppointment,
   selectedRoomId,
   view,
   onViewChange,
+  onDateChange,
 }) => {
   const [selectedDate, setSelectedDate] = useState<Dayjs>(dayjs());
+  const themeColors = useThemeColors();
+
+  // Fetch room data for colors
+  const { data: rooms = [] } = useRooms({ active_only: true });
+
+  // Helper function to get room color
+  const getRoomColor = (appointment: Appointment): string => {
+    if (!appointment.room_id) {
+      return '#1890ff'; // Default blue color for appointments without rooms
+    }
+
+    const room = rooms.find(r => r.id === appointment.room_id);
+    return room?.color || '#1890ff'; // Fallback to default blue
+  };
+
+  // Create tooltip content for appointment
+  const getTooltipContent = (apt: Appointment) => {
+    const room = rooms.find(r => r.id === apt.room_id);
+
+    return (
+      <div>
+        <div style={{ marginBottom: '2px' }}>
+          <strong>Patient:</strong> {apt.patient_name || 'Unknown Patient'}
+        </div>
+        <div style={{ marginBottom: '2px' }}>
+          <strong>Microchip ID:</strong> {apt.microchip_id || '-'}
+        </div>
+        <div style={{ marginBottom: '2px' }}>
+          <strong>Time:</strong> {dayjs(apt.start_time).format('HH:mm')} - {dayjs(apt.end_time).format('HH:mm')}
+        </div>
+        <div style={{ marginBottom: '2px' }}>
+          <strong>Date:</strong> {dayjs(apt.start_time).format('MMM DD, YYYY')}
+        </div>
+        {room && (
+          <div style={{ marginBottom: '2px' }}>
+            <strong>Room:</strong> {room.name}
+          </div>
+        )}
+        <div style={{ marginBottom: '2px' }}>
+          <strong>Status:</strong> {apt.status.replace('_', ' ')}
+        </div>
+        <div style={{ fontWeight: 'bold', marginTop: '4px', marginBottom: '4px' }}>{apt.title}</div>
+        {apt.description && (
+          <div style={{ fontStyle: 'italic' }}>
+            {apt.description}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   // Calculate date range based on view
   const { startDate, endDate } = useMemo(() => {
@@ -57,15 +111,11 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
     };
   }, [selectedDate, view]);
 
-  // Fetch appointments for the current view
-  const { data, isLoading } = useCalendarAppointments(startDate, endDate);
-  const appointments = data?.appointments || [];
-
   // Filter appointments by room if selected
   const filteredAppointments = useMemo(() => {
-    if (!selectedRoomId) return appointments;
-    return appointments.filter((apt) => apt.room_id === selectedRoomId);
-  }, [appointments, selectedRoomId]);
+    if (!selectedRoomId) return allAppointments;
+    return allAppointments.filter((apt) => apt.room_id === selectedRoomId);
+  }, [allAppointments, selectedRoomId]);
 
   // Group appointments by date
   const appointmentsByDate = useMemo(() => {
@@ -81,7 +131,7 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
   }, [filteredAppointments]);
 
   // Custom cell renderer for calendar
-  const dateCellRender = (date: Dayjs) => {
+  const cellRender = (date: Dayjs) => {
     const dateKey = date.format('YYYY-MM-DD');
     const dayAppointments = appointmentsByDate[dateKey] || [];
 
@@ -90,26 +140,31 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
       return (
         <div className="appointments-cell">
           {dayAppointments.slice(0, 3).map((apt) => (
-            <div
+            <Tooltip
               key={apt.id}
-              className="appointment-badge"
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelectAppointment(apt);
-              }}
+              title={getTooltipContent(apt)}
+              placement="top"
+              mouseEnterDelay={0.5}
+              overlayStyle={{ maxWidth: '300px' }}
             >
-              <Badge
-                status="processing"
-                color={appointmentService.getStatusColor(apt.status)}
-                text={
-                  <Tooltip title={`${apt.title} - ${apt.patient_name || 'Patient'}`}>
+              <div
+                className={`appointment-badge ${apt.status === 'cancelled' ? 'appointment-cancelled' : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelectAppointment(apt);
+                }}
+              >
+                <Badge
+                  status="processing"
+                  color={getRoomColor(apt)}
+                  text={
                     <span className="appointment-text">
                       {dayjs(apt.start_time).format('HH:mm')} - {apt.title}
                     </span>
-                  </Tooltip>
-                }
-              />
-            </div>
+                  }
+                />
+              </div>
+            </Tooltip>
           ))}
           {dayAppointments.length > 3 && (
             <div className="more-appointments">+{dayAppointments.length - 3} more</div>
@@ -122,24 +177,31 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
     return (
       <div className="appointments-list">
         {dayAppointments.map((apt) => (
-          <div
+          <Tooltip
             key={apt.id}
-            className="appointment-item"
-            style={{ borderLeft: `3px solid ${appointmentService.getStatusColor(apt.status)}` }}
-            onClick={(e) => {
-              e.stopPropagation();
-              onSelectAppointment(apt);
-            }}
+            title={getTooltipContent(apt)}
+            placement="right"
+            mouseEnterDelay={0.5}
+            overlayStyle={{ maxWidth: '300px' }}
           >
-            <div className="appointment-time">
-              {dayjs(apt.start_time).format('HH:mm')} - {dayjs(apt.end_time).format('HH:mm')}
+            <div
+              className={`appointment-item ${apt.status === 'cancelled' ? 'appointment-cancelled' : ''}`}
+              style={{ borderLeft: `3px solid ${getRoomColor(apt)}` }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelectAppointment(apt);
+              }}
+            >
+              <div className="appointment-time" style={{ color: themeColors.textSecondary }}>
+                {dayjs(apt.start_time).format('HH:mm')} - {dayjs(apt.end_time).format('HH:mm')}
+              </div>
+              <div className="appointment-title" style={{ color: themeColors.text }}>{apt.title}</div>
+              <div className="appointment-patient" style={{ color: themeColors.textSecondary }}>{apt.patient_name || 'Patient'}</div>
+              <Tag color={getRoomColor(apt)}>
+                {apt.status.replace('_', ' ')}
+              </Tag>
             </div>
-            <div className="appointment-title">{apt.title}</div>
-            <div className="appointment-patient">{apt.patient_name || 'Patient'}</div>
-            <Tag color={appointmentService.getStatusColor(apt.status)}>
-              {apt.status.replace('_', ' ')}
-            </Tag>
-          </div>
+          </Tooltip>
         ))}
       </div>
     );
@@ -192,6 +254,15 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
     setSelectedDate(dayjs());
   };
 
+  // Handle day header click in week view to switch to day view
+  const handleDayHeaderClick = (date: Dayjs) => {
+    setSelectedDate(date);
+    onViewChange('day');
+    if (onDateChange) {
+      onDateChange(date);
+    }
+  };
+
   // Custom header for the calendar
   const headerRender = () => {
     const title = view === 'month'
@@ -221,7 +292,7 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
             icon={<LeftOutlined />}
             onClick={handlePrevious}
           />
-          <span className="calendar-title">{title}</span>
+          <span className="calendar-title" style={{ color: themeColors.text }}>{title}</span>
           <Button
             size="small"
             icon={<RightOutlined />}
@@ -238,18 +309,22 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
     switch (view) {
       case 'week':
         return (
-          <WeekViewDraggable
+          <WeekView
             selectedDate={selectedDate}
-            appointments={appointments || []}
+            appointments={filteredAppointments}
             onSelectAppointment={onSelectAppointment}
-            onCreateAppointment={onCreateAppointment}
+            onCreateAppointment={(startDate, endDate) => {
+              // Pass both dates to parent
+              onCreateAppointment(startDate, endDate);
+            }}
+            onDayHeaderClick={handleDayHeaderClick}
           />
         );
       case 'day':
         return (
-          <DayViewDraggable
+          <DayViewSimple
             selectedDate={selectedDate}
-            appointments={appointments || []}
+            appointments={filteredAppointments}
             onSelectAppointment={onSelectAppointment}
             onCreateAppointment={(startDate, endDate) => {
               // Pass both dates to parent
@@ -262,7 +337,7 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
           <Calendar
             value={selectedDate}
             onSelect={handleSelect}
-            dateCellRender={dateCellRender}
+            cellRender={cellRender}
             mode="month"
             headerRender={() => null} // We use custom header
             fullscreen={true}

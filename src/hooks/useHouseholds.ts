@@ -16,16 +16,13 @@ export const useHouseholds = () => {
       setLoading(true);
       setError(null);
 
-      console.log('Loading all households...');
 
       // Get all households directly without search
-      console.log('Invoking get_all_households...');
       const householdsWithPeople = await invoke<any[]>('get_all_households', {
         limit: 100,
         offset: 0
       });
 
-      console.log('Loaded households with people:', householdsWithPeople);
 
       // Convert the response to our format
       const householdResults = householdsWithPeople.map((hwp: any) => ({
@@ -45,7 +42,6 @@ export const useHouseholds = () => {
         relevanceScore: 1.0
       }));
 
-      console.log('Converted households:', householdResults);
       setHouseholds(householdResults);
     } catch (err) {
       console.error('Failed to load households - Full error:', err);

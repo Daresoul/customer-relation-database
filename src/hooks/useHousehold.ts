@@ -18,7 +18,6 @@ export function useHouseholdDetail(householdId: number) {
         householdId
       });
 
-      console.log('Raw household data from backend:', result);
 
       // Transform the response to match our expected format
       const transformed: HouseholdDetailView = {
@@ -49,7 +48,6 @@ export function useHouseholdDetail(householdId: number) {
         patients: [] // Empty for now - will add separate fetch later
       };
 
-      console.log('Transformed household data:', transformed);
       return transformed;
     },
     enabled: !!householdId,
@@ -238,20 +236,16 @@ export function useHouseholdPatients(householdId: number) {
   return useQuery({
     queryKey: ['household-patients', householdId],
     queryFn: async () => {
-      console.log(`Fetching patients for household ${householdId}...`);
 
       try {
         const result = await invoke('get_household_patients', {
           householdId  // Back to camelCase - matches other working commands
         });
 
-        console.log(`Raw result from get_household_patients:`, result);
-        console.log(`Result type: ${typeof result}, is array: ${Array.isArray(result)}`);
 
         // Handle the result - it might already be an array or might need parsing
         const patients = Array.isArray(result) ? result : [];
 
-        console.log(`Fetched ${patients.length} patients for household ${householdId}:`, patients);
 
         // Transform the patient data
         const transformed = patients.map((patient: any) => ({
@@ -265,7 +259,6 @@ export function useHouseholdPatients(householdId: number) {
           status: patient.status || 'active'
         }));
 
-        console.log(`Transformed patients:`, transformed);
         return transformed;
       } catch (error) {
         console.error(`Failed to fetch patients for household ${householdId}:`, error);

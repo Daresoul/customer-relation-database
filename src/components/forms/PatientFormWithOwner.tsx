@@ -119,7 +119,6 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
     setSearchingHouseholds(true);
     try {
       const result = await invoke<any>('search_households', { query: query || '', limit: 20 });
-      console.log('Household search result:', result);
 
       // The backend returns a SearchHouseholdsResponse with results array
       let householdList = [];
@@ -135,7 +134,6 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
                                (primaryPerson ? primaryPerson.last_name : null) ||
                                'Unnamed Household';
 
-          console.log('Household data:', { item, primaryPerson, householdName });
 
           return {
             id: item.id,

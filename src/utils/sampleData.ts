@@ -75,7 +75,6 @@ export const generateSampleData = async () => {
       }
     }
 
-    console.log('Sample data generated successfully!');
     return true;
   } catch (error) {
     console.error('Failed to generate sample data:', error);

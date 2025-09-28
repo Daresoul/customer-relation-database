@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import appointmentService from '../services/appointmentService';
 import {
   Appointment,
@@ -20,6 +20,11 @@ export const useAppointments = (filter: AppointmentFilter = {}) => {
   const queryClient = useQueryClient();
   const [currentFilter, setCurrentFilter] = useState<AppointmentFilter>(filter);
 
+  // Sync external filter changes
+  useEffect(() => {
+    setCurrentFilter(filter);
+  }, [filter]);
+
   // Fetch appointments with pagination
   const {
     data,
@@ -38,6 +43,8 @@ export const useAppointments = (filter: AppointmentFilter = {}) => {
       return lastPage.has_more ? totalFetched : undefined;
     },
     initialPageParam: 0,
+    staleTime: 0, // Force immediate refetch
+    gcTime: 0, // Don't cache
   });
 
   // Flatten appointments from all pages

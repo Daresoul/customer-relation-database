@@ -9,6 +9,9 @@ import {
   Drawer,
   Modal,
   message,
+  Row,
+  Col,
+  Checkbox,
 } from 'antd';
 import {
   CalendarOutlined,
@@ -20,6 +23,7 @@ import {
 import AppointmentCalendar from '../../components/AppointmentCalendar/AppointmentCalendar';
 import AppointmentList from '../../components/AppointmentList/AppointmentList';
 import AppointmentModal from '../../components/AppointmentModal/AppointmentModal';
+import TodaysAppointments from '../../components/AppointmentCalendar/TodaysAppointments';
 import {
   Appointment,
   AppointmentFilter,
@@ -56,6 +60,7 @@ const AppointmentsTab: React.FC = () => {
     isDeleting,
   } = useAppointments(filter);
 
+
   const { rooms } = useRooms();
 
   const { data: appointmentDetail } = useAppointmentDetail(
@@ -64,7 +69,6 @@ const AppointmentsTab: React.FC = () => {
 
   // Handle create appointment
   const handleCreateAppointment = useCallback((date?: Date, endDate?: Date) => {
-    console.log('AppointmentsTab: handleCreateAppointment called with date:', date, 'endDate:', endDate);
     setInitialDate(date || new Date());
     setInitialEndDate(endDate);
     setModalMode('create');
@@ -118,7 +122,7 @@ const AppointmentsTab: React.FC = () => {
     async (values: any) => {
       try {
         if (modalMode === 'edit' && selectedAppointment) {
-          await updateAppointment(selectedAppointment.id, values);
+          await updateAppointment({ id: selectedAppointment.id, input: values });
           message.success('Appointment updated successfully');
         } else {
           await createAppointment(values);
@@ -127,6 +131,7 @@ const AppointmentsTab: React.FC = () => {
         setModalVisible(false);
         setSelectedAppointment(null);
       } catch (error: any) {
+        console.error('AppointmentsTab: Save error:', error);
         message.error(error.message || 'Failed to save appointment');
       }
     },
@@ -168,16 +173,14 @@ const AppointmentsTab: React.FC = () => {
             label: (
               <span>
                 <UnorderedListOutlined />
-                List View
+                Today's Appointments
               </span>
             ),
             children: (
-              <AppointmentList
-                filter={filter}
-                onEdit={handleEditAppointment}
-                onDelete={handleDeleteAppointment}
-                onDuplicate={handleDuplicateAppointment}
-                onSelect={handleEditAppointment}
+              <TodaysAppointments
+                appointments={appointments || []}
+                onSelectAppointment={handleEditAppointment}
+                onCreateAppointment={handleCreateAppointment}
               />
             ),
           },
@@ -212,39 +215,48 @@ const AppointmentsTab: React.FC = () => {
         width={400}
       >
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
-          <div>
-            <label>Date Range</label>
-            <RangePicker
-              style={{ width: '100%' }}
-              onChange={(dates) => {
-                if (dates && dates[0] && dates[1]) {
-                  setFilter({
-                    ...filter,
-                    start_date: dates[0].toDate(),
-                    end_date: dates[1].toDate(),
-                  });
-                } else {
-                  const { start_date, end_date, ...rest } = filter;
-                  setFilter(rest);
-                }
-              }}
-            />
-          </div>
+          {/* Date Range - Only show for Calendar view */}
+          {activeView === 'calendar' && (
+            <div>
+              <label>Date Range</label>
+              <RangePicker
+                style={{ width: '100%' }}
+                onChange={(dates) => {
+                  if (dates && dates[0] && dates[1]) {
+                    setFilter({
+                      ...filter,
+                      start_date: dates[0].toDate(),
+                      end_date: dates[1].toDate(),
+                    });
+                  } else {
+                    const { start_date, end_date, ...rest } = filter;
+                    setFilter(rest);
+                  }
+                }}
+              />
+            </div>
+          )}
 
           <div>
             <label>Status</label>
             <Select
               style={{ width: '100%' }}
-              placeholder="Select status"
+              placeholder="All statuses"
               allowClear
               onChange={(value) => {
                 if (value) {
-                  setFilter({ ...filter, status: value });
+                  setFilter({
+                    ...filter,
+                    status: value,
+                    // Clear include_cancelled when selecting a specific status
+                    include_cancelled: value === 'cancelled' ? true : undefined
+                  });
                 } else {
-                  const { status, ...rest } = filter;
+                  const { status, include_cancelled, ...rest } = filter;
                   setFilter(rest);
                 }
               }}
+              value={filter.status}
             >
               <Select.Option value="scheduled">Scheduled</Select.Option>
               <Select.Option value="in_progress">In Progress</Select.Option>
@@ -257,7 +269,7 @@ const AppointmentsTab: React.FC = () => {
             <label>Room</label>
             <Select
               style={{ width: '100%' }}
-              placeholder="Select room"
+              placeholder="All rooms"
               allowClear
               onChange={(value) => {
                 if (value) {
@@ -267,6 +279,7 @@ const AppointmentsTab: React.FC = () => {
                   setFilter(rest);
                 }
               }}
+              value={filter.room_id}
             >
               {rooms?.map((room) => (
                 <Select.Option key={room.id} value={room.id}>
@@ -275,6 +288,25 @@ const AppointmentsTab: React.FC = () => {
               ))}
             </Select>
           </div>
+
+          {/* Include cancelled - Only show when not filtering by cancelled status specifically */}
+          {filter.status !== 'cancelled' && (
+            <div>
+              <Checkbox
+                checked={filter.include_cancelled || false}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setFilter({ ...filter, include_cancelled: true });
+                  } else {
+                    const { include_cancelled, ...rest } = filter;
+                    setFilter(rest);
+                  }
+                }}
+              >
+                Include cancelled appointments
+              </Checkbox>
+            </div>
+          )}
 
           <Button type="primary" onClick={() => setFilterDrawerVisible(false)} block>
             Apply Filters
@@ -295,8 +327,8 @@ const AppointmentsTab: React.FC = () => {
       <AppointmentModal
         open={modalVisible}
         appointment={selectedAppointment}
+        mode={modalMode}
         onCancel={() => {
-          console.log('AppointmentsTab: Modal onCancel called');
           setModalVisible(false);
           setSelectedAppointment(null);
           setInitialEndDate(undefined);
@@ -306,6 +338,7 @@ const AppointmentsTab: React.FC = () => {
         initialEndDate={modalMode === 'create' ? initialEndDate : undefined}
         rooms={rooms}
       />
+
     </div>
   );
 };
