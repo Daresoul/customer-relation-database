@@ -1,0 +1,30 @@
+/* Form Fields CSS Module */
+
+/* Full width utilities for form fields */
+.fullWidth {
+  width: 100%;
+}
+
+/* Address field groups */
+.addressCity {
+  width: 40%;
+}
+
+.addressState {
+  width: 30%;
+}
+
+.addressZip {
+  width: 30%;
+}
+
+/* Field containers */
+.fieldGroup {
+  display: flex;
+  gap: 8px;
+}
+
+/* Field icons */
+.fieldIcon {
+  color: var(--text-secondary);
+}

@@ -3,6 +3,7 @@ import { Drawer, Descriptions, Typography, Space, Button, List, App } from 'antd
 import { useMedicalRecord } from '@/hooks/useMedicalRecords';
 import { MedicalService } from '@/services/medicalService';
 import type { MedicalRecordHistory } from '@/types/medical';
+import styles from './MedicalRecordDetail.module.css';
 
 const { Text, Paragraph } = Typography;
 
@@ -51,7 +52,7 @@ export const MedicalRecordDetailDrawer: React.FC<MedicalRecordDetailDrawerProps>
   return (
     <Drawer title="Medical Record Details" open={open} onClose={onClose} width={720}>
       {record && (
-        <Descriptions bordered size="small" column={1} style={{ marginBottom: 16 }}>
+        <Descriptions bordered size="small" column={1} className={styles.marginBottom16}>
           <Descriptions.Item label="Type">{record.recordType}</Descriptions.Item>
           <Descriptions.Item label="Name">{record.name}</Descriptions.Item>
           {record.procedureName && (
@@ -61,7 +62,7 @@ export const MedicalRecordDetailDrawer: React.FC<MedicalRecordDetailDrawerProps>
             <Descriptions.Item label="Price">{record.price}</Descriptions.Item>
           )}
           <Descriptions.Item label="Description">
-            <Paragraph style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{record.description}</Paragraph>
+            <Paragraph className={styles.preWrapNoMargin}>{record.description}</Paragraph>
           </Descriptions.Item>
           <Descriptions.Item label="Created">{new Date(record.createdAt).toLocaleString()}</Descriptions.Item>
           <Descriptions.Item label="Updated">{new Date(record.updatedAt).toLocaleString()}</Descriptions.Item>
@@ -69,7 +70,7 @@ export const MedicalRecordDetailDrawer: React.FC<MedicalRecordDetailDrawerProps>
         </Descriptions>
       )}
 
-      <Space style={{ marginBottom: 16 }}>
+      <Space className={styles.marginBottom16}>
         <Button onClick={handleRevert} disabled={parsedHistory.length === 0}>Revert to Previous Version</Button>
       </Space>
 
@@ -79,8 +80,8 @@ export const MedicalRecordDetailDrawer: React.FC<MedicalRecordDetailDrawerProps>
         dataSource={parsedHistory}
         renderItem={(item) => (
           <List.Item>
-            <Space direction="vertical" size={0} style={{ width: '100%' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <Space direction="vertical" size={0} className={styles.fullWidth}>
+              <div className={styles.flexSpaceBetween}>
                 <Text>Version {item.version}</Text>
                 <Text type="secondary">{new Date(item.changedAt).toLocaleString()}</Text>
               </div>
@@ -100,7 +101,7 @@ export const MedicalRecordDetailDrawer: React.FC<MedicalRecordDetailDrawerProps>
                     return (
                       <div>
                         {keys.map(k => (
-                          <Text key={k} type="secondary" style={{ display: 'block' }}>
+                          <Text key={k} type="secondary" className={styles.displayBlock}>
                             {k}: {String(oldVals[k])} 	→ {String(newVals[k])}
                           </Text>
                         ))}

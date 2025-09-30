@@ -3,6 +3,7 @@ import { Input, Select, DatePicker, Space, Button, Row, Col, Collapse } from 'an
 import { SearchOutlined, ClearOutlined, FilterOutlined } from '@ant-design/icons';
 import type { MedicalRecordFilter } from '@/types/medical';
 import dayjs from 'dayjs';
+import styles from './MedicalRecordSearch.module.css';
 
 const { RangePicker } = DatePicker;
 const { Option } = Select;
@@ -68,7 +69,7 @@ const MedicalRecordSearch: React.FC<MedicalRecordSearchProps> = ({
   return (
     <div>
       {/* Quick Search Bar */}
-      <Space.Compact style={{ width: '100%', marginBottom: 16 }}>
+      <Space.Compact className={styles.fullWidthMarginBottom}>
         <Input
           size="large"
           placeholder="Search records by name, procedure, description, or attachments..."
@@ -105,9 +106,9 @@ const MedicalRecordSearch: React.FC<MedicalRecordSearchProps> = ({
         <Panel header="Advanced Filters" key="filters" showArrow={false}>
           <Row gutter={[16, 16]}>
             <Col xs={24} sm={12} md={8}>
-              <label style={{ display: 'block', marginBottom: 4 }}>Record Type</label>
+              <label className={styles.filterLabel}>Record Type</label>
               <Select
-                style={{ width: '100%' }}
+                className={styles.fullWidth}
                 placeholder="All Types"
                 value={filter.recordType}
                 onChange={(value) => setFilter({ ...filter, recordType: value })}
@@ -119,9 +120,9 @@ const MedicalRecordSearch: React.FC<MedicalRecordSearchProps> = ({
             </Col>
 
             <Col xs={24} sm={12} md={8}>
-              <label style={{ display: 'block', marginBottom: 4 }}>Status</label>
+              <label className={styles.filterLabel}>Status</label>
               <Select
-                style={{ width: '100%' }}
+                className={styles.fullWidth}
                 placeholder="Active Records"
                 value={filter.includeArchived}
                 onChange={(value) => setFilter({ ...filter, includeArchived: value })}
@@ -133,9 +134,9 @@ const MedicalRecordSearch: React.FC<MedicalRecordSearchProps> = ({
             </Col>
 
             <Col xs={24} sm={12} md={8}>
-              <label style={{ display: 'block', marginBottom: 4 }}>Date Range</label>
+              <label className={styles.filterLabel}>Date Range</label>
               <RangePicker
-                style={{ width: '100%' }}
+                className={styles.fullWidth}
                 value={[
                   filter.startDate ? dayjs(filter.startDate) : null,
                   filter.endDate ? dayjs(filter.endDate) : null,
@@ -146,9 +147,9 @@ const MedicalRecordSearch: React.FC<MedicalRecordSearchProps> = ({
             </Col>
 
             <Col xs={24} sm={12} md={8}>
-              <label style={{ display: 'block', marginBottom: 4 }}>Has Attachments</label>
+              <label className={styles.filterLabel}>Has Attachments</label>
               <Select
-                style={{ width: '100%' }}
+                className={styles.fullWidth}
                 placeholder="Any"
                 value={filter.hasAttachments}
                 onChange={(value) => setFilter({ ...filter, hasAttachments: value })}
@@ -160,9 +161,9 @@ const MedicalRecordSearch: React.FC<MedicalRecordSearchProps> = ({
             </Col>
 
             <Col xs={24} sm={12} md={8}>
-              <label style={{ display: 'block', marginBottom: 4 }}>Has Price</label>
+              <label className={styles.filterLabel}>Has Price</label>
               <Select
-                style={{ width: '100%' }}
+                className={styles.fullWidth}
                 placeholder="Any"
                 value={filter.hasPrice}
                 onChange={(value) => setFilter({ ...filter, hasPrice: value })}
@@ -174,9 +175,9 @@ const MedicalRecordSearch: React.FC<MedicalRecordSearchProps> = ({
             </Col>
 
             <Col xs={24} sm={12} md={8}>
-              <label style={{ display: 'block', marginBottom: 4 }}>Sort By</label>
+              <label className={styles.filterLabel}>Sort By</label>
               <Select
-                style={{ width: '100%' }}
+                className={styles.fullWidth}
                 placeholder="Date (Newest First)"
                 value={filter.sortBy}
                 onChange={(value) => setFilter({ ...filter, sortBy: value })}
@@ -191,7 +192,7 @@ const MedicalRecordSearch: React.FC<MedicalRecordSearchProps> = ({
             </Col>
           </Row>
 
-          <div style={{ marginTop: 16, textAlign: 'right' }}>
+          <div className={styles.filterActions}>
             <Space>
               <Button icon={<ClearOutlined />} onClick={handleReset}>
                 Clear Filters

@@ -1,0 +1,608 @@
+/**
+ * Animation utilities using CSS Modules
+ * Reusable animations without !important
+ */
+
+@layer utilities {
+  /* Keyframe definitions */
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes fadeOut {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes fadeInDown {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes fadeInLeft {
+    from {
+      opacity: 0;
+      transform: translateX(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes fadeInRight {
+    from {
+      opacity: 0;
+      transform: translateX(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes slideInUp {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slideInDown {
+    from {
+      transform: translateY(-100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slideInLeft {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes slideInRight {
+    from {
+      transform: translateX(100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes scaleIn {
+    from {
+      transform: scale(0.95);
+      opacity: 0;
+    }
+    to {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  @keyframes scaleOut {
+    from {
+      transform: scale(1);
+      opacity: 1;
+    }
+    to {
+      transform: scale(0.95);
+      opacity: 0;
+    }
+  }
+
+  @keyframes spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes ping {
+    75%, 100% {
+      transform: scale(2);
+      opacity: 0;
+    }
+  }
+
+  @keyframes pulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: .5;
+    }
+  }
+
+  @keyframes bounce {
+    0%, 100% {
+      transform: translateY(-25%);
+      animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
+    }
+    50% {
+      transform: translateY(0);
+      animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+    }
+  }
+
+  @keyframes shake {
+    0%, 100% {
+      transform: translateX(0);
+    }
+    10%, 30%, 50%, 70%, 90% {
+      transform: translateX(-2px);
+    }
+    20%, 40%, 60%, 80% {
+      transform: translateX(2px);
+    }
+  }
+
+  @keyframes skeleton {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+
+  /* Animation classes */
+  .animateFadeIn {
+    animation: fadeIn var(--motion-duration-mid) var(--motion-ease-out);
+  }
+
+  .animateFadeOut {
+    animation: fadeOut var(--motion-duration-mid) var(--motion-ease-in);
+  }
+
+  .animateFadeInUp {
+    animation: fadeInUp var(--motion-duration-mid) var(--motion-ease-out);
+  }
+
+  .animateFadeInDown {
+    animation: fadeInDown var(--motion-duration-mid) var(--motion-ease-out);
+  }
+
+  .animateFadeInLeft {
+    animation: fadeInLeft var(--motion-duration-mid) var(--motion-ease-out);
+  }
+
+  .animateFadeInRight {
+    animation: fadeInRight var(--motion-duration-mid) var(--motion-ease-out);
+  }
+
+  .animateSlideInUp {
+    animation: slideInUp var(--motion-duration-slow) var(--motion-ease-out);
+  }
+
+  .animateSlideInDown {
+    animation: slideInDown var(--motion-duration-slow) var(--motion-ease-out);
+  }
+
+  .animateSlideInLeft {
+    animation: slideInLeft var(--motion-duration-slow) var(--motion-ease-out);
+  }
+
+  .animateSlideInRight {
+    animation: slideInRight var(--motion-duration-slow) var(--motion-ease-out);
+  }
+
+  .animateScaleIn {
+    animation: scaleIn var(--motion-duration-mid) var(--motion-ease-out);
+  }
+
+  .animateScaleOut {
+    animation: scaleOut var(--motion-duration-mid) var(--motion-ease-in);
+  }
+
+  .animateSpin {
+    animation: spin 1s linear infinite;
+  }
+
+  .animatePing {
+    animation: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+
+  .animatePulse {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  .animateBounce {
+    animation: bounce 1s infinite;
+  }
+
+  .animateShake {
+    animation: shake 0.5s;
+  }
+
+  /* Skeleton loading animation */
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--bg-spotlight) 0%,
+      var(--bg-elevated) 50%,
+      var(--bg-spotlight) 100%
+    );
+    background-size: 200% 100%;
+    animation: skeleton 1.5s ease-in-out infinite;
+  }
+
+  /* Transition utilities */
+  .transitionNone {
+    transition: none;
+  }
+
+  .transitionAll {
+    transition: all var(--motion-duration-mid) var(--motion-ease-in-out);
+  }
+
+  .transitionFast {
+    transition: all var(--motion-duration-fast) var(--motion-ease-in-out);
+  }
+
+  .transitionSlow {
+    transition: all var(--motion-duration-slow) var(--motion-ease-in-out);
+  }
+
+  .transitionColors {
+    transition: background-color var(--motion-duration-mid) var(--motion-ease-in-out),
+                border-color var(--motion-duration-mid) var(--motion-ease-in-out),
+                color var(--motion-duration-mid) var(--motion-ease-in-out),
+                fill var(--motion-duration-mid) var(--motion-ease-in-out),
+                stroke var(--motion-duration-mid) var(--motion-ease-in-out);
+  }
+
+  .transitionOpacity {
+    transition: opacity var(--motion-duration-mid) var(--motion-ease-in-out);
+  }
+
+  .transitionShadow {
+    transition: box-shadow var(--motion-duration-mid) var(--motion-ease-in-out);
+  }
+
+  .transitionTransform {
+    transition: transform var(--motion-duration-mid) var(--motion-ease-in-out);
+  }
+
+  /* Duration modifiers */
+  .duration75 {
+    transition-duration: 75ms;
+  }
+
+  .duration100 {
+    transition-duration: 100ms;
+  }
+
+  .duration150 {
+    transition-duration: 150ms;
+  }
+
+  .duration200 {
+    transition-duration: 200ms;
+  }
+
+  .duration300 {
+    transition-duration: 300ms;
+  }
+
+  .duration500 {
+    transition-duration: 500ms;
+  }
+
+  .duration700 {
+    transition-duration: 700ms;
+  }
+
+  .duration1000 {
+    transition-duration: 1000ms;
+  }
+
+  /* Delay utilities */
+  .delay75 {
+    transition-delay: 75ms;
+  }
+
+  .delay100 {
+    transition-delay: 100ms;
+  }
+
+  .delay150 {
+    transition-delay: 150ms;
+  }
+
+  .delay200 {
+    transition-delay: 200ms;
+  }
+
+  .delay300 {
+    transition-delay: 300ms;
+  }
+
+  .delay500 {
+    transition-delay: 500ms;
+  }
+
+  .delay700 {
+    transition-delay: 700ms;
+  }
+
+  .delay1000 {
+    transition-delay: 1000ms;
+  }
+
+  /* Easing utilities */
+  .easeLinear {
+    transition-timing-function: linear;
+  }
+
+  .easeIn {
+    transition-timing-function: var(--motion-ease-in);
+  }
+
+  .easeOut {
+    transition-timing-function: var(--motion-ease-out);
+  }
+
+  .easeInOut {
+    transition-timing-function: var(--motion-ease-in-out);
+  }
+
+  /* Transform utilities */
+  .scale0 {
+    transform: scale(0);
+  }
+
+  .scale50 {
+    transform: scale(0.5);
+  }
+
+  .scale75 {
+    transform: scale(0.75);
+  }
+
+  .scale90 {
+    transform: scale(0.9);
+  }
+
+  .scale95 {
+    transform: scale(0.95);
+  }
+
+  .scale100 {
+    transform: scale(1);
+  }
+
+  .scale105 {
+    transform: scale(1.05);
+  }
+
+  .scale110 {
+    transform: scale(1.1);
+  }
+
+  .scale125 {
+    transform: scale(1.25);
+  }
+
+  .scale150 {
+    transform: scale(1.5);
+  }
+
+  .rotate0 {
+    transform: rotate(0deg);
+  }
+
+  .rotate45 {
+    transform: rotate(45deg);
+  }
+
+  .rotate90 {
+    transform: rotate(90deg);
+  }
+
+  .rotate180 {
+    transform: rotate(180deg);
+  }
+
+  .rotateNeg45 {
+    transform: rotate(-45deg);
+  }
+
+  .rotateNeg90 {
+    transform: rotate(-90deg);
+  }
+
+  .rotateNeg180 {
+    transform: rotate(-180deg);
+  }
+
+  /* Translate utilities */
+  .translateX0 {
+    transform: translateX(0);
+  }
+
+  .translateXFull {
+    transform: translateX(100%);
+  }
+
+  .translateXNegFull {
+    transform: translateX(-100%);
+  }
+
+  .translateY0 {
+    transform: translateY(0);
+  }
+
+  .translateYFull {
+    transform: translateY(100%);
+  }
+
+  .translateYNegFull {
+    transform: translateY(-100%);
+  }
+
+  /* Transform origin */
+  .originCenter {
+    transform-origin: center;
+  }
+
+  .originTop {
+    transform-origin: top;
+  }
+
+  .originTopRight {
+    transform-origin: top right;
+  }
+
+  .originRight {
+    transform-origin: right;
+  }
+
+  .originBottomRight {
+    transform-origin: bottom right;
+  }
+
+  .originBottom {
+    transform-origin: bottom;
+  }
+
+  .originBottomLeft {
+    transform-origin: bottom left;
+  }
+
+  .originLeft {
+    transform-origin: left;
+  }
+
+  .originTopLeft {
+    transform-origin: top left;
+  }
+
+  /* Cursor utilities */
+  .cursorAuto {
+    cursor: auto;
+  }
+
+  .cursorDefault {
+    cursor: default;
+  }
+
+  .cursorPointer {
+    cursor: pointer;
+  }
+
+  .cursorWait {
+    cursor: wait;
+  }
+
+  .cursorText {
+    cursor: text;
+  }
+
+  .cursorMove {
+    cursor: move;
+  }
+
+  .cursorHelp {
+    cursor: help;
+  }
+
+  .cursorNotAllowed {
+    cursor: not-allowed;
+  }
+
+  .cursorProgress {
+    cursor: progress;
+  }
+
+  .cursorGrab {
+    cursor: grab;
+  }
+
+  .cursorGrabbing {
+    cursor: grabbing;
+  }
+
+  /* Will change for performance */
+  .willChangeTransform {
+    will-change: transform;
+  }
+
+  .willChangeOpacity {
+    will-change: opacity;
+  }
+
+  .willChangeAll {
+    will-change: transform, opacity;
+  }
+
+  /* Reduce motion for accessibility */
+  @media (prefers-reduced-motion: reduce) {
+    .animateFadeIn,
+    .animateFadeOut,
+    .animateFadeInUp,
+    .animateFadeInDown,
+    .animateFadeInLeft,
+    .animateFadeInRight,
+    .animateSlideInUp,
+    .animateSlideInDown,
+    .animateSlideInLeft,
+    .animateSlideInRight,
+    .animateScaleIn,
+    .animateScaleOut,
+    .animateSpin,
+    .animatePing,
+    .animatePulse,
+    .animateBounce,
+    .animateShake {
+      animation-duration: 0.01ms;
+      animation-iteration-count: 1;
+    }
+
+    .transitionAll,
+    .transitionFast,
+    .transitionSlow,
+    .transitionColors,
+    .transitionOpacity,
+    .transitionShadow,
+    .transitionTransform {
+      transition-duration: 0.01ms;
+    }
+  }
+}

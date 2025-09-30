@@ -1,0 +1,77 @@
+/* MedicalRecordForm styles */
+.fullWidth {
+  width: 100%;
+}
+
+.datePickerRow {
+  width: 100%;
+}
+
+.dateInput {
+  margin-bottom: 0;
+  flex: 1;
+}
+
+.datePickerFull {
+  width: 100%;
+}
+
+.severityInput {
+  margin-bottom: 0;
+  min-width: 120px;
+}
+
+.treatmentSection {
+  margin-bottom: 24px;
+}
+
+.medicationList {
+  margin-top: 16px;
+}
+
+.filesSection {
+  margin-bottom: 24px;
+}
+
+.uploadArea {
+  margin-bottom: 8px;
+}
+
+.uploadIcon {
+  font-size: 48px;
+  color: #4A90E2;
+}
+
+.uploadHint {
+  display: block;
+  margin-top: 8px;
+}
+
+.submitButton {
+  margin-bottom: 0;
+  margin-top: 24px;
+}
+
+.formSection {
+  margin-bottom: 16px;
+}
+
+.recordType {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.filesList {
+  margin-top: 12px;
+}
+
+.fileItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  margin-bottom: 8px;
+}

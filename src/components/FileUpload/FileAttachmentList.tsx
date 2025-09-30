@@ -16,6 +16,7 @@ import { MedicalService } from '@/services/medicalService';
 import type { MedicalAttachment } from '@/types/medical';
 import dayjs from 'dayjs';
 import { formatDate } from '@/utils/dateFormatter';
+import styles from './FileUpload.module.css';
 
 const { Text } = Typography;
 
@@ -35,24 +36,24 @@ const FileAttachmentList: React.FC<FileAttachmentListProps> = ({
   const getFileIcon = (mimeType?: string, fileName?: string) => {
     if (!mimeType && fileName) {
       const ext = fileName.split('.').pop()?.toLowerCase();
-      if (ext === 'pdf') return <FilePdfOutlined style={{ fontSize: 24 }} />;
-      if (['doc', 'docx'].includes(ext || '')) return <FileWordOutlined style={{ fontSize: 24 }} />;
-      if (['xls', 'xlsx'].includes(ext || '')) return <FileExcelOutlined style={{ fontSize: 24 }} />;
+      if (ext === 'pdf') return <FilePdfOutlined className={styles.fileIcon} />;
+      if (['doc', 'docx'].includes(ext || '')) return <FileWordOutlined className={styles.fileIcon} />;
+      if (['xls', 'xlsx'].includes(ext || '')) return <FileExcelOutlined className={styles.fileIcon} />;
       if (['jpg', 'jpeg', 'png', 'gif', 'bmp'].includes(ext || ''))
-        return <FileImageOutlined style={{ fontSize: 24 }} />;
-      if (['txt', 'csv'].includes(ext || '')) return <FileTextOutlined style={{ fontSize: 24 }} />;
+        return <FileImageOutlined className={styles.fileIcon} />;
+      if (['txt', 'csv'].includes(ext || '')) return <FileTextOutlined className={styles.fileIcon} />;
     }
 
     if (mimeType) {
-      if (mimeType === 'application/pdf') return <FilePdfOutlined style={{ fontSize: 24 }} />;
-      if (mimeType.includes('word')) return <FileWordOutlined style={{ fontSize: 24 }} />;
+      if (mimeType === 'application/pdf') return <FilePdfOutlined className={styles.fileIcon} />;
+      if (mimeType.includes('word')) return <FileWordOutlined className={styles.fileIcon} />;
       if (mimeType.includes('excel') || mimeType.includes('spreadsheet'))
-        return <FileExcelOutlined style={{ fontSize: 24 }} />;
-      if (mimeType.startsWith('image/')) return <FileImageOutlined style={{ fontSize: 24 }} />;
-      if (mimeType.startsWith('text/')) return <FileTextOutlined style={{ fontSize: 24 }} />;
+        return <FileExcelOutlined className={styles.fileIcon} />;
+      if (mimeType.startsWith('image/')) return <FileImageOutlined className={styles.fileIcon} />;
+      if (mimeType.startsWith('text/')) return <FileTextOutlined className={styles.fileIcon} />;
     }
 
-    return <FileOutlined style={{ fontSize: 24 }} />;
+    return <FileOutlined className={styles.fileIcon} />;
   };
 
   const handleSaveAs = async (attachment: MedicalAttachment) => {
@@ -120,7 +121,7 @@ const FileAttachmentList: React.FC<FileAttachmentListProps> = ({
                 shape="square"
                 size="large"
                 icon={getFileIcon(item.mimeType, item.originalName)}
-                style={{ backgroundColor: '#f0f0f0' }}
+                className={styles.avatarBackground}
               />
             }
             title={item.originalName}

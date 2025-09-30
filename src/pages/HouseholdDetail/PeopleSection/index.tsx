@@ -6,6 +6,7 @@ import { PersonWithContacts, CreatePersonWithContactsDto } from '../../../types/
 import { PersonCard } from './PersonCard';
 import { AddPersonModal } from './AddPersonModal';
 import { useAddPerson } from '../../../hooks/useHousehold';
+import styles from '../HouseholdDetail.module.css';
 
 const { Title } = Typography;
 
@@ -40,8 +41,8 @@ export const PeopleSection: React.FC<PeopleSectionProps> = ({ people, householdI
   };
 
   return (
-    <div style={{ marginTop: 24 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+    <div className={styles.sectionContainer}>
+      <div className={styles.sectionHeaderRow}>
         <Title level={4}>{t('detail.people.title')}</Title>
         <Button
           type="primary"
@@ -67,7 +68,7 @@ export const PeopleSection: React.FC<PeopleSectionProps> = ({ people, householdI
       ) : (
         <Empty
           description={t('detail.people.noPeople')}
-          style={{ marginBottom: 24 }}
+          className={styles.marginBottom24}
         >
           <Button type="primary" onClick={() => setIsAddingPerson(true)}>
             {t('detail.people.addFirstPerson')}

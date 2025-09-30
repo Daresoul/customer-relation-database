@@ -32,6 +32,7 @@ import {
 import { useRooms } from '../../hooks/useAppointments';
 import appointmentService from '../../services/appointmentService';
 import { usePatients } from '../../hooks/usePatients';
+import styles from './AppointmentModal.module.css';
 
 const { TextArea } = Input;
 const { Text } = Typography;
@@ -339,7 +340,7 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
               rules={[{ required: true, message: 'Please select date' }]}
             >
               <DatePicker
-                style={{ width: '100%' }}
+                className={styles.fullWidth}
                 disabledDate={disabledDate}
                 format="MMMM DD, YYYY"
               />
@@ -352,7 +353,7 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
               rules={[{ required: true, message: 'Please select start time' }]}
             >
               <TimePicker
-                style={{ width: '100%' }}
+                className={styles.fullWidth}
                 format="HH:mm"
                 minuteStep={15}
                 suffixIcon={<ClockCircleOutlined />}
@@ -367,7 +368,7 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
               rules={[{ required: true, message: 'Please select end time' }]}
             >
               <TimePicker
-                style={{ width: '100%' }}
+                className={styles.fullWidth}
                 format="HH:mm"
                 minuteStep={15}
                 suffixIcon={<ClockCircleOutlined />}

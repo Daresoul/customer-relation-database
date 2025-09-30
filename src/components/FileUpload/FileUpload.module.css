@@ -1,0 +1,91 @@
+/* File Upload Components CSS Module */
+
+.uploadContainer {
+  margin-bottom: 16px;
+}
+
+.uploadDragger {
+  padding: 20px;
+  background: #1a1a1a;
+  border: 2px dashed #303030;
+  border-radius: 8px;
+}
+
+.uploadDraggerHover {
+  border-color: #1890ff;
+}
+
+.uploadIcon {
+  font-size: 48px;
+  color: #1890ff;
+  margin-bottom: 16px;
+}
+
+.uploadText {
+  font-size: 16px;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.uploadHint {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.fileList {
+  margin-top: 16px;
+}
+
+.fileItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  background: #262626;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+.fileInfo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.fileName {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.fileSize {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.fileActions {
+  display: flex;
+  gap: 8px;
+}
+
+.previewButton {
+  color: #1890ff;
+  cursor: pointer;
+}
+
+.deleteButton {
+  color: #ff4d4f;
+  cursor: pointer;
+}
+
+.buttonSpacing {
+  margin-left: 8px;
+}
+
+.fileIcon {
+  font-size: 24px;
+}
+
+.avatarBackground {
+  background-color: #f0f0f0;
+}

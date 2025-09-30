@@ -28,6 +28,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { PersonWithContacts, PersonContact } from '../../../types/household';
 import { useUpdatePerson, useDeletePerson, useUpdatePersonContacts } from '../../../hooks/useHousehold';
+import styles from '../HouseholdDetail.module.css';
 
 const { Text } = Typography;
 
@@ -162,8 +163,7 @@ export const PersonCard: React.FC<PersonCardProps> = ({
   if (isEditing) {
     return (
       <Card
-        className="person-card person-card-editing"
-        style={{ marginBottom: 16, background: '#262626', borderColor: '#303030' }}
+        className={`person-card person-card-editing ${styles.personCardStyle}`}
       >
         <Form
           form={form}
@@ -211,12 +211,12 @@ export const PersonCard: React.FC<PersonCardProps> = ({
               {(fields, { add, remove }) => (
                 <>
                   {fields.map(({ key, name, ...restField }) => (
-                    <Space key={key} style={{ display: 'flex', marginBottom: 8 }} align="baseline">
+                    <Space key={key} className={styles.contactRow} align="baseline">
                       <Form.Item
                         {...restField}
                         name={[name, 'contactType']}
                         rules={[{ required: true, message: t('detail.people.modal.validation.selectType') }]}
-                        style={{ marginBottom: 0, width: 150 }}
+                        className={styles.contactType}
                       >
                         <Select placeholder={t('detail.people.modal.placeholders.contactType')} options={contactTypeOptions} />
                       </Form.Item>
@@ -238,7 +238,7 @@ export const PersonCard: React.FC<PersonCardProps> = ({
                             }
                           })
                         ]}
-                        style={{ marginBottom: 0, flex: 1 }}
+                        className={styles.contactValue}
                       >
                         <Input placeholder={t('detail.people.modal.placeholders.contactValue')} />
                       </Form.Item>
@@ -281,8 +281,7 @@ export const PersonCard: React.FC<PersonCardProps> = ({
 
   return (
     <Card
-      className="person-card"
-      style={{ marginBottom: 16, background: '#262626', borderColor: '#303030' }}
+      className={`person-card ${styles.personCardStyle}`}
       title={
         <Space>
           <UserOutlined />
@@ -320,13 +319,13 @@ export const PersonCard: React.FC<PersonCardProps> = ({
       }
     >
       {person.contacts.length > 0 ? (
-        <Space direction="vertical" style={{ width: '100%' }}>
+        <Space direction="vertical" className={styles.fullWidthSpace}>
           {person.contacts.map(contact => (
             <Space key={contact.id}>
               {getContactIcon(contact.contactType)}
               <Text type="secondary">{getContactTypeLabel(contact.contactType)}:</Text>
               <Text copyable>{contact.contactValue}</Text>
-              {contact.isPrimary && <Tag color="green" style={{ marginLeft: 8 }}>{t('entities:roles.primaryContact')}</Tag>}
+              {contact.isPrimary && <Tag color="green" className={styles.marginLeft8}>{t('entities:roles.primaryContact')}</Tag>}
             </Space>
           ))}
         </Space>

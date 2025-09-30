@@ -1,5 +1,11 @@
 import type { ThemeConfig } from 'antd';
 import { theme } from 'antd';
+import { createUnifiedTheme } from '../styles/theme/unifiedTheme';
+
+/**
+ * Legacy theme configurations - maintained for backward compatibility
+ * New implementations should use createUnifiedTheme from unifiedTheme.ts
+ */
 
 /**
  * Dark theme configuration for the veterinary clinic application

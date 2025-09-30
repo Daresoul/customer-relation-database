@@ -14,6 +14,7 @@ import type { MedicalRecord } from '@/types/medical';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { formatDateTime } from '@/utils/dateFormatter';
+import styles from './MedicalRecordDetail.module.css';
 
 dayjs.extend(relativeTime);
 
@@ -50,7 +51,7 @@ const MedicalRecordDetail: React.FC<MedicalRecordDetailProps> = ({
       width={900}
       loading={isLoading}
     >
-      <div style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+      <div className={styles.scrollableContent}>
         {/* Record Information */}
         <Title level={5}>Record Information</Title>
         <Descriptions bordered column={2} size="small">
@@ -75,7 +76,7 @@ const MedicalRecordDetail: React.FC<MedicalRecordDetailProps> = ({
             </Descriptions.Item>
           )}
           <Descriptions.Item label="Description" span={2}>
-            <Text style={{ whiteSpace: 'pre-wrap' }}>{record.description}</Text>
+            <Text className={styles.preWrap}>{record.description}</Text>
           </Descriptions.Item>
           {record.price && (
             <>

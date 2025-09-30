@@ -31,6 +31,7 @@ import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
 import { invoke } from '@tauri-apps/api/tauri';
 import { Patient, CreatePatientInput, UpdatePatientInput } from '../../types';
+import styles from './Forms.module.css';
 
 const { TextArea } = Input;
 const { Option } = Select;
@@ -257,11 +258,11 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
     <Card
       title={
         <Space>
-          <HeartOutlined style={{ color: '#ff69b4' }} />
+          <HeartOutlined className={styles.iconPink} />
           {patient ? 'Edit Patient' : 'Add New Patient'}
         </Space>
       }
-      style={{ maxWidth: 800, margin: '0 auto' }}
+      className={styles.formCardCentered}
     >
       {formError && (
         <Alert
@@ -271,7 +272,7 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
           showIcon
           closable
           onClose={() => setFormError(null)}
-          style={{ marginBottom: 16 }}
+          className={styles.formAlert}
         />
       )}
 
@@ -327,7 +328,7 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
           <Col xs={24} sm={8}>
             <Form.Item name="dateOfBirth" label="Date of Birth">
               <DatePicker
-                style={{ width: '100%' }}
+                className={styles.fullWidth}
                 format="YYYY-MM-DD"
                 disabledDate={(current) => current && current > dayjs()}
                 placeholder="Select date"
@@ -356,7 +357,7 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
               ]}
             >
               <InputNumber
-                style={{ width: '100%' }}
+                className={styles.fullWidth}
                 placeholder="Enter weight"
                 min={0.01}
                 max={500}
@@ -399,7 +400,7 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
                   onSearch={searchHouseholds}
                   filterOption={false}
                   notFoundContent={searchingHouseholds ? 'Searching...' : 'No households found'}
-                  style={{ width: '100%' }}
+                  className={styles.fullWidth}
                 >
                   {(Array.isArray(households) ? households : [])
                     .filter(household => household && household.id != null)
@@ -409,7 +410,7 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
                           <HomeOutlined />
                           <span>{household.lastName || household.household_name || 'Unknown'}</span>
                           {household.primaryContact && (
-                            <span style={{ color: '#8c8c8c' }}>({household.primaryContact})</span>
+                            <span className={styles.householdOption}>({household.primaryContact})</span>
                           )}
                         </Space>
                       </Option>
@@ -420,7 +421,7 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
                 type="dashed"
                 icon={<PlusOutlined />}
                 onClick={() => setShowCreateHousehold(true)}
-                style={{ marginBottom: 16 }}
+                className={styles.actionButton}
               >
                 Create New Household
               </Button>
@@ -473,7 +474,7 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
                 setShowCreateHousehold(false);
                 form.resetFields(['newHouseholdName', 'newHouseholdContact', 'newHouseholdEmail', 'newHouseholdPhone']);
               }}
-              style={{ marginBottom: 16 }}
+              className={styles.actionButton}
             >
               Cancel and select existing household
             </Button>

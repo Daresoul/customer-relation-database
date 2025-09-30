@@ -3,6 +3,7 @@ import { Select, Spin } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useCurrencies } from '../../hooks/useCurrencies';
 import { useAppSettings } from '../../hooks/useAppSettings';
+import styles from './CurrencySelector.module.css';
 
 const { Option } = Select;
 
@@ -36,7 +37,8 @@ export const CurrencySelector: React.FC<CurrencySelectorProps> = ({
     <Select
       value={currentValue}
       onChange={onChange}
-      style={{ width: 200, ...style }}
+      className={styles.currencySelect}
+      style={style}
       allowClear={allowClear}
       placeholder={placeholder || t('selectPlaceholder')}
       showSearch

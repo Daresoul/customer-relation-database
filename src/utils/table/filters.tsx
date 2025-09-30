@@ -7,6 +7,7 @@ import dayjs from 'dayjs';
 import type { TableProps } from 'antd/es/table';
 import type { Patient } from '../../types';
 import type { PatientTableRecord, HouseholdTableRecord, TableFilters } from '../../types/ui.types';
+import styles from './TableUtils.module.css';
 
 /**
  * Filter functions for patient table
@@ -155,15 +156,15 @@ export const getFilterDropdownProps = (
   placeholder: string = 'Search'
 ): TableProps<any>['columns'][0] => ({
   filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
-    <div style={{ padding: 8 }}>
+    <div className={styles.filterDropdown}>
       <input
         placeholder={placeholder}
         value={selectedKeys[0]}
         onChange={e => setSelectedKeys(e.target.value ? [e.target.value] : [])}
         onPressEnter={() => confirm()}
-        style={{ marginBottom: 8, display: 'block', width: 188 }}
+        className={styles.filterInput}
       />
-      <button onClick={() => confirm()} style={{ marginRight: 8 }}>
+      <button onClick={() => confirm()} className={styles.filterButtonInline}>
         Search
       </button>
       <button onClick={() => clearFilters && clearFilters()}>
@@ -171,7 +172,7 @@ export const getFilterDropdownProps = (
       </button>
     </div>
   ),
-  filterIcon: filtered => <span style={{ color: filtered ? '#1890ff' : undefined }}>🔍</span>,
+  filterIcon: filtered => <span className={filtered ? styles.filterIcon : styles.filterIconDefault}>🔍</span>,
   onFilter: (value, record) =>
     record[dataIndex]
       ? record[dataIndex].toString().toLowerCase().includes(value.toLowerCase())
@@ -206,21 +207,21 @@ export const filterPresets = {
  */
 export const getColumnSearchProps = (dataIndex: string): TableProps<any>['columns'][0] => ({
   filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
-    <div style={{ padding: 8 }}>
+    <div className={styles.filterDropdown}>
       <input
         placeholder={`Search ${dataIndex}`}
         value={selectedKeys[0]}
         onChange={e => setSelectedKeys(e.target.value ? [e.target.value] : [])}
         onPressEnter={() => confirm()}
-        style={{ width: 188, marginBottom: 8, display: 'block' }}
+        className={styles.filterInput}
       />
       <button
         onClick={() => confirm()}
-        style={{ width: 90, marginRight: 8 }}
+        className={styles.filterButton}
       >
         Search
       </button>
-      <button onClick={() => clearFilters && clearFilters()} style={{ width: 90 }}>
+      <button onClick={() => clearFilters && clearFilters()} className={styles.filterButtonReset}>
         Reset
       </button>
     </div>

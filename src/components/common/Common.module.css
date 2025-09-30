@@ -1,0 +1,228 @@
+/* Common Components CSS Module */
+
+/* Empty State */
+.emptyIcon {
+  font-size: 48px;
+  color: #8c8c8c;
+}
+
+.emptyIconGreen {
+  font-size: 48px;
+  color: #52c41a;
+}
+
+.emptyContainer {
+  height: 100%;
+  min-height: 400px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.emptyImageStyle {
+  height: auto;
+}
+
+.emptyImageDefault {
+  height: 60px;
+}
+
+.emptyTitle {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.emptyDescription {
+  color: #8c8c8c;
+}
+
+.tablePadding {
+  padding: 40px 0;
+}
+
+.listEmpty {
+  text-align: center;
+  padding: 20px;
+  color: #8c8c8c;
+}
+
+.listEmptyIcon {
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+
+/* Loading */
+.spinnerSmall {
+  font-size: 14px;
+}
+
+.spinnerDefault {
+  font-size: 24px;
+}
+
+.spinnerLarge {
+  font-size: 32px;
+}
+
+.fullScreenOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: rgba(0, 0, 0, 0.75);
+  z-index: 9999;
+}
+
+.fullScreenTransparent {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: transparent;
+  z-index: 9999;
+}
+
+.overlayContainer {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 100px;
+}
+
+.overlayInner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 10;
+}
+
+.pageLoaderContainer {
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.pageLoaderText {
+  font-size: 16px;
+  color: #8c8c8c;
+}
+
+.tableLoaderContainer {
+  width: 100%;
+}
+
+.skeletonFullWidth {
+  width: 100%;
+}
+
+.cardLoaderItem {
+  width: 300px;
+}
+
+.formLoaderContainer {
+  width: 100%;
+}
+
+.formLoaderLabel {
+  width: 100px;
+  margin-bottom: 8px;
+}
+
+.formLoaderInput {
+  width: 100%;
+}
+
+.formLoaderButton {
+  width: 120px;
+}
+
+.inlineLoaderText {
+  color: #8c8c8c;
+}
+
+.buttonLoaderMargin {
+  margin-right: 8px;
+}
+
+.lazyLoaderError {
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.lazyLoaderErrorTitle {
+  font-size: 18px;
+  color: #ff4d4f;
+}
+
+.lazyLoaderErrorMessage {
+  font-size: 14px;
+  color: #8c8c8c;
+}
+
+.lazyLoaderButton {
+  padding: 8px 16px;
+  border-radius: 4px;
+  border: none;
+  background-color: #1890ff;
+  color: white;
+  cursor: pointer;
+}
+
+/* Modal */
+.modalIconInfo {
+  color: #1890ff;
+}
+
+.modalIconSuccess {
+  color: #52c41a;
+}
+
+.modalIconWarning {
+  color: #faad14;
+}
+
+.modalIconError {
+  color: #ff4d4f;
+}
+
+/* Input & Select */
+.inputContainer {
+  width: 100%;
+}
+
+.inputHelperText {
+  font-size: 12px;
+  margin-top: 4px;
+  color: #8c8c8c;
+}
+
+.inputHelperError {
+  font-size: 12px;
+  margin-top: 4px;
+  color: #ff4d4f;
+}
+
+.selectIconMargin {
+  margin-right: 8px;
+}

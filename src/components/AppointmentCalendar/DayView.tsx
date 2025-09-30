@@ -5,6 +5,7 @@ import dayjs, { Dayjs } from 'dayjs';
 import { Appointment } from '../../types/appointments';
 import { useThemeColors } from '../../utils/themeStyles';
 
+import styles from './DayView.module.css';
 interface DayViewProps {
   selectedDate: Dayjs;
   appointments: Appointment[];
@@ -63,54 +64,28 @@ const DayView: React.FC<DayViewProps> = ({
 
     return (
       <div key={slot.time} className="day-view-slot">
-        <div style={{
-          display: 'flex',
-          gap: '16px',
-          minHeight: '60px',
-          borderBottom: '1px solid #f0f0f0',
-          padding: '8px 0'
-        }}>
-          <div style={{
-            width: '80px',
-            flexShrink: 0,
-            fontWeight: 500,
-            color: themeColors.textSecondary,
-            textAlign: 'center',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
+        <div className={styles.timeSlotContainer}>
+          <div className={styles.timeLabel}>
             {slot.time}
           </div>
-          <div style={{ flex: 1 }}>
+          <div className={styles.flex1}>
             {slotAppointments.length === 0 ? (
               <div
-                style={{
-                  border: '1px dashed #d9d9d9',
-                  borderRadius: '4px',
-                  padding: '8px',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  minHeight: '40px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-                className="empty-slot"
+                className={styles.emptySlot}
                 onClick={() => onCreateAppointment(slotDate.toDate())}
               >
                 <Button
                   type="text"
                   size="small"
                   icon={<PlusOutlined />}
-                  style={{ opacity: 0.5 }}
+                  className={styles.faded}
                   className="add-btn"
                 >
                   Add appointment
                 </Button>
               </div>
             ) : (
-              <Space direction="vertical" style={{ width: '100%' }}>
+              <Space direction="vertical" className={styles.fullWidth}>
                 {slotAppointments.map((apt) => (
                   <Card
                     key={apt.id}
@@ -123,28 +98,28 @@ const DayView: React.FC<DayViewProps> = ({
                         getStatusColor(apt.status) === 'green' ? '#52c41a' : '#ff4d4f'}`
                     }}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                    <div className={styles.appointmentCardHeader}>
                       <div>
-                        <div style={{ fontWeight: 500, fontSize: '14px', marginBottom: '4px' }}>
+                        <div className={styles.appointmentCardTitle}>
                           {apt.title}
                         </div>
                         <Space size="small">
-                          <span style={{ fontSize: '12px', color: themeColors.textSecondary }}>
+                          <span className={styles.secondaryText}>
                             <ClockCircleOutlined /> {dayjs(apt.start_time).format('HH:mm')} - {dayjs(apt.end_time).format('HH:mm')}
                           </span>
                           {apt.room_name && (
-                            <span style={{ fontSize: '12px', color: themeColors.textSecondary }}>
+                            <span className={styles.secondaryText}>
                               📍 {apt.room_name}
                             </span>
                           )}
                         </Space>
                       </div>
-                      <Tag color={getStatusColor(apt.status)} style={{ marginLeft: '8px' }}>
+                      <Tag color={getStatusColor(apt.status)} className={styles.tagMarginLeft}>
                         {apt.status}
                       </Tag>
                     </div>
                     {apt.description && (
-                      <div style={{ fontSize: '12px', color: themeColors.textSecondary, marginTop: '8px' }}>
+                      <div className={styles.appointmentDescription}>
                         {apt.description}
                       </div>
                     )}
@@ -159,7 +134,7 @@ const DayView: React.FC<DayViewProps> = ({
   };
 
   return (
-    <div className="day-view" style={{ padding: '16px', background: '#fff', borderRadius: '8px' }}>
+    <div className={styles.dayView}>
       <style>{`
         .empty-slot:hover {
           background: #f5f5f5;
@@ -174,7 +149,7 @@ const DayView: React.FC<DayViewProps> = ({
       `}</style>
 
       {dayAppointments.length === 0 && (
-        <Card style={{ marginBottom: '16px', background: '#e6f7ff', borderColor: '#1890ff' }}>
+        <Card className={styles.notificationCard}>
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
             description="No appointments scheduled for this day"

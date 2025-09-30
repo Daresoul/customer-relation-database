@@ -34,6 +34,7 @@ import notifications from '../services/notifications';
 import type { Patient, PatientWithHousehold } from '../types';
 import type { HouseholdTableRecord } from '../types/ui.types';
 import { useThemeColors } from '../utils/themeStyles';
+import styles from './MainDashboard.module.css';
 
 // Removed TabPane - using items prop instead
 
@@ -249,8 +250,8 @@ export const MainDashboard: React.FC = () => {
   // Simplified layout without header
 
   return (
-    <div style={{ background: themeColors.background, padding: '24px' }}>
-      <Space direction="vertical" size="large" style={{ width: '100%' }}>
+    <div className={styles.dashboard}>
+      <Space direction="vertical" size="large" className={styles.contentWrapper}>
         {/* Statistics Cards */}
         <Row gutter={16}>
           <Col span={8}>
@@ -321,7 +322,7 @@ export const MainDashboard: React.FC = () => {
                       setShowHouseholdForm(true);
                     }
                   }}
-                  style={{ display: activeView === 'appointments' ? 'none' : 'inline-flex' }}
+                  className={activeView === 'appointments' ? styles.viewToggleHidden : styles.viewToggle}
                 >
                   {activeView === 'patients' ? t('patients:addPatient') : t('patients:addHousehold')}
                 </Button>
@@ -437,7 +438,7 @@ export const MainDashboard: React.FC = () => {
           <li>Households: N (each with 1–5 pets)</li>
           <li>Each pet: 1–5 procedures and 1–5 notes</li>
         </ul>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div className={styles.searchControls}>
           <span>Households:</span>
           <InputNumber
             min={1}

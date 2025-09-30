@@ -1,0 +1,233 @@
+/* MedicalHistory styles */
+.container {
+  padding: 16px 0;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.viewToggle {
+  display: flex;
+  gap: 8px;
+}
+
+.searchBar {
+  margin-bottom: 16px;
+}
+
+.filterRow {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.filterItem {
+  flex: 1;
+}
+
+.recordCard {
+  margin-bottom: 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.recordCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.recordHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.recordTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.recordMeta {
+  display: flex;
+  gap: 16px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.recordContent {
+  margin: 12px 0;
+  color: var(--text-primary);
+  line-height: 1.6;
+}
+
+.recordDescription {
+  margin-bottom: 8px;
+}
+
+.recordTreatment {
+  background: var(--background-secondary);
+  padding: 8px;
+  border-radius: 4px;
+  margin-top: 8px;
+}
+
+.recordActions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.severityBadge {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.severityLow {
+  background: #f0f9ff;
+  color: #0369a1;
+}
+
+.severityMedium {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.severityHigh {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.attachmentList {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.attachmentItem {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: var(--background-secondary);
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.emptyState {
+  text-align: center;
+  padding: 48px;
+  color: var(--text-secondary);
+}
+
+.loadMore {
+  text-align: center;
+  padding: 16px;
+}
+
+/* Medical History Section specific styles */
+.sectionCard {
+  margin-top: 16px;
+}
+
+.fullWidthSpace {
+  width: 100%;
+}
+
+.filterContainer {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.searchInput {
+  max-width: 400px;
+}
+
+.typeSelect {
+  width: 150px;
+}
+
+.archiveSelect {
+  width: 150px;
+}
+
+.loadingContainer {
+  text-align: center;
+  padding: 50px 0;
+}
+
+/* Medical Record Cards styles */
+.recordCardItem {
+  margin-bottom: 16px;
+}
+
+.cardTitleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.procedureIcon {
+  font-size: 18px;
+  color: #1890ff;
+}
+
+.noteIcon {
+  font-size: 18px;
+  color: #52c41a;
+}
+
+.cardTitleText {
+  margin: 0;
+}
+
+.inheritColor {
+  color: inherit;
+}
+
+.descriptionParagraph {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.attachmentTag {
+  padding: 4px 8px;
+}
+
+.attachmentText {
+  margin-left: 8px;
+}
+
+.fullWidthDiv {
+  width: 100%;
+}
+
+/* Medical Record Table styles */
+.attachmentIcon {
+  color: #1890ff;
+}
+
+.historyIcon {
+  color: #faad14;
+}
+
+.marginBottom16 {
+  margin-bottom: 16px;
+}

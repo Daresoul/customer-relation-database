@@ -3,6 +3,7 @@ import { Card, Form, Select, Typography } from 'antd';
 import { DollarOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors } from '../../../utils/themeStyles';
+import styles from '../Settings.module.css';
 import { useCurrencies } from '../../../hooks/useCurrencies';
 
 const { Text } = Typography;
@@ -22,20 +23,16 @@ const BusinessSettings: React.FC<BusinessSettingsProps> = ({ form, isUpdating })
     <div>
       <Card
         title={
-          <span style={{ color: themeColors.text }}>
+          <span className={styles.cardTitle}>
             <DollarOutlined /> {t('common:currency')}
           </span>
         }
-        style={{
-          marginBottom: 16,
-          background: themeColors.cardBg,
-          borderColor: themeColors.border
-        }}
+        className={styles.businessCard}
       >
         <Form.Item
           name="currencyId"
-          label={<span style={{ color: themeColors.text }}>{t('common:currency')}</span>}
-          extra={<span style={{ color: themeColors.textSecondary }}>Default currency for new procedures</span>}
+          label={<span className={styles.formLabel}>{t('common:currency')}</span>}
+          extra={<span className={styles.formHint}>Default currency for new procedures</span>}
         >
           <Select
             size="large"
@@ -47,7 +44,7 @@ const BusinessSettings: React.FC<BusinessSettingsProps> = ({ form, isUpdating })
             filterOption={(input, option) =>
               (option?.label as string)?.toLowerCase().includes(input.toLowerCase())
             }
-            style={{ width: '100%' }}
+            className={styles.fullWidth}
             disabled={isUpdating}
           >
             {currencies?.map((currency) => (

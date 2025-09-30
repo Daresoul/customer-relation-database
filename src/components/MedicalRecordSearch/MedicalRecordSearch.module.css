@@ -1,0 +1,99 @@
+/* Medical Record Search CSS Module */
+
+.searchContainer {
+  margin-bottom: 24px;
+}
+
+.searchBar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.searchInput {
+  flex: 1;
+  max-width: 600px;
+}
+
+.filterButton {
+  margin-left: 8px;
+}
+
+.filterPanel {
+  background: #1a1a1a;
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.filterRow {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.filterItem {
+  flex: 1;
+}
+
+.filterLabel {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.resultsContainer {
+  margin-top: 16px;
+}
+
+.resultItem {
+  padding: 16px;
+  background: #262626;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.resultItem:hover {
+  background: #303030;
+}
+
+.resultHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.resultTitle {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.resultDate {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.resultContent {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.fullWidthMarginBottom {
+  width: 100%;
+  margin-bottom: 16px;
+}
+
+.fullWidth {
+  width: 100%;
+}
+
+.filterActions {
+  margin-top: 16px;
+  text-align: right;
+}

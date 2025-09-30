@@ -26,7 +26,7 @@ import { useAppointments } from '../../hooks/useAppointments';
 import appointmentService from '../../services/appointmentService';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
-import './AppointmentList.css';
+import styles from './AppointmentList.module.css';
 
 dayjs.extend(relativeTime);
 
@@ -133,14 +133,14 @@ const AppointmentList: React.FC<AppointmentListProps> = ({
 
     return (
       <Card
-        className={`appointment-list-item ${
-          isPast ? 'past' : ''
-        } ${isToday ? 'today' : ''}`}
+        className={`${styles.appointmentListItem} ${
+          isPast ? styles.past : ''
+        } ${isToday ? styles.today : ''}`}
         hoverable
         onClick={() => onSelect(appointment)}
       >
-        <div className="appointment-list-content">
-          <div className="appointment-list-header">
+        <div className={styles.appointmentListContent}>
+          <div className={styles.appointmentListHeader}>
             <Space>
               <Avatar
                 icon={<UserOutlined />}
@@ -149,7 +149,7 @@ const AppointmentList: React.FC<AppointmentListProps> = ({
                 }}
               />
               <div>
-                <Title level={5} className="appointment-title">
+                <Title level={5} className={styles.appointmentTitle}>
                   {appointment.title}
                 </Title>
                 <Space size="small">
@@ -178,7 +178,7 @@ const AppointmentList: React.FC<AppointmentListProps> = ({
             </Space>
           </div>
 
-          <div className="appointment-list-details">
+          <div className={styles.appointmentListDetails}>
             <Space size="large">
               <Tooltip title={startTime.format('MMMM DD, YYYY')}>
                 <Space size="small">
@@ -206,12 +206,12 @@ const AppointmentList: React.FC<AppointmentListProps> = ({
           </div>
 
           {appointment.description && (
-            <div className="appointment-list-description">
+            <div className={styles.appointmentListDescription}>
               <Text type="secondary">{appointment.description}</Text>
             </div>
           )}
 
-          <div className="appointment-list-footer">
+          <div className={styles.appointmentListFooter}>
             <Text type="secondary" style={{ fontSize: 12 }}>
               Created {dayjs(appointment.created_at).fromNow()} by {appointment.created_by}
             </Text>
@@ -223,7 +223,7 @@ const AppointmentList: React.FC<AppointmentListProps> = ({
 
   if (isLoading && appointments.length === 0) {
     return (
-      <div className="appointment-list-loading">
+      <div className={styles.appointmentListLoading}>
         <Spin size="large" />
       </div>
     );
@@ -239,8 +239,8 @@ const AppointmentList: React.FC<AppointmentListProps> = ({
   }
 
   return (
-    <div className="appointment-list">
-      <div className="appointment-list-header-info">
+    <div className={styles.appointmentList}>
+      <div className={styles.appointmentListHeaderInfo}>
         <Text type="secondary">
           Showing {appointments.length} of {totalCount} appointments
         </Text>
@@ -251,12 +251,12 @@ const AppointmentList: React.FC<AppointmentListProps> = ({
         renderItem={renderAppointmentItem}
         itemLayout="vertical"
         split={false}
-        className="appointment-list-container"
+        className={styles.appointmentListContainer}
       />
 
-      <div ref={loadMoreRef} className="load-more-trigger">
+      <div ref={loadMoreRef} className={styles.loadMoreTrigger}>
         {isFetchingNextPage && (
-          <div className="loading-more">
+          <div className={styles.loadingMore}>
             <Spin />
             <Text type="secondary">Loading more appointments...</Text>
           </div>

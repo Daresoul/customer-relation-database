@@ -9,6 +9,7 @@ import { useAppSettings } from '@/hooks/useAppSettings';
 import { MedicalService } from '@/services/medicalService';
 import type { MedicalRecord, CreateMedicalRecordInput, UpdateMedicalRecordInput } from '@/types/medical';
 import type { UploadFile } from 'antd';
+import styles from './MedicalRecordForm.module.css';
 
 const { TextArea } = Input;
 const { Option } = Select;
@@ -145,24 +146,24 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
       </Form.Item>
 
       {recordType === 'procedure' && (
-        <Space size="middle" style={{ width: '100%' }}>
+        <Space size="middle" className={styles.fullWidth}>
           <Form.Item
             name="price"
             label={t('medical:fields.price')}
-            style={{ marginBottom: 0, flex: 1 }}
+            className={styles.dateInput}
           >
             <InputNumber
               min={0}
               precision={2}
               placeholder="0.00"
-              style={{ width: '100%' }}
+              className={styles.fullWidth}
             />
           </Form.Item>
 
           <Form.Item
             name="currencyId"
             label={t('medical:fields.currency')}
-            style={{ marginBottom: 0, minWidth: 120 }}
+            className={styles.severityInput}
           >
             <Select placeholder={t('common:selectPlaceholder')} allowClear>
               {currencies?.map(currency => (
@@ -179,7 +180,7 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
 
       {/* File Attachments Section */}
       {isEdit && recordId && (
-        <div style={{ marginBottom: 24 }}>
+        <div className={styles.filesSection}>
           <h4>{t('medical:fileAttachments')}</h4>
           {recordDetail?.attachments && recordDetail.attachments.length > 0 ? (
             <FileAttachmentList
@@ -189,7 +190,7 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
           ) : (
             <Text type="secondary">{t('medical:noAttachments')}</Text>
           )}
-          <div style={{ marginTop: 16 }}>
+          <div className={styles.medicationList}>
             <FileUpload
               medicalRecordId={recordId}
               onUploadSuccess={() => refetchRecord()}
@@ -199,7 +200,7 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
       )}
 
       {!isEdit && (
-        <div style={{ marginBottom: 24 }}>
+        <div className={styles.filesSection}>
           <h4>{t('medical:fileAttachments')}</h4>
           <Dragger
             beforeUpload={(file) => {
@@ -247,20 +248,20 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
             style={{ marginBottom: pendingFiles.length > 0 ? 8 : 0 }}
           >
             <p className="ant-upload-drag-icon">
-              <InboxOutlined style={{ fontSize: 48, color: '#4A90E2' }} />
+              <InboxOutlined className={styles.uploadIcon} />
             </p>
             <p className="ant-upload-text">{t('medical:form.dropFile')}</p>
             <p className="ant-upload-hint">{t('medical:form.supportedFormats')}</p>
           </Dragger>
           {pendingFiles.length > 0 && (
-            <Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
+            <Text type="secondary" className={styles.uploadHint}>
               {t('medical:fileUploadPending', { count: pendingFiles.length })}
             </Text>
           )}
         </div>
       )}
 
-      <Form.Item style={{ marginBottom: 0, marginTop: 24 }}>
+      <Form.Item className={styles.submitButton}>
         <Space>
           <Button
             type="primary"

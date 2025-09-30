@@ -12,6 +12,7 @@ import {
   CalendarOutlined,
   TagOutlined,
 } from '@ant-design/icons';
+import styles from './Common.module.css';
 
 const { Option } = AntSelect;
 
@@ -57,7 +58,7 @@ export const Select: React.FC<SelectProps> = ({
   };
 
   return (
-    <div style={{ width: fullWidth ? '100%' : undefined }}>
+    <div className={fullWidth ? styles.inputContainer : undefined}>
       <AntSelect
         status={error ? 'error' : undefined}
         style={customStyle}
@@ -67,17 +68,13 @@ export const Select: React.FC<SelectProps> = ({
         {children ||
           options.map((option) => (
             <Option key={option.value} value={option.value} disabled={option.disabled}>
-              {option.icon && <span style={{ marginRight: 8 }}>{option.icon}</span>}
+              {option.icon && <span className={styles.selectIconMargin}>{option.icon}</span>}
               {option.label}
             </Option>
           ))}
       </AntSelect>
       {helperText && (
-        <div style={{
-          fontSize: '12px',
-          marginTop: '4px',
-          color: error ? '#ff4d4f' : '#8c8c8c'
-        }}>
+        <div className={error ? styles.inputHelperError : styles.inputHelperText}>
           {helperText}
         </div>
       )}

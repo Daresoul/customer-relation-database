@@ -1,0 +1,190 @@
+.weekView {
+  height: 600px;
+  overflow: auto;
+  position: relative;
+}
+
+.weekHeader {
+  display: flex;
+  height: 60px;
+}
+
+.weekTimeColumn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.weekDayColumn {
+  flex: 1;
+  padding: 0 8px;
+  border-left: 1px solid var(--border-secondary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.isToday {
+  background-color: var(--primary-bg);
+}
+
+.dayOfWeek {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.dayOfMonth {
+  font-size: 20px;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.weekContent {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.weekHourRow {
+  display: flex;
+}
+
+.timeLabel {
+  width: 60px;
+  text-align: right;
+  padding-right: 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: -8px;
+}
+
+.daySlots {
+  position: relative;
+}
+
+.appointmentSlot {
+  position: absolute;
+  z-index: 10;
+  width: calc(100% - 8px);
+  margin: 0 4px;
+  border-radius: 6px;
+  padding: 8px;
+  cursor: pointer;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.appointmentContent {
+  color: white;
+  font-weight: 500;
+  font-size: 11px;
+  margin-bottom: 2px;
+}
+
+.appointmentSubtitle {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 10px;
+}
+
+.currentTimeIndicator {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background-color: #ff4d4f;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.tooltipInfo {
+  margin-bottom: 2px;
+}
+
+.tooltipTitle {
+  font-weight: bold;
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+
+.tooltipDescription {
+  font-style: italic;
+}
+
+.appointmentSlot:hover {
+  transform: translateX(2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 16px;
+  }
+}
+
+/* Drag overlay base styles */
+.dragOverlay {
+  position: absolute;
+  background: rgba(24, 144, 255, 0.2);
+  border: 2px solid #1890ff;
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Appointment card styles */
+.appointmentCard {
+  position: absolute;
+  min-height: 20px;
+  z-index: 5;
+  cursor: pointer;
+  font-size: 12px;
+  overflow: hidden;
+}
+
+.appointmentTitle {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 14px;
+}
+
+.appointmentTime {
+  font-size: 10px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Day header styles */
+.dayHeader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+}
+
+.dayNumber {
+  font-size: 16px;
+}
+
+/* Time grid container */
+.timeGridContainer {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* Time label styling */
+.timeLabelSpan {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--background);
+  padding: 0 4px;
+  font-weight: 500;
+}

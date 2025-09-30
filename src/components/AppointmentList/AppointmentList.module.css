@@ -1,73 +1,73 @@
-.appointment-list {
+.appointmentList {
   height: 100%;
   display: flex;
   flex-direction: column;
 }
 
-.appointment-list-header-info {
+.appointmentListHeaderInfo {
   padding: 16px;
   background: #fafafa;
   border-bottom: 1px solid #f0f0f0;
 }
 
-.appointment-list-container {
+.appointmentListContainer {
   flex: 1;
   overflow-y: auto;
   padding: 16px;
 }
 
-.appointment-list-item {
+.appointmentListItem {
   margin-bottom: 16px;
   transition: all 0.3s;
 }
 
-.appointment-list-item:hover {
+.appointmentListItem:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
-.appointment-list-item.past {
+.appointmentListItem.past {
   opacity: 0.7;
 }
 
-.appointment-list-item.today {
+.appointmentListItem.today {
   border-left: 4px solid #1890ff;
 }
 
-.appointment-list-content {
+.appointmentListContent {
   position: relative;
 }
 
-.appointment-list-header {
+.appointmentListHeader {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 12px;
 }
 
-.appointment-title {
-  margin: 0 !important;
+.appointmentTitle {
+  margin: 0;
   font-weight: 500;
 }
 
-.appointment-list-details {
+.appointmentListDetails {
   margin-bottom: 8px;
 }
 
-.appointment-list-description {
+.appointmentListDescription {
   margin: 12px 0;
   padding: 8px;
   background: #fafafa;
   border-radius: 4px;
 }
 
-.appointment-list-footer {
+.appointmentListFooter {
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid #f0f0f0;
 }
 
-.appointment-list-loading {
+.appointmentListLoading {
   display: flex;
   justify-content: center;
   align-items: center;
@@ -75,12 +75,12 @@
   min-height: 400px;
 }
 
-.load-more-trigger {
+.loadMoreTrigger {
   padding: 24px;
   text-align: center;
 }
 
-.loading-more {
+.loadingMore {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -88,40 +88,40 @@
 }
 
 /* Scrollbar styling */
-.appointment-list-container::-webkit-scrollbar {
+.appointmentListContainer::-webkit-scrollbar {
   width: 8px;
 }
 
-.appointment-list-container::-webkit-scrollbar-track {
+.appointmentListContainer::-webkit-scrollbar-track {
   background: #f1f1f1;
   border-radius: 4px;
 }
 
-.appointment-list-container::-webkit-scrollbar-thumb {
+.appointmentListContainer::-webkit-scrollbar-thumb {
   background: #888;
   border-radius: 4px;
 }
 
-.appointment-list-container::-webkit-scrollbar-thumb:hover {
+.appointmentListContainer::-webkit-scrollbar-thumb:hover {
   background: #555;
 }
 
 /* Mobile responsive */
 @media (max-width: 768px) {
-  .appointment-list-container {
+  .appointmentListContainer {
     padding: 8px;
   }
 
-  .appointment-list-item {
+  .appointmentListItem {
     margin-bottom: 8px;
   }
 
-  .appointment-list-header {
+  .appointmentListHeader {
     flex-direction: column;
     gap: 8px;
   }
 
-  .appointment-list-details {
+  .appointmentListDetails {
     flex-direction: column;
     align-items: flex-start;
   }

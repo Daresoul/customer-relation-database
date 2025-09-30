@@ -8,6 +8,7 @@ import { HouseholdInfo } from './HouseholdInfo';
 import { PeopleSection } from './PeopleSection';
 import { AnimalsSection } from './AnimalsSection';
 import { Link } from 'react-router-dom';
+import styles from './HouseholdDetail.module.css';
 
 const { Content } = Layout;
 
@@ -23,7 +24,7 @@ export const HouseholdDetail: React.FC = () => {
 
   if (!id || isNaN(householdId)) {
     return (
-      <Content style={{ padding: 24, background: '#141414' }}>
+      <Content className={styles.contentPadding}>
         <Alert
           message={t('detail.invalidId')}
           description={t('detail.invalidIdDescription')}
@@ -41,16 +42,16 @@ export const HouseholdDetail: React.FC = () => {
 
   if (isLoading) {
     return (
-      <Content style={{ padding: 24, textAlign: 'center', background: '#141414' }}>
+      <Content className={styles.contentCenter}>
         <Spin size="large" />
-        <div style={{ marginTop: 16 }}>{t('detail.loading')}</div>
+        <div className={styles.marginTop16}>{t('detail.loading')}</div>
       </Content>
     );
   }
 
   if (error) {
     return (
-      <Content style={{ padding: 24, background: '#141414' }}>
+      <Content className={styles.contentPadding}>
         <Alert
           message={t('detail.errorLoading')}
           description={error instanceof Error ? error.message : t('detail.failedToLoad')}
@@ -73,7 +74,7 @@ export const HouseholdDetail: React.FC = () => {
 
   if (!data) {
     return (
-      <Content style={{ padding: 24, background: '#141414' }}>
+      <Content className={styles.contentPadding}>
         <Alert
           message={t('detail.notFound')}
           description={t('detail.notFoundDescription')}
@@ -90,8 +91,8 @@ export const HouseholdDetail: React.FC = () => {
   }
 
   return (
-    <Content style={{ padding: 24 }}>
-      <div style={{ marginBottom: 16 }}>
+    <Content className={styles.contentPadding}>
+      <div className={styles.marginBottom16}>
         <Breadcrumb
           items={[
             {
@@ -107,7 +108,7 @@ export const HouseholdDetail: React.FC = () => {
         />
       </div>
 
-      <div style={{ marginBottom: 16 }}>
+      <div className={styles.marginBottom16}>
         <Button
           icon={<ArrowLeftOutlined />}
           onClick={() => navigate('/')}
@@ -116,7 +117,7 @@ export const HouseholdDetail: React.FC = () => {
         </Button>
       </div>
 
-      <div style={{ background: '#1f1f1f', padding: 24, borderRadius: 8 }}>
+      <div className={styles.mainContainer}>
         <HouseholdInfo household={data.household} />
 
         <PeopleSection

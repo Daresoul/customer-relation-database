@@ -12,6 +12,7 @@ import {
   LoadingOutlined,
   SyncOutlined,
 } from '@ant-design/icons';
+import styles from './notifications.module.css';
 
 export type NotificationType = 'success' | 'error' | 'warning' | 'info';
 export type NotificationPlacement = 'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight';
@@ -38,7 +39,7 @@ export const notify = {
     notification.success({
       message: title,
       description,
-      icon: <CheckCircleOutlined style={{ color: '#52c41a' }} />,
+      icon: <CheckCircleOutlined className={styles.successIcon} />,
       ...options,
     });
   },
@@ -47,7 +48,7 @@ export const notify = {
     notification.error({
       message: title,
       description,
-      icon: <CloseCircleOutlined style={{ color: '#ff4d4f' }} />,
+      icon: <CloseCircleOutlined className={styles.errorIcon} />,
       ...options,
     });
   },
@@ -56,7 +57,7 @@ export const notify = {
     notification.warning({
       message: title,
       description,
-      icon: <ExclamationCircleOutlined style={{ color: '#faad14' }} />,
+      icon: <ExclamationCircleOutlined className={styles.warningIcon} />,
       ...options,
     });
   },
@@ -65,7 +66,7 @@ export const notify = {
     notification.info({
       message: title,
       description,
-      icon: <InfoCircleOutlined style={{ color: '#1890ff' }} />,
+      icon: <InfoCircleOutlined className={styles.infoIcon} />,
       ...options,
     });
   },
@@ -74,7 +75,7 @@ export const notify = {
     notification.open({
       message: title,
       description,
-      icon: <LoadingOutlined spin style={{ color: '#1890ff' }} />,
+      icon: <LoadingOutlined spin className={styles.loadingIcon} />,
       duration: 0, // Don't auto-close loading notifications
       ...options,
     });
@@ -87,26 +88,15 @@ export const notify = {
       message: title,
       description: (
         <div>
-          <div style={{
-            width: '100%',
-            height: 8,
-            backgroundColor: '#f0f0f0',
-            borderRadius: 4,
-            overflow: 'hidden',
-          }}>
-            <div style={{
-              width: `${progress}%`,
-              height: '100%',
-              backgroundColor: '#1890ff',
-              transition: 'width 0.3s ease',
-            }} />
+          <div className={styles.progressContainer}>
+            <div className={styles.progressBar} style={{ width: `${progress}%` }} />
           </div>
-          <div style={{ marginTop: 4, fontSize: 12, color: '#8c8c8c' }}>
+          <div className={styles.progressText}>
             {progress}% complete
           </div>
         </div>
       ),
-      icon: <SyncOutlined spin style={{ color: '#1890ff' }} />,
+      icon: <SyncOutlined spin className={styles.infoIcon} />,
       duration: 0,
       ...options,
     });
@@ -223,7 +213,7 @@ export const specialNotifications = {
     notify.error(
       'Validation Error',
       (
-        <ul style={{ margin: 0, paddingLeft: 20 }}>
+        <ul className={styles.errorList}>
           {errors.map((error, index) => (
             <li key={index}>{error}</li>
           ))}

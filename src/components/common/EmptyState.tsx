@@ -16,6 +16,7 @@ import {
   FrownOutlined,
   SmileOutlined,
 } from '@ant-design/icons';
+import styles from './Common.module.css';
 
 export interface EmptyStateProps {
   title?: string;
@@ -31,13 +32,13 @@ export interface EmptyStateProps {
 }
 
 const iconMap = {
-  search: <FileSearchOutlined style={{ fontSize: 48, color: '#8c8c8c' }} />,
-  inbox: <InboxOutlined style={{ fontSize: 48, color: '#8c8c8c' }} />,
-  folder: <FolderOpenOutlined style={{ fontSize: 48, color: '#8c8c8c' }} />,
-  team: <TeamOutlined style={{ fontSize: 48, color: '#8c8c8c' }} />,
-  heart: <HeartOutlined style={{ fontSize: 48, color: '#8c8c8c' }} />,
-  frown: <FrownOutlined style={{ fontSize: 48, color: '#8c8c8c' }} />,
-  smile: <SmileOutlined style={{ fontSize: 48, color: '#52c41a' }} />,
+  search: <FileSearchOutlined className={styles.emptyIcon} />,
+  inbox: <InboxOutlined className={styles.emptyIcon} />,
+  folder: <FolderOpenOutlined className={styles.emptyIcon} />,
+  team: <TeamOutlined className={styles.emptyIcon} />,
+  heart: <HeartOutlined className={styles.emptyIcon} />,
+  frown: <FrownOutlined className={styles.emptyIcon} />,
+  smile: <SmileOutlined className={styles.emptyIconGreen} />,
 };
 
 export const EmptyState: React.FC<EmptyStateProps> = ({
@@ -56,25 +57,15 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
 
   const emptyImage = image === 'simple' ? Empty.PRESENTED_IMAGE_SIMPLE : image === 'default' ? Empty.PRESENTED_IMAGE_DEFAULT : image;
 
-  const containerStyle: React.CSSProperties = fullHeight
-    ? {
-        height: '100%',
-        minHeight: 400,
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-      }
-    : {};
-
   return (
-    <div style={containerStyle}>
+    <div className={fullHeight ? styles.emptyContainer : undefined}>
       <Empty
         image={customIcon || emptyImage}
         imageStyle={customIcon ? { height: 'auto' } : { height: 60 }}
         description={
           <Space direction="vertical" size="small">
-            {title && <div style={{ fontSize: 16, fontWeight: 500 }}>{title}</div>}
-            {description && <div style={{ color: '#8c8c8c' }}>{description}</div>}
+            {title && <div className={styles.emptyTitle}>{title}</div>}
+            {description && <div className={styles.emptyDescription}>{description}</div>}
           </Space>
         }
       >
@@ -211,7 +202,7 @@ export const TableEmptyState: React.FC<{
   entityName?: string;
   onAdd?: () => void;
 }> = ({ entityName = 'items', onAdd }) => (
-  <div style={{ padding: '40px 0' }}>
+  <div className={styles.tablePadding}>
     <EmptyState
       title={`No ${entityName} yet`}
       description={`Start by adding your first ${entityName.slice(0, -1)}`}
@@ -225,8 +216,8 @@ export const TableEmptyState: React.FC<{
 export const ListEmptyState: React.FC<{
   itemName?: string;
 }> = ({ itemName = 'items' }) => (
-  <div style={{ textAlign: 'center', padding: '20px', color: '#8c8c8c' }}>
-    <InboxOutlined style={{ fontSize: 32, marginBottom: 8 }} />
+  <div className={styles.listEmpty}>
+    <InboxOutlined className={styles.listEmptyIcon} />
     <div>No {itemName} to display</div>
   </div>
 );

@@ -1,0 +1,512 @@
+/**
+ * CSS Mixins and shared patterns using CSS Modules
+ * Common patterns without !important
+ */
+
+@layer utilities {
+  /* Card styles */
+  .card {
+    background: var(--bg-container);
+    border: 1px solid var(--border-base);
+    border-radius: var(--radius-base);
+    padding: var(--spacing-lg);
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow var(--motion-duration-fast);
+  }
+
+  .cardHoverable {
+    composes: card;
+    cursor: pointer;
+  }
+
+  .cardHoverable:hover {
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-2px);
+    transition: all var(--motion-duration-mid);
+  }
+
+  .cardCompact {
+    composes: card;
+    padding: var(--spacing-base);
+  }
+
+  .cardBorderless {
+    background: var(--bg-container);
+    padding: var(--spacing-lg);
+    border: none;
+    box-shadow: none;
+  }
+
+  /* Button base styles */
+  .btnBase {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 var(--spacing-base);
+    height: var(--control-height);
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-medium);
+    line-height: 1;
+    border-radius: var(--radius-base);
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all var(--motion-duration-fast);
+    user-select: none;
+    white-space: nowrap;
+  }
+
+  .btnBase:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--color-primary);
+  }
+
+  .btnBase:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .btnPrimary {
+    composes: btnBase;
+    background: var(--color-primary);
+    color: #ffffff;
+    border-color: var(--color-primary);
+  }
+
+  .btnPrimary:hover:not(:disabled) {
+    background: var(--color-primary-hover);
+    border-color: var(--color-primary-hover);
+  }
+
+  .btnPrimary:active:not(:disabled) {
+    background: var(--color-primary-active);
+    border-color: var(--color-primary-active);
+  }
+
+  .btnDefault {
+    composes: btnBase;
+    background: var(--bg-container);
+    color: var(--text-primary);
+    border-color: var(--border-base);
+  }
+
+  .btnDefault:hover:not(:disabled) {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+
+  .btnGhost {
+    composes: btnBase;
+    background: transparent;
+    color: var(--text-primary);
+    border-color: transparent;
+  }
+
+  .btnGhost:hover:not(:disabled) {
+    background: var(--bg-spotlight);
+  }
+
+  .btnDanger {
+    composes: btnBase;
+    background: var(--color-error);
+    color: #ffffff;
+    border-color: var(--color-error);
+  }
+
+  .btnDanger:hover:not(:disabled) {
+    background: #ff7875;
+    border-color: #ff7875;
+  }
+
+  .btnLink {
+    composes: btnBase;
+    background: transparent;
+    color: var(--link-color);
+    border: none;
+    padding: 0;
+    height: auto;
+  }
+
+  .btnLink:hover:not(:disabled) {
+    color: var(--link-hover);
+    text-decoration: underline;
+  }
+
+  /* Input styles */
+  .inputBase {
+    width: 100%;
+    height: var(--control-height);
+    padding: 0 var(--spacing-md);
+    font-size: var(--font-size-base);
+    line-height: var(--line-height-base);
+    color: var(--text-primary);
+    background: var(--bg-container);
+    border: 1px solid var(--border-base);
+    border-radius: var(--radius-base);
+    transition: all var(--motion-duration-fast);
+  }
+
+  .inputBase:hover {
+    border-color: var(--color-primary-hover);
+  }
+
+  .inputBase:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+  }
+
+  .inputBase:disabled {
+    background: var(--bg-spotlight);
+    color: var(--text-disabled);
+    cursor: not-allowed;
+  }
+
+  .inputBase::placeholder {
+    color: var(--text-placeholder);
+  }
+
+  .inputError {
+    composes: inputBase;
+    border-color: var(--color-error);
+  }
+
+  .inputError:focus {
+    border-color: var(--color-error);
+    box-shadow: 0 0 0 2px rgba(255, 77, 79, 0.2);
+  }
+
+  .inputLarge {
+    composes: inputBase;
+    height: var(--control-height-lg);
+    font-size: var(--font-size-lg);
+  }
+
+  .inputSmall {
+    composes: inputBase;
+    height: var(--control-height-sm);
+    font-size: var(--font-size-sm);
+  }
+
+  .textarea {
+    composes: inputBase;
+    height: auto;
+    min-height: calc(var(--control-height) * 2);
+    padding: var(--spacing-sm) var(--spacing-md);
+    resize: vertical;
+  }
+
+  /* Label styles */
+  .label {
+    display: block;
+    margin-bottom: var(--spacing-sm);
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-medium);
+    color: var(--text-primary);
+  }
+
+  .labelRequired::after {
+    content: ' *';
+    color: var(--color-error);
+  }
+
+  .labelOptional::after {
+    content: ' (optional)';
+    color: var(--text-tertiary);
+    font-weight: var(--font-weight-normal);
+    font-size: var(--font-size-sm);
+  }
+
+  /* Form group */
+  .formGroup {
+    margin-bottom: var(--spacing-lg);
+  }
+
+  .formGroupInline {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-base);
+  }
+
+  .formError {
+    color: var(--color-error);
+    font-size: var(--font-size-sm);
+    margin-top: var(--spacing-xs);
+  }
+
+  .formHint {
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    margin-top: var(--spacing-xs);
+  }
+
+  /* Badge styles */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-weight: var(--font-weight-medium);
+    border-radius: var(--radius-sm);
+    line-height: 1.5;
+  }
+
+  .badgeDefault {
+    composes: badge;
+    background: var(--bg-spotlight);
+    color: var(--text-primary);
+  }
+
+  .badgePrimary {
+    composes: badge;
+    background: var(--color-primary);
+    color: #ffffff;
+  }
+
+  .badgeSuccess {
+    composes: badge;
+    background: var(--color-success);
+    color: #ffffff;
+  }
+
+  .badgeWarning {
+    composes: badge;
+    background: var(--color-warning);
+    color: #ffffff;
+  }
+
+  .badgeError {
+    composes: badge;
+    background: var(--color-error);
+    color: #ffffff;
+  }
+
+  .badgeInfo {
+    composes: badge;
+    background: var(--color-info);
+    color: #ffffff;
+  }
+
+  /* Tag styles */
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 8px;
+    height: 24px;
+    font-size: var(--font-size-sm);
+    border: 1px solid var(--border-base);
+    border-radius: var(--radius-sm);
+    background: var(--bg-container);
+    color: var(--text-primary);
+  }
+
+  .tagClosable {
+    composes: tag;
+    padding-right: 4px;
+  }
+
+  .tagCloseBtn {
+    margin-left: 4px;
+    padding: 2px;
+    cursor: pointer;
+    color: var(--text-tertiary);
+    transition: color var(--motion-duration-fast);
+  }
+
+  .tagCloseBtn:hover {
+    color: var(--text-primary);
+  }
+
+  /* List styles */
+  .listUnstyled {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .listInline {
+    composes: listUnstyled;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-base);
+  }
+
+  .listDivided > li {
+    padding: var(--spacing-base) 0;
+    border-bottom: 1px solid var(--border-base);
+  }
+
+  .listDivided > li:last-child {
+    border-bottom: none;
+  }
+
+  /* Table styles */
+  .table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .tableStriped tbody tr:nth-child(even) {
+    background: var(--bg-spotlight);
+  }
+
+  .tableBordered {
+    border: 1px solid var(--border-base);
+  }
+
+  .tableBordered th,
+  .tableBordered td {
+    border: 1px solid var(--border-base);
+    padding: var(--spacing-sm) var(--spacing-base);
+  }
+
+  .tableHoverable tbody tr:hover {
+    background: var(--bg-spotlight);
+  }
+
+  /* Modal overlay */
+  .overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: var(--z-index-modal);
+  }
+
+  .overlayLight {
+    composes: overlay;
+    background: rgba(255, 255, 255, 0.45);
+  }
+
+  /* Divider */
+  .divider {
+    border: 0;
+    border-top: 1px solid var(--border-base);
+    margin: var(--spacing-lg) 0;
+  }
+
+  .dividerVertical {
+    display: inline-block;
+    width: 1px;
+    height: 1em;
+    background: var(--border-base);
+    margin: 0 var(--spacing-base);
+    vertical-align: middle;
+  }
+
+  .dividerDashed {
+    composes: divider;
+    border-top-style: dashed;
+  }
+
+  /* Skeleton loading */
+  .skeletonBase {
+    background: linear-gradient(
+      90deg,
+      var(--bg-spotlight) 0%,
+      var(--bg-elevated) 50%,
+      var(--bg-spotlight) 100%
+    );
+    background-size: 200% 100%;
+    animation: skeleton 1.5s ease-in-out infinite;
+    border-radius: var(--radius-sm);
+  }
+
+  .skeletonText {
+    composes: skeletonBase;
+    height: 1em;
+    margin-bottom: var(--spacing-sm);
+  }
+
+  .skeletonTitle {
+    composes: skeletonBase;
+    height: 1.5em;
+    margin-bottom: var(--spacing-base);
+    width: 50%;
+  }
+
+  .skeletonAvatar {
+    composes: skeletonBase;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+  }
+
+  .skeletonButton {
+    composes: skeletonBase;
+    height: var(--control-height);
+    width: 100px;
+  }
+
+  /* Tooltip arrow */
+  .tooltipArrow {
+    width: 0;
+    height: 0;
+    border-style: solid;
+  }
+
+  .tooltipArrowTop {
+    composes: tooltipArrow;
+    border-width: 0 4px 4px 4px;
+    border-color: transparent transparent var(--bg-elevated) transparent;
+  }
+
+  .tooltipArrowBottom {
+    composes: tooltipArrow;
+    border-width: 4px 4px 0 4px;
+    border-color: var(--bg-elevated) transparent transparent transparent;
+  }
+
+  .tooltipArrowLeft {
+    composes: tooltipArrow;
+    border-width: 4px 4px 4px 0;
+    border-color: transparent var(--bg-elevated) transparent transparent;
+  }
+
+  .tooltipArrowRight {
+    composes: tooltipArrow;
+    border-width: 4px 0 4px 4px;
+    border-color: transparent transparent transparent var(--bg-elevated);
+  }
+
+  /* Focus trap for modals */
+  .focusTrap {
+    outline: none;
+  }
+
+  .focusTrap:focus {
+    box-shadow: inset 0 0 0 2px var(--color-primary);
+  }
+
+  /* Medical status indicators */
+  .statusDot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+
+  .statusDotActive {
+    composes: statusDot;
+    background: var(--status-active);
+  }
+
+  .statusDotInactive {
+    composes: statusDot;
+    background: var(--status-inactive);
+  }
+
+  .statusDotPending {
+    composes: statusDot;
+    background: var(--status-pending);
+  }
+
+  .statusDotError {
+    composes: statusDot;
+    background: var(--status-error);
+  }
+}

@@ -1,0 +1,57 @@
+/* AddPersonModal styles */
+.modalContent {
+  padding: 16px;
+}
+
+.fullWidth {
+  width: 100%;
+}
+
+.formSection {
+  margin-bottom: 24px;
+}
+
+.sectionTitle {
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: var(--text-primary);
+}
+
+.phoneInput {
+  width: 100%;
+}
+
+.addressInput {
+  width: 100%;
+}
+
+.phoneRow {
+  display: flex;
+  margin-bottom: 8px;
+}
+
+.phoneTypeInput {
+  margin-bottom: 0;
+  width: 150px;
+}
+
+.phoneNumberInput {
+  margin-bottom: 0;
+  flex: 1;
+}
+
+.flexRow {
+  display: flex;
+  gap: 16px;
+}
+
+.flexItem {
+  flex: 1;
+}
+
+.submitButtons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 24px;
+}

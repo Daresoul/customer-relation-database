@@ -7,6 +7,7 @@ import { useInlineEdit } from '../../hooks/useAutoSave';
 import dayjs from 'dayjs';
 import { formatDateTime, getDatePickerFormat } from '../../utils/dateFormatter';
 import { useThemeColors } from '../../utils/themeStyles';
+import styles from './PatientDetail.module.css';
 
 const { Text } = Typography;
 
@@ -114,8 +115,8 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
   const isSaving = updatePatient.isPending;
 
   return (
-    <div style={{ background: themeColors.cardBg, padding: 24, borderRadius: 8 }}>
-      <Typography.Title level={4} style={{ color: themeColors.text, marginBottom: 16 }}>
+    <div className={styles.infoCard}>
+      <Typography.Title level={4} className={styles.cardTitle}>
         {t('detail.patientInfo.title')}
       </Typography.Title>
 
@@ -150,7 +151,7 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
               },
               triggerType: ['text'],
             }}
-            style={{ color: themeColors.text }}
+            className={styles.textPrimary}
           >
             {localValues.name || '-'}
           </Text>
@@ -161,7 +162,7 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
             value={patient.species}
             onChange={(value) => handleFieldUpdate('species', value)}
             options={translatedSpeciesOptions}
-            style={{ width: '100%' }}
+            className={styles.fullWidth}
             disabled={isSaving}
           />
         </Descriptions.Item>
@@ -179,7 +180,7 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
               },
               triggerType: ['text'],
             }}
-            style={{ color: themeColors.text }}
+            className={styles.textPrimary}
           >
             {localValues.breed || '-'}
           </Text>
@@ -190,7 +191,7 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
             value={patient.gender || 'Unknown'}
             onChange={(value) => handleFieldUpdate('gender', value)}
             options={translatedGenderOptions}
-            style={{ width: '100%' }}
+            className={styles.fullWidth}
             disabled={isSaving}
           />
         </Descriptions.Item>
@@ -204,14 +205,14 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
               handleFieldUpdate('dateOfBirth', dateString);
             }}
             format={getDatePickerFormat()}
-            style={{ width: '100%' }}
+            className={styles.fullWidth}
             disabled={isSaving}
             disabledDate={(current) => current && current > dayjs().endOf('day')}
           />
         </Descriptions.Item>
 
         <Descriptions.Item label={t('detail.patientInfo.labels.age')} span={1}>
-          <Text style={{ color: themeColors.text }}>{patient.age?.display || '-'}</Text>
+          <Text className={styles.textPrimary}>{patient.age?.display || '-'}</Text>
         </Descriptions.Item>
 
         <Descriptions.Item label={t('detail.patientInfo.labels.weight')} span={1}>
@@ -221,7 +222,7 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
             min={0.01}
             max={500}
             precision={2}
-            style={{ width: '100%' }}
+            className={styles.fullWidth}
             disabled={isSaving}
             addonAfter="kg"
           />
@@ -240,7 +241,7 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
               },
               triggerType: ['text'],
             }}
-            style={{ color: themeColors.text }}
+            className={styles.textPrimary}
           >
             {localValues.color || '-'}
           </Text>
@@ -259,7 +260,7 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
               },
               triggerType: ['text'],
             }}
-            style={{ color: themeColors.text }}
+            className={styles.textPrimary}
           >
             {localValues.microchipId || '-'}
           </Text>
@@ -272,13 +273,13 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
         </Descriptions.Item>
 
         <Descriptions.Item label={t('detail.patientInfo.labels.created')} span={1}>
-          <Text style={{ color: themeColors.textSecondary }}>
+          <Text className={styles.textSecondary}>
             {formatDateTime(patient.createdAt)}
           </Text>
         </Descriptions.Item>
 
         <Descriptions.Item label={t('detail.patientInfo.labels.lastUpdated')} span={1}>
-          <Text style={{ color: themeColors.textSecondary }}>
+          <Text className={styles.textSecondary}>
             {formatDateTime(patient.updatedAt)}
           </Text>
         </Descriptions.Item>

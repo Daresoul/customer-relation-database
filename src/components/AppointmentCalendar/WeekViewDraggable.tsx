@@ -5,6 +5,7 @@ import dayjs, { Dayjs } from 'dayjs';
 import { Appointment } from '../../types/appointments';
 import { useThemeColors } from '../../utils/themeStyles';
 
+import styles from './WeekViewDraggable.module.css';
 interface WeekViewDraggableProps {
   selectedDate: Dayjs;
   appointments: Appointment[];
@@ -192,7 +193,7 @@ const WeekViewDraggable: React.FC<WeekViewDraggableProps> = ({
   };
 
   return (
-    <div className="week-view-draggable" style={{ background: themeColors.cardBg, borderRadius: '8px', padding: '16px' }}>
+    <div className={styles.weekViewDraggable}>
       <style>{`
         .week-view-draggable {
           user-select: none;
@@ -263,12 +264,12 @@ const WeekViewDraggable: React.FC<WeekViewDraggableProps> = ({
       `}</style>
 
       {weekAppointments.length === 0 && (
-        <Card style={{ marginBottom: '16px', background: themeColors.infoBg || '#e6f7ff', borderColor: '#1890ff' }}>
+        <Card className={styles.notificationCard}>
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
             description="No appointments scheduled for this week"
           >
-            <div style={{ fontSize: '12px', color: themeColors.textSecondary, marginTop: '8px' }}>
+            <div className={styles.notificationDescription}>
               <strong>Drag vertically</strong> in any day column to create an appointment
             </div>
           </Empty>
@@ -281,10 +282,10 @@ const WeekViewDraggable: React.FC<WeekViewDraggableProps> = ({
           <div className="week-header-time week-header-cell"></div>
           {weekDays.map((day) => (
             <div key={day.dayIndex} className={`week-header-cell ${day.isToday ? 'is-today' : ''}`}>
-              <div style={{ fontSize: '12px', color: themeColors.textSecondary }}>
+              <div className={styles.secondaryText}>
                 {day.date.format('ddd')}
               </div>
-              <div style={{ fontSize: '16px' }}>
+              <div className={styles.dayNumber}>
                 {day.date.format('D')}
               </div>
             </div>
@@ -292,7 +293,7 @@ const WeekViewDraggable: React.FC<WeekViewDraggableProps> = ({
         </div>
 
         {/* Time slots */}
-        <div style={{ position: 'relative' }}>
+        <div className={styles.relative}>
           {timeSlots.map((slot) => (
             <div key={slot.time} className="week-row">
               <div className="time-cell">{slot.time}</div>
@@ -310,17 +311,11 @@ const WeekViewDraggable: React.FC<WeekViewDraggableProps> = ({
                       <Tag
                         key={apt.id}
                         color={getStatusColor(apt.status)}
-                        style={{
-                          cursor: 'pointer',
-                          marginBottom: '2px',
-                          display: 'block',
-                          fontSize: '11px',
-                          whiteSpace: 'normal',
-                        }}
+                        className={styles.appointmentTag}
                         onClick={() => onSelectAppointment(apt)}
                       >
                         <div>{dayjs(apt.start_time).format('HH:mm')}</div>
-                        <div style={{ fontWeight: 500 }}>{apt.title}</div>
+                        <div className={styles.appointmentTitle}>{apt.title}</div>
                       </Tag>
                     ))}
                   </div>
@@ -332,7 +327,7 @@ const WeekViewDraggable: React.FC<WeekViewDraggableProps> = ({
           {/* Drag preview */}
           {isDragging && dragStart && dragEnd && (
             <div style={getDragPreviewStyle()!}>
-              <span style={{ color: themeColors.primary || '#1890ff', fontWeight: 500, fontSize: '12px' }}>
+              <span className={styles.dragText}>
                 New Appointment
               </span>
             </div>

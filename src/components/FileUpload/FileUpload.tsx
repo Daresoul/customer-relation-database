@@ -4,6 +4,7 @@ import { UploadOutlined, InboxOutlined } from '@ant-design/icons';
 import { useUploadAttachment } from '@/hooks/useMedicalRecords';
 import { MedicalService } from '@/services/medicalService';
 import type { UploadFile, UploadProps } from 'antd/es/upload';
+import styles from './FileUpload.module.css';
 
 const { Dragger } = Upload;
 
@@ -85,17 +86,16 @@ const FileUpload: React.FC<FileUploadProps> = ({
           </p>
         </Dragger>
         {fileList.length > 0 && (
-          <div style={{ marginTop: 16 }}>
+          <div className={styles.fileList}>
             <Button
               type="primary"
               onClick={handleUpload}
               loading={uploading}
-              style={{ marginTop: 16 }}
             >
               {uploading ? 'Uploading' : `Upload ${fileList.length} file(s)`}
             </Button>
             <Button
-              style={{ marginLeft: 8 }}
+              className={styles.buttonSpacing}
               onClick={() => setFileList([])}
               disabled={uploading}
             >
@@ -113,7 +113,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
         <Button icon={<UploadOutlined />}>Select Files</Button>
       </Upload>
       {fileList.length > 0 && (
-        <div style={{ marginTop: 16 }}>
+        <div className={styles.fileList}>
           <Button
             type="primary"
             onClick={handleUpload}
@@ -122,7 +122,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
             {uploading ? 'Uploading' : `Upload ${fileList.length} file(s)`}
           </Button>
           <Button
-            style={{ marginLeft: 8 }}
+            className={styles.buttonSpacing}
             onClick={() => setFileList([])}
             disabled={uploading}
           >

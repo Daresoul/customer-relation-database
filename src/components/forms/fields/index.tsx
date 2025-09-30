@@ -25,6 +25,7 @@ import {
 } from '@ant-design/icons';
 import { validationRules } from '../../../utils/validation/formRules';
 import type { Dayjs } from 'dayjs';
+import styles from './FormFields.module.css';
 
 const { TextArea } = Input;
 const { Option } = Select;
@@ -210,7 +211,7 @@ export const DateField: React.FC<DateFieldProps> = ({
   return (
     <Form.Item name={name} label={label} rules={rules} {...formItemProps}>
       <DatePicker
-        style={{ width: '100%' }}
+        className={styles.fullWidth}
         placeholder={placeholder}
         format={format}
         disabledDate={disabledDate}
@@ -249,7 +250,7 @@ export const NumberField: React.FC<NumberFieldProps> = ({
   return (
     <Form.Item name={name} label={label} rules={rules} {...formItemProps}>
       <InputNumber
-        style={{ width: '100%' }}
+        className={styles.fullWidth}
         placeholder={placeholder}
         min={min}
         max={max}
@@ -468,13 +469,13 @@ export const AddressFields: React.FC = () => {
       <Form.Item label="City/State/ZIP">
         <Input.Group compact>
           <Form.Item name={['address', 'city']} noStyle>
-            <Input style={{ width: '40%' }} placeholder="City" />
+            <Input className={styles.addressCity} placeholder="City" />
           </Form.Item>
           <Form.Item name={['address', 'state']} noStyle>
-            <Input style={{ width: '30%' }} placeholder="State" />
+            <Input className={styles.addressState} placeholder="State" />
           </Form.Item>
           <Form.Item name={['address', 'zipCode']} noStyle>
-            <Input style={{ width: '30%' }} placeholder="ZIP Code" />
+            <Input className={styles.addressZip} placeholder="ZIP Code" />
           </Form.Item>
         </Input.Group>
       </Form.Item>

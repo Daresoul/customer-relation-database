@@ -1,0 +1,89 @@
+/* Medical Record Detail Components CSS Module */
+
+.detailContainer {
+  padding: 24px;
+}
+
+.detailHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.detailTitle {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.detailSection {
+  margin-bottom: 24px;
+}
+
+.detailSectionTitle {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+
+.detailRow {
+  display: flex;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.detailLabel {
+  flex: 0 0 150px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.detailValue {
+  flex: 1;
+  color: var(--text-primary);
+}
+
+.detailActions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.drawerContent {
+  padding: 0;
+}
+
+.marginBottom16 {
+  margin-bottom: 16px;
+}
+
+.preWrap {
+  white-space: pre-wrap;
+}
+
+.preWrapNoMargin {
+  white-space: pre-wrap;
+  margin: 0;
+}
+
+.fullWidth {
+  width: 100%;
+}
+
+.flexSpaceBetween {
+  display: flex;
+  justify-content: space-between;
+}
+
+.displayBlock {
+  display: block;
+}
+
+.scrollableContent {
+  max-height: 70vh;
+  overflow-y: auto;
+}

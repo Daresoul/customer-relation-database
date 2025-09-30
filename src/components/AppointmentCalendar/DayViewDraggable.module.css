@@ -1,0 +1,164 @@
+.dayViewDraggable {
+  padding: 16px;
+  background: var(--card-bg);
+  border-radius: 8px;
+}
+
+.dayView {
+  height: 600px;
+  overflow: auto;
+  position: relative;
+}
+
+.dayHeader {
+  display: flex;
+  height: 60px;
+}
+
+.dayTimeColumn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dayContentColumn {
+  flex: 1;
+  padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.dayContent {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.dayHourRow {
+  display: flex;
+}
+
+.timeLabel {
+  width: 60px;
+  text-align: right;
+  padding-right: 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: -8px;
+}
+
+.timeSlots {
+  position: relative;
+}
+
+.appointmentSlot {
+  position: absolute;
+  z-index: 10;
+  width: calc(100% - 16px);
+  margin-left: 8px;
+  border-radius: 8px;
+  padding: 12px;
+  cursor: pointer;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.appointmentContent {
+  color: white;
+  font-weight: 500;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.appointmentSubtitle {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 12px;
+}
+
+.isDragging {
+  opacity: 0.5;
+}
+
+.tooltipInfo {
+  margin-bottom: 2px;
+}
+
+.tooltipTitle {
+  font-weight: bold;
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+
+.tooltipDescription {
+  font-style: italic;
+}
+
+.appointmentSlot:hover {
+  transform: translateX(2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+/* Drag overlay */
+.dragOverlay {
+  position: absolute;
+  left: 80px;
+  right: 16px;
+  background: rgba(24, 144, 255, 0.2);
+  border: 2px solid #1890ff;
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Day number display */
+.dayNumber {
+  font-size: 16px;
+  font-weight: bold;
+  color: var(--text-primary);
+}
+
+/* Time label span */
+.timeLabelSpan {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--background);
+  padding: 0 4px;
+  font-weight: 500;
+}
+
+/* Appointment card title and time */
+.appointmentTitle {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 14px;
+}
+
+.appointmentTime {
+  font-size: 10px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Relative positioning helper */
+.relative {
+  position: relative;
+}
+
+/* Secondary text color */
+.secondaryText {
+  color: var(--text-secondary);
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 16px;
+  }
+}

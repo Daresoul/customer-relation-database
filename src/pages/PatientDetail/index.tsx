@@ -18,6 +18,7 @@ import { HouseholdSection } from './HouseholdSection';
 import MedicalHistorySection from './MedicalHistory/MedicalHistorySection';
 import { Link } from 'react-router-dom';
 import { useThemeColors } from '../../utils/themeStyles';
+import styles from './PatientDetail.module.css';
 
 const { Content } = Layout;
 
@@ -63,7 +64,7 @@ export const PatientDetail: React.FC = () => {
   // Invalid ID check
   if (!id || isNaN(patientId)) {
     return (
-      <Content style={{ padding: 24, background: themeColors.background }}>
+      <Content className={styles.container}>
         <Alert
           message={t('patients:errors.invalidId')}
           description={t('patients:errors.invalidIdDescription')}
@@ -82,9 +83,9 @@ export const PatientDetail: React.FC = () => {
   // Loading state
   if (isLoading) {
     return (
-      <Content style={{ padding: 24, textAlign: 'center', background: themeColors.background, minHeight: '100vh' }}>
+      <Content className={`${styles.container} ${styles.loadingContainer}`}>
         <Spin size="large" />
-        <div style={{ marginTop: 16, color: themeColors.text }}>{t('patients:loadingPatient')}</div>
+        <div className={styles.loadingText}>{t('patients:loadingPatient')}</div>
       </Content>
     );
   }
@@ -92,7 +93,7 @@ export const PatientDetail: React.FC = () => {
   // Error state
   if (error) {
     return (
-      <Content style={{ padding: 24, background: themeColors.background }}>
+      <Content className={styles.container}>
         <Alert
           message={t('patients:errors.loadingError')}
           description={error instanceof Error ? error.message : t('patients:errors.loadingErrorDescription')}
@@ -116,7 +117,7 @@ export const PatientDetail: React.FC = () => {
   // Patient not found
   if (!patient) {
     return (
-      <Content style={{ padding: 24, background: themeColors.background }}>
+      <Content className={styles.container}>
         <Alert
           message={t('patients:errors.notFound')}
           description={t('patients:errors.notFoundDescription')}
@@ -161,7 +162,7 @@ export const PatientDetail: React.FC = () => {
         </span>
       ),
       children: (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+        <div className={styles.tabContent}>
           <PatientInfo patient={patient} />
           <HouseholdSection household={patient.household} />
         </div>
@@ -187,29 +188,29 @@ export const PatientDetail: React.FC = () => {
 
   return (
     <Content
-      style={{ padding: 24, background: themeColors.background, minHeight: '100vh' }}
+      className={styles.container}
     >
-      <div style={{ marginBottom: 16 }}>
+      <div className={styles.section}>
         <Breadcrumb
           items={[
             {
-              title: <Link to="/" style={{ color: '#4A90E2' }}><HomeOutlined /> {t('navigation:home')}</Link>,
+              title: <Link to="/" className={styles.breadcrumbLink}><HomeOutlined /> {t('navigation:home')}</Link>,
             },
             {
-              title: <Link to="/" style={{ color: '#4A90E2' }}>{t('navigation:dashboard')}</Link>,
+              title: <Link to="/" className={styles.breadcrumbLink}>{t('navigation:dashboard')}</Link>,
             },
             {
-              title: <span style={{ color: themeColors.text }}>{patient.name}</span>,
+              title: <span className={styles.breadcrumbCurrent}>{patient.name}</span>,
             },
           ]}
         />
       </div>
 
-      <div style={{ marginBottom: 24 }}>
+      <div className={styles.header}>
         <Button
           icon={<ArrowLeftOutlined />}
           onClick={() => navigate(-1)}
-          style={{ marginRight: 8 }}
+          className={styles.backButton}
         >
           {t('common:back')}
         </Button>
@@ -218,7 +219,7 @@ export const PatientDetail: React.FC = () => {
           icon={<DeleteOutlined />}
           onClick={handleDelete}
           loading={isDeleting}
-          style={{ float: 'right' }}
+          className={styles.deleteButton}
         >
           {t('patients:deletePatient')}
         </Button>
@@ -229,13 +230,7 @@ export const PatientDetail: React.FC = () => {
         onChange={setActiveTab}
         items={tabItems}
         size="large"
-        style={{
-          background: 'transparent',
-        }}
-        tabBarStyle={{
-          marginBottom: 24,
-          borderBottom: '1px solid #303030',
-        }}
+        className={styles.tabs}
       />
     </Content>
   );

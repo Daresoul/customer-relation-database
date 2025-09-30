@@ -3,6 +3,7 @@ import { App, Button, Typography, Spin } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 // We prefer blob URLs generated from reading the PNG file to avoid scheme issues
 import { MedicalService } from '@/services/medicalService';
+import styles from './PdfMultiPagePreview.module.css';
 
 const { Text } = Typography;
 
@@ -151,9 +152,9 @@ const PdfMultiPagePreview: React.FC<Props> = ({ attachmentId, initialPageUrl }) 
 
   if (!pages.length && !error) {
     return (
-      <div style={{ textAlign: 'center', padding: 20 }}>
+      <div className={styles.loadingContainer}>
         <Spin />
-        <Text type="secondary" style={{ display: 'block', marginTop: 8 }}>Loading preview...</Text>
+        <Text type="secondary" className={styles.loadingText}>Loading preview...</Text>
       </div>
     );
   }
@@ -164,7 +165,7 @@ const PdfMultiPagePreview: React.FC<Props> = ({ attachmentId, initialPageUrl }) 
 
   return (
     <div>
-      <div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div className={styles.headerRow}>
         <Text>
           {pageCount && `${pages.length} of ${pageCount} pages loaded`}
         </Text>
@@ -180,39 +181,27 @@ const PdfMultiPagePreview: React.FC<Props> = ({ attachmentId, initialPageUrl }) 
 
       <div
         ref={scrollContainerRef}
-        style={{
-          maxHeight: 600,
-          overflow: 'auto',
-          border: '1px solid #303030',
-          padding: 8,
-          borderRadius: 4,
-          background: '#141414'
-        }}
+        className={styles.scrollContainer}
       >
         {pages.map(p => (
-          <div key={p.page} style={{ marginBottom: 8 }}>
+          <div key={p.page} className={styles.pageContainer}>
             <img
               src={p.url}
               alt={`Page ${p.page}`}
-              style={{
-                maxWidth: '100%',
-                display: 'block',
-                borderRadius: 4,
-                boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
-              }}
+              className={styles.pageImage}
             />
           </div>
         ))}
 
         {loadingMore && (
-          <div style={{ textAlign: 'center', padding: 20 }}>
+          <div className={styles.loadingContainer}>
             <Spin size="small" />
-            <Text type="secondary" style={{ display: 'block', marginTop: 8 }}>Loading more pages...</Text>
+            <Text type="secondary" className={styles.loadingText}>Loading more pages...</Text>
           </div>
         )}
 
         {canLoadMore && !loadingMore && (
-          <div style={{ textAlign: 'center', padding: 20 }}>
+          <div className={styles.loadingContainer}>
             <Text type="secondary">Scroll down to load more pages</Text>
           </div>
         )}

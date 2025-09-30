@@ -35,6 +35,7 @@ import {
   useRooms,
   useCalendarAppointments,
 } from '../../hooks/useAppointments';
+import styles from './Appointments.module.css';
 
 const { RangePicker } = DatePicker;
 
@@ -176,7 +177,7 @@ const AppointmentsTab: React.FC = () => {
   );
 
   return (
-    <div style={{ height: '100%', overflow: 'auto' }}>
+    <div className={styles.fullHeightScroll}>
       <Tabs
         activeKey={activeView}
         onChange={(key) => setActiveView(key as 'calendar' | 'list')}
@@ -251,11 +252,11 @@ const AppointmentsTab: React.FC = () => {
         open={filterDrawerVisible}
         width={500}
       >
-        <Space direction="vertical" style={{ width: '100%' }} size="large">
+        <Space direction="vertical" className={styles.fullWidth} size="large">
           <div>
-            <div style={{ marginBottom: '8px', fontWeight: 500 }}>Status</div>
+            <div className={styles.filterLabel}>Status</div>
             <Select
-              style={{ width: '100%' }}
+              className={styles.fullWidth}
               onChange={(value) => {
                 if (value && value !== 'all') {
                   setFilter({
@@ -280,9 +281,9 @@ const AppointmentsTab: React.FC = () => {
           </div>
 
           <div>
-            <div style={{ marginBottom: '8px', fontWeight: 500 }}>Room</div>
+            <div className={styles.filterLabel}>Room</div>
             <Select
-              style={{ width: '100%' }}
+              className={styles.fullWidth}
               onChange={(value) => {
                 if (value && value !== 'all') {
                   setFilter({ ...filter, room_id: value });

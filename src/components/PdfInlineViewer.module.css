@@ -1,0 +1,20 @@
+/* PdfInlineViewer styles */
+.errorText {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.iframe {
+  width: 100%;
+  height: 480px;
+  border: 0;
+}
+
+.fallbackLink {
+  margin-top: 8px;
+}
+
+.canvas {
+  width: 100%;
+  display: block;
+}

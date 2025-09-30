@@ -3,6 +3,7 @@ import { Card, Form, Input, Button, Table, Space, Modal, Popconfirm, InputNumber
 import { HomeOutlined, PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors } from '../../../utils/themeStyles';
+import styles from '../Settings.module.css';
 import { useRooms, useCreateRoom, useUpdateRoom, useDeleteRoom } from '../../../hooks/useRooms';
 import { Room, CreateRoomInput, UpdateRoomInput } from '../../../types/rooms';
 
@@ -102,17 +103,9 @@ const RoomsSettings: React.FC<RoomsSettingsProps> = ({ form, isUpdating }) => {
       width: 80,
       render: (color: string, record: Room) => (
         <div
+          className={`${styles.roomColorBox} ${!record.is_active ? styles.roomColorInactive : ''}`}
           style={{
-            width: 24,
-            height: 24,
-            borderRadius: '4px',
-            backgroundColor: record.is_active ? color || '#1890ff' : '#d9d9d9',
-            border: '1px solid #d9d9d9',
-            opacity: record.is_active ? 1 : 0.5,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            margin: '0 auto'
+            backgroundColor: record.is_active ? color || '#1890ff' : '#d9d9d9'
           }}
           title={`Room color: ${color || '#1890ff'}`}
         />
@@ -123,10 +116,7 @@ const RoomsSettings: React.FC<RoomsSettingsProps> = ({ form, isUpdating }) => {
       dataIndex: 'name',
       key: 'name',
       render: (text: string, record: Room) => (
-        <span style={{
-          color: record.is_active ? 'inherit' : '#999',
-          textDecoration: record.is_active ? 'none' : 'line-through'
-        }}>
+        <span className={record.is_active ? styles.roomNameActive : styles.roomNameInactive}>
           {text}
           {!record.is_active && ' (Inactive)'}
         </span>
@@ -181,7 +171,7 @@ const RoomsSettings: React.FC<RoomsSettingsProps> = ({ form, isUpdating }) => {
     <div>
       <Card
         title={
-          <span style={{ color: themeColors.text }}>
+          <span className={styles.cardTitle}>
             <HomeOutlined /> Appointment Rooms
           </span>
         }
@@ -194,11 +184,7 @@ const RoomsSettings: React.FC<RoomsSettingsProps> = ({ form, isUpdating }) => {
             Add Room
           </Button>
         }
-        style={{
-          marginBottom: 16,
-          background: themeColors.cardBg,
-          borderColor: themeColors.border
-        }}
+        className={styles.roomsCard}
       >
         <Table
           columns={columns}
@@ -256,7 +242,7 @@ const RoomsSettings: React.FC<RoomsSettingsProps> = ({ form, isUpdating }) => {
               min={1}
               max={100}
               placeholder="Number of patients/animals"
-              style={{ width: '100%' }}
+              className={styles.fullWidth}
             />
           </Form.Item>
 
@@ -267,7 +253,7 @@ const RoomsSettings: React.FC<RoomsSettingsProps> = ({ form, isUpdating }) => {
           >
             <Input
               type="color"
-              style={{ width: 100, height: 40 }}
+              className={styles.colorPickerInput}
             />
           </Form.Item>
 

@@ -6,6 +6,7 @@ import { Appointment } from '../../types/appointments';
 import { useThemeColors } from '../../utils/themeStyles';
 import { useRooms } from '../../hooks/useRooms';
 
+import styles from './DayViewSimple.module.css';
 interface DayViewSimpleProps {
   selectedDate: Dayjs;
   appointments: Appointment[];
@@ -170,29 +171,29 @@ const DayViewSimple: React.FC<DayViewSimpleProps> = ({
 
     return (
       <div>
-        <div style={{ marginBottom: '2px' }}>
+        <div className={styles.tooltipInfo}>
           <strong>Patient:</strong> {apt.patient_name || 'Unknown Patient'}
         </div>
-        <div style={{ marginBottom: '2px' }}>
+        <div className={styles.tooltipInfo}>
           <strong>Microchip ID:</strong> {apt.microchip_id || '-'}
         </div>
-        <div style={{ marginBottom: '2px' }}>
+        <div className={styles.tooltipInfo}>
           <strong>Time:</strong> {dayjs(apt.start_time).format('HH:mm')} - {dayjs(apt.end_time).format('HH:mm')}
         </div>
-        <div style={{ marginBottom: '2px' }}>
+        <div className={styles.tooltipInfo}>
           <strong>Date:</strong> {dayjs(apt.start_time).format('MMM DD, YYYY')}
         </div>
         {room && (
-          <div style={{ marginBottom: '2px' }}>
+          <div className={styles.tooltipInfo}>
             <strong>Room:</strong> {room.name}
           </div>
         )}
-        <div style={{ marginBottom: '2px' }}>
+        <div className={styles.tooltipInfo}>
           <strong>Status:</strong> {apt.status.replace('_', ' ')}
         </div>
-        <div style={{ fontWeight: 'bold', marginTop: '4px', marginBottom: '4px' }}>{apt.title}</div>
+        <div className={styles.tooltipTitle}>{apt.title}</div>
         {apt.description && (
-          <div style={{ fontStyle: 'italic' }}>
+          <div className={styles.tooltipDescription}>
             {apt.description}
           </div>
         )}
@@ -275,17 +276,10 @@ const DayViewSimple: React.FC<DayViewSimpleProps> = ({
 
     return (
       <div
+        className={styles.dragOverlay}
         style={{
-          position: 'absolute',
-          left: 80,
-          right: 16,
           top: 60 + startSlot * slotHeight, // Add header height
           height: (endSlot - startSlot + 1) * slotHeight,
-          background: 'rgba(24, 144, 255, 0.2)',
-          border: '2px solid #1890ff',
-          borderRadius: '4px',
-          pointerEvents: 'none',
-          zIndex: 10,
         }}
       />
     );
@@ -338,23 +332,11 @@ const DayViewSimple: React.FC<DayViewSimpleProps> = ({
             }
           }}
         >
-          <div style={{
-            fontWeight: 500,
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            lineHeight: '14px',
-          }}>
+          <div className={styles.appointmentTitle}>
             {apt.title}
           </div>
           {style.height > 40 && (
-            <div style={{
-              fontSize: '10px',
-              color: themeColors.textSecondary,
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}>
+            <div className={styles.appointmentTime}>
               {dayjs(apt.start_time).format('HH:mm')} - {dayjs(apt.end_time).format('HH:mm')}
             </div>
           )}
@@ -366,7 +348,7 @@ const DayViewSimple: React.FC<DayViewSimpleProps> = ({
   const appointmentsWithLayout = calculateAppointmentLayout(dayAppointments);
 
   return (
-    <div className="day-view" ref={containerRef} style={{ height: '600px', overflow: 'auto', position: 'relative' }}>
+    <div className={styles.dayView} ref={containerRef}>
       <style>{`
         .day-view {
           background: ${themeColors.cardBg};
@@ -462,52 +444,35 @@ const DayViewSimple: React.FC<DayViewSimpleProps> = ({
       `}</style>
 
       {/* Header with day label - EXACTLY like WeekView */}
-      <div className="day-header" style={{ display: 'flex', height: '60px' }}>
-        <div className="day-time-column" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <span style={{ fontSize: '12px', color: themeColors.textSecondary }}>Time</span>
+      <div className={styles.dayHeader}>
+        <div className={styles.dayTimeColumn}>
+          <span className={styles.secondaryText}>Time</span>
         </div>
-        <div className="day-content-column" style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}>
-          <div style={{ fontSize: '12px', color: themeColors.textSecondary }}>
+        <div className={styles.dayContentColumn}>
+          <div className={styles.secondaryText}>
             {selectedDate.format('ddd')}
           </div>
-          <div style={{
-            fontSize: '16px',
-            fontWeight: 'bold',
-            color: themeColors.text
-          }}>
+          <div className={styles.dayNumber}>
             {selectedDate.format('D')}
           </div>
         </div>
       </div>
 
       {/* Time grid - EXACTLY like WeekView structure */}
-      <div style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
+      <div className={styles.dayContent}>
         {hourSlots.map((hour) => (
-          <div key={hour.hour} className="day-hour-row" style={{ display: 'flex' }}>
+          <div key={hour.hour} className={styles.dayHourRow}>
             {/* Time label */}
             <div className="day-time-label">
-              <span style={{
-                position: 'absolute',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                background: themeColors.background,
-                padding: '0 4px',
-                fontWeight: 500
-              }}>
+              <span className={styles.timeLabelSpan}>
                 {hour.time}
               </span>
             </div>
 
             {/* Day column - EXACTLY like WeekView day column */}
             <div
-              className="day-content-column day-cell"
+              className={`day-content-column day-cell ${styles.relative}`}
               onMouseDown={(e) => handleMouseDown(e, hour.hour)}
-              style={{ position: 'relative' }}
             >
               {/* Half-hour divider line */}
               <div className="day-half-hour-line" />

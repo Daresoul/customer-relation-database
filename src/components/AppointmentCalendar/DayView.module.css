@@ -1,0 +1,186 @@
+.dayView {
+  padding: 16px;
+  background: #fff;
+  border-radius: 8px;
+}
+
+.dayColumn {
+  background: #fafafa;
+  border-radius: 8px;
+  padding: 16px;
+  flex: 1;
+}
+
+.dayTitle {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.dayContent {
+  flex: 1;
+}
+
+.noAppointments {
+  opacity: 0.5;
+}
+
+.appointmentList {
+  width: 100%;
+}
+
+.appointmentCard {
+  cursor: pointer;
+}
+
+.appointmentHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+}
+
+.appointmentInfo {
+  /* Add styles here */
+}
+
+.appointmentTitle {
+  font-weight: 500;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.appointmentTime {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.appointmentRoom {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.appointmentStatus {
+  margin-left: 8px;
+}
+
+.appointmentDescription {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 8px;
+}
+
+.notificationCard {
+  margin-bottom: 16px;
+  background: #e6f7ff;
+  border-color: #1890ff;
+}
+
+.appointmentCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 16px;
+  }
+}
+
+
+/* Common utility classes */
+.tooltipInfo {
+  margin-bottom: 2px;
+}
+
+.tooltipTitle {
+  font-weight: bold;
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+
+.tooltipDescription {
+  font-style: italic;
+}
+
+.primaryText {
+  color: var(--text-primary);
+}
+
+.secondaryText {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.appointmentTitle {
+  font-weight: 500;
+}
+
+.faded {
+  opacity: 0.5;
+}
+
+.relative {
+  position: relative;
+}
+
+.flex1 {
+  flex: 1;
+}
+
+.fullWidth {
+  width: 100%;
+}
+
+/* Time slot styles */
+.timeSlotContainer {
+  display: flex;
+  gap: 16px;
+  min-height: 60px;
+  border-bottom: 1px solid #f0f0f0;
+  padding: 8px 0;
+}
+
+.timeLabel {
+  width: 80px;
+  flex-shrink: 0;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.emptySlot {
+  border: 1px dashed #d9d9d9;
+  border-radius: 4px;
+  padding: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.emptySlot:hover {
+  border-color: #1890ff;
+  background: #f0f7ff;
+}
+
+.appointmentCardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+}
+
+.appointmentCardTitle {
+  font-weight: 500;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.tagMarginLeft {
+  margin-left: 8px;
+}

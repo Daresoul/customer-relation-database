@@ -1,0 +1,48 @@
+/* MedicalRecordModal styles */
+.loadingContainer {
+  text-align: center;
+  padding: 50px 0;
+}
+
+.contentContainer {
+  padding: 16px;
+}
+
+.divider {
+  margin-top: 24px;
+}
+
+.changeHistoryTitle {
+  color: #E6E6E6;
+  font-weight: 600;
+}
+
+.fullWidth {
+  width: 100%;
+}
+
+.flexBetween {
+  display: flex;
+  justify-content: space-between;
+}
+
+.changeDetail {
+  display: block;
+}
+
+.timelineItem {
+  margin-top: 8px;
+}
+
+.recordHeader {
+  margin-bottom: 24px;
+}
+
+.recordContent {
+  margin-bottom: 16px;
+}
+
+.metaInfo {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
