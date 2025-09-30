@@ -7,6 +7,7 @@ import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist/legacy/build/pdf';
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
 import workerSrc from 'pdfjs-dist/legacy/build/pdf.worker.min.js?url';
+import styles from './PdfInlineViewer.module.css';
 
 const { Text } = Typography;
 
@@ -131,14 +132,14 @@ const PdfInlineViewer: React.FC<PdfInlineViewerProps> = ({ blob, fileName }) => 
   if (error) {
     return (
       <div>
-        <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>{error}</Text>
+        <Text type="secondary" className={styles.errorText}>{error}</Text>
         {/* Use object/iframe with blob URL if the runtime can display PDFs */}
         {fallbackUrl ? (
           <>
             <object data={fallbackUrl} type="application/pdf" width="100%" height={480}>
-              <iframe src={fallbackUrl} title={fileName} style={{ width: '100%', height: 480, border: 0 }} />
+              <iframe src={fallbackUrl} title={fileName} className={styles.iframe} />
             </object>
-            <div style={{ marginTop: 8 }}>
+            <div className={styles.fallbackLink}>
               <a href={fallbackUrl} download={fileName}>Download PDF</a>
             </div>
           </>
@@ -151,7 +152,7 @@ const PdfInlineViewer: React.FC<PdfInlineViewerProps> = ({ blob, fileName }) => 
   if (loading) {
     return <Text type="secondary">Loading preview...</Text>;
   }
-  return <canvas ref={canvasRef} style={{ width: '100%', display: 'block' }} />;
+  return <canvas ref={canvasRef} className={styles.canvas} />;
 };
 
 export default PdfInlineViewer;

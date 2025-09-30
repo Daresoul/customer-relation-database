@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Patient } from '../../types/household';
 import { PlusOutlined } from '@ant-design/icons';
+import styles from './HouseholdDetail.module.css';
 
 const { Title } = Typography;
 
@@ -87,8 +88,8 @@ export const AnimalsSection: React.FC<AnimalsSectionProps> = ({ patients, househ
   ];
 
   return (
-    <div style={{ marginTop: 24 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+    <div className={styles.sectionContainer}>
+      <div className={styles.sectionHeaderRow}>
         <Title level={4}>{t('detail.animals.title')}</Title>
         <Link to={`/patients/new?householdId=${householdId}`}>
           <Button type="primary" icon={<PlusOutlined />}>
@@ -107,7 +108,7 @@ export const AnimalsSection: React.FC<AnimalsSectionProps> = ({ patients, househ
       ) : (
         <Empty
           description={t('detail.animals.noAnimals')}
-          style={{ marginBottom: 24 }}
+          className={styles.marginBottom24}
         >
           <Link to={`/patients/new?householdId=${householdId}`}>
             <Button type="primary">{t('detail.animals.registerFirstPet')}</Button>

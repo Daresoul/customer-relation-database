@@ -1,0 +1,571 @@
+/**
+ * Color utilities using CSS Modules
+ * Theme-aware color utilities without !important
+ */
+
+@layer utilities {
+  /* Background colors */
+  .bgTransparent {
+    background-color: transparent;
+  }
+
+  .bgCurrent {
+    background-color: currentColor;
+  }
+
+  .bgBase {
+    background-color: var(--bg-base);
+  }
+
+  .bgContainer {
+    background-color: var(--bg-container);
+  }
+
+  .bgElevated {
+    background-color: var(--bg-elevated);
+  }
+
+  .bgLayout {
+    background-color: var(--bg-layout);
+  }
+
+  .bgSpotlight {
+    background-color: var(--bg-spotlight);
+  }
+
+  .bgPrimary {
+    background-color: var(--color-primary);
+  }
+
+  .bgPrimaryHover {
+    background-color: var(--color-primary-hover);
+  }
+
+  .bgPrimaryActive {
+    background-color: var(--color-primary-active);
+  }
+
+  .bgSuccess {
+    background-color: var(--color-success);
+  }
+
+  .bgWarning {
+    background-color: var(--color-warning);
+  }
+
+  .bgError {
+    background-color: var(--color-error);
+  }
+
+  .bgInfo {
+    background-color: var(--color-info);
+  }
+
+  /* Text colors */
+  .textTransparent {
+    color: transparent;
+  }
+
+  .textCurrent {
+    color: currentColor;
+  }
+
+  .textBase {
+    color: var(--text-base);
+  }
+
+  .textPrimary {
+    color: var(--text-primary);
+  }
+
+  .textSecondary {
+    color: var(--text-secondary);
+  }
+
+  .textTertiary {
+    color: var(--text-tertiary);
+  }
+
+  .textQuaternary {
+    color: var(--text-quaternary);
+  }
+
+  .textDisabled {
+    color: var(--text-disabled);
+  }
+
+  .textPlaceholder {
+    color: var(--text-placeholder);
+  }
+
+  .textSuccess {
+    color: var(--color-success);
+  }
+
+  .textWarning {
+    color: var(--color-warning);
+  }
+
+  .textError {
+    color: var(--color-error);
+  }
+
+  .textInfo {
+    color: var(--color-info);
+  }
+
+  .textLink {
+    color: var(--link-color);
+  }
+
+  .textLinkHover {
+    color: var(--link-hover);
+  }
+
+  .textLinkActive {
+    color: var(--link-active);
+  }
+
+  /* Border colors */
+  .borderTransparent {
+    border-color: transparent;
+  }
+
+  .borderCurrent {
+    border-color: currentColor;
+  }
+
+  .borderBase {
+    border-color: var(--border-base);
+  }
+
+  .borderSecondary {
+    border-color: var(--border-secondary);
+  }
+
+  .borderPrimary {
+    border-color: var(--color-primary);
+  }
+
+  .borderSuccess {
+    border-color: var(--color-success);
+  }
+
+  .borderWarning {
+    border-color: var(--color-warning);
+  }
+
+  .borderError {
+    border-color: var(--color-error);
+  }
+
+  .borderInfo {
+    border-color: var(--color-info);
+  }
+
+  /* Border width */
+  .border0 {
+    border-width: 0;
+  }
+
+  .border {
+    border-width: 1px;
+  }
+
+  .border2 {
+    border-width: 2px;
+  }
+
+  .border4 {
+    border-width: 4px;
+  }
+
+  .borderT0 {
+    border-top-width: 0;
+  }
+
+  .borderT {
+    border-top-width: 1px;
+  }
+
+  .borderT2 {
+    border-top-width: 2px;
+  }
+
+  .borderR0 {
+    border-right-width: 0;
+  }
+
+  .borderR {
+    border-right-width: 1px;
+  }
+
+  .borderR2 {
+    border-right-width: 2px;
+  }
+
+  .borderB0 {
+    border-bottom-width: 0;
+  }
+
+  .borderB {
+    border-bottom-width: 1px;
+  }
+
+  .borderB2 {
+    border-bottom-width: 2px;
+  }
+
+  .borderL0 {
+    border-left-width: 0;
+  }
+
+  .borderL {
+    border-left-width: 1px;
+  }
+
+  .borderL2 {
+    border-left-width: 2px;
+  }
+
+  /* Border style */
+  .borderSolid {
+    border-style: solid;
+  }
+
+  .borderDashed {
+    border-style: dashed;
+  }
+
+  .borderDotted {
+    border-style: dotted;
+  }
+
+  .borderDouble {
+    border-style: double;
+  }
+
+  .borderNone {
+    border-style: none;
+  }
+
+  /* Border radius */
+  .rounded0 {
+    border-radius: 0;
+  }
+
+  .roundedSm {
+    border-radius: var(--radius-sm);
+  }
+
+  .rounded {
+    border-radius: var(--radius-base);
+  }
+
+  .roundedLg {
+    border-radius: var(--radius-lg);
+  }
+
+  .roundedXl {
+    border-radius: var(--radius-xl);
+  }
+
+  .roundedFull {
+    border-radius: 9999px;
+  }
+
+  /* Specific corner radius */
+  .roundedT {
+    border-top-left-radius: var(--radius-base);
+    border-top-right-radius: var(--radius-base);
+  }
+
+  .roundedR {
+    border-top-right-radius: var(--radius-base);
+    border-bottom-right-radius: var(--radius-base);
+  }
+
+  .roundedB {
+    border-bottom-left-radius: var(--radius-base);
+    border-bottom-right-radius: var(--radius-base);
+  }
+
+  .roundedL {
+    border-top-left-radius: var(--radius-base);
+    border-bottom-left-radius: var(--radius-base);
+  }
+
+  /* Opacity */
+  .opacity0 {
+    opacity: 0;
+  }
+
+  .opacity5 {
+    opacity: 0.05;
+  }
+
+  .opacity10 {
+    opacity: 0.1;
+  }
+
+  .opacity20 {
+    opacity: 0.2;
+  }
+
+  .opacity25 {
+    opacity: 0.25;
+  }
+
+  .opacity30 {
+    opacity: 0.3;
+  }
+
+  .opacity40 {
+    opacity: 0.4;
+  }
+
+  .opacity50 {
+    opacity: 0.5;
+  }
+
+  .opacity60 {
+    opacity: 0.6;
+  }
+
+  .opacity70 {
+    opacity: 0.7;
+  }
+
+  .opacity75 {
+    opacity: 0.75;
+  }
+
+  .opacity80 {
+    opacity: 0.8;
+  }
+
+  .opacity90 {
+    opacity: 0.9;
+  }
+
+  .opacity95 {
+    opacity: 0.95;
+  }
+
+  .opacity100 {
+    opacity: 1;
+  }
+
+  /* Box shadow */
+  .shadowNone {
+    box-shadow: none;
+  }
+
+  .shadowSm {
+    box-shadow: var(--shadow-sm);
+  }
+
+  .shadow {
+    box-shadow: var(--shadow-base);
+  }
+
+  .shadowLg {
+    box-shadow: var(--shadow-lg);
+  }
+
+  .shadowInner {
+    box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06);
+  }
+
+  /* Outline */
+  .outlineNone {
+    outline: none;
+  }
+
+  .outline {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+
+  .outlineWhite {
+    outline: 2px solid #ffffff;
+    outline-offset: 2px;
+  }
+
+  .outlineBlack {
+    outline: 2px solid #000000;
+    outline-offset: 2px;
+  }
+
+  /* Ring (focus rings) */
+  .ring0 {
+    box-shadow: 0 0 0 0 transparent;
+  }
+
+  .ring1 {
+    box-shadow: 0 0 0 1px var(--color-primary);
+  }
+
+  .ring2 {
+    box-shadow: 0 0 0 2px var(--color-primary);
+  }
+
+  .ring4 {
+    box-shadow: 0 0 0 4px var(--color-primary);
+  }
+
+  .ringInset {
+    box-shadow: inset 0 0 0 2px var(--color-primary);
+  }
+
+  /* Medical status colors */
+  .statusActive {
+    color: var(--status-active);
+  }
+
+  .statusInactive {
+    color: var(--status-inactive);
+  }
+
+  .statusPending {
+    color: var(--status-pending);
+  }
+
+  .statusError {
+    color: var(--status-error);
+  }
+
+  .statusSuccess {
+    color: var(--status-success);
+  }
+
+  .statusWarning {
+    color: var(--status-warning);
+  }
+
+  .statusInfo {
+    color: var(--status-info);
+  }
+
+  .bgStatusActive {
+    background-color: var(--status-active);
+  }
+
+  .bgStatusInactive {
+    background-color: var(--status-inactive);
+  }
+
+  .bgStatusPending {
+    background-color: var(--status-pending);
+  }
+
+  .bgStatusError {
+    background-color: var(--status-error);
+  }
+
+  .bgStatusSuccess {
+    background-color: var(--status-success);
+  }
+
+  .bgStatusWarning {
+    background-color: var(--status-warning);
+  }
+
+  .bgStatusInfo {
+    background-color: var(--status-info);
+  }
+
+  /* Gradient backgrounds */
+  .bgGradientPrimary {
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
+  }
+
+  .bgGradientSuccess {
+    background: linear-gradient(135deg, var(--color-success) 0%, #73d13d 100%);
+  }
+
+  .bgGradientWarning {
+    background: linear-gradient(135deg, var(--color-warning) 0%, #ffbb33 100%);
+  }
+
+  .bgGradientError {
+    background: linear-gradient(135deg, var(--color-error) 0%, #ff7875 100%);
+  }
+
+  .bgGradientInfo {
+    background: linear-gradient(135deg, var(--color-info) 0%, var(--color-primary-hover) 100%);
+  }
+
+  /* Hover utilities */
+  .hoverBgPrimary:hover {
+    background-color: var(--color-primary);
+  }
+
+  .hoverBgPrimaryLight:hover {
+    background-color: var(--color-primary-hover);
+  }
+
+  .hoverTextPrimary:hover {
+    color: var(--color-primary);
+  }
+
+  .hoverBorderPrimary:hover {
+    border-color: var(--color-primary);
+  }
+
+  .hoverOpacity75:hover {
+    opacity: 0.75;
+  }
+
+  .hoverOpacity50:hover {
+    opacity: 0.5;
+  }
+
+  .hoverShadowLg:hover {
+    box-shadow: var(--shadow-lg);
+  }
+
+  /* Focus utilities */
+  .focusBgPrimary:focus {
+    background-color: var(--color-primary);
+  }
+
+  .focusTextPrimary:focus {
+    color: var(--color-primary);
+  }
+
+  .focusBorderPrimary:focus {
+    border-color: var(--color-primary);
+  }
+
+  .focusRing:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--color-primary);
+  }
+
+  .focusVisible:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+
+  /* Active utilities */
+  .activeBgPrimaryDark:active {
+    background-color: var(--color-primary-active);
+  }
+
+  .activeOpacity75:active {
+    opacity: 0.75;
+  }
+
+  /* Disabled utilities */
+  .disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .disabledBg {
+    background-color: var(--bg-spotlight);
+    color: var(--text-disabled);
+    cursor: not-allowed;
+  }
+}

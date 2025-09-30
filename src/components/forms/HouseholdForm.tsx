@@ -27,6 +27,7 @@ import {
   MailOutlined,
 } from '@ant-design/icons';
 import type { HouseholdFormValues, ContactFormValues } from '../../types/ui.types';
+import styles from './Forms.module.css';
 
 const { Title, Text } = Typography;
 
@@ -74,7 +75,7 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
           {mode === 'create' ? 'Create New Household' : 'Edit Household'}
         </Space>
       }
-      style={{ maxWidth: '900px' }}
+      className={styles.formCardLarge}
     >
       <Form
         form={form}
@@ -118,7 +119,7 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
                 <Card
                   key={key}
                   size="small"
-                  style={{ marginBottom: 16, background: '#262626' }}
+                  className={styles.contactCard}
                   title={
                     <Space>
                       <Text>Contact {index + 1}</Text>

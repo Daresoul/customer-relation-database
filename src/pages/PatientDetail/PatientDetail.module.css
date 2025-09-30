@@ -1,0 +1,335 @@
+/* PatientDetail styles */
+.container {
+  padding: 24px;
+  background: var(--background);
+  min-height: 100vh;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.headerContent {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.backButton {
+  margin-right: 16px;
+}
+
+.content {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.section {
+  margin-bottom: 24px;
+}
+
+.sectionTitle {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: var(--text-primary);
+}
+
+.infoGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.infoItem {
+  display: flex;
+  flex-direction: column;
+}
+
+.infoLabel {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.infoValue {
+  font-size: 14px;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.card {
+  margin-bottom: 16px;
+}
+
+.fieldRow {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.field {
+  flex: 1;
+}
+
+.fullWidth {
+  width: 100%;
+}
+
+.actionButtons {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.emptyState {
+  text-align: center;
+  padding: 32px;
+  color: var(--text-secondary);
+}
+
+/* Patient Info specific styles */
+.infoCard {
+  background: var(--card-bg);
+  padding: 24px;
+  border-radius: 8px;
+}
+
+.cardTitle {
+  color: var(--text-primary);
+  margin-bottom: 16px;
+}
+
+.textPrimary {
+  color: var(--text-primary);
+}
+
+.textSecondary {
+  color: var(--text-secondary);
+}
+
+.loadingContainer {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  text-align: center;
+}
+
+.loadingText {
+  margin-top: 16px;
+  color: var(--text-primary);
+}
+
+.deleteButton {
+  float: right;
+}
+
+.errorContainer {
+  padding: 24px;
+  text-align: center;
+}
+
+.tabContent {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.breadcrumbLink {
+  color: #4A90E2;
+}
+
+.breadcrumbLink:hover {
+  color: #357ABD;
+}
+
+.breadcrumbCurrent {
+  color: var(--text-primary);
+}
+
+.tabs {
+  background: transparent;
+}
+
+.tabs :global(.ant-tabs-nav) {
+  margin-bottom: 24px;
+  border-bottom: 1px solid #303030;
+}
+
+.avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.avatarPlaceholder {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: var(--background-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  font-size: 32px;
+}
+
+/* Medical Section styles */
+.medicalCard {
+  background: #1f1f1f;
+  border-color: #303030;
+}
+
+.medicalTitle {
+  color: #E6E6E6;
+  margin: 0;
+}
+
+.iconButton {
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.editIcon {
+  color: #4A90E2;
+}
+
+.saveIcon {
+  color: #52c41a;
+}
+
+.cancelIcon {
+  color: #ff4d4f;
+}
+
+.loadingContainer {
+  text-align: center;
+  padding: 20px;
+}
+
+.medicalTextArea {
+  background: #262626;
+  color: #E6E6E6;
+}
+
+.textAreaError {
+  border-color: #ff4d4f;
+}
+
+.textAreaNormal {
+  border-color: #303030;
+}
+
+.characterCountRow {
+  margin-top: 8px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.smallText {
+  font-size: 12px;
+}
+
+.helpText {
+  margin-top: 8px;
+}
+
+.notesDisplay {
+  min-height: 100px;
+  cursor: text;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.notesDisplayEmpty {
+  padding: 16px;
+}
+
+.notesText {
+  color: #E6E6E6;
+}
+
+.emptyNotesText {
+  font-style: italic;
+}
+
+/* Household Section styles */
+.householdCard {
+  background: #1f1f1f;
+  border-color: #303030;
+}
+
+.householdTitle {
+  color: #E6E6E6;
+  margin: 0;
+}
+
+.householdIcon {
+  margin-right: 8px;
+}
+
+.emptyHousehold {
+  padding: 40px 0;
+}
+
+.householdLink {
+  color: #4A90E2;
+}
+
+.householdText {
+  color: #E6E6E6;
+}
+
+.contactIcon {
+  color: #A6A6A6;
+}
+
+.primaryTag {
+  margin-left: 8px;
+}
+
+.memberTag {
+  background: #262626;
+  border-color: #303030;
+  color: #E6E6E6;
+}
+
+.householdFooter {
+  margin-top: 16px;
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 16px;
+  }
+
+  .headerContent {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .fieldRow {
+    flex-direction: column;
+  }
+
+  .actionButtons {
+    justify-content: stretch;
+  }
+
+  .actionButtons > button {
+    flex: 1;
+  }
+}

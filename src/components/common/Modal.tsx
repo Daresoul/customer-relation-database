@@ -11,6 +11,7 @@ import {
   InfoCircleOutlined,
   QuestionCircleOutlined,
 } from '@ant-design/icons';
+import styles from './Common.module.css';
 
 export interface ModalProps extends AntModalProps {
   variant?: 'default' | 'info' | 'success' | 'warning' | 'error';
@@ -19,10 +20,10 @@ export interface ModalProps extends AntModalProps {
 }
 
 const variantIcons = {
-  info: <InfoCircleOutlined style={{ color: '#1890ff' }} />,
-  success: <CheckCircleOutlined style={{ color: '#52c41a' }} />,
-  warning: <ExclamationCircleOutlined style={{ color: '#faad14' }} />,
-  error: <CloseCircleOutlined style={{ color: '#ff4d4f' }} />,
+  info: <InfoCircleOutlined className={styles.modalIconInfo} />,
+  success: <CheckCircleOutlined className={styles.modalIconSuccess} />,
+  warning: <ExclamationCircleOutlined className={styles.modalIconWarning} />,
+  error: <CloseCircleOutlined className={styles.modalIconError} />,
   default: null,
 };
 
@@ -81,7 +82,7 @@ export const confirmDelete = ({
 }: Omit<Parameters<typeof confirm>[0], 'icon'>) => {
   return confirm({
     title,
-    icon: <ExclamationCircleOutlined style={{ color: '#ff4d4f' }} />,
+    icon: <ExclamationCircleOutlined className={styles.modalIconError} />,
     content,
     okText: 'Delete',
     okType: 'danger',
@@ -101,7 +102,7 @@ export const confirmAction = ({
 }: Omit<Parameters<typeof confirm>[0], 'icon'>) => {
   return confirm({
     title,
-    icon: <QuestionCircleOutlined style={{ color: '#1890ff' }} />,
+    icon: <QuestionCircleOutlined className={styles.modalIconInfo} />,
     content,
     okText: 'Confirm',
     cancelText: 'Cancel',

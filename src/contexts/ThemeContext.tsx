@@ -1,12 +1,14 @@
 /**
  * T034: Theme context for managing application theme
+ * Enhanced to work with new unified theme system
  */
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { ConfigProvider, theme as antTheme } from 'antd';
-import { darkTheme, lightTheme, medicalTheme } from '../config/theme.config';
+import { createUnifiedTheme } from '../styles/theme/unifiedTheme';
+import { generateCSSVariables, injectCSSVariables } from '../styles/theme/cssVariables';
 
-export type ThemeMode = 'dark' | 'light' | 'medical';
+export type ThemeMode = 'dark' | 'light';
 
 interface ThemeContextType {
   themeMode: ThemeMode;
@@ -15,20 +17,16 @@ interface ThemeContextType {
   setPrimaryColor: (color: string) => void;
   fontSize: number;
   setFontSize: (size: number) => void;
+  cssVariables: Record<string, string>;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
-
-const themeMap = {
-  dark: darkTheme,
-  light: lightTheme,
-  medical: medicalTheme,
-};
 
 export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [themeMode, setThemeModeState] = useState<ThemeMode>('dark');
   const [primaryColor, setPrimaryColorState] = useState('#4A90E2');
   const [fontSize, setFontSizeState] = useState(14);
+  const [cssVariables, setCssVariables] = useState<Record<string, string>>({});
 
   // Load theme preference on mount
   useEffect(() => {
@@ -36,7 +34,7 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const savedColor = localStorage.getItem('primaryColor');
     const savedFontSize = localStorage.getItem('fontSize');
 
-    if (savedTheme && ['dark', 'light', 'medical'].includes(savedTheme)) {
+    if (savedTheme && ['dark', 'light'].includes(savedTheme)) {
       setThemeModeState(savedTheme);
     }
     if (savedColor) {
@@ -46,6 +44,25 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       setFontSizeState(parseInt(savedFontSize, 10));
     }
   }, []);
+
+  // Update CSS variables whenever theme changes
+  useEffect(() => {
+    const theme = createUnifiedTheme({
+      mode: themeMode,
+      primaryColor,
+      fontSize,
+    });
+
+    const variables = generateCSSVariables(theme, themeMode === 'dark');
+    setCssVariables(variables);
+    injectCSSVariables(variables);
+
+    // Also set the data-theme attribute for legacy CSS
+    document.documentElement.setAttribute('data-theme', themeMode);
+
+    // Apply theme-specific classes to body
+    document.body.className = themeMode === 'dark' ? 'dark-theme' : 'light-theme';
+  }, [themeMode, primaryColor, fontSize]);
 
   // Save theme preference
   const setThemeMode = (mode: ThemeMode) => {
@@ -63,15 +80,12 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     localStorage.setItem('fontSize', size.toString());
   };
 
-  // Get current theme config
-  const currentTheme = {
-    ...themeMap[themeMode],
-    token: {
-      ...themeMap[themeMode].token,
-      colorPrimary: primaryColor,
-      fontSize,
-    },
-  };
+  // Get current theme config using unified theme
+  const currentTheme = createUnifiedTheme({
+    mode: themeMode,
+    primaryColor,
+    fontSize,
+  });
 
   return (
     <ThemeContext.Provider
@@ -82,6 +96,7 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         setPrimaryColor,
         fontSize,
         setFontSize,
+        cssVariables,
       }}
     >
       <ConfigProvider theme={currentTheme}>

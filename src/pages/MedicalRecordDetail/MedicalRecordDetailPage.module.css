@@ -1,0 +1,81 @@
+/* MedicalRecordDetail Page styles */
+.contentPadding {
+  padding: 24px;
+  background: #141414;
+}
+
+.contentCenter {
+  padding: 24px;
+  text-align: center;
+  background: #141414;
+  min-height: 100vh;
+}
+
+.contentMinHeight {
+  padding: 24px;
+  background: #141414;
+  min-height: 100vh;
+}
+
+.loadingText {
+  margin-top: 16px;
+  color: #E6E6E6;
+}
+
+.breadcrumbContainer {
+  margin-bottom: 16px;
+}
+
+.breadcrumbLink {
+  color: #4A90E2;
+}
+
+.breadcrumbText {
+  color: #E6E6E6;
+}
+
+.titleZeroMargin {
+  margin: 0;
+  color: #E6E6E6;
+}
+
+.versionControls {
+  margin-bottom: 12px;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.marginTop16 {
+  margin-top: 16px;
+}
+
+.descriptionLabel {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.descriptionText {
+  margin: 0;
+  white-space: pre-wrap;
+  color: #E6E6E6;
+}
+
+.cardMarginTop {
+  margin-top: 16px;
+}
+
+.iframe {
+  width: 100%;
+  height: 480px;
+  border: 0;
+}
+
+.image {
+  max-width: 100%;
+  display: block;
+}
+
+.attachmentLink {
+  color: #E6E6E6;
+}

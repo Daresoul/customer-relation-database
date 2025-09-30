@@ -1,0 +1,503 @@
+/* Settings Page Styles */
+
+/* Layout */
+.container {
+  min-height: 100vh;
+  background: var(--background);
+}
+
+.contentWrapper {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.breadcrumbLink {
+  color: #4A90E2;
+}
+
+.breadcrumbCurrent {
+  color: var(--text-primary);
+}
+
+.settingsLayout {
+  background: transparent;
+}
+
+.formAction {
+  margin: 0;
+}
+
+.titleCard {
+  margin-bottom: 24px;
+}
+
+.sidebarMenu {
+  background: transparent !important;
+  border: none !important;
+  height: 100%;
+}
+
+.saveCard {
+  background: var(--card-bg);
+  border-color: var(--border);
+  margin-top: 16px;
+}
+
+.cancelButton {
+  background: var(--container-bg);
+  border-color: var(--border);
+}
+
+.backButton {
+  /* Uses theme colors */
+}
+
+.sidebar {
+  width: 240px;
+  background: var(--card-bg);
+  border-right: 1px solid var(--border);
+  padding: 24px 0;
+}
+
+.sidebarMenu {
+  padding: 0 16px;
+}
+
+.menuItem {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  margin: 4px 0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.menuItem:hover {
+  background: var(--hover-bg);
+}
+
+.menuItemActive {
+  background: var(--primary-bg);
+  color: var(--primary);
+  font-weight: 500;
+}
+
+.menuIcon {
+  margin-right: 12px;
+  font-size: 16px;
+}
+
+.content {
+  flex: 1;
+  padding: 24px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+/* Headers */
+.header {
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-top: 8px;
+}
+
+.sectionTitle {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+}
+
+/* Form Elements */
+.section {
+  margin-bottom: 32px;
+}
+
+.formItem {
+  margin-bottom: 24px;
+}
+
+.formLabel {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.formHint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+.inputGroup {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.inputWrapper {
+  flex: 1;
+}
+
+.input {
+  width: 100%;
+}
+
+.select {
+  width: 100%;
+  min-width: 200px;
+}
+
+/* Buttons */
+.buttonGroup {
+  display: flex;
+  gap: 8px;
+  margin-top: 24px;
+}
+
+.saveButton {
+  min-width: 120px;
+}
+
+.cancelButton {
+  min-width: 100px;
+}
+
+.actionButton {
+  margin-left: 8px;
+}
+
+/* Room Settings Specific */
+.roomsContainer {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.roomsCard {
+  margin-bottom: 16px;
+  background: var(--card-bg);
+  border-color: var(--border);
+}
+
+.cardTitle {
+  color: var(--text-primary);
+}
+
+.roomColorBox {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: 1px solid #d9d9d9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+  opacity: 1;
+}
+
+.roomColorInactive {
+  opacity: 0.5;
+}
+
+.roomNameActive {
+  color: inherit;
+  text-decoration: none;
+}
+
+.roomNameInactive {
+  color: #999;
+  text-decoration: line-through;
+}
+
+.fullWidth {
+  width: 100%;
+}
+
+.colorPickerInput {
+  width: 100px;
+  height: 40px;
+}
+
+.roomItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  margin-bottom: 8px;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  transition: all 0.3s ease;
+}
+
+.roomItem:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.roomInfo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.roomColor {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+}
+
+.roomName {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.roomCapacity {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.roomActions {
+  display: flex;
+  gap: 8px;
+}
+
+.addRoomForm {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+  background: var(--background);
+  border-radius: 6px;
+  margin-top: 16px;
+}
+
+.colorPicker {
+  width: 100px;
+}
+
+/* Appointment Settings */
+.appointmentsCard {
+  margin-bottom: 16px;
+  background: var(--card-bg);
+  border-color: var(--border);
+}
+
+.alertBox {
+  margin-bottom: 24px;
+}
+
+.connectionStatus {
+  color: var(--text-primary);
+}
+
+.statusDisconnected {
+  color: #ff4d4f;
+}
+
+.statusConnected {
+  color: #52c41a;
+}
+
+.disconnectButton {
+  display: none;
+}
+
+.timeSlotGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.timeSlot {
+  padding: 8px 12px;
+  text-align: center;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.timeSlot:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.timeSlotSelected {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+.switchItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+}
+
+.switchLabel {
+  flex: 1;
+}
+
+.switchLabelText {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.switchDescription {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+/* General Settings */
+.settingsCard {
+  margin-bottom: 16px;
+  background: var(--card-bg);
+  border-color: var(--border);
+}
+
+.languageSelector {
+  display: flex;
+  gap: 8px;
+}
+
+.themeSelector {
+  display: flex;
+  gap: 16px;
+}
+
+.themeOption {
+  padding: 12px;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-align: center;
+}
+
+.themeOption:hover {
+  border-color: var(--primary);
+}
+
+.themeOptionSelected {
+  border-color: var(--primary);
+  background: var(--primary-bg);
+}
+
+.themePreview {
+  width: 80px;
+  height: 60px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+/* Business Settings */
+.businessCard {
+  margin-bottom: 16px;
+  background: var(--card-bg);
+  border-color: var(--border);
+}
+
+.businessInfo {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+}
+
+.uploadArea {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background: var(--background);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+}
+
+.logoPreview {
+  width: 80px;
+  height: 80px;
+  border-radius: 8px;
+  object-fit: contain;
+  background: white;
+  padding: 8px;
+}
+
+/* Loading & Error States */
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
+}
+
+.error {
+  padding: 16px;
+  background: var(--error-bg);
+  color: var(--error);
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.success {
+  padding: 16px;
+  background: var(--success-bg);
+  color: var(--success);
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .container {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding: 16px;
+  }
+
+  .content {
+    padding: 16px;
+  }
+
+  .inputGroup {
+    flex-direction: column;
+  }
+
+  .businessInfo {
+    grid-template-columns: 1fr;
+  }
+
+  .addRoomForm {
+    flex-direction: column;
+  }
+}

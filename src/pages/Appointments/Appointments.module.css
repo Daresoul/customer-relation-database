@@ -1,73 +1,73 @@
-.appointments-page {
+.appointmentsPage {
   height: 100vh;
   background: #f0f2f5;
 }
 
-.appointments-header {
+.appointmentsHeader {
   background: #fff;
   padding: 0 24px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   z-index: 10;
 }
 
-.appointments-header-content {
+.appointmentsHeaderContent {
   display: flex;
   justify-content: space-between;
   align-items: center;
   height: 100%;
 }
 
-.appointments-header-left {
+.appointmentsHeaderLeft {
   display: flex;
   align-items: center;
   gap: 48px;
 }
 
-.appointments-header-left h1 {
+.appointmentsHeaderLeft h1 {
   margin: 0;
   font-size: 24px;
   font-weight: 600;
 }
 
-.appointments-content {
+.appointmentsContent {
   padding: 24px;
   background: #f0f2f5;
   height: calc(100vh - 64px);
   overflow: hidden;
 }
 
-.appointments-content .ant-tabs {
+.appointmentsContent .antTabs {
   height: 100%;
   background: #fff;
   border-radius: 8px;
   padding: 16px;
 }
 
-.appointments-content .ant-tabs-content {
+.appointmentsContent .antTabsContent {
   height: calc(100% - 46px);
 }
 
-.appointments-content .ant-tabs-tabpane {
+.appointmentsContent .antTabsTabpane {
   height: 100%;
   overflow: auto;
 }
 
-.appointment-detail .detail-info {
+.appointmentDetail .detailInfo {
   margin-top: 16px;
 }
 
-.appointment-detail .detail-info > div {
+.appointmentDetail .detailInfo > div {
   margin-bottom: 12px;
   padding: 8px 0;
   border-bottom: 1px solid #f0f0f0;
 }
 
-.appointment-detail .detail-info > div:last-child {
+.appointmentDetail .detailInfo > div:last-child {
   border-bottom: none;
 }
 
 /* Filter drawer styles */
-.ant-drawer-body label {
+.antDrawerBody label {
   display: block;
   margin-bottom: 8px;
   font-weight: 500;
@@ -75,41 +75,56 @@
 }
 
 /* Statistics styles */
-.ant-statistic {
+.antStatistic {
   text-align: center;
 }
 
-.ant-statistic-title {
+.antStatisticTitle {
   font-size: 12px;
   color: #8c8c8c;
 }
 
-.ant-statistic-content {
+.antStatisticContent {
   font-size: 20px;
   font-weight: 600;
 }
 
+/* Utility classes */
+.fullWidth {
+  width: 100%;
+}
+
+.fullHeightScroll {
+  height: 100%;
+  overflow: auto;
+}
+
+.filterLabel {
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
 /* Responsive styles */
 @media (max-width: 768px) {
-  .appointments-header-content {
+  .appointmentsHeaderContent {
     flex-direction: column;
     align-items: flex-start;
     padding: 16px 0;
   }
 
-  .appointments-header-left {
+  .appointmentsHeaderLeft {
     flex-direction: column;
     align-items: flex-start;
     gap: 16px;
     margin-bottom: 16px;
   }
 
-  .appointments-content {
+  .appointmentsContent {
     padding: 16px;
   }
 
-  .ant-drawer {
-    width: 100% !important;
-    max-width: 100% !important;
+  .antDrawer {
+    width: 100%;
+    max-width: 100%;
   }
 }

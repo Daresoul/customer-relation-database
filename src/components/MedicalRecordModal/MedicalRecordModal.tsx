@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import MedicalRecordForm from './MedicalRecordForm';
 import { useMedicalRecord, useCreateMedicalRecord, useUpdateMedicalRecord, useUploadAttachment } from '@/hooks/useMedicalRecords';
 import type { CreateMedicalRecordInput, UpdateMedicalRecordInput, MedicalRecordHistory } from '@/types/medical';
+import styles from './MedicalRecordModal.module.css';
 
 interface MedicalRecordModalProps {
   open: boolean;
@@ -103,11 +104,11 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
       destroyOnHidden
     >
       {isEdit && isLoadingRecord ? (
-        <div style={{ textAlign: 'center', padding: '50px 0' }}>
+        <div className={styles.loadingContainer}>
           <Spin size="large" />
         </div>
       ) : isEdit && isError ? (
-        <div style={{ padding: 16 }}>
+        <div className={styles.contentContainer}>
           <Alert
             type="error"
             showIcon
@@ -140,7 +141,7 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
 
           {isEdit && recordDetail?.history && recordDetail.history.length > 0 && (
             <>
-              <Divider style={{ marginTop: 24 }} />
+              <Divider className={styles.divider} />
               <HistoryList history={recordDetail.history} />
             </>
           )}
@@ -170,14 +171,14 @@ const HistoryList: React.FC<{ history: MedicalRecordHistory[] }> = ({ history })
 
   return (
     <div>
-      <Text strong style={{ color: '#E6E6E6' }}>Change History</Text>
+      <Text strong className={styles.changeHistoryTitle}>Change History</Text>
       <List
         size="small"
         dataSource={items}
         renderItem={(item) => (
           <List.Item>
-            <Space direction="vertical" size={0} style={{ width: '100%' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <Space direction="vertical" size={0} className={styles.fullWidth}>
+              <div className={styles.flexBetween}>
                 <Text>Version {item.version}</Text>
                 <Text type="secondary">{new Date(item.changedAt).toLocaleString()}</Text>
               </div>
@@ -202,7 +203,7 @@ const HistoryList: React.FC<{ history: MedicalRecordHistory[] }> = ({ history })
                     return (
                       <div>
                         {keys.map(k => (
-                          <Text key={k} type="secondary" style={{ display: 'block' }}>
+                          <Text key={k} type="secondary" className={styles.changeDetail}>
                             {k}: {String(oldVals[k])} 	→ {String(newVals[k])}
                           </Text>
                         ))}
@@ -227,7 +228,7 @@ const HistoryList: React.FC<{ history: MedicalRecordHistory[] }> = ({ history })
             </Space>
           </List.Item>
         )}
-        style={{ marginTop: 8 }}
+        className={styles.timelineItem}
       />
     </div>
   );

@@ -3,6 +3,7 @@ import { Card, Form, Select, Typography } from 'antd';
 import { GlobalOutlined, BgColorsOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors } from '../../../utils/themeStyles';
+import styles from '../Settings.module.css';
 
 const { Text } = Typography;
 const { Option } = Select;
@@ -20,24 +21,20 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ form, isUpdating }) =
     <div>
       <Card
         title={
-          <span style={{ color: themeColors.text }}>
+          <span className={styles.cardTitle}>
             <GlobalOutlined /> {t('common:language')}
           </span>
         }
-        style={{
-          marginBottom: 16,
-          background: themeColors.cardBg,
-          borderColor: themeColors.border
-        }}
+        className={styles.settingsCard}
       >
         <Form.Item
           name="language"
-          label={<span style={{ color: themeColors.text }}>{t('common:language')}</span>}
+          label={<span className={styles.formLabel}>{t('common:language')}</span>}
           rules={[{ required: true, message: t('forms:validation.required') }]}
         >
           <Select
             size="large"
-            style={{ width: '100%' }}
+            className={styles.fullWidth}
             disabled={isUpdating}
           >
             <Option value="en">
@@ -52,24 +49,20 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ form, isUpdating }) =
 
       <Card
         title={
-          <span style={{ color: themeColors.text }}>
+          <span className={styles.cardTitle}>
             <BgColorsOutlined /> {t('common:theme')}
           </span>
         }
-        style={{
-          marginBottom: 16,
-          background: themeColors.cardBg,
-          borderColor: themeColors.border
-        }}
+        className={styles.settingsCard}
       >
         <Form.Item
           name="theme"
-          label={<span style={{ color: themeColors.text }}>{t('common:theme')}</span>}
+          label={<span className={styles.formLabel}>{t('common:theme')}</span>}
           rules={[{ required: true, message: t('forms:validation.required') }]}
         >
           <Select
             size="large"
-            style={{ width: '100%' }}
+            className={styles.fullWidth}
             disabled={isUpdating}
           >
             <Option value="light">☀️ Light</Option>
@@ -79,12 +72,12 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ form, isUpdating }) =
 
         <Form.Item
           name="dateFormat"
-          label={<span style={{ color: themeColors.text }}>{t('common:dateFormat')}</span>}
+          label={<span className={styles.formLabel}>{t('common:dateFormat')}</span>}
           rules={[{ required: true, message: t('forms:validation.required') }]}
         >
           <Select
             size="large"
-            style={{ width: '100%' }}
+            className={styles.fullWidth}
             disabled={isUpdating}
           >
             <Option value="MM/DD/YYYY">MM/DD/YYYY (01/31/2024)</Option>

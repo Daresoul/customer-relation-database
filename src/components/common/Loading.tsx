@@ -9,6 +9,7 @@ import {
   SyncOutlined,
   HourglassOutlined,
 } from '@ant-design/icons';
+import styles from './Common.module.css';
 
 export interface LoadingProps {
   size?: 'small' | 'default' | 'large';
@@ -45,9 +46,7 @@ export const Loading: React.FC<LoadingProps> = ({
           size={size}
           tip={tip}
           indicator={icon}
-          style={{
-            fontSize: size === 'large' ? 32 : size === 'small' ? 14 : 24,
-          }}
+          className={size === 'large' ? styles.spinnerLarge : size === 'small' ? styles.spinnerSmall : styles.spinnerDefault}
         />
       )}
       {type === 'dots' && (
@@ -68,20 +67,7 @@ export const Loading: React.FC<LoadingProps> = ({
 
   if (fullScreen) {
     return (
-      <div
-        style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          backgroundColor: overlay ? 'rgba(0, 0, 0, 0.75)' : 'transparent',
-          zIndex: 9999,
-        }}
-      >
+      <div className={overlay ? styles.fullScreenOverlay : styles.fullScreenTransparent}>
         {spinElement}
       </div>
     );
@@ -89,28 +75,8 @@ export const Loading: React.FC<LoadingProps> = ({
 
   if (overlay) {
     return (
-      <div
-        style={{
-          position: 'relative',
-          width: '100%',
-          height: '100%',
-          minHeight: 100,
-        }}
-      >
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            zIndex: 10,
-          }}
-        >
+      <div className={styles.overlayContainer}>
+        <div className={styles.overlayInner}>
           {spinElement}
         </div>
       </div>
@@ -124,18 +90,9 @@ export const Loading: React.FC<LoadingProps> = ({
 export const PageLoader: React.FC<{ message?: string }> = ({
   message = 'Loading...',
 }) => (
-  <div
-    style={{
-      height: '100vh',
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      flexDirection: 'column',
-      gap: '16px',
-    }}
-  >
+  <div className={styles.pageLoaderContainer}>
     <Loading size="large" />
-    <div style={{ fontSize: '16px', color: '#8c8c8c' }}>{message}</div>
+    <div className={styles.pageLoaderText}>{message}</div>
   </div>
 );
 
@@ -165,9 +122,9 @@ export const ContentLoader: React.FC<ContentLoaderProps> = ({
 
 // Table loader
 export const TableLoader: React.FC<{ rows?: number }> = ({ rows = 5 }) => (
-  <Space direction="vertical" style={{ width: '100%' }}>
+  <Space direction="vertical" className={styles.tableLoaderContainer}>
     {Array.from({ length: rows }).map((_, index) => (
-      <Skeleton.Input key={index} active style={{ width: '100%' }} />
+      <Skeleton.Input key={index} active className={styles.skeletonFullWidth} />
     ))}
   </Space>
 );
@@ -176,7 +133,7 @@ export const TableLoader: React.FC<{ rows?: number }> = ({ rows = 5 }) => (
 export const CardLoader: React.FC<{ count?: number }> = ({ count = 3 }) => (
   <Space size="large">
     {Array.from({ length: count }).map((_, index) => (
-      <div key={index} style={{ width: 300 }}>
+      <div key={index} className={styles.cardLoaderItem}>
         <Skeleton active avatar paragraph={{ rows: 3 }} />
       </div>
     ))}
@@ -185,7 +142,7 @@ export const CardLoader: React.FC<{ count?: number }> = ({ count = 3 }) => (
 
 // List loader
 export const ListLoader: React.FC<{ items?: number }> = ({ items = 5 }) => (
-  <Space direction="vertical" style={{ width: '100%' }}>
+  <Space direction="vertical" className={styles.tableLoaderContainer}>
     {Array.from({ length: items }).map((_, index) => (
       <Skeleton key={index} active avatar title={{ width: '50%' }} paragraph={{ rows: 1 }} />
     ))}
@@ -194,14 +151,14 @@ export const ListLoader: React.FC<{ items?: number }> = ({ items = 5 }) => (
 
 // Form loader
 export const FormLoader: React.FC<{ fields?: number }> = ({ fields = 4 }) => (
-  <Space direction="vertical" style={{ width: '100%' }} size="large">
+  <Space direction="vertical" className={styles.formLoaderContainer} size="large">
     {Array.from({ length: fields }).map((_, index) => (
       <div key={index}>
-        <Skeleton.Input active size="small" style={{ width: 100, marginBottom: 8 }} />
-        <Skeleton.Input active style={{ width: '100%' }} />
+        <Skeleton.Input active size="small" className={styles.formLoaderLabel} />
+        <Skeleton.Input active className={styles.formLoaderInput} />
       </div>
     ))}
-    <Skeleton.Button active style={{ width: 120 }} />
+    <Skeleton.Button active className={styles.formLoaderButton} />
   </Space>
 );
 
@@ -211,13 +168,13 @@ export const InlineLoader: React.FC<{ text?: string }> = ({
 }) => (
   <Space size="small">
     <Spin size="small" />
-    <span style={{ color: '#8c8c8c' }}>{text}</span>
+    <span className={styles.inlineLoaderText}>{text}</span>
   </Space>
 );
 
 // Button loader
 export const ButtonLoader: React.FC = () => (
-  <Spin size="small" style={{ marginRight: 8 }} />
+  <Spin size="small" className={styles.buttonLoaderMargin} />
 );
 
 // Lazy loading wrapper
@@ -240,30 +197,11 @@ export const LazyLoader: React.FC<LazyLoaderProps> = ({
 
   if (error) {
     return (
-      <div
-        style={{
-          height: '100vh',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          flexDirection: 'column',
-          gap: '16px',
-        }}
-      >
-        <div style={{ fontSize: '18px', color: '#ff4d4f' }}>Error loading content</div>
-        <div style={{ fontSize: '14px', color: '#8c8c8c' }}>{error.message}</div>
+      <div className={styles.lazyLoaderError}>
+        <div className={styles.lazyLoaderErrorTitle}>Error loading content</div>
+        <div className={styles.lazyLoaderErrorMessage}>{error.message}</div>
         {retry && (
-          <button
-            onClick={retry}
-            style={{
-              padding: '8px 16px',
-              borderRadius: '4px',
-              border: 'none',
-              backgroundColor: '#1890ff',
-              color: 'white',
-              cursor: 'pointer',
-            }}
-          >
+          <button onClick={retry} className={styles.lazyLoaderButton}>
             Retry
           </button>
         )}

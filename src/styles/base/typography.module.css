@@ -1,0 +1,415 @@
+/**
+ * Typography system using CSS Modules
+ * Uses CSS variables from the theme for consistency
+ */
+
+@layer base {
+  /* Base font family */
+  .fontBase {
+    font-family: var(--font-family);
+  }
+
+  .fontMono {
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  }
+
+  /* Font sizes */
+  .textXs {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .textSm {
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-sm);
+  }
+
+  .textBase {
+    font-size: var(--font-size-base);
+    line-height: var(--line-height-base);
+  }
+
+  .textLg {
+    font-size: var(--font-size-lg);
+    line-height: var(--line-height-lg);
+  }
+
+  .textXl {
+    font-size: var(--font-size-xl);
+    line-height: 1.5;
+  }
+
+  .text2xl {
+    font-size: var(--font-size-xxl);
+    line-height: 1.4;
+  }
+
+  .text3xl {
+    font-size: 30px;
+    line-height: 1.35;
+  }
+
+  .text4xl {
+    font-size: 36px;
+    line-height: 1.25;
+  }
+
+  .text5xl {
+    font-size: 48px;
+    line-height: 1.2;
+  }
+
+  /* Font weights */
+  .fontNormal {
+    font-weight: var(--font-weight-normal);
+  }
+
+  .fontMedium {
+    font-weight: var(--font-weight-medium);
+  }
+
+  .fontSemibold {
+    font-weight: var(--font-weight-strong);
+  }
+
+  .fontBold {
+    font-weight: 700;
+  }
+
+  /* Headings */
+  .h1 {
+    font-size: 38px;
+    font-weight: var(--font-weight-strong);
+    line-height: 1.23;
+    margin-bottom: 0.5em;
+    margin-top: 0;
+    color: var(--text-primary);
+  }
+
+  .h2 {
+    font-size: 30px;
+    font-weight: var(--font-weight-strong);
+    line-height: 1.35;
+    margin-bottom: 0.5em;
+    margin-top: 0;
+    color: var(--text-primary);
+  }
+
+  .h3 {
+    font-size: 24px;
+    font-weight: var(--font-weight-strong);
+    line-height: 1.35;
+    margin-bottom: 0.5em;
+    margin-top: 0;
+    color: var(--text-primary);
+  }
+
+  .h4 {
+    font-size: 20px;
+    font-weight: var(--font-weight-strong);
+    line-height: 1.4;
+    margin-bottom: 0.5em;
+    margin-top: 0;
+    color: var(--text-primary);
+  }
+
+  .h5 {
+    font-size: 16px;
+    font-weight: var(--font-weight-strong);
+    line-height: 1.5;
+    margin-bottom: 0.5em;
+    margin-top: 0;
+    color: var(--text-primary);
+  }
+
+  .h6 {
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-strong);
+    line-height: 1.5;
+    margin-bottom: 0.5em;
+    margin-top: 0;
+    color: var(--text-primary);
+  }
+
+  /* Text alignment */
+  .textLeft {
+    text-align: left;
+  }
+
+  .textCenter {
+    text-align: center;
+  }
+
+  .textRight {
+    text-align: right;
+  }
+
+  .textJustify {
+    text-align: justify;
+  }
+
+  /* Text decoration */
+  .underline {
+    text-decoration: underline;
+  }
+
+  .noUnderline {
+    text-decoration: none;
+  }
+
+  .lineThrough {
+    text-decoration: line-through;
+  }
+
+  /* Text transform */
+  .uppercase {
+    text-transform: uppercase;
+  }
+
+  .lowercase {
+    text-transform: lowercase;
+  }
+
+  .capitalize {
+    text-transform: capitalize;
+  }
+
+  .normalCase {
+    text-transform: none;
+  }
+
+  /* Letter spacing */
+  .trackingTight {
+    letter-spacing: -0.025em;
+  }
+
+  .trackingNormal {
+    letter-spacing: 0;
+  }
+
+  .trackingWide {
+    letter-spacing: 0.025em;
+  }
+
+  .trackingWider {
+    letter-spacing: 0.05em;
+  }
+
+  .trackingWidest {
+    letter-spacing: 0.1em;
+  }
+
+  /* Line height */
+  .leadingNone {
+    line-height: 1;
+  }
+
+  .leadingTight {
+    line-height: 1.25;
+  }
+
+  .leadingSnug {
+    line-height: 1.375;
+  }
+
+  .leadingNormal {
+    line-height: 1.5;
+  }
+
+  .leadingRelaxed {
+    line-height: 1.625;
+  }
+
+  .leadingLoose {
+    line-height: 2;
+  }
+
+  /* Text color utilities */
+  .textPrimary {
+    color: var(--text-primary);
+  }
+
+  .textSecondary {
+    color: var(--text-secondary);
+  }
+
+  .textTertiary {
+    color: var(--text-tertiary);
+  }
+
+  .textQuaternary {
+    color: var(--text-quaternary);
+  }
+
+  .textDisabled {
+    color: var(--text-disabled);
+  }
+
+  .textSuccess {
+    color: var(--color-success);
+  }
+
+  .textWarning {
+    color: var(--color-warning);
+  }
+
+  .textError {
+    color: var(--color-error);
+  }
+
+  .textInfo {
+    color: var(--color-info);
+  }
+
+  .textLink {
+    color: var(--link-color);
+    cursor: pointer;
+    transition: color var(--motion-duration-fast);
+  }
+
+  .textLink:hover {
+    color: var(--link-hover);
+    text-decoration: underline;
+  }
+
+  .textLink:active {
+    color: var(--link-active);
+  }
+
+  /* Lists */
+  .listNone {
+    list-style: none;
+  }
+
+  .listDisc {
+    list-style-type: disc;
+    padding-left: 1.5em;
+  }
+
+  .listDecimal {
+    list-style-type: decimal;
+    padding-left: 1.5em;
+  }
+
+  /* Prose styles for article content */
+  .prose {
+    font-size: var(--font-size-base);
+    line-height: 1.7;
+    color: var(--text-primary);
+  }
+
+  .prose p {
+    margin-bottom: 1.25em;
+  }
+
+  .prose h1,
+  .prose h2,
+  .prose h3,
+  .prose h4,
+  .prose h5,
+  .prose h6 {
+    margin-top: 2em;
+    margin-bottom: 1em;
+    font-weight: var(--font-weight-strong);
+  }
+
+  .prose ul,
+  .prose ol {
+    margin-bottom: 1.25em;
+    padding-left: 1.5em;
+  }
+
+  .prose li {
+    margin-bottom: 0.5em;
+  }
+
+  .prose blockquote {
+    border-left: 4px solid var(--border-base);
+    padding-left: 1em;
+    margin-left: 0;
+    margin-right: 0;
+    font-style: italic;
+    color: var(--text-secondary);
+  }
+
+  .prose code {
+    background-color: var(--bg-spotlight);
+    padding: 0.2em 0.4em;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    font-size: 0.875em;
+  }
+
+  .prose pre {
+    background-color: var(--bg-spotlight);
+    padding: 1em;
+    border-radius: var(--radius-base);
+    overflow-x: auto;
+    margin-bottom: 1.25em;
+  }
+
+  .prose pre code {
+    background-color: transparent;
+    padding: 0;
+  }
+
+  .prose a {
+    color: var(--link-color);
+    text-decoration: underline;
+  }
+
+  .prose a:hover {
+    color: var(--link-hover);
+  }
+
+  .prose strong {
+    font-weight: var(--font-weight-strong);
+  }
+
+  .prose em {
+    font-style: italic;
+  }
+
+  /* Utility for medical record emphasis */
+  .medicalEmphasis {
+    font-weight: var(--font-weight-strong);
+    color: var(--color-error);
+  }
+
+  .medicalNote {
+    font-style: italic;
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+  }
+
+  /* Responsive typography */
+  @media (max-width: 768px) {
+    .h1 {
+      font-size: 30px;
+    }
+
+    .h2 {
+      font-size: 24px;
+    }
+
+    .h3 {
+      font-size: 20px;
+    }
+
+    .h4 {
+      font-size: 18px;
+    }
+
+    .h5 {
+      font-size: 16px;
+    }
+
+    .text4xl {
+      font-size: 30px;
+    }
+
+    .text5xl {
+      font-size: 36px;
+    }
+  }
+}

@@ -3,6 +3,7 @@ import { Modal, Form, Input, Select, Button, Space, Radio } from 'antd';
 import { PlusOutlined, MinusCircleOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { CreatePersonWithContactsDto } from '../../../types/household';
+import styles from './AddPersonModal.module.css';
 
 interface AddPersonModalProps {
   visible: boolean;
@@ -127,12 +128,12 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({
             {(fields, { add, remove }) => (
               <>
                 {fields.map(({ key, name, ...restField }) => (
-                  <Space key={key} style={{ display: 'flex', marginBottom: 8 }} align="baseline">
+                  <Space key={key} className={styles.phoneRow} align="baseline">
                     <Form.Item
                       {...restField}
                       name={[name, 'contactType']}
                       rules={[{ required: true, message: t('detail.people.modal.validation.selectType') }]}
-                      style={{ marginBottom: 0, width: 150 }}
+                      className={styles.phoneTypeInput}
                     >
                       <Select placeholder={t('detail.people.modal.placeholders.contactType')} options={contactTypeOptions} />
                     </Form.Item>
@@ -154,7 +155,7 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({
                           }
                         })
                       ]}
-                      style={{ marginBottom: 0, flex: 1 }}
+                      className={styles.phoneNumberInput}
                     >
                       <Input placeholder={t('detail.people.modal.placeholders.contactValue')} />
                     </Form.Item>

@@ -14,6 +14,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useThemeColors } from '../../utils/themeStyles';
 import { useAppSettings } from '../../hooks/useAppSettings';
 import { useTheme } from '../../contexts/ThemeContext';
+import styles from './Settings.module.css';
 
 // Import category components
 import GeneralSettings from './components/GeneralSettings';
@@ -118,32 +119,32 @@ const SettingsLayout: React.FC = () => {
   const CurrentComponent = currentMenuItem?.component || GeneralSettings;
 
   return (
-    <Layout style={{ minHeight: '100vh', background: themeColors.background }}>
-      <Content style={{ padding: 24 }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+    <Layout className={styles.container}>
+      <Content className={styles.content}>
+        <div className={styles.contentWrapper}>
           {/* Breadcrumb */}
-          <div style={{ marginBottom: 16 }}>
+          <div className={styles.section}>
             <Breadcrumb
               items={[
                 {
-                  title: <Link to="/" style={{ color: '#4A90E2' }}><HomeOutlined /> {t('navigation:home')}</Link>,
+                  title: <Link to="/" className={styles.breadcrumbLink}><HomeOutlined /> {t('navigation:home')}</Link>,
                 },
                 {
-                  title: <Link to="/" style={{ color: '#4A90E2' }}>{t('navigation:dashboard')}</Link>,
+                  title: <Link to="/" className={styles.breadcrumbLink}>{t('navigation:dashboard')}</Link>,
                 },
                 {
-                  title: <span style={{ color: themeColors.text }}>{t('navigation:settings')}</span>,
+                  title: <span className={styles.breadcrumbCurrent}>{t('navigation:settings')}</span>,
                 },
               ]}
             />
           </div>
 
           {/* Back Button */}
-          <div style={{ marginBottom: 16 }}>
+          <div className={styles.header}>
             <Button
               icon={<ArrowLeftOutlined />}
               onClick={() => navigate(-1)}
-              style={{ background: themeColors.containerBg, borderColor: themeColors.border }}
+              className={styles.backButton}
             >
               {t('common:back')}
             </Button>
@@ -151,39 +152,26 @@ const SettingsLayout: React.FC = () => {
 
           {/* Title */}
           <Card
-            style={{
-              background: themeColors.cardBg,
-              borderColor: themeColors.border,
-              marginBottom: 24
-            }}
+            className={styles.titleCard}
           >
-            <Title level={2} style={{ color: themeColors.text, margin: 0 }}>
+            <Title level={2} className={styles.title}>
               <SettingOutlined /> {t('navigation:settings')}
             </Title>
-            <Text style={{ color: themeColors.textSecondary }}>{t('common:settings')}</Text>
+            <Text className={styles.subtitle}>{t('common:settings')}</Text>
           </Card>
 
           {/* Main Layout */}
-          <Layout style={{ background: 'transparent' }}>
+          <Layout className={styles.settingsLayout}>
             {/* Side Menu */}
             <Sider
               width={250}
-              style={{
-                background: themeColors.cardBg,
-                borderRadius: '8px',
-                marginRight: 24,
-                border: `1px solid ${themeColors.border}`,
-              }}
+              className={styles.sidebar}
             >
               <Menu
                 mode="inline"
                 selectedKeys={[selectedCategory]}
                 onClick={({ key }) => setSelectedCategory(key as SettingsCategory)}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  height: '100%',
-                }}
+                className={styles.sidebarMenu}
                 items={menuItems.map(item => ({
                   key: item.key,
                   icon: item.icon,
@@ -204,13 +192,9 @@ const SettingsLayout: React.FC = () => {
 
                 {/* Save/Cancel buttons - always visible */}
                 <Card
-                  style={{
-                    background: themeColors.cardBg,
-                    borderColor: themeColors.border,
-                    marginTop: 16,
-                  }}
+                  className={styles.saveCard}
                 >
-                  <Form.Item style={{ margin: 0 }}>
+                  <Form.Item className={styles.formAction}>
                     <Space>
                       <Button
                         type="primary"
@@ -224,7 +208,7 @@ const SettingsLayout: React.FC = () => {
                       <Button
                         onClick={handleCancel}
                         size="large"
-                        style={{ background: themeColors.containerBg, borderColor: themeColors.border }}
+                        className={styles.cancelButton}
                       >
                         {t('common:cancel')}
                       </Button>

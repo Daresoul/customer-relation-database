@@ -28,6 +28,7 @@ import type { Dayjs } from 'dayjs';
 import { getDatePickerFormat } from '../../utils/dateFormatter';
 import { Patient, CreatePatientInput, UpdatePatientInput } from '../../types';
 import type { BaseFormProps } from '../../types/ui.types';
+import styles from './Forms.module.css';
 
 interface PatientFormProps extends Omit<BaseFormProps, 'onSubmit'> {
   patient?: Patient;
@@ -99,7 +100,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({
           {mode === 'create' ? 'Create New Patient' : 'Edit Patient'}
         </Space>
       }
-      style={{ maxWidth: '800px' }}
+      className={styles.formCard}
     >
       <Form
         form={form}
@@ -159,7 +160,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({
               rules={[{ validator: validateAge }]}
             >
               <DatePicker
-                style={{ width: '100%' }}
+                className={styles.fullWidth}
                 placeholder="Select date of birth"
                 disabledDate={(current) => current && current > dayjs()}
                 format={getDatePickerFormat()}
@@ -191,7 +192,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({
               ]}
             >
               <InputNumber
-                style={{ width: '100%' }}
+                className={styles.fullWidth}
                 placeholder="Enter weight"
                 step={0.1}
                 precision={2}
@@ -233,7 +234,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({
               hidden={!householdId && mode === 'create'}
             >
               <InputNumber
-                style={{ width: '100%' }}
+                className={styles.fullWidth}
                 placeholder="Household ID (optional)"
                 disabled={!!householdId}
               />

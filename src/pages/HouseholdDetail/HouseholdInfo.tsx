@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Household } from '../../types/household';
 import { useUpdateHousehold } from '../../hooks/useHousehold';
 import { useInlineEdit } from '../../hooks/useAutoSave';
+import styles from './HouseholdDetail.module.css';
 
 const { Text } = Typography;
 
@@ -76,7 +77,7 @@ export const HouseholdInfo: React.FC<HouseholdInfoProps> = ({ household }) => {
             },
             triggerType: ['text'],
           }}
-          style={{ width: '100%' }}
+          className={styles.fullWidth}
         >
           {household.householdName || t('detail.householdInfo.placeholders.name')}
         </Text>
@@ -88,7 +89,7 @@ export const HouseholdInfo: React.FC<HouseholdInfoProps> = ({ household }) => {
             onChange: (value) => addressEdit.onChange(value),
             triggerType: ['text'],
           }}
-          style={{ width: '100%' }}
+          className={styles.fullWidth}
         >
           {household.address || t('detail.householdInfo.placeholders.address')}
         </Text>

@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import dayjs from 'dayjs';
 import DayViewSimple from './DayViewSimple';
 import { Appointment } from '../../types/appointments';
-import { useThemeColors } from '../../utils/themeStyles';
+import styles from './TodaysAppointments.module.css';
 
 interface TodaysAppointmentsProps {
   appointments: Appointment[];
@@ -15,7 +15,6 @@ const TodaysAppointments: React.FC<TodaysAppointmentsProps> = ({
   onSelectAppointment,
   onCreateAppointment,
 }) => {
-  const themeColors = useThemeColors();
   const today = dayjs();
 
   // Filter appointments to only show today's appointments
@@ -27,20 +26,8 @@ const TodaysAppointments: React.FC<TodaysAppointmentsProps> = ({
   }, [allAppointments, today]);
 
   return (
-    <div style={{
-      padding: '16px',
-      background: themeColors.cardBg,
-      borderRadius: '8px',
-      height: '100%',
-      border: `1px solid ${themeColors.border}`
-    }}>
-      <h3 style={{
-        margin: '0 0 16px 0',
-        fontSize: '16px',
-        color: themeColors.text,
-        borderBottom: `1px solid ${themeColors.border}`,
-        paddingBottom: '8px'
-      }}>
+    <div className={styles.container}>
+      <h3 className={styles.header}>
         Today's Appointments
       </h3>
       <DayViewSimple

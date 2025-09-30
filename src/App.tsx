@@ -16,11 +16,9 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { ViewProvider } from './contexts';
 import { AppWrapper } from './components/AppWrapper';
 
-// Import Ant Design styles
-import './styles/antd.css';
-
 // Import global styles
 import './styles/globals.css';
+import styles from './App.module.css';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -34,7 +32,7 @@ const queryClient = new QueryClient({
 
 function App() {
   return (
-    <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}><Spin size="large" /></div>}>
+    <Suspense fallback={<div className={styles.loadingContainer}><Spin size="large" /></div>}>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
           <ViewProvider>

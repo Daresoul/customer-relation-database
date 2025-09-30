@@ -32,6 +32,7 @@ import { Patient, PatientWithHousehold } from '../../types';
 import type { BaseTableProps } from '../../types/ui.types';
 import dayjs from 'dayjs';
 import { formatDate } from '../../utils/dateFormatter';
+import styles from './Tables.module.css';
 
 const { Text } = Typography;
 
@@ -110,10 +111,10 @@ export const PatientTable: React.FC<PatientTableProps> = ({
       sorter: (a, b) => (a.name || '').localeCompare(b.name || ''),
       render: (text, record) => (
         <Space>
-          <HeartOutlined style={{ color: '#ff69b4' }} />
+          <HeartOutlined className={styles.iconPink} />
           <Button
             type="link"
-            style={{ padding: 0, fontWeight: 600 }}
+            className={styles.nameButton}
             onClick={() => navigate(`/patients/${record.id}`)}
           >
             {text}
@@ -288,14 +289,14 @@ export const PatientTable: React.FC<PatientTableProps> = ({
 
   return (
     <div className="patient-table-container">
-      <div style={{ marginBottom: 16 }}>
+      <div className={styles.searchContainer}>
         <Space>
           <Input
             placeholder={t('patients:searchPlaceholder')}
             prefix={<SearchOutlined />}
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
-            style={{ width: 300 }}
+            className={styles.searchInput}
             allowClear
           />
           {selectedRowKeys.length > 0 && (

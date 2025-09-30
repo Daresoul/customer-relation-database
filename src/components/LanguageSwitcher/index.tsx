@@ -2,6 +2,7 @@ import React from 'react';
 import { Select } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useAppSettings } from '../../hooks/useAppSettings';
+import styles from './LanguageSwitcher.module.css';
 
 const { Option } = Select;
 
@@ -18,7 +19,7 @@ export const LanguageSwitcher: React.FC = () => {
       value={settings?.language || i18n.language}
       onChange={handleLanguageChange}
       loading={isLoading}
-      style={{ width: 150 }}
+      className={styles.languageSelect}
     >
       <Option value="en">
         <span role="img" aria-label="English">🇬🇧</span> {t('languages.en')}

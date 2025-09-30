@@ -4,6 +4,7 @@ import { HomeOutlined, UserOutlined, PhoneOutlined, MailOutlined } from '@ant-de
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { HouseholdSummary } from '../../types/patient';
+import styles from './PatientDetail.module.css';
 
 const { Title, Text } = Typography;
 
@@ -16,13 +17,10 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household })
   if (!household) {
     return (
       <Card
-        style={{
-          background: '#1f1f1f',
-          borderColor: '#303030',
-        }}
+        className={styles.householdCard}
         title={
-          <Title level={4} style={{ color: '#E6E6E6', margin: 0 }}>
-            <HomeOutlined style={{ marginRight: 8 }} />
+          <Title level={4} className={styles.householdTitle}>
+            <HomeOutlined className={styles.householdIcon} />
             {t('detail.householdInfo.title')}
           </Title>
         }
@@ -34,7 +32,7 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household })
               {t('detail.householdInfo.noHousehold')}
             </Text>
           }
-          style={{ padding: '40px 0' }}
+          className={styles.emptyHousehold}
         />
       </Card>
     );
@@ -48,13 +46,10 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household })
 
   return (
     <Card
-      style={{
-        background: '#1f1f1f',
-        borderColor: '#303030',
-      }}
+      className={styles.householdCard}
       title={
-        <Title level={4} style={{ color: '#E6E6E6', margin: 0 }}>
-          <HomeOutlined style={{ marginRight: 8 }} />
+        <Title level={4} className={styles.householdTitle}>
+          <HomeOutlined className={styles.householdIcon} />
           {t('detail.householdInfo.title')}
         </Title>
       }
@@ -74,13 +69,13 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household })
         bordered
       >
         <Descriptions.Item label={t('detail.householdInfo.householdName')}>
-          <Link to={`/households/${household.id}`} style={{ color: '#4A90E2' }}>
+          <Link to={`/households/${household.id}`} className={styles.householdLink}>
             {household.householdName}
           </Link>
         </Descriptions.Item>
 
         <Descriptions.Item label={t('detail.householdInfo.address')}>
-          <Text style={{ color: '#E6E6E6' }}>{fullAddress || '-'}</Text>
+          <Text className={styles.householdText}>{fullAddress || '-'}</Text>
         </Descriptions.Item>
 
         {household.primaryContact && (
@@ -88,7 +83,7 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household })
             <Descriptions.Item label={t('detail.householdInfo.primaryContact')}>
               <Space>
                 <UserOutlined />
-                <Text style={{ color: '#E6E6E6' }}>
+                <Text className={styles.householdText}>
                   {household.primaryContact.firstName} {household.primaryContact.lastName}
                 </Text>
                 <Tag color="blue">{t('detail.householdInfo.primary')}</Tag>
@@ -101,15 +96,15 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household })
                   {household.primaryContact.contacts.map((contact) => (
                     <Space key={contact.id}>
                       {contact.type === 'phone' || contact.type === 'mobile' ? (
-                        <PhoneOutlined style={{ color: '#A6A6A6' }} />
+                        <PhoneOutlined className={styles.contactIcon} />
                       ) : (
-                        <MailOutlined style={{ color: '#A6A6A6' }} />
+                        <MailOutlined className={styles.contactIcon} />
                       )}
-                      <Text style={{ color: '#E6E6E6' }}>
+                      <Text className={styles.householdText}>
                         {contact.value}
                       </Text>
                       {contact.isPrimary && (
-                        <Tag color="green" style={{ marginLeft: 8 }}>{t('detail.householdInfo.primary')}</Tag>
+                        <Tag color="green" className={styles.primaryTag}>{t('detail.householdInfo.primary')}</Tag>
                       )}
                     </Space>
                   ))}
@@ -125,7 +120,7 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household })
               {household.people
                 .filter(person => !person.isPrimary)
                 .map(person => (
-                  <Tag key={person.id} style={{ background: '#262626', borderColor: '#303030', color: '#E6E6E6' }}>
+                  <Tag key={person.id} className={styles.memberTag}>
                     {person.firstName} {person.lastName}
                   </Tag>
                 ))}
@@ -134,9 +129,9 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household })
         )}
       </Descriptions>
 
-      <div style={{ marginTop: 16 }}>
+      <div className={styles.householdFooter}>
         <Link to={`/households/${household.id}`}>
-          <Text style={{ color: '#4A90E2' }}>
+          <Text className={styles.householdLink}>
             {t('detail.householdInfo.viewDetails')}
           </Text>
         </Link>

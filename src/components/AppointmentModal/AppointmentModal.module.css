@@ -1,0 +1,28 @@
+/* AppointmentModal styles */
+.fullWidth {
+  width: 100%;
+}
+
+.modalContent {
+  padding: 0;
+}
+
+.formContainer {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.formItem {
+  margin-bottom: 16px;
+}
+
+.timeSlots {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 8px;
+}
+
+.conflictWarning {
+  color: var(--error-color);
+  margin-top: 8px;
+}

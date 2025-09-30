@@ -19,6 +19,7 @@ import {
   NumberOutlined,
   CalendarOutlined,
 } from '@ant-design/icons';
+import styles from './Common.module.css';
 
 const { TextArea: AntTextArea, Search: AntSearch, Password: AntPassword } = AntInput;
 
@@ -56,7 +57,7 @@ export const Input: React.FC<InputProps> = ({
   };
 
   return (
-    <div style={{ width: fullWidth ? '100%' : undefined }}>
+    <div className={fullWidth ? styles.inputContainer : undefined}>
       <AntInput
         prefix={icon}
         status={error ? 'error' : undefined}
@@ -64,11 +65,7 @@ export const Input: React.FC<InputProps> = ({
         {...props}
       />
       {helperText && (
-        <div style={{
-          fontSize: '12px',
-          marginTop: '4px',
-          color: error ? '#ff4d4f' : '#8c8c8c'
-        }}>
+        <div className={error ? styles.inputHelperError : styles.inputHelperText}>
           {helperText}
         </div>
       )}
@@ -96,18 +93,14 @@ export const TextArea: React.FC<TextAreaProps> = ({
   };
 
   return (
-    <div style={{ width: fullWidth ? '100%' : undefined }}>
+    <div className={fullWidth ? styles.inputContainer : undefined}>
       <AntTextArea
         status={error ? 'error' : undefined}
         style={customStyle}
         {...props}
       />
       {helperText && (
-        <div style={{
-          fontSize: '12px',
-          marginTop: '4px',
-          color: error ? '#ff4d4f' : '#8c8c8c'
-        }}>
+        <div className={error ? styles.inputHelperError : styles.inputHelperText}>
           {helperText}
         </div>
       )}
@@ -159,7 +152,7 @@ export const PasswordInput: React.FC<PasswordInputProps> = ({
   };
 
   return (
-    <div style={{ width: fullWidth ? '100%' : undefined }}>
+    <div className={fullWidth ? styles.inputContainer : undefined}>
       <AntPassword
         prefix={<LockOutlined />}
         status={error ? 'error' : undefined}
@@ -167,11 +160,7 @@ export const PasswordInput: React.FC<PasswordInputProps> = ({
         {...props}
       />
       {helperText && (
-        <div style={{
-          fontSize: '12px',
-          marginTop: '4px',
-          color: error ? '#ff4d4f' : '#8c8c8c'
-        }}>
+        <div className={error ? styles.inputHelperError : styles.inputHelperText}>
           {helperText}
         </div>
       )}
@@ -199,18 +188,14 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   };
 
   return (
-    <div style={{ width: fullWidth ? '100%' : undefined }}>
+    <div className={fullWidth ? styles.inputContainer : undefined}>
       <AntInputNumber
         status={error ? 'error' : undefined}
         style={customStyle}
         {...props}
       />
       {helperText && (
-        <div style={{
-          fontSize: '12px',
-          marginTop: '4px',
-          color: error ? '#ff4d4f' : '#8c8c8c'
-        }}>
+        <div className={error ? styles.inputHelperError : styles.inputHelperText}>
           {helperText}
         </div>
       )}

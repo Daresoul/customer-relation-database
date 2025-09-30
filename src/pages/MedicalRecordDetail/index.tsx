@@ -11,6 +11,7 @@ import { MedicalService } from '@/services/medicalService';
 import MedicalRecordForm from '@/components/MedicalRecordModal/MedicalRecordForm';
 // Inline PDF viewer handled by PdfInlineViewer with reliable fallbacks
 import type { MedicalRecord, MedicalRecordHistory, UpdateMedicalRecordInput } from '@/types/medical';
+import styles from './MedicalRecordDetailPage.module.css';
 
 const { Content } = Layout;
 const { Title, Text, Paragraph } = Typography;
@@ -282,7 +283,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
 
   if (!id || isNaN(recordId)) {
     return (
-      <Content style={{ padding: 24, background: '#141414' }}>
+      <Content className={styles.contentPadding}>
         <Alert message={t('medical:detail.invalidRecordId')} type="error" showIcon />
       </Content>
     );
@@ -290,16 +291,16 @@ export const MedicalRecordDetailPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <Content style={{ padding: 24, textAlign: 'center', background: '#141414', minHeight: '100vh' }}>
+      <Content className={styles.contentCenter}>
         <Spin size="large" />
-        <div style={{ marginTop: 16, color: '#E6E6E6' }}>{t('medical:detail.loadingRecord')}</div>
+        <div className={styles.loadingText}>{t('medical:detail.loadingRecord')}</div>
       </Content>
     );
   }
 
   if (isError || !record) {
     return (
-      <Content style={{ padding: 24, background: '#141414' }}>
+      <Content className={styles.contentPadding}>
         <Alert
           message={t('medical:messages.loadError')}
           description={error instanceof Error ? error.message : t('common:error')}
@@ -312,7 +313,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
   }
 
   return (
-    <Content style={{ padding: 24, background: '#141414', minHeight: '100vh' }}>
+    <Content className={styles.contentMinHeight}>
       {(() => {/* compute display values */})()}
       {(() => {
         // Prefer selected version's snapshot newValues if available
@@ -327,20 +328,20 @@ export const MedicalRecordDetailPage: React.FC = () => {
       {(() => {
         return null;
       })()}
-      <div style={{ marginBottom: 16 }}>
+      <div className={styles.breadcrumbContainer}>
         <Breadcrumb
           items={[
             {
-              title: <Link to="/" style={{ color: '#4A90E2' }}><HomeOutlined /> {t('navigation:home')}</Link>,
+              title: <Link to="/" className={styles.breadcrumbLink}><HomeOutlined /> {t('navigation:home')}</Link>,
             },
             {
-              title: <Link to="/" style={{ color: '#4A90E2' }}>{t('navigation:dashboard')}</Link>,
+              title: <Link to="/" className={styles.breadcrumbLink}>{t('navigation:dashboard')}</Link>,
             },
             {
               title: record?.patientId ? (
                 <Link
                   to={`/patients/${record.patientId}`}
-                  style={{ color: '#4A90E2' }}
+                  className={styles.breadcrumbLink}
                   onClick={(e) => {
                     // Save the current tab state so we return to the Medical History tab
                     sessionStorage.setItem(
@@ -352,16 +353,16 @@ export const MedicalRecordDetailPage: React.FC = () => {
                   {t('navigation:patients')}
                 </Link>
               ) : (
-                <span style={{ color: '#E6E6E6' }}>{t('navigation:patients')}</span>
+                <span className={styles.breadcrumbText}>{t('navigation:patients')}</span>
               ),
             },
             {
-              title: <span style={{ color: '#E6E6E6' }}>{t('medical:title')}</span>,
+              title: <span className={styles.breadcrumbText}>{t('medical:title')}</span>,
             },
           ]}
         />
       </div>
-      <div style={{ marginBottom: 16 }}>
+      <div className={styles.breadcrumbContainer}>
         <Button
           icon={<ArrowLeftOutlined />}
           onClick={() => {
@@ -382,7 +383,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
       </div>
 
       <Card
-        title={<Title level={4} style={{ margin: 0, color: '#E6E6E6' }}>{
+        title={<Title level={4} className={styles.titleZeroMargin}>{
           (displayRecord?.name) || record.name
         }</Title>}
         extra={
@@ -391,7 +392,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
           ) : undefined
         }
       >
-        <div style={{ marginBottom: 12, display: 'flex', gap: 16, alignItems: 'center' }}>
+        <div className={styles.versionControls}>
           <Space>
             <Switch
               size="small"
@@ -431,7 +432,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
                     )}
                     {typeof priceVal !== 'undefined' && (
                       <Descriptions.Item label={t('medical:fields.price')}>
-                        <Text strong style={{ color: '#E6E6E6' }}>
+                        <Text strong className={styles.breadcrumbText}>
                           {getCurrencyDisplay()}{priceVal}
                         </Text>
                       </Descriptions.Item>
@@ -441,9 +442,9 @@ export const MedicalRecordDetailPage: React.FC = () => {
                     <Descriptions.Item label={t('medical:fields.version')}>{selectedVersion || record.version}</Descriptions.Item>
                   </Descriptions>
 
-                  <div style={{ marginTop: 16 }}>
-                    <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>{t('medical:fields.description')}</Text>
-                    <Paragraph style={{ margin: 0, whiteSpace: 'pre-wrap', color: '#E6E6E6' }}>{descVal as any}</Paragraph>
+                  <div className={styles.marginTop16}>
+                    <Text type="secondary" className={styles.descriptionLabel}>{t('medical:fields.description')}</Text>
+                    <Paragraph className={styles.descriptionText}>{descVal as any}</Paragraph>
                   </div>
 
                   {/* Attachments now rendered as separate Card below */}
@@ -475,7 +476,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
       </Card>
 
       {/* Attachments Card */}
-      <Card title={t('medical:fields.attachments')} style={{ marginTop: 16 }}>
+      <Card title={t('medical:fields.attachments')} className={styles.marginTop16}>
         <Table
           size="small"
           rowKey={(r: any) => String(r.id)}
@@ -521,7 +522,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
                   return <Text type="secondary">{t('medical:detail.loadingPreview')}</Text>;
                 } else {
                   // In browsers, prefer native PDF viewer for reliability
-                  if (url) return <iframe src={url} title={row.originalName} style={{ width: '100%', height: 480, border: 0 }} />;
+                  if (url) return <iframe src={url} title={row.originalName} className={styles.iframe} />;
                   if (!pblob) return <Text type="secondary">{t('medical:detail.loadingPreview')}</Text>;
                   return <PdfInlineViewer blob={pblob} fileName={row.originalName} />;
                 }
@@ -530,10 +531,10 @@ export const MedicalRecordDetailPage: React.FC = () => {
                 return <Text type="secondary">{t('medical:detail.loadingPreview')}</Text>;
               }
               if (mime.startsWith('image/')) {
-                return <img src={url} alt={row.originalName} style={{ maxWidth: '100%', display: 'block' }} />;
+                return <img src={url} alt={row.originalName} className={styles.image} />;
               }
               if (mime.startsWith('text/')) {
-                return <iframe src={url} title={row.originalName} style={{ width: '100%', height: 480, border: 0 }} />;
+                return <iframe src={url} title={row.originalName} className={styles.iframe} />;
               }
               return <Text type="secondary">{t('medical:detail.previewNotAvailable')}</Text>;
             }
@@ -544,8 +545,8 @@ export const MedicalRecordDetailPage: React.FC = () => {
               dataIndex: 'originalName',
               key: 'originalName',
               render: (v: string, row: any) => (
-                <span style={{
-                  color: '#E6E6E6',
+                <span className={styles.attachmentLink} style={{
+                  
                   textDecoration: isPreviewable(row.mimeType, row.originalName) ? 'underline' : 'none'
                 }}>
                   {v}
@@ -597,7 +598,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
         />
       </Card>
 
-      <Card title={t('medical:detail.versionHistory')} style={{ marginTop: 16 }}>
+      <Card title={t('medical:detail.versionHistory')} className={styles.marginTop16}>
         <Table
           dataSource={sortedHistory}
           rowKey={(r) => String(r.id)}

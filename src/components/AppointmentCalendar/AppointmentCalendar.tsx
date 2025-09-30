@@ -13,7 +13,7 @@ import WeekView from './WeekView';
 import DayView from './DayView';
 import DayViewSimple from './DayViewSimple';
 import enUS from 'antd/es/locale/en_US';
-import './AppointmentCalendar.css';
+import styles from './AppointmentCalendar.module.css';
 
 // Configure dayjs to start week on Monday
 dayjs.extend(updateLocale);
@@ -63,29 +63,29 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
 
     return (
       <div>
-        <div style={{ marginBottom: '2px' }}>
+        <div className={styles.tooltipLine}>
           <strong>Patient:</strong> {apt.patient_name || 'Unknown Patient'}
         </div>
-        <div style={{ marginBottom: '2px' }}>
+        <div className={styles.tooltipLine}>
           <strong>Microchip ID:</strong> {apt.microchip_id || '-'}
         </div>
-        <div style={{ marginBottom: '2px' }}>
+        <div className={styles.tooltipLine}>
           <strong>Time:</strong> {dayjs(apt.start_time).format('HH:mm')} - {dayjs(apt.end_time).format('HH:mm')}
         </div>
-        <div style={{ marginBottom: '2px' }}>
+        <div className={styles.tooltipLine}>
           <strong>Date:</strong> {dayjs(apt.start_time).format('MMM DD, YYYY')}
         </div>
         {room && (
-          <div style={{ marginBottom: '2px' }}>
+          <div className={styles.tooltipLine}>
             <strong>Room:</strong> {room.name}
           </div>
         )}
-        <div style={{ marginBottom: '2px' }}>
+        <div className={styles.tooltipLine}>
           <strong>Status:</strong> {apt.status.replace('_', ' ')}
         </div>
-        <div style={{ fontWeight: 'bold', marginTop: '4px', marginBottom: '4px' }}>{apt.title}</div>
+        <div className={styles.tooltipTitle}>{apt.title}</div>
         {apt.description && (
-          <div style={{ fontStyle: 'italic' }}>
+          <div className={styles.tooltipDescription}>
             {apt.description}
           </div>
         )}
@@ -149,7 +149,7 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
     if (view === 'month') {
       // Month view: show badges
       return (
-        <div className="appointments-cell">
+        <div className={styles.appointmentsCell}>
           {dayAppointments.slice(0, 3).map((apt) => (
             <Tooltip
               key={apt.id}
@@ -159,7 +159,7 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
               styles={{ root: { maxWidth: '300px' } }}
             >
               <div
-                className={`appointment-badge ${apt.status === 'cancelled' ? 'appointment-cancelled' : ''}`}
+                className={`${styles.appointmentBadge} ${apt.status === 'cancelled' ? styles.appointmentCancelled : ''}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   onSelectAppointment(apt);
@@ -169,7 +169,7 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                   status="processing"
                   color={getRoomColor(apt)}
                   text={
-                    <span className="appointment-text">
+                    <span className={styles.appointmentText}>
                       {dayjs(apt.start_time).format('HH:mm')} - {apt.title}
                     </span>
                   }
@@ -178,7 +178,7 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
             </Tooltip>
           ))}
           {dayAppointments.length > 3 && (
-            <div className="more-appointments">+{dayAppointments.length - 3} more</div>
+            <div className={styles.moreAppointments}>+{dayAppointments.length - 3} more</div>
           )}
         </div>
       );
@@ -186,7 +186,7 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
 
     // Week/Day view: show detailed list
     return (
-      <div className="appointments-list">
+      <div className={styles.appointmentsList}>
         {dayAppointments.map((apt) => (
           <Tooltip
             key={apt.id}
@@ -196,18 +196,18 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
             styles={{ root: { maxWidth: '300px' } }}
           >
             <div
-              className={`appointment-item ${apt.status === 'cancelled' ? 'appointment-cancelled' : ''}`}
+              className={`${styles.appointmentItem} ${apt.status === 'cancelled' ? styles.appointmentCancelled : ''}`}
               style={{ borderLeft: `3px solid ${getRoomColor(apt)}` }}
               onClick={(e) => {
                 e.stopPropagation();
                 onSelectAppointment(apt);
               }}
             >
-              <div className="appointment-time" style={{ color: themeColors.textSecondary }}>
+              <div className={styles.appointmentTime}>
                 {dayjs(apt.start_time).format('HH:mm')} - {dayjs(apt.end_time).format('HH:mm')}
               </div>
-              <div className="appointment-title" style={{ color: themeColors.text }}>{apt.title}</div>
-              <div className="appointment-patient" style={{ color: themeColors.textSecondary }}>{apt.patient_name || 'Patient'}</div>
+              <div className={styles.appointmentTitle}>{apt.title}</div>
+              <div className={styles.appointmentPatient}>{apt.patient_name || 'Patient'}</div>
               <Tag color={getRoomColor(apt)}>
                 {apt.status.replace('_', ' ')}
               </Tag>
@@ -283,7 +283,7 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
       : selectedDate.format('dddd, MMMM DD, YYYY');
 
     return (
-      <div className="calendar-header">
+      <div className={styles.calendarHeader}>
         <Space size="small">
           <Radio.Group
             value={view}
@@ -297,13 +297,13 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
           </Radio.Group>
         </Space>
 
-        <div className="calendar-navigation-buttons">
+        <div className={styles.calendarNavigationButtons}>
           <Button
             size="small"
             icon={<LeftOutlined />}
             onClick={handlePrevious}
           />
-          <span className="calendar-title" style={{ color: themeColors.text }}>{title}</span>
+          <span className={styles.calendarTitle}>{title}</span>
           <Button
             size="small"
             icon={<RightOutlined />}
@@ -372,7 +372,7 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
   };
 
   return (
-    <div className="appointment-calendar">
+    <div className={styles.appointmentCalendar}>
       {headerRender()}
       {renderCalendarContent()}
     </div>

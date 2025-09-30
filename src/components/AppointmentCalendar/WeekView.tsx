@@ -6,6 +6,7 @@ import { Appointment } from '../../types/appointments';
 import { useThemeColors } from '../../utils/themeStyles';
 import { useRooms } from '../../hooks/useRooms';
 
+import styles from './WeekView.module.css';
 interface WeekViewProps {
   selectedDate: Dayjs;
   appointments: Appointment[];
@@ -193,17 +194,12 @@ const WeekView: React.FC<WeekViewProps> = ({
 
     return (
       <div
+        className={styles.dragOverlay}
         style={{
-          position: 'absolute',
           left: 80 + dragEnd.day * ((document.querySelector('.week-view')?.clientWidth || 800) - 80) / 7,
           top: 60 + startSlot * slotHeight, // Add header height
           width: ((document.querySelector('.week-view')?.clientWidth || 800) - 80) / 7,
           height: (endSlot - startSlot + 1) * slotHeight,
-          background: 'rgba(24, 144, 255, 0.2)',
-          border: '2px solid #1890ff',
-          borderRadius: '4px',
-          pointerEvents: 'none',
-          zIndex: 10,
         }}
       />
     );
@@ -290,29 +286,29 @@ const WeekView: React.FC<WeekViewProps> = ({
 
     return (
       <div>
-        <div style={{ marginBottom: '2px' }}>
+        <div className={styles.tooltipInfo}>
           <strong>Patient:</strong> {apt.patient_name || 'Unknown Patient'}
         </div>
-        <div style={{ marginBottom: '2px' }}>
+        <div className={styles.tooltipInfo}>
           <strong>Microchip ID:</strong> {apt.microchip_id || '-'}
         </div>
-        <div style={{ marginBottom: '2px' }}>
+        <div className={styles.tooltipInfo}>
           <strong>Time:</strong> {dayjs(apt.start_time).format('HH:mm')} - {dayjs(apt.end_time).format('HH:mm')}
         </div>
-        <div style={{ marginBottom: '2px' }}>
+        <div className={styles.tooltipInfo}>
           <strong>Date:</strong> {dayjs(apt.start_time).format('MMM DD, YYYY')}
         </div>
         {room && (
-          <div style={{ marginBottom: '2px' }}>
+          <div className={styles.tooltipInfo}>
             <strong>Room:</strong> {room.name}
           </div>
         )}
-        <div style={{ marginBottom: '2px' }}>
+        <div className={styles.tooltipInfo}>
           <strong>Status:</strong> {apt.status.replace('_', ' ')}
         </div>
-        <div style={{ fontWeight: 'bold', marginTop: '4px', marginBottom: '4px' }}>{apt.title}</div>
+        <div className={styles.tooltipTitle}>{apt.title}</div>
         {apt.description && (
-          <div style={{ fontStyle: 'italic' }}>
+          <div className={styles.tooltipDescription}>
             {apt.description}
           </div>
         )}
@@ -340,23 +336,17 @@ const WeekView: React.FC<WeekViewProps> = ({
         <Card
           size="small"
           hoverable
-          className={apt.status === 'cancelled' ? 'appointment-cancelled' : ''}
+          className={`${styles.appointmentCard} ${apt.status === 'cancelled' ? 'appointment-cancelled' : ''}`}
           onClick={() => {
             onSelectAppointment(apt);
           }}
           style={{
-            position: 'absolute',
             left: `${leftOffset}%`,
             width: `${columnWidth - 1}%`, // Subtract 1% for spacing
             top: style.top,
             height: style.height,
-            minHeight: '20px',
-            zIndex: 5,
-            cursor: 'pointer',
             borderLeft: `4px solid ${roomColor}`,
             backgroundColor: `${roomColor}10`, // Very light tint of room color
-            fontSize: '12px',
-            overflow: 'hidden',
           }}
           styles={{
             body: {
@@ -366,23 +356,11 @@ const WeekView: React.FC<WeekViewProps> = ({
             }
           }}
         >
-          <div style={{
-            fontWeight: 500,
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            lineHeight: '14px',
-          }}>
+          <div className={styles.appointmentTitle}>
             {apt.title}
           </div>
           {style.height > 40 && (
-            <div style={{
-              fontSize: '10px',
-              color: themeColors.textSecondary,
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}>
+            <div className={styles.appointmentTime}>
               {dayjs(apt.start_time).format('HH:mm')} - {dayjs(apt.end_time).format('HH:mm')}
             </div>
           )}
@@ -402,7 +380,7 @@ const WeekView: React.FC<WeekViewProps> = ({
   };
 
   return (
-    <div className="week-view" ref={containerRef} style={{ height: '600px', overflow: 'auto', position: 'relative' }}>
+    <div className={styles.weekView} ref={containerRef}>
       <style>{`
         .week-view {
           background: ${themeColors.cardBg};
@@ -489,26 +467,21 @@ const WeekView: React.FC<WeekViewProps> = ({
       `}</style>
 
       {/* Header with day labels */}
-      <div className="week-header" style={{ display: 'flex', height: '60px' }}>
-        <div className="week-time-column" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <span style={{ fontSize: '12px', color: themeColors.textSecondary }}>Time</span>
+      <div className={styles.weekHeader}>
+        <div className={styles.weekTimeColumn}>
+          <span className={styles.secondaryText}>Time</span>
         </div>
         {weekDays.map((day, index) => {
           const isToday = day.isSame(dayjs(), 'day');
           return (
             <div
               key={index}
-              className="week-day-column"
+              className={styles.dayHeader}
               onClick={() => onDayHeaderClick && onDayHeaderClick(day)}
               style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
                 background: isToday ? `${themeColors.primary || '#1890ff'}15` : 'transparent',
                 borderTop: isToday ? `2px solid ${themeColors.primary || '#1890ff'}` : 'none',
                 cursor: onDayHeaderClick ? 'pointer' : 'default',
-                transition: 'background-color 0.2s',
               }}
               onMouseEnter={(e) => {
                 if (onDayHeaderClick) {
@@ -521,14 +494,16 @@ const WeekView: React.FC<WeekViewProps> = ({
                 }
               }}
             >
-              <div style={{ fontSize: '12px', color: themeColors.textSecondary }}>
+              <div className={styles.secondaryText}>
                 {day.format('ddd')}
               </div>
-              <div style={{
-                fontSize: '16px',
-                fontWeight: isToday ? 'bold' : 'normal',
-                color: isToday ? themeColors.primary || '#1890ff' : themeColors.text
-              }}>
+              <div
+                className={styles.dayNumber}
+                style={{
+                  fontWeight: isToday ? 'bold' : 'normal',
+                  color: isToday ? themeColors.primary || '#1890ff' : themeColors.text
+                }}
+              >
                 {day.format('D')}
               </div>
             </div>
@@ -537,19 +512,12 @@ const WeekView: React.FC<WeekViewProps> = ({
       </div>
 
       {/* Time grid */}
-      <div style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
+      <div className={styles.timeGridContainer}>
         {hourSlots.map((hour) => (
-          <div key={hour.hour} className="week-hour-row" style={{ display: 'flex' }}>
+          <div key={hour.hour} className={styles.weekHourRow}>
             {/* Time label */}
             <div className="week-time-label">
-              <span style={{
-                position: 'absolute',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                background: themeColors.background,
-                padding: '0 4px',
-                fontWeight: 500
-              }}>
+              <span className={styles.timeLabelSpan}>
                 {hour.time}
               </span>
             </div>
@@ -563,9 +531,8 @@ const WeekView: React.FC<WeekViewProps> = ({
               return (
                 <div
                   key={dayIndex}
-                  className={`week-day-column week-cell ${isToday ? 'today-column' : ''}`}
+                  className={`week-day-column week-cell ${isToday ? 'today-column' : ''} ${styles.relative}`}
                   onMouseDown={(e) => handleMouseDown(e, dayIndex, hour.hour)}
-                  style={{ position: 'relative' }}
                 >
                   {/* Half-hour divider line */}
                   <div className="week-half-hour-line" />

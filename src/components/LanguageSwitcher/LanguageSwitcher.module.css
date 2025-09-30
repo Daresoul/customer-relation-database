@@ -1,0 +1,13 @@
+/* Language Switcher CSS Module */
+
+.languageSwitcher {
+  display: inline-block;
+}
+
+.languageSelect {
+  width: 150px;
+}
+
+.flagIcon {
+  margin-right: 8px;
+}

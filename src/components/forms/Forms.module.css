@@ -1,0 +1,59 @@
+/* Form Components CSS Module */
+
+/* Base form card styles */
+.formCard {
+  max-width: 800px;
+}
+
+.formCardLarge {
+  max-width: 900px;
+}
+
+.formCardCentered {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+/* Full width utilities */
+.fullWidth {
+  width: 100%;
+}
+
+/* Icon styles */
+.iconPink {
+  color: #ff69b4;
+}
+
+/* Alert box */
+.formAlert {
+  margin-bottom: 16px;
+}
+
+/* Contact cards within forms */
+.contactCard {
+  margin-bottom: 16px;
+  background: #262626;
+}
+
+/* Household search */
+.householdSearch {
+  width: 100%;
+}
+
+.householdOption {
+  color: #8c8c8c;
+}
+
+/* Action buttons */
+.actionButton {
+  margin-bottom: 16px;
+}
+
+/* Form sections */
+.formSection {
+  margin-bottom: 24px;
+}
+
+.formDivider {
+  margin: 24px 0;
+}

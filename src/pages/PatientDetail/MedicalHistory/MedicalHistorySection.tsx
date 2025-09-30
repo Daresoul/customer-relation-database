@@ -6,6 +6,7 @@ import { useMedicalRecords } from '@/hooks/useMedicalRecords';
 import MedicalRecordCards from './MedicalRecordCards';
 import MedicalRecordModal from '@/components/MedicalRecordModal/MedicalRecordModal';
 import type { MedicalRecordFilter } from '@/types/medical';
+import styles from './MedicalHistory.module.css';
 
 const { Search } = Input;
 const { Option } = Select;
@@ -77,11 +78,11 @@ const MedicalHistorySection: React.FC<MedicalHistorySectionProps> = ({
           {t('detail.medicalHistory.addRecord')}
         </Button>
       }
-      style={{ marginTop: 16 }}
+      className={styles.sectionCard}
     >
-      <Space direction="vertical" style={{ width: '100%' }} size="middle">
+      <Space direction="vertical" className={styles.fullWidthSpace} size="middle">
         {/* Search and Filters */}
-        <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
+        <div className={styles.filterContainer}>
           <Search
             placeholder={t('detail.medicalHistory.searchPlaceholder')}
             prefix={<SearchOutlined />}
@@ -90,12 +91,12 @@ const MedicalHistorySection: React.FC<MedicalHistorySectionProps> = ({
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
             onSearch={handleSearch}
-            style={{ maxWidth: 400 }}
+            className={styles.searchInput}
           />
 
           <Select
             defaultValue="all"
-            style={{ width: 150 }}
+            className={styles.typeSelect}
             onChange={handleTypeFilter}
             suffixIcon={<FilterOutlined />}
           >
@@ -106,7 +107,7 @@ const MedicalHistorySection: React.FC<MedicalHistorySectionProps> = ({
 
           <Select
             defaultValue={false}
-            style={{ width: 150 }}
+            className={styles.archiveSelect}
             onChange={handleArchiveFilter}
           >
             <Option value={false}>{t('detail.medicalHistory.filters.active')}</Option>
@@ -116,7 +117,7 @@ const MedicalHistorySection: React.FC<MedicalHistorySectionProps> = ({
 
         {/* Medical Records */}
         {isLoading ? (
-          <div style={{ textAlign: 'center', padding: '50px 0' }}>
+          <div className={styles.loadingContainer}>
             <Spin size="large" />
           </div>
         ) : data?.records && data.records.length > 0 ? (

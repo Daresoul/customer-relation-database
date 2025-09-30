@@ -1,0 +1,13 @@
+/* Currency Selector CSS Module */
+
+.currencySelector {
+  display: inline-block;
+}
+
+.currencySelect {
+  width: 200px;
+}
+
+.currencyIcon {
+  margin-right: 8px;
+}

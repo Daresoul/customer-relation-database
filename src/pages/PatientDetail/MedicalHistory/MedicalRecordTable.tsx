@@ -16,6 +16,7 @@ import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
 import { formatDate } from '@/utils/dateFormatter';
 import { Link } from 'react-router-dom';
+import styles from './MedicalHistory.module.css';
 
 interface MedicalRecordTableProps {
   records: MedicalRecord[];
@@ -97,17 +98,17 @@ const MedicalRecordTable: React.FC<MedicalRecordTableProps> = ({
       ellipsis: true,
       render: (name: string, record) => (
         <Space>
-          <Link to={`/medical-records/${record.id}`} style={{ color: 'inherit' }}>
+          <Link to={`/medical-records/${record.id}`} className={styles.inheritColor}>
             {name}
           </Link>
           {record.attachments && record.attachments.length > 0 && (
             <Tooltip title={`${record.attachments.length} attachment(s)`}>
-              <PaperClipOutlined style={{ color: '#1890ff' }} />
+              <PaperClipOutlined className={styles.attachmentIcon} />
             </Tooltip>
           )}
           {record.version > 1 && (
             <Tooltip title={`Modified (v${record.version})`}>
-              <HistoryOutlined style={{ color: '#faad14' }} />
+              <HistoryOutlined className={styles.historyIcon} />
             </Tooltip>
           )}
         </Space>
@@ -121,7 +122,7 @@ const MedicalRecordTable: React.FC<MedicalRecordTableProps> = ({
       render: (procedureName: string | undefined, record) => (
         <>
           {record.recordType === 'procedure' ? (
-            <Link to={`/medical-records/${record.id}`} style={{ color: 'inherit' }}>
+            <Link to={`/medical-records/${record.id}`} className={styles.inheritColor}>
               {record.name || '-'}
             </Link>
           ) : (
@@ -195,7 +196,7 @@ const MedicalRecordTable: React.FC<MedicalRecordTableProps> = ({
   return (
     <>
       {selectedRowKeys.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
+        <div className={styles.marginBottom16}>
           <Space>
             <span>{selectedRowKeys.length} selected</span>
             <Button onClick={() => setSelectedRowKeys([])}>Clear</Button>

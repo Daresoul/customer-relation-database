@@ -40,7 +40,7 @@ import {
   useAppointmentDetail,
   useRooms,
 } from '../../hooks/useAppointments';
-import './Appointments.css';
+import styles from './Appointments.module.css';
 
 const { Header, Content, Sider } = Layout;
 const { RangePicker } = DatePicker;
@@ -206,10 +206,10 @@ const Appointments: React.FC = () => {
   ).length;
 
   return (
-    <Layout className="appointments-page">
-      <Header className="appointments-header">
-        <div className="appointments-header-content">
-          <div className="appointments-header-left">
+    <Layout className={styles.appointmentsPage}>
+      <Header className={styles.appointmentsHeader}>
+        <div className={styles.appointmentsHeaderContent}>
+          <div className={styles.appointmentsHeaderLeft}>
             <h1>Appointments</h1>
             <Space size="large">
               <Statistic title="Today" value={todayCount} />
@@ -239,7 +239,7 @@ const Appointments: React.FC = () => {
         </div>
       </Header>
 
-      <Content className="appointments-content">
+      <Content className={styles.appointmentsContent}>
         <Tabs
           activeKey={activeTab}
           onChange={(key) => setActiveTab(key as 'calendar' | 'list')}
@@ -317,11 +317,11 @@ const Appointments: React.FC = () => {
         }
       >
         {appointmentDetail && (
-          <div className="appointment-detail">
+          <div className={styles.appointmentDetail}>
             <Card>
               <h3>{appointmentDetail.appointment.title}</h3>
               <p>{appointmentDetail.appointment.description}</p>
-              <div className="detail-info">
+              <div className={styles.detailInfo}>
                 <div>
                   <strong>Patient:</strong> {appointmentDetail.patient?.name}
                 </div>
@@ -365,11 +365,11 @@ const Appointments: React.FC = () => {
           </Space>
         }
       >
-        <Space direction="vertical" style={{ width: '100%' }}>
+        <Space direction="vertical" className={styles.fullWidth}>
           <div>
             <label>Date Range</label>
             <RangePicker
-              style={{ width: '100%' }}
+              className={styles.fullWidth}
               onChange={(dates) => {
                 if (dates) {
                   setFilter({
@@ -384,7 +384,7 @@ const Appointments: React.FC = () => {
           <div>
             <label>Room</label>
             <Select
-              style={{ width: '100%' }}
+              className={styles.fullWidth}
               placeholder="All rooms"
               allowClear
               onChange={(value) => setFilter({ ...filter, room_id: value })}
@@ -399,7 +399,7 @@ const Appointments: React.FC = () => {
           <div>
             <label>Status</label>
             <Select
-              style={{ width: '100%' }}
+              className={styles.fullWidth}
               placeholder="All statuses"
               allowClear
               onChange={(value) => setFilter({ ...filter, status: value })}

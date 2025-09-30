@@ -1,0 +1,37 @@
+/* PdfMultiPagePreview styles */
+.loadingContainer {
+  text-align: center;
+  padding: 20px;
+}
+
+.loadingText {
+  display: block;
+  margin-top: 8px;
+}
+
+.headerRow {
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.scrollContainer {
+  max-height: 600px;
+  overflow: auto;
+  border: 1px solid #303030;
+  padding: 8px;
+  border-radius: 4px;
+  background: #141414;
+}
+
+.pageContainer {
+  margin-bottom: 8px;
+}
+
+.pageImage {
+  max-width: 100%;
+  display: block;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}

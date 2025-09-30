@@ -1,0 +1,122 @@
+/* Table Components CSS Module */
+
+/* Search container */
+.searchContainer {
+  margin-bottom: 16px;
+}
+
+/* Search input */
+.searchInput {
+  width: 300px;
+}
+
+/* Icons */
+.iconPink {
+  color: #ff69b4;
+}
+
+.iconBlue {
+  color: #4A90E2;
+}
+
+.iconGreen {
+  color: #52C41A;
+}
+
+.iconPrimary {
+  color: #1890ff;
+}
+
+.iconLarge {
+  font-size: 20px;
+  color: #ff69b4;
+}
+
+/* Button styles */
+.nameButton {
+  padding: 0;
+  font-weight: 600;
+}
+
+.linkClean {
+  text-decoration: none;
+}
+
+/* Text styles */
+.textPrimary {
+  color: #1890ff;
+  cursor: pointer;
+}
+
+.textSmall {
+  font-size: 12px;
+}
+
+.textMedium {
+  font-size: 16px;
+}
+
+.textItalic {
+  font-style: italic;
+}
+
+/* Avatar */
+.avatarBlue {
+  background: #4A90E2;
+}
+
+.avatarPrimary {
+  background: #52C41A;
+  font-size: 18px;
+}
+
+/* Expanded row styles */
+.expandedRow {
+  padding: 20px;
+  background: #1a1a1a;
+  border-radius: 8px;
+}
+
+.expandedGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.fullWidth {
+  width: 100%;
+}
+
+/* List item */
+.listItem {
+  border-bottom: 1px solid #303030;
+}
+
+/* Detail card */
+.detailCard {
+  background: #262626;
+  padding: 16px;
+  border-radius: 8px;
+}
+
+/* Spacing utilities */
+.marginRight8 {
+  margin-right: 8px;
+}
+
+.marginLeft8 {
+  margin-left: 8px;
+}
+
+/* Badge styles - note: background colors that change dynamically remain inline */
+.badgeGreen {
+  background-color: #52C41A;
+}
+
+.badgeGray {
+  background-color: #595959;
+}
+
+.badgeLight {
+  background-color: #d9d9d9;
+}

@@ -1,0 +1,36 @@
+/* Table Utilities CSS Module */
+
+/* Filter dropdown container */
+.filterDropdown {
+  padding: 8px;
+}
+
+/* Filter input */
+.filterInput {
+  width: 188px;
+  margin-bottom: 8px;
+  display: block;
+}
+
+/* Filter buttons */
+.filterButton {
+  width: 90px;
+  margin-right: 8px;
+}
+
+.filterButtonReset {
+  width: 90px;
+}
+
+.filterButtonInline {
+  margin-right: 8px;
+}
+
+/* Filter icon */
+.filterIcon {
+  color: #1890ff;
+}
+
+.filterIconDefault {
+  color: inherit;
+}

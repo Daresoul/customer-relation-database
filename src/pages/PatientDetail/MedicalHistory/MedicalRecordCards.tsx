@@ -16,6 +16,7 @@ import { useArchiveMedicalRecord, useDownloadAttachment, useCurrencies } from '@
 import { Link, useNavigate } from 'react-router-dom';
 import { formatDate } from '@/utils/dateFormatter';
 import MedicalRecordDetailDrawer from '@/components/MedicalRecordDetail/MedicalRecordDetailDrawer';
+import styles from './MedicalHistory.module.css';
 
 const { Text, Title, Paragraph } = Typography;
 
@@ -93,20 +94,19 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
     return (
       <Card
         key={record.id}
-        className="medical-record-card"
-        style={{ marginBottom: 16 }}
+        className={`medical-record-card ${styles.recordCardItem}`}
         title={
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div className={styles.cardTitleRow}>
             <Space>
               {isProcedure ? (
-                <MedicineBoxOutlined style={{ fontSize: 18, color: '#1890ff' }} />
+                <MedicineBoxOutlined className={styles.procedureIcon} />
               ) : (
-                <FileTextOutlined style={{ fontSize: 18, color: '#52c41a' }} />
+                <FileTextOutlined className={styles.noteIcon} />
               )}
-              <Title level={5} style={{ margin: 0 }}>
+              <Title level={5} className={styles.cardTitleText}>
                 <Link
                   to={`/medical-records/${record.id}`}
-                  style={{ color: 'inherit' }}
+                  className={styles.inheritColor}
                   onClick={(e) => {
                     if (onNavigateToRecord) {
                       e.preventDefault();
@@ -144,7 +144,7 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
               <Descriptions.Item label={t('fields.procedureName')}>
                 <Link
                   to={`/medical-records/${record.id}`}
-                  style={{ color: 'inherit' }}
+                  className={styles.inheritColor}
                   onClick={(e) => {
                     if (onNavigateToRecord) {
                       e.preventDefault();
@@ -171,7 +171,7 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
           )}
 
           <Descriptions.Item label={t('fields.description')}>
-            <Paragraph style={{ margin: 0, whiteSpace: 'pre-wrap' }} ellipsis={{ rows: 4, expandable: true }}>
+            <Paragraph className={styles.descriptionParagraph} ellipsis={{ rows: 4, expandable: true }}>
               {record.description}
             </Paragraph>
           </Descriptions.Item>
@@ -217,11 +217,11 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
                           handleDownloadAttachment(attachment.id, attachment.originalName);
                         }
                       }}
-                      style={{ padding: '4px 8px' }}
+                      className={styles.attachmentTag}
                     >
                       {attachment.originalName}
                       {attachment.fileSize && (
-                        <Text type="secondary" style={{ marginLeft: 8 }}>
+                        <Text type="secondary" className={styles.attachmentText}>
                           ({(attachment.fileSize / 1024).toFixed(1)} KB)
                         </Text>
                       )}
@@ -251,7 +251,7 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
 
   return (
     <>
-      <div style={{ width: '100%' }}>
+      <div className={styles.fullWidthDiv}>
         {records.map(renderRecordCard)}
       </div>
 

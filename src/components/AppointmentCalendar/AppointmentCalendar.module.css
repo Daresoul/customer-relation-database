@@ -1,10 +1,10 @@
-.appointment-calendar {
+.appointmentCalendar {
   height: 100%;
   display: flex;
   flex-direction: column;
 }
 
-.calendar-header {
+.calendarHeader {
   padding: 12px 0;
   margin-bottom: 16px;
   background: transparent;
@@ -15,7 +15,7 @@
   flex-wrap: wrap;
 }
 
-.calendar-title {
+.calendarTitle {
   font-size: 16px;
   font-weight: 600;
   padding: 0 12px;
@@ -23,30 +23,30 @@
   text-align: center;
 }
 
-[data-theme="light"] .calendar-title {
+[data-theme="light"] .calendarTitle {
   color: #262626;
 }
 
-[data-theme="dark"] .calendar-title {
+[data-theme="dark"] .calendarTitle {
   color: #E6E6E6;
 }
 
-.appointments-cell {
+.appointmentsCell {
   padding: 4px;
 }
 
-.appointment-badge {
+.appointmentBadge {
   margin-bottom: 4px;
   cursor: pointer;
   transition: background-color 0.2s;
 }
 
-.appointment-badge:hover {
+.appointmentBadge:hover {
   background-color: var(--theme-hover, #f5f5f5);
   border-radius: 4px;
 }
 
-.appointment-text {
+.appointmentText {
   font-size: 12px;
   display: block;
   overflow: hidden;
@@ -54,18 +54,18 @@
   white-space: nowrap;
 }
 
-.more-appointments {
+.moreAppointments {
   font-size: 11px;
   color: #8c8c8c;
   margin-top: 4px;
   font-style: italic;
 }
 
-.appointments-list {
+.appointmentsList {
   padding: 8px;
 }
 
-.appointment-item {
+.appointmentItem {
   padding: 8px;
   margin-bottom: 8px;
   background: var(--theme-card-bg, #fafafa);
@@ -74,152 +74,152 @@
   transition: all 0.2s;
 }
 
-.appointment-item:hover {
+.appointmentItem:hover {
   background: var(--theme-hover, #f0f0f0);
   transform: translateX(2px);
 }
 
-.appointment-time {
+.appointmentTime {
   font-weight: 500;
   font-size: 13px;
-  color: #262626;
+  color: var(--text-secondary);
   margin-bottom: 4px;
 }
 
-.appointment-title {
+.appointmentTitle {
   font-size: 14px;
-  color: #262626;
+  color: var(--text-primary);
   margin-bottom: 2px;
 }
 
-.appointment-patient {
+.appointmentPatient {
   font-size: 12px;
-  color: #8c8c8c;
+  color: var(--text-secondary);
   margin-bottom: 4px;
 }
 
 /* Calendar header button and radio styling */
-.calendar-header .ant-radio-group-solid {
+.calendarHeader .antRadioGroupSolid {
   font-size: 14px;
 }
 
-.calendar-header .ant-radio-button-wrapper {
+.calendarHeader .antRadioButtonWrapper {
   height: 32px;
   line-height: 30px;
   padding: 0 15px;
 }
 
-.calendar-header .ant-radio-button-wrapper-checked {
+.calendarHeader .antRadioButtonWrapperChecked {
   background: #1890ff;
   border-color: #1890ff;
 }
 
-.calendar-header .ant-btn-group {
+.calendarHeader .antBtnGroup {
   box-shadow: none;
 }
 
-.calendar-header .ant-btn {
+.calendarHeader .antBtn {
   height: 32px;
   padding: 4px 15px;
   font-size: 14px;
   border-radius: 4px;
 }
 
-.calendar-header .ant-btn-group .ant-btn {
+.calendarHeader .antBtnGroup .antBtn {
   border-color: #d9d9d9;
 }
 
-.calendar-header .ant-btn-group .ant-btn:hover {
+.calendarHeader .antBtnGroup .antBtn:hover {
   color: #1890ff;
   border-color: #1890ff;
   z-index: 2;
 }
 
-.calendar-header .ant-btn-group .ant-btn:focus,
-.calendar-header .ant-btn-group .ant-btn:active {
+.calendarHeader .antBtnGroup .antBtn:focus,
+.calendarHeader .antBtnGroup .antBtn:active {
   color: #1890ff;
   border-color: #1890ff;
   background: #e6f7ff;
 }
 
-.calendar-navigation-buttons {
+.calendarNavigationButtons {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
 /* Calendar customization */
-.ant-picker-calendar-full .ant-picker-panel {
+.antPickerCalendarFull .antPickerPanel {
   border: none;
   background: transparent;
 }
 
-.ant-picker-calendar-full .ant-picker-calendar-date {
+.antPickerCalendarFull .antPickerCalendarDate {
   border-top: 2px solid #f0f0f0;
   min-height: 100px;
 }
 
 /* Light theme date text color */
-[data-theme="light"] .ant-picker-calendar .ant-picker-calendar-date-value {
-  color: #262626 !important;
+[data-theme="light"] .antPickerCalendar .antPickerCalendarDateValue {
+  color: #262626;
 }
 
-[data-theme="light"] .ant-picker-calendar .ant-picker-calendar-date-content {
-  color: #595959 !important;
+[data-theme="light"] .antPickerCalendar .antPickerCalendarDateContent {
+  color: #595959;
 }
 
-[data-theme="light"] .ant-picker-calendar-full .ant-picker-cell {
-  color: #262626 !important;
+[data-theme="light"] .antPickerCalendarFull .antPickerCell {
+  color: #262626;
 }
 
 /* Dark theme date text color */
-[data-theme="dark"] .ant-picker-calendar .ant-picker-calendar-date-value {
-  color: #E6E6E6 !important;
-}
-
-[data-theme="dark"] .ant-picker-calendar .ant-picker-calendar-date-content {
-  color: #A6A6A6 !important;
-}
-
-[data-theme="dark"] .ant-picker-calendar-full .ant-picker-cell {
-  color: #E6E6E6 !important;
-}
-
-[data-theme="dark"] .calendar-title {
+[data-theme="dark"] .antPickerCalendar .antPickerCalendarDateValue {
   color: #E6E6E6;
 }
 
-.ant-picker-calendar-full .ant-picker-calendar-date-today {
+[data-theme="dark"] .antPickerCalendar .antPickerCalendarDateContent {
+  color: #A6A6A6;
+}
+
+[data-theme="dark"] .antPickerCalendarFull .antPickerCell {
+  color: #E6E6E6;
+}
+
+[data-theme="dark"] .calendarTitle {
+  color: #E6E6E6;
+}
+
+.antPickerCalendarFull .antPickerCalendarDateToday {
   border-color: #1890ff;
 }
 
-.ant-picker-calendar-full .ant-picker-calendar-date-selected {
+.antPickerCalendarFull .antPickerCalendarDateSelected {
   background-color: #e6f7ff;
 }
 
 /* Week view styles */
-.ant-picker-calendar-mode-week .ant-picker-calendar-date {
+.antPickerCalendarModeWeek .antPickerCalendarDate {
   min-height: 400px;
 }
 
 /* Day view styles */
-.ant-picker-calendar-mode-day .ant-picker-calendar-date {
+.antPickerCalendarModeDay .antPickerCalendarDate {
   min-height: 600px;
 }
 
 /* Time slot indicators for day view */
-.day-view-time-slots {
+.dayViewTimeSlots {
   position: relative;
   height: 100%;
 }
 
-.time-slot {
+.timeSlot {
   height: 40px;
   border-bottom: 1px solid #f0f0f0;
   position: relative;
 }
 
-.time-slot-label {
+.timeSlotLabel {
   position: absolute;
   left: 8px;
   top: 50%;
@@ -229,18 +229,18 @@
 }
 
 /* Loading state */
-.appointment-calendar.loading {
+.appointmentCalendar.loading {
   opacity: 0.6;
   pointer-events: none;
 }
 
 /* Cancelled appointment styling with diagonal stripes */
-.appointment-cancelled {
+.appointmentCancelled {
   position: relative;
   opacity: 0.7;
 }
 
-.appointment-cancelled::before {
+.appointmentCancelled::before {
   content: '';
   position: absolute;
   top: 0;
@@ -259,7 +259,7 @@
 }
 
 /* Dark theme cancelled appointments */
-[data-theme="dark"] .appointment-cancelled::before {
+[data-theme="dark"] .appointmentCancelled::before {
   background-image: repeating-linear-gradient(
     45deg,
     transparent,
@@ -270,17 +270,32 @@
 }
 
 /* Cancelled badge styling */
-.appointment-badge.appointment-cancelled .ant-badge-status-dot {
-  background-color: #ff4d4f !important;
+.appointmentBadge.appointmentCancelled .antBadgeStatusDot {
+  background-color: #ff4d4f;
 }
 
 /* Cancelled item styling */
-.appointment-item.appointment-cancelled {
+.appointmentItem.appointmentCancelled {
   border: 1px dashed #ff4d4f;
   background-color: rgba(255, 77, 79, 0.05);
 }
 
-[data-theme="dark"] .appointment-item.appointment-cancelled {
+[data-theme="dark"] .appointmentItem.appointmentCancelled {
   background-color: rgba(255, 120, 120, 0.1);
   border-color: rgba(255, 120, 120, 0.6);
+}
+
+/* Tooltip styles */
+.tooltipLine {
+  margin-bottom: 2px;
+}
+
+.tooltipTitle {
+  font-weight: bold;
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+
+.tooltipDescription {
+  font-style: italic;
 }

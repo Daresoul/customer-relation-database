@@ -3,6 +3,7 @@ import { Card, Form, Switch, Button, Typography, Alert, Space } from 'antd';
 import { CalendarOutlined, GoogleOutlined, LinkOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors } from '../../../utils/themeStyles';
+import styles from '../Settings.module.css';
 
 const { Text, Paragraph } = Typography;
 
@@ -27,36 +28,32 @@ const AppointmentsSettings: React.FC<AppointmentsSettingsProps> = ({ form, isUpd
     <div>
       <Card
         title={
-          <span style={{ color: themeColors.text }}>
+          <span className={styles.cardTitle}>
             <CalendarOutlined /> Google Calendar Integration
           </span>
         }
-        style={{
-          marginBottom: 16,
-          background: themeColors.cardBg,
-          borderColor: themeColors.border
-        }}
+        className={styles.appointmentsCard}
       >
         <Alert
           message="Google Calendar Sync"
           description="Connect your Google Calendar to automatically sync appointments between your veterinary clinic and Google Calendar. This allows you to view and manage appointments from both systems."
           type="info"
           showIcon
-          style={{ marginBottom: 24 }}
+          className={styles.alertBox}
         />
 
         <Form.Item
           name="googleCalendarSync"
-          label={<span style={{ color: themeColors.text }}>Enable Google Calendar Sync</span>}
-          extra={<span style={{ color: themeColors.textSecondary }}>Two-way sync between clinic appointments and Google Calendar</span>}
+          label={<span className={styles.formLabel}>Enable Google Calendar Sync</span>}
+          extra={<span className={styles.formHint}>Two-way sync between clinic appointments and Google Calendar</span>}
           valuePropName="checked"
         >
           <Switch disabled={isUpdating} />
         </Form.Item>
 
-        <Space direction="vertical" style={{ width: '100%' }}>
-          <Paragraph style={{ color: themeColors.text }}>
-            <strong>Connection Status:</strong> <span style={{ color: '#ff4d4f' }}>Not Connected</span>
+        <Space direction="vertical" className={styles.fullWidth}>
+          <Paragraph className={styles.connectionStatus}>
+            <strong>Connection Status:</strong> <span className={styles.statusDisconnected}>Not Connected</span>
           </Paragraph>
 
           <Space>
@@ -73,7 +70,7 @@ const AppointmentsSettings: React.FC<AppointmentsSettingsProps> = ({ form, isUpd
               icon={<LinkOutlined />}
               onClick={handleDisconnectGoogle}
               disabled={isUpdating}
-              style={{ display: 'none' }} // Show only when connected
+              className={styles.disconnectButton} // Show only when connected
             >
               Disconnect
             </Button>

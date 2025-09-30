@@ -32,6 +32,7 @@ import {
   HeartOutlined,
 } from '@ant-design/icons';
 import type { HouseholdTableRecord } from '../../types/ui.types';
+import styles from './Tables.module.css';
 
 const { Text, Link } = Typography;
 
@@ -93,13 +94,13 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
       sorter: (a, b) => (a.lastName || '').localeCompare(b.lastName || ''),
       render: (text, record) => (
         <Space>
-          <HomeOutlined style={{ color: '#4A90E2' }} />
+          <HomeOutlined className={styles.iconBlue} />
           <div>
-            <RouterLink to={`/households/${record.id}`} style={{ textDecoration: 'none' }}>
-              <Text strong style={{ color: '#1890ff', cursor: 'pointer' }}>{text}</Text>
+            <RouterLink to={`/households/${record.id}`} className={styles.linkClean}>
+              <Text strong className={styles.textPrimary}>{text}</Text>
             </RouterLink>
             <br />
-            <Text type="secondary" style={{ fontSize: '12px' }}>
+            <Text type="secondary" className={styles.textSmall}>
               ID: #{record.id}
             </Text>
           </div>
@@ -113,7 +114,7 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
       width: 180,
       render: (text) => (
         <Space>
-          <Avatar size="small" icon={<UserOutlined />} style={{ background: '#4A90E2' }}>
+          <Avatar size="small" icon={<UserOutlined />} className={styles.avatarBlue}>
             {text?.charAt(0)}
           </Avatar>
           <Text>{text || t('entities:defaults.noPrimaryContact')}</Text>
@@ -129,14 +130,14 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
         <Space direction="vertical" size={0}>
           {record.phone && (
             <Space size={4}>
-              <PhoneOutlined style={{ color: '#52C41A' }} />
+              <PhoneOutlined className={styles.iconGreen} />
               <Link href={`tel:${record.phone}`}>{record.phone}</Link>
             </Space>
           )}
           {record.email && (
             <Space size={4}>
-              <MailOutlined style={{ color: '#1890ff' }} />
-              <Link href={`mailto:${record.email}`} style={{ fontSize: '12px' }}>
+              <MailOutlined className={styles.iconPrimary} />
+              <Link href={`mailto:${record.email}`} className={styles.textSmall}>
                 {record.email}
               </Link>
             </Space>
@@ -161,7 +162,7 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
           }}
           overflowCount={99}
         >
-          <HeartOutlined style={{ fontSize: '20px', color: '#ff69b4' }} />
+          <HeartOutlined className={styles.iconLarge} />
         </Badge>
       ),
       sorter: (a, b) => (a.petCount || 0) - (b.petCount || 0),
@@ -241,26 +242,26 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
         }] : [];
 
     return (
-      <div style={{ padding: '20px', background: '#1a1a1a', borderRadius: '8px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+      <div className={styles.expandedRow}>
+        <div className={styles.expandedGrid}>
           {/* Left Column - Family Members */}
           <div>
-            <Space direction="vertical" style={{ width: '100%' }} size="middle">
-              <Text strong style={{ fontSize: '16px' }}>
+            <Space direction="vertical" className={styles.fullWidth} size="middle">
+              <Text strong className={styles.textMedium}>
                 <TeamOutlined /> {t('patients:familyMembers', { count: contacts.length })}
               </Text>
               <List
                 size="small"
                 dataSource={contacts}
                 renderItem={(contact) => (
-                  <List.Item style={{ borderBottom: '1px solid #303030' }}>
+                  <List.Item className={styles.listItem}>
                     <List.Item.Meta
                       avatar={
                         <Avatar
                           icon={<UserOutlined />}
+                          className={styles.avatarPrimary}
                           style={{
                             background: contact.role === t('entities:roles.primaryContact') ? '#52C41A' : '#4A90E2',
-                            fontSize: '18px'
                           }}
                           size={42}
                         >
@@ -274,7 +275,7 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
                             {contact.role}
                           </Tag>
                           {contact.relationship && (
-                            <Text type="secondary" style={{ fontSize: '12px' }}>
+                            <Text type="secondary" className={styles.textSmall}>
                               ({contact.relationship})
                             </Text>
                           )}
@@ -284,18 +285,18 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
                         <Space direction="vertical" size={4}>
                           {contact.phone && (
                             <span>
-                              <PhoneOutlined style={{ marginRight: 8 }} />
+                              <PhoneOutlined className={styles.marginRight8} />
                               {contact.phone}
                             </span>
                           )}
                           {contact.email && (
                             <span>
-                              <MailOutlined style={{ marginRight: 8 }} />
+                              <MailOutlined className={styles.marginRight8} />
                               {contact.email}
                             </span>
                           )}
                           {!contact.phone && !contact.email && (
-                            <Text type="secondary" style={{ fontStyle: 'italic' }}>
+                            <Text type="secondary" className={styles.textItalic}>
                               {t('entities:defaults.noContactInfo')}
                             </Text>
                           )}
@@ -310,17 +311,17 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
 
           {/* Right Column - Household Details */}
           <div>
-            <Space direction="vertical" style={{ width: '100%' }} size="middle">
-              <Text strong style={{ fontSize: '16px' }}>
+            <Space direction="vertical" className={styles.fullWidth} size="middle">
+              <Text strong className={styles.textMedium}>
                 <HomeOutlined /> Household Details
               </Text>
 
-              <div style={{ background: '#262626', padding: '16px', borderRadius: '8px' }}>
-                <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+              <div className={styles.detailCard}>
+                <Space direction="vertical" size="middle" className={styles.fullWidth}>
                   <div>
                     <Text type="secondary">Household Name:</Text>
                     <br />
-                    <Text strong style={{ fontSize: '16px' }}>{record.lastName || 'Not specified'}</Text>
+                    <Text strong className={styles.textMedium}>{record.lastName || 'Not specified'}</Text>
                   </div>
 
                   {record.address && (
@@ -340,7 +341,7 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
                       showZero
                     />
                     {record.petCount > 0 && (
-                      <Text type="secondary" style={{ marginLeft: 8 }}>
+                      <Text type="secondary" className={styles.marginLeft8}>
                         View household page to see all pets
                       </Text>
                     )}
@@ -364,7 +365,7 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
                     <div>
                       <Text type="secondary">Notes:</Text>
                       <br />
-                      <Text style={{ fontStyle: 'italic' }}>{record.notes}</Text>
+                      <Text className={styles.textItalic}>{record.notes}</Text>
                     </div>
                   )}
                 </Space>
@@ -411,14 +412,14 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
 
   return (
     <div className="household-table-container">
-      <div style={{ marginBottom: 16 }}>
+      <div className={styles.searchContainer}>
         <Space>
           <Input
             placeholder={t('patients:searchHouseholdsPlaceholder')}
             prefix={<SearchOutlined />}
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
-            style={{ width: 300 }}
+            className={styles.searchInput}
             allowClear
           />
           {selectedRowKeys.length > 0 && (
