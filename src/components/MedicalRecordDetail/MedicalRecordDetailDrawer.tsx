@@ -30,7 +30,12 @@ export const MedicalRecordDetailDrawer: React.FC<MedicalRecordDetailDrawerProps>
       await refetch();
       onChanged?.();
     } catch (e: any) {
-      notification.error({ message: "Error", description: typeof e === 'string' ? e : (e?.message || 'Failed to revert', placement: "bottomRight", duration: 5 }));
+      notification.error({
+        message: "Error",
+        description: typeof e === 'string' ? e : (e?.message || 'Failed to revert'),
+        placement: "bottomRight",
+        duration: 5
+      });
     }
   };
 

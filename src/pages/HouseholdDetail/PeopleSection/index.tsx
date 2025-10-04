@@ -28,9 +28,9 @@ export const PeopleSection: React.FC<PeopleSectionProps> = ({ people, householdI
         person: personData
       });
       setIsAddingPerson(false);
-      notification.success({ message: "Success", description: t('detail.people.personAdded', placement: "bottomRight", duration: 3 }));
+      notification.success({ message: "Success", description: t('detail.people.personAdded'), placement: "bottomRight", duration: 3 });
     } catch (error) {
-      notification.error({ message: "Error", description: t('detail.people.failedToAdd', placement: "bottomRight", duration: 5 }));
+      notification.error({ message: "Error", description: t('detail.people.failedToAdd'), placement: "bottomRight", duration: 5 });
       console.error('Add person failed:', error);
     }
   };

@@ -58,7 +58,12 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
       setSelectedRecord(null);
       onRefresh();
     } catch (error) {
-      notification.error({ message: "Error", description: selectedRecord.isArchived ? t('messages.restoreFailed', placement: "bottomRight", duration: 5 }) : t('messages.archiveFailed'));
+      notification.error({
+        message: "Error",
+        description: selectedRecord.isArchived ? t('messages.restoreFailed') : t('messages.archiveFailed'),
+        placement: "bottomRight",
+        duration: 5
+      });
     }
   };
 
@@ -69,7 +74,7 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
         fileName,
       });
     } catch (error) {
-      notification.error({ message: "Error", description: t('messages.downloadFailed', placement: "bottomRight", duration: 5 }));
+      notification.error({ message: "Error", description: t('messages.downloadFailed'), placement: "bottomRight", duration: 5 });
     }
   };
 

@@ -119,13 +119,13 @@ export const PersonCard: React.FC<PersonCardProps> = ({
       }
 
       setIsEditing(false);
-      notification.success({ message: "Success", description: t('detail.people.personAdded', placement: "bottomRight", duration: 3 }));
+      notification.success({ message: "Success", description: t('detail.people.personAdded'), placement: "bottomRight", duration: 3 });
 
       if (values.isPrimary && !person.isPrimary) {
         onPrimaryChange?.(person.id);
       }
     } catch (error) {
-      notification.error({ message: "Error", description: t('detail.householdInfo.failedToSave', placement: "bottomRight", duration: 5 }));
+      notification.error({ message: "Error", description: t('detail.householdInfo.failedToSave'), placement: "bottomRight", duration: 5 });
       console.error('Save failed:', error);
     }
   };
@@ -136,9 +136,9 @@ export const PersonCard: React.FC<PersonCardProps> = ({
         personId: person.id,
         householdId
       });
-      notification.success({ message: "Success", description: t('detail.people.personRemoved', placement: "bottomRight", duration: 3 }));
+      notification.success({ message: "Success", description: t('detail.people.personRemoved'), placement: "bottomRight", duration: 3 });
     } catch (error) {
-      notification.error({ message: "Error", description: t('detail.people.failedToDelete', placement: "bottomRight", duration: 5 }));
+      notification.error({ message: "Error", description: t('detail.people.failedToDelete'), placement: "bottomRight", duration: 5 });
       console.error('Delete failed:', error);
     }
   };

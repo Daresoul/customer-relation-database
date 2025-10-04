@@ -71,7 +71,7 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
         setLocalValues(prev => ({ ...prev, [field]: patient[field as keyof typeof patient] }));
       }
       console.error('Update failed:', error);
-      notification.error({ message: "Error", description: t('detail.patientInfo.failedToSave', placement: "bottomRight", duration: 5 }));
+      notification.error({ message: "Error", description: t('detail.patientInfo.failedToSave'), placement: "bottomRight", duration: 5 });
     }
   };
 
