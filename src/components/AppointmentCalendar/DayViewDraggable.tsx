@@ -318,12 +318,12 @@ const DayViewDraggable: React.FC<DayViewDraggableProps> = ({
         }
         .day-time-column {
           width: 80px;
-          background: ${themeColors.background};
-          border-right: 1px solid ${themeColors.border};
           flex-shrink: 0;
           display: flex;
           align-items: center;
           justify-content: center;
+          background: ${themeColors.background};
+          border-right: 1px solid ${themeColors.border};
         }
         .day-content-column {
           flex: 1;
@@ -348,9 +348,8 @@ const DayViewDraggable: React.FC<DayViewDraggableProps> = ({
           width: 80px;
           height: 80px;
           display: flex;
-          align-items: flex-start;
+          align-items: center;
           justify-content: center;
-          padding-top: 0px;
           font-size: 12px;
           color: ${themeColors.textSecondary};
           background: ${themeColors.background};
