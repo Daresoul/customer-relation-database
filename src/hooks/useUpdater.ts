@@ -50,7 +50,7 @@ export function useUpdater() {
       setStatus('error');
       console.error('Update check failed:', error);
     }
-  }, []);
+  }, [notification]);
 
   /**
    * Install the downloaded update and restart the app
@@ -68,7 +68,7 @@ export function useUpdater() {
         placement: 'topRight',
       });
     }
-  }, []);
+  }, [notification]);
 
   /**
    * Subscribe to updater events (PENDING, DONE, ERROR)

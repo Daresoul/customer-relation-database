@@ -52,7 +52,7 @@ export function UpdateSettings() {
 
     loadPreferences();
     loadVersion();
-  }, []);
+  }, [notification]);
 
   /**
    * Toggle automatic update checking
