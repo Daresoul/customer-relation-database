@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Form, Input, Select, Button, Space, Divider, InputNumber, List, Typography, Upload, message } from 'antd';
+import { Form, Input, Select, Button, Space, Divider, InputNumber, List, Typography, Upload } from 'antd';
 import { SaveOutlined, CloseOutlined, UploadOutlined, DeleteOutlined, InboxOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import FileUpload from '../FileUpload/FileUpload';
@@ -206,7 +206,7 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
             beforeUpload={(file) => {
               const error = MedicalService.validateFile(file);
               if (error) {
-                message.error(error);
+                notification.error({ message: "Error", description: error, placement: "bottomRight", duration: 5 });
                 return Upload.LIST_IGNORE;
               }
               // Don't add to state here, let onChange handle it

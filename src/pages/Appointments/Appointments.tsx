@@ -48,7 +48,7 @@ const { Search } = Input;
 const { Option } = Select;
 
 const Appointments: React.FC = () => {
-  const { message } = App.useApp();
+  const { notification } = App.useApp();
   const [activeTab, setActiveTab] = useState<'calendar' | 'list'>('calendar');
   const [calendarView, setCalendarView] = useState<CalendarView>('month');
   const [modalVisible, setModalVisible] = useState(false);
@@ -102,7 +102,7 @@ const Appointments: React.FC = () => {
   // Handle delete appointment
   const handleDeleteAppointment = useCallback(
     async (appointment: Appointment) => {
-      Modal.confirm({
+      modal.confirm({
         title: 'Delete Appointment',
         content: `Are you sure you want to delete the appointment "${appointment.title}"?`,
         okText: 'Delete',
@@ -110,10 +110,20 @@ const Appointments: React.FC = () => {
         onOk: async () => {
           try {
             await deleteAppointment(appointment.id);
-            message.success('Appointment deleted successfully');
+            notification.success({
+        message: 'Appointment deleted successfully',
+        description: 'Appointment deleted successfully',
+        placement: 'bottomRight',
+        duration: 3,
+      });
             setDetailDrawerVisible(false);
           } catch (error) {
-            message.error('Failed to delete appointment');
+            notification.error({
+        message: 'Error',
+        description: 'Failed to delete appointment',
+        placement: 'bottomRight',
+        duration: 5,
+      });
           }
         },
       });
@@ -126,7 +136,7 @@ const Appointments: React.FC = () => {
     async (appointment: Appointment) => {
       const targetDate = await new Promise<Date | null>((resolve) => {
         let selectedDate: Date | null = null;
-        Modal.confirm({
+        modal.confirm({
           title: 'Duplicate Appointment',
           content: (
             <div>
@@ -153,9 +163,19 @@ const Appointments: React.FC = () => {
             target_date: targetDate.toISOString(),
           };
           await duplicateAppointment(input);
-          message.success('Appointment duplicated successfully');
+          notification.success({
+        message: 'Appointment duplicated successfully',
+        description: 'Appointment duplicated successfully',
+        placement: 'bottomRight',
+        duration: 3,
+      });
         } catch (error) {
-          message.error('Failed to duplicate appointment');
+          notification.error({
+        message: 'Error',
+        description: 'Failed to duplicate appointment',
+        placement: 'bottomRight',
+        duration: 5,
+      });
         }
       }
     },
@@ -169,20 +189,30 @@ const Appointments: React.FC = () => {
     try {
       if (modalMode === 'create') {
         await createAppointment(data as CreateAppointmentInput);
-        message.success('Appointment created successfully');
+        notification.success({
+        message: 'Appointment created successfully',
+        description: 'Appointment created successfully',
+        placement: 'bottomRight',
+        duration: 3,
+      });
       } else if (selectedAppointment) {
         await updateAppointment({
           id: selectedAppointment.id,
           input: data as UpdateAppointmentInput,
         });
-        message.success('Appointment updated successfully');
+        notification.success({
+        message: 'Appointment updated successfully',
+        description: 'Appointment updated successfully',
+        placement: 'bottomRight',
+        duration: 3,
+      });
       }
       setModalVisible(false);
       refetch();
     } catch (error) {
-      message.error(
+      notification.error({ message: "Error", description: 
         `Failed to ${modalMode === 'create' ? 'create' : 'update'} appointment`
-      );
+      , placement: "bottomRight", duration: 5 });
       throw error;
     }
   };

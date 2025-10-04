@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Table, Tag, Space, Button, Tooltip, Popconfirm, message } from 'antd';
+import { Table, Tag, Space, Button, Tooltip, Popconfirm } from 'antd';
 import {
   EditOutlined,
   DeleteOutlined,
@@ -45,7 +45,12 @@ const MedicalRecordTable: React.FC<MedicalRecordTableProps> = ({
 
   const handleBulkArchive = async () => {
     if (selectedRowKeys.length === 0) {
-      message.warning('Please select records to archive');
+      notification.warning({
+        message: 'Warning',
+        description: 'Please select records to archive',
+        placement: 'bottomRight',
+        duration: 4,
+      });
       return;
     }
 
@@ -55,7 +60,12 @@ const MedicalRecordTable: React.FC<MedicalRecordTableProps> = ({
 
     try {
       await Promise.all(promises);
-      message.success(`${selectedRowKeys.length} records archived`);
+      notification.success({
+        message: 'Success',
+        description: `${selectedRowKeys.length} records archived`,
+        placement: 'bottomRight',
+        duration: 3,
+      });
       setSelectedRowKeys([]);
       onRefresh();
     } catch (error) {

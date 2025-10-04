@@ -15,17 +15,22 @@ interface MedicalRecordDetailDrawerProps {
 }
 
 export const MedicalRecordDetailDrawer: React.FC<MedicalRecordDetailDrawerProps> = ({ recordId, open, onClose, onChanged }) => {
-  const { message } = App.useApp();
+  const { notification } = App.useApp();
   const { data, isLoading, refetch } = useMedicalRecord(recordId, true);
 
   const handleRevert = async () => {
     try {
       await MedicalService.revertMedicalRecord(recordId);
-      message.success('Reverted to previous version');
+      notification.success({
+        message: 'Reverted to previous version',
+        description: 'Reverted to previous version',
+        placement: 'bottomRight',
+        duration: 3,
+      });
       await refetch();
       onChanged?.();
     } catch (e: any) {
-      message.error(typeof e === 'string' ? e : (e?.message || 'Failed to revert'));
+      notification.error({ message: "Error", description: typeof e === 'string' ? e : (e?.message || 'Failed to revert', placement: "bottomRight", duration: 5 }));
     }
   };
 

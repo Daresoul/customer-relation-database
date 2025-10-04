@@ -13,7 +13,7 @@ interface MedicalSectionProps {
 }
 
 export const MedicalSection: React.FC<MedicalSectionProps> = ({ patient }) => {
-  const { message } = App.useApp();
+  const { notification } = App.useApp();
   const updatePatient = useUpdatePatient();
 
   const [isEditing, setIsEditing] = useState(false);

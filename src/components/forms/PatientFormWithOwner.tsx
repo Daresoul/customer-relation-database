@@ -76,7 +76,7 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const { message } = App.useApp();
+  const { notification } = App.useApp();
 
   // Load initial data
   useEffect(() => {
@@ -237,7 +237,7 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
       // Submit the patient data
       await onSubmit(formData);
       if (message) {
-        message.success(patient ? 'Patient updated successfully!' : 'Patient created successfully!');
+        notification.success({ message: "Success", description: patient ? 'Patient updated successfully!' : 'Patient created successfully!', placement: "bottomRight", duration: 3 });
       }
       form.resetFields();
     } catch (error: any) {

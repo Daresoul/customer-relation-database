@@ -11,6 +11,7 @@ import type { HouseholdTableRecord } from '../types/ui.types';
 let appInstance: any = null;
 
 export const setAppInstance = (app: any) => {
+  const { notification, modal } = App.useApp();
   appInstance = app;
 };
 
@@ -58,6 +59,7 @@ const showLoading = (text: string) => {
 
 // Patient API methods
 export const patientApi = {
+  const { notification, modal } = App.useApp();
   search: async (query: string, limit?: number): Promise<Patient[]> => {
     try {
       return await invoke<Patient[]>('search_patients', { query: query || '', limit });
@@ -123,6 +125,7 @@ export const patientApi = {
 
 // Household API methods
 export const householdApi = {
+  const { notification, modal } = App.useApp();
   search: async (query: string, limit?: number): Promise<HouseholdTableRecord[]> => {
     try {
       // If query is completely empty, use get_all_households to fetch everything
@@ -339,6 +342,7 @@ export const householdApi = {
 
 // View preference API
 export const viewApi = {
+  const { notification, modal } = App.useApp();
   getPreference: async (): Promise<string> => {
     try {
       return await invoke<string>('get_view_preference');
@@ -359,6 +363,7 @@ export const viewApi = {
 
 // Batch operations with progress
 export const batchOperations = {
+  const { notification, modal } = App.useApp();
   importPatients: async (patients: Partial<Patient>[], onProgress?: (current: number, total: number) => void): Promise<Patient[]> => {
     const results: Patient[] = [];
     const total = patients.length;

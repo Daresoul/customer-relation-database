@@ -4,8 +4,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Modal, App, ConfigProvider, theme } from 'antd';
-import { ExclamationCircleOutlined } from '@ant-design/icons';
+import { App } from 'antd';
 import { PatientService } from '../services/patientService';
 import { Patient, UpdatePatientInput } from '../types';
 import { PatientDetail, DeletePatientResponse } from '../types/patient';
@@ -110,7 +109,7 @@ export function usePatientDetail(patientId: number) {
  */
 export function useUpdatePatient() {
   const queryClient = useQueryClient();
-  const { message } = App.useApp();
+  const { notification } = App.useApp();
 
   return useMutation({
     mutationFn: async ({
@@ -163,7 +162,13 @@ export function useUpdatePatient() {
       if (context?.previousPatient) {
         queryClient.setQueryData(['patient', patientId], context.previousPatient);
       }
-      message.error('Failed to update patient');
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      notification.error({
+        message: 'Failed to Update Patient',
+        description: `Error: ${errorMessage}`,
+        placement: 'bottomRight',
+        duration: 5,
+      });
       console.error('Update patient error:', error);
     },
     onSuccess: (updatedPatient, { patientId }) => {
@@ -186,7 +191,12 @@ export function useUpdatePatient() {
         });
       }
 
-      message.success('Saved');
+      notification.success({
+        message: 'Patient Updated',
+        description: 'Patient information saved successfully',
+        placement: 'bottomRight',
+        duration: 3,
+      });
     }
   });
 }
@@ -197,7 +207,7 @@ export function useUpdatePatient() {
 export function useDeletePatient() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const { message } = App.useApp();
+  const { notification } = App.useApp();
 
   return useMutation({
     mutationFn: async (patientId: number) => {
@@ -213,11 +223,22 @@ export function useDeletePatient() {
       queryClient.removeQueries({ queryKey: ['patient', patientId] });
       queryClient.invalidateQueries({ queryKey: ['patients'] });
 
-      message.success(response.message);
+      notification.success({
+        message: 'Patient Deleted',
+        description: response.message,
+        placement: 'bottomRight',
+        duration: 3,
+      });
       navigate(response.redirectTo);
     },
     onError: (error) => {
-      message.error('Failed to delete patient');
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      notification.error({
+        message: 'Failed to Delete Patient',
+        description: `Error: ${errorMessage}`,
+        placement: 'bottomRight',
+        duration: 5,
+      });
       console.error('Delete patient error:', error);
     }
   });
@@ -227,10 +248,11 @@ export function useDeletePatient() {
  * Hook to show delete confirmation modal
  */
 export function useDeleteConfirmation() {
+  const { modal } = App.useApp();
   const deletePatient = useDeletePatient();
 
   const showDeleteConfirm = (patientId: number, patientName: string) => {
-    Modal.confirm({
+    modal.confirm({
       title: 'Delete Patient',
       content: `Are you sure you want to delete ${patientName}? This action cannot be undone.`,
       okText: 'Delete',

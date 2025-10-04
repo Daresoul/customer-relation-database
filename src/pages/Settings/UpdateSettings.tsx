@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Form, Switch, Button, Typography, Space, message } from 'antd';
+import { Form, Switch, Button, Typography, Space, App } from 'antd';
 import { getVersion } from '@tauri-apps/api/app';
 import { updateService } from '../../services/updateService';
 import { useUpdater } from '../../hooks/useUpdater';
@@ -13,6 +13,7 @@ import { useUpdater } from '../../hooks/useUpdater';
 const { Text } = Typography;
 
 export function UpdateSettings() {
+  const { message, notification } = App.useApp();
   const [autoCheckEnabled, setAutoCheckEnabled] = useState(true);
   const [lastCheck, setLastCheck] = useState<Date | null>(null);
   const [currentVersion, setCurrentVersion] = useState<string>('');
@@ -31,7 +32,12 @@ export function UpdateSettings() {
         }
       } catch (error) {
         console.error('Failed to load update preferences:', error);
-        message.error('Failed to load update settings');
+        notification.error({
+        message: 'Error',
+        description: 'Failed to load update settings',
+        placement: 'bottomRight',
+        duration: 5,
+      });
       }
     }
 
@@ -56,10 +62,20 @@ export function UpdateSettings() {
       setLoading(true);
       await updateService.setAutoCheckEnabled(checked);
       setAutoCheckEnabled(checked);
-      message.success('Update settings saved');
+      notification.success({
+        message: 'Update settings saved',
+        description: 'Update settings saved',
+        placement: 'bottomRight',
+        duration: 3,
+      });
     } catch (error) {
       console.error('Failed to save update settings:', error);
-      message.error('Failed to save settings');
+      notification.error({
+        message: 'Error',
+        description: 'Failed to save settings',
+        placement: 'bottomRight',
+        duration: 5,
+      });
     } finally {
       setLoading(false);
     }
@@ -71,10 +87,34 @@ export function UpdateSettings() {
   const handleManualCheck = async () => {
     try {
       setLoading(true);
-      await checkForUpdates();
+      const result = await updateService.checkForUpdates();
 
-      if (status === 'idle') {
-        message.success('You are up to date!');
+      if (result.shouldUpdate && result.manifest) {
+        // Update available
+        const description = result.manifest.notes
+          ? result.manifest.notes.split('\n')[0]
+          : 'A new version is available';
+
+        notification.info({
+          message: 'Update Available',
+          description: `Version ${result.manifest.version}: ${description}`,
+          placement: 'bottomRight',
+          duration: 5,
+        });
+
+        // Record the check
+        await updateService.recordCheck(result.manifest.version);
+      } else {
+        // Up to date
+        notification.success({
+          message: 'Up to Date',
+          description: 'You are running the latest version!',
+          placement: 'bottomRight',
+          duration: 3,
+        });
+
+        // Record check without version
+        await updateService.recordCheck();
       }
 
       // Update last check timestamp
@@ -84,7 +124,14 @@ export function UpdateSettings() {
       }
     } catch (error) {
       console.error('Update check failed:', error);
-      message.error('Update check failed');
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+
+      notification.error({
+        message: 'Update Check Failed',
+        description: `Error: ${errorMessage}`,
+        placement: 'bottomRight',
+        duration: 5,
+      });
     } finally {
       setLoading(false);
     }

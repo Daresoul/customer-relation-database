@@ -15,7 +15,7 @@ interface Props {
 // Tauri-only multi-page PDF preview using PDFium-rendered PNGs.
 // Renders page 1 immediately, loads subsequent pages on demand with infinite scroll.
 const PdfMultiPagePreview: React.FC<Props> = ({ attachmentId, initialPageUrl }) => {
-  const { message } = App.useApp();
+  const { notification } = App.useApp();
   const [pageCount, setPageCount] = useState<number | null>(null);
   const [pages, setPages] = useState<Array<{ page: number; url: string }>>(
     initialPageUrl ? [{ page: 1, url: initialPageUrl }] : []
@@ -101,7 +101,7 @@ const PdfMultiPagePreview: React.FC<Props> = ({ attachmentId, initialPageUrl }) 
       });
     } catch (e: any) {
       console.warn('[PdfMultiPagePreview] Load more failed:', e);
-      message.error(e?.message || 'Failed to load more pages');
+      notification.error({ message: "Error", description: e?.message || 'Failed to load more pages', placement: "bottomRight", duration: 5 });
     } finally {
       setLoadingMore(false);
       loadingRef.current = false;
@@ -119,10 +119,15 @@ const PdfMultiPagePreview: React.FC<Props> = ({ attachmentId, initialPageUrl }) 
       }));
 
       setPages(results);
-      message.success('Previews regenerated successfully');
+      notification.success({
+        message: 'Previews regenerated successfully',
+        description: 'Previews regenerated successfully',
+        placement: 'bottomRight',
+        duration: 3,
+      });
     } catch (e: any) {
       console.error('[PdfMultiPagePreview] Regenerate failed:', e);
-      message.error(e?.message || 'Failed to regenerate previews');
+      notification.error({ message: "Error", description: e?.message || 'Failed to regenerate previews', placement: "bottomRight", duration: 5 });
     } finally {
       setRegenerating(false);
     }

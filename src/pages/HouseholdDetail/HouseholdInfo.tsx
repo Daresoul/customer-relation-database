@@ -14,7 +14,7 @@ interface HouseholdInfoProps {
 }
 
 export const HouseholdInfo: React.FC<HouseholdInfoProps> = ({ household }) => {
-  const { message } = App.useApp();
+  const { notification } = App.useApp();
   const { t } = useTranslation('households');
   const updateHousehold = useUpdateHousehold();
 
@@ -24,9 +24,9 @@ export const HouseholdInfo: React.FC<HouseholdInfoProps> = ({ household }) => {
         householdId: household.id,
         updates: { [field]: value || null }
       });
-      message.success(t('detail.householdInfo.saved'));
+      notification.success({ message: "Success", description: t('detail.householdInfo.saved', placement: "bottomRight", duration: 3 }));
     } catch (error) {
-      message.error(t('detail.householdInfo.failedToSave'));
+      notification.error({ message: "Error", description: t('detail.householdInfo.failedToSave', placement: "bottomRight", duration: 5 }));
       console.error('Update failed:', error);
     }
   };
@@ -72,7 +72,7 @@ export const HouseholdInfo: React.FC<HouseholdInfoProps> = ({ household }) => {
             onChange: (value) => {
               const result = nameEdit.onChange(value);
               if (!result.success && result.error) {
-                message.error(result.error);
+                notification.error({ message: "Error", description: result.error, placement: "bottomRight", duration: 5 });
               }
             },
             triggerType: ['text'],
@@ -112,7 +112,7 @@ export const HouseholdInfo: React.FC<HouseholdInfoProps> = ({ household }) => {
             onChange: (value) => {
               const result = postalCodeEdit.onChange(value);
               if (!result.success && result.error) {
-                message.error(result.error);
+                notification.error({ message: "Error", description: result.error, placement: "bottomRight", duration: 5 });
               }
             },
             triggerType: ['text'],
