@@ -114,10 +114,10 @@ const SettingsLayout: React.FC = () => {
         setThemeMode(completeValues.theme as 'light' | 'dark');
       }
 
-      notification.success({ message: "Success", description: t('common:saveSuccess', placement: "bottomRight", duration: 3 }));
+      notification.success({ message: "Success", description: t('common:saveSuccess'), placement: "bottomRight", duration: 3 });
     } catch (error) {
       console.error('Settings update error:', error);
-      notification.error({ message: "Error", description: t('common:operationFailed', placement: "bottomRight", duration: 5 }));
+      notification.error({ message: "Error", description: t('common:operationFailed'), placement: "bottomRight", duration: 5 });
     }
   };
 

@@ -79,9 +79,19 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
 
           try {
             await Promise.all(uploadPromises);
-            notification.success({ message: "Success", description: t('messages.uploadSuccess', placement: "bottomRight", duration: 3 }));
+            notification.success({
+              message: "Success",
+              description: t('messages.uploadSuccess'),
+              placement: "bottomRight",
+              duration: 3
+            });
           } catch (uploadError) {
-            notification.error({ message: "Error", description: t('messages.uploadFailed', placement: "bottomRight", duration: 5 }));
+            notification.error({
+              message: "Error",
+              description: t('messages.uploadFailed'),
+              placement: "bottomRight",
+              duration: 5
+            });
             console.error('Upload error:', uploadError);
           }
         }

@@ -195,7 +195,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
     const key = String(row.id);
     if (expanded) {
       if (!isPreviewable(row.mimeType, row.originalName)) {
-        notification.info({ message: "Info", description: t('medical:detail.previewNotAvailable', placement: "bottomRight", duration: 3 }));
+        notification.info({ message: "Info", description: t('medical:detail.previewNotAvailable'), placement: "bottomRight", duration: 3 });
         return;
       }
       // Only one open at a time

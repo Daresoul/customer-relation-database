@@ -24,9 +24,9 @@ export const HouseholdInfo: React.FC<HouseholdInfoProps> = ({ household }) => {
         householdId: household.id,
         updates: { [field]: value || null }
       });
-      notification.success({ message: "Success", description: t('detail.householdInfo.saved', placement: "bottomRight", duration: 3 }));
+      notification.success({ message: "Success", description: t('detail.householdInfo.saved'), placement: "bottomRight", duration: 3 });
     } catch (error) {
-      notification.error({ message: "Error", description: t('detail.householdInfo.failedToSave', placement: "bottomRight", duration: 5 }));
+      notification.error({ message: "Error", description: t('detail.householdInfo.failedToSave'), placement: "bottomRight", duration: 5 });
       console.error('Update failed:', error);
     }
   };
