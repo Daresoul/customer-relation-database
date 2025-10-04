@@ -335,9 +335,6 @@ export const MedicalRecordDetailPage: React.FC = () => {
               title: <Link to="/" className={styles.breadcrumbLink}><HomeOutlined /> {t('navigation:home')}</Link>,
             },
             {
-              title: <Link to="/" className={styles.breadcrumbLink}>{t('navigation:dashboard')}</Link>,
-            },
-            {
               title: record?.patientId ? (
                 <Link
                   to={`/patients/${record.patientId}`}
@@ -374,7 +371,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
               );
               navigate(`/patients/${record.patientId}`);
             } else {
-              navigate(-1);
+              navigate('/');
             }
           }}
         >

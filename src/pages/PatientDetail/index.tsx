@@ -197,9 +197,6 @@ export const PatientDetail: React.FC = () => {
               title: <Link to="/" className={styles.breadcrumbLink}><HomeOutlined /> {t('navigation:home')}</Link>,
             },
             {
-              title: <Link to="/" className={styles.breadcrumbLink}>{t('navigation:dashboard')}</Link>,
-            },
-            {
               title: <span className={styles.breadcrumbCurrent}>{patient.name}</span>,
             },
           ]}
@@ -209,7 +206,7 @@ export const PatientDetail: React.FC = () => {
       <div className={styles.header}>
         <Button
           icon={<ArrowLeftOutlined />}
-          onClick={() => navigate(-1)}
+          onClick={() => navigate('/')}
           className={styles.backButton}
         >
           {t('common:back')}

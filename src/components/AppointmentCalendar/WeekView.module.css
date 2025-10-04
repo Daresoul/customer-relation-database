@@ -10,9 +10,11 @@
 }
 
 .weekTimeColumn {
+  width: 80px;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
 .weekDayColumn {
@@ -161,6 +163,7 @@
 
 /* Day header styles */
 .dayHeader {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -187,4 +190,15 @@
   background: var(--background);
   padding: 0 4px;
   font-weight: 500;
+}
+
+/* Secondary text styling */
+.secondaryText {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Relative positioning utility */
+.relative {
+  position: relative;
 }
