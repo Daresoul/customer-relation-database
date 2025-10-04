@@ -92,8 +92,8 @@ export function UpdateSettings() {
         <Text type="secondary">Last checked: {lastCheck.toLocaleString()}</Text>
       )}
 
-      <Button onClick={handleManualCheck} loading={loading || status === 'checking'}>
-        Check for Updates Now
+      <Button onClick={handleManualCheck} loading={loading || status === 'checking'} type="primary">
+        Check for Updates
       </Button>
     </Space>
   );
