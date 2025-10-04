@@ -9,7 +9,7 @@ import {
   Input,
   Drawer,
   Modal,
-  message,
+  App,
   Card,
   Statistic,
   Row,
@@ -48,6 +48,7 @@ const { Search } = Input;
 const { Option } = Select;
 
 const Appointments: React.FC = () => {
+  const { message } = App.useApp();
   const [activeTab, setActiveTab] = useState<'calendar' | 'list'>('calendar');
   const [calendarView, setCalendarView] = useState<CalendarView>('month');
   const [modalVisible, setModalVisible] = useState(false);

@@ -13,7 +13,7 @@ import {
   Col,
   Typography,
   Divider,
-  message,
+  App,
 } from 'antd';
 import {
   CalendarOutlined,
@@ -50,9 +50,9 @@ interface AppointmentModalProps {
   rooms?: any[];
 }
 
-const AppointmentModal: React.FC<AppointmentModalProps> = ({
-  visible,
-  open,
+// Inner component that only renders when modal is open
+const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 'open'> & { isVisible: boolean }> = ({
+  isVisible,
   appointment,
   initialDate,
   initialEndDate,
@@ -61,6 +61,7 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
   mode = 'create',
   rooms: propsRooms,
 }) => {
+  const { message } = App.useApp();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [conflicts, setConflicts] = useState<Appointment[]>([]);
@@ -76,12 +77,9 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
     []
   );
 
-  // Determine modal visibility - prefer 'open' prop, fall back to 'visible' for backward compatibility
-  const isModalVisible = open ?? visible ?? false;
-
   // Initialize form values
   useEffect(() => {
-    if (isModalVisible) {
+    if (isVisible) {
       if (mode === 'edit' && appointment) {
         form.setFieldsValue({
           patient_id: appointment.patient_id,
@@ -115,7 +113,7 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
         });
       }
     }
-  }, [isModalVisible, appointment, mode, initialDate, initialEndDate, form]);
+  }, [isVisible, appointment, mode, initialDate, initialEndDate, form]);
 
   // Check for conflicts when room or time changes
   const checkConflicts = async () => {
@@ -146,6 +144,9 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
       setConflicts(response.conflicts || []);
     } catch (error) {
       console.error('Failed to check conflicts:', error);
+      // Clear conflicts and show warning instead of blocking
+      setConflicts([]);
+      message.warning('Unable to check for conflicts. Please verify manually.');
     } finally {
       setCheckingConflicts(false);
     }
@@ -244,7 +245,7 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
           {mode === 'create' ? 'New Appointment' : 'Edit Appointment'}
         </Space>
       }
-      open={isModalVisible}
+      open={isVisible}
       destroyOnHidden
       onCancel={handleCancel}
       width={700}
@@ -416,6 +417,18 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
       </Form>
     </Modal>
   );
+};
+
+// Wrapper component that conditionally renders content
+const AppointmentModal: React.FC<AppointmentModalProps> = (props) => {
+  const isModalVisible = props.open ?? props.visible ?? false;
+
+  // Only render the content when modal is visible
+  if (!isModalVisible) {
+    return null;
+  }
+
+  return <AppointmentModalContent {...props} isVisible={isModalVisible} />;
 };
 
 export default AppointmentModal;

@@ -8,11 +8,10 @@ import styles from '../Settings.module.css';
 const { Text, Paragraph } = Typography;
 
 interface AppointmentsSettingsProps {
-  form: any;
   isUpdating: boolean;
 }
 
-const AppointmentsSettings: React.FC<AppointmentsSettingsProps> = ({ form, isUpdating }) => {
+const AppointmentsSettings: React.FC<AppointmentsSettingsProps> = ({ isUpdating }) => {
   const { t } = useTranslation(['common', 'forms']);
   const themeColors = useThemeColors();
 

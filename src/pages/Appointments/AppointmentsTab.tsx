@@ -8,7 +8,7 @@ import {
   Input,
   Drawer,
   Modal,
-  message,
+  App,
   Row,
   Col,
   Checkbox,
@@ -40,6 +40,7 @@ import styles from './Appointments.module.css';
 const { RangePicker } = DatePicker;
 
 const AppointmentsTab: React.FC = () => {
+  const { message } = App.useApp();
   const [activeView, setActiveView] = useState<'calendar' | 'list'>('list');
   const [calendarView, setCalendarView] = useState<CalendarView>('month');
   const [modalVisible, setModalVisible] = useState(false);

@@ -9,11 +9,10 @@ const { Text } = Typography;
 const { Option } = Select;
 
 interface GeneralSettingsProps {
-  form: any;
   isUpdating: boolean;
 }
 
-const GeneralSettings: React.FC<GeneralSettingsProps> = ({ form, isUpdating }) => {
+const GeneralSettings: React.FC<GeneralSettingsProps> = ({ isUpdating }) => {
   const { t } = useTranslation(['common', 'forms']);
   const themeColors = useThemeColors();
 

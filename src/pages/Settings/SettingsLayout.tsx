@@ -37,10 +37,12 @@ interface MenuItem {
 const SettingsLayout: React.FC = () => {
   const { t } = useTranslation(['common', 'entities', 'navigation', 'forms']);
   const navigate = useNavigate();
-  const [form] = Form.useForm();
   const { themeMode, setThemeMode } = useTheme();
   const themeColors = useThemeColors();
   const [selectedCategory, setSelectedCategory] = useState<SettingsCategory>('general');
+
+  // Only create form for tabs that need it (not for rooms tab which has its own form)
+  const [form] = Form.useForm();
 
   const { settings, updateSettings, isLoading, isUpdating } = useAppSettings();
 
@@ -181,41 +183,46 @@ const SettingsLayout: React.FC = () => {
             </Sider>
 
             {/* Content Area */}
-            <Content>
-              <Form
-                form={form}
-                layout="vertical"
-                onFinish={handleSubmit}
-              >
-                {/* Dynamic content based on selected category */}
-                <CurrentComponent form={form} isUpdating={isUpdating} />
-
-                {/* Save/Cancel buttons - always visible */}
-                <Card
-                  className={styles.saveCard}
+            <Content className={styles.settingsContent}>
+              {/* Rooms tab doesn't need the parent form - it has its own modal form */}
+              {selectedCategory === 'rooms' ? (
+                <CurrentComponent isUpdating={isUpdating} />
+              ) : (
+                <Form
+                  form={form}
+                  layout="vertical"
+                  onFinish={handleSubmit}
                 >
-                  <Form.Item className={styles.formAction}>
-                    <Space>
-                      <Button
-                        type="primary"
-                        htmlType="submit"
-                        loading={isUpdating}
-                        size="large"
-                        icon={<SettingOutlined />}
-                      >
-                        {t('common:saveChanges')}
-                      </Button>
-                      <Button
-                        onClick={handleCancel}
-                        size="large"
-                        className={styles.cancelButton}
-                      >
-                        {t('common:cancel')}
-                      </Button>
-                    </Space>
-                  </Form.Item>
-                </Card>
-              </Form>
+                  {/* Dynamic content based on selected category */}
+                  <CurrentComponent isUpdating={isUpdating} />
+
+                  {/* Save/Cancel buttons - always visible */}
+                  <Card
+                    className={styles.saveCard}
+                  >
+                    <Form.Item className={styles.formAction}>
+                      <Space>
+                        <Button
+                          type="primary"
+                          htmlType="submit"
+                          loading={isUpdating}
+                          size="large"
+                          icon={<SettingOutlined />}
+                        >
+                          {t('common:saveChanges')}
+                        </Button>
+                        <Button
+                          onClick={handleCancel}
+                          size="large"
+                          className={styles.cancelButton}
+                        >
+                          {t('common:cancel')}
+                        </Button>
+                      </Space>
+                    </Form.Item>
+                  </Card>
+                </Form>
+              )}
             </Content>
           </Layout>
         </div>
