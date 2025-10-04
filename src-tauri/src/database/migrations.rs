@@ -34,6 +34,7 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, "016_add_missing_patient_columns", add_missing_patient_columns).await?;
     run_migration(pool, "017_create_app_settings_table", create_app_settings_table).await?;
     run_migration(pool, "018_create_appointments_tables", create_appointments_tables).await?;
+    run_migration(pool, "019_create_update_preferences_table", create_update_preferences_table).await?;
 
     Ok(())
 }
@@ -984,6 +985,53 @@ fn create_appointments_tables(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::f
         .await?;
 
         println!("Created appointments management tables");
+        Ok(())
+    })
+}
+
+fn create_update_preferences_table(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        // Create update_preferences table for auto-update system
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS update_preferences (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                auto_check_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                last_check_timestamp INTEGER,
+                last_notified_version TEXT,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            )
+        "#)
+        .execute(pool)
+        .await?;
+
+        // Insert default preferences (singleton pattern - only one row allowed)
+        sqlx::query(r#"
+            INSERT OR IGNORE INTO update_preferences (
+                id,
+                auto_check_enabled,
+                created_at,
+                updated_at
+            )
+            VALUES (
+                1,
+                TRUE,
+                strftime('%s', 'now'),
+                strftime('%s', 'now')
+            )
+        "#)
+        .execute(pool)
+        .await?;
+
+        // Index for efficient lookups (though only 1 row exists)
+        sqlx::query(r#"
+            CREATE INDEX IF NOT EXISTS idx_update_preferences_auto_check
+            ON update_preferences(auto_check_enabled)
+        "#)
+        .execute(pool)
+        .await?;
+
+        println!("Created update_preferences table");
         Ok(())
     })
 }
