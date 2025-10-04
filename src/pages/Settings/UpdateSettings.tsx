@@ -6,6 +6,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Form, Switch, Button, Typography, Space, message } from 'antd';
+import { getVersion } from '@tauri-apps/api/app';
 import { updateService } from '../../services/updateService';
 import { useUpdater } from '../../hooks/useUpdater';
 
@@ -14,10 +15,11 @@ const { Text } = Typography;
 export function UpdateSettings() {
   const [autoCheckEnabled, setAutoCheckEnabled] = useState(true);
   const [lastCheck, setLastCheck] = useState<Date | null>(null);
+  const [currentVersion, setCurrentVersion] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const { checkForUpdates, status } = useUpdater();
 
-  // Load preferences on mount
+  // Load preferences and version on mount
   useEffect(() => {
     async function loadPreferences() {
       try {
@@ -33,7 +35,17 @@ export function UpdateSettings() {
       }
     }
 
+    async function loadVersion() {
+      try {
+        const version = await getVersion();
+        setCurrentVersion(version);
+      } catch (error) {
+        console.error('Failed to get app version:', error);
+      }
+    }
+
     loadPreferences();
+    loadVersion();
   }, []);
 
   /**
@@ -80,6 +92,10 @@ export function UpdateSettings() {
 
   return (
     <Space direction="vertical" style={{ width: '100%' }}>
+      {currentVersion && (
+        <Text strong>Current Version: {currentVersion}</Text>
+      )}
+
       <Form.Item label="Automatic Update Checks">
         <Switch
           checked={autoCheckEnabled}
