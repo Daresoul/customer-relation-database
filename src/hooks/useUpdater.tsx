@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { App } from 'antd';
+import { App, Button } from 'antd';
 import { updateService } from '../services/updateService';
 import type { UpdateManifest, UpdateStatus } from '../types/update';
 
@@ -40,10 +40,13 @@ export function useUpdater() {
           description,
           duration: 0, // Don't auto-close
           placement: 'topRight',
-          btn: (
-            <button
+          key: 'update-available',
+          actions: (
+            <Button
+              type="primary"
+              size="small"
               onClick={async () => {
-                notification.close('update-available');
+                notification.destroy('update-available');
                 try {
                   setStatus('installing');
                   await updateService.installAndRestart();
@@ -57,19 +60,10 @@ export function useUpdater() {
                   });
                 }
               }}
-              style={{
-                padding: '4px 15px',
-                background: '#1677ff',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer',
-              }}
             >
               Install & Restart
-            </button>
+            </Button>
           ),
-          key: 'update-available',
         });
       } else {
         setStatus('idle');

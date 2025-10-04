@@ -100,10 +100,13 @@ export function UpdateSettings() {
           description: `Version ${result.manifest.version}: ${description}`,
           placement: 'bottomRight',
           duration: 0, // Don't auto-close
-          btn: (
-            <button
+          key: 'manual-update-check',
+          actions: (
+            <Button
+              type="primary"
+              size="small"
               onClick={async () => {
-                notification.close('manual-update-check');
+                notification.destroy('manual-update-check');
                 try {
                   await updateService.installAndRestart();
                 } catch (error) {
@@ -116,19 +119,10 @@ export function UpdateSettings() {
                   });
                 }
               }}
-              style={{
-                padding: '4px 15px',
-                background: '#1677ff',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer',
-              }}
             >
               Install & Restart
-            </button>
+            </Button>
           ),
-          key: 'manual-update-check',
         });
 
         // Record the check
