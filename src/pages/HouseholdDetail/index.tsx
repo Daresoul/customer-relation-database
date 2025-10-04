@@ -99,9 +99,6 @@ export const HouseholdDetail: React.FC = () => {
               title: <Link to="/"><HomeOutlined /> {t('detail.breadcrumb.home')}</Link>,
             },
             {
-              title: <Link to="/">{t('detail.breadcrumb.dashboard')}</Link>,
-            },
-            {
               title: data.household.householdName || `Household ${householdId}`,
             },
           ]}
