@@ -30,9 +30,13 @@ export function useUpdater() {
         await updateService.recordCheck(result.manifest.version);
 
         // Show non-intrusive notification
+        const description = result.manifest.notes
+          ? result.manifest.notes.split('\n')[0]
+          : 'A new version is available';
+
         notification.info({
           message: `Update Available: ${result.manifest.version}`,
-          description: result.manifest.notes.split('\n')[0], // First line only
+          description,
           duration: 0, // Don't auto-close
           placement: 'topRight',
         });

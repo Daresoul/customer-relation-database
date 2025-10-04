@@ -20,7 +20,7 @@ export interface UpdatePreferences {
  */
 export interface UpdateManifest {
   version: string;
-  notes: string;
+  notes?: string;
   pub_date: string;
   platforms: Record<
     string,
