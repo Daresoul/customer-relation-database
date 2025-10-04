@@ -11,11 +11,10 @@ const { TextArea } = Input;
 
 
 interface RoomsSettingsProps {
-  form: any;
   isUpdating: boolean;
 }
 
-const RoomsSettings: React.FC<RoomsSettingsProps> = ({ form, isUpdating }) => {
+const RoomsSettings: React.FC<RoomsSettingsProps> = ({ isUpdating }) => {
   const { t } = useTranslation(['common', 'forms']);
   const themeColors = useThemeColors();
   const [roomModalVisible, setRoomModalVisible] = useState(false);

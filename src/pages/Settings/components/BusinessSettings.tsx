@@ -10,11 +10,10 @@ const { Text } = Typography;
 const { Option } = Select;
 
 interface BusinessSettingsProps {
-  form: any;
   isUpdating: boolean;
 }
 
-const BusinessSettings: React.FC<BusinessSettingsProps> = ({ form, isUpdating }) => {
+const BusinessSettings: React.FC<BusinessSettingsProps> = ({ isUpdating }) => {
   const { t } = useTranslation(['common', 'forms']);
   const themeColors = useThemeColors();
   const { data: currencies, isLoading: currenciesLoading } = useCurrencies();
