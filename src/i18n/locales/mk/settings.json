@@ -1,0 +1,21 @@
+{
+  "updates": {
+    "currentVersion": "Тековна верзија",
+    "automaticUpdateChecks": "Автоматски проверки за ажурирања",
+    "lastChecked": "Последна проверка",
+    "checkForUpdates": "Провери за ажурирања",
+    "updateAvailable": "Достапно ажурирање",
+    "upToDate": "Ажурно",
+    "updateCheckFailed": "Проверката за ажурирање не успеа",
+    "updateInstallationFailed": "Инсталацијата на ажурирањето не успеа",
+    "installAndRestart": "Инсталирај и рестартирај",
+    "messages": {
+      "loadSettingsFailed": "Неуспешно вчитување на поставки за ажурирање",
+      "settingsSaved": "Поставките за ажурирање се зачувани",
+      "saveSettingsFailed": "Неуспешно зачувување на поставки",
+      "installFailed": "Неуспешна инсталација на ажурирањето. Ве молиме обидете се повторно подоцна.",
+      "upToDateDescription": "Користите најнова верзија!",
+      "checkFailedDescription": "Грешка: {{error}}"
+    }
+  }
+}
