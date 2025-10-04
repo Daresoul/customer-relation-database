@@ -6,10 +6,12 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { App, Button } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { updateService } from '../services/updateService';
 import type { UpdateManifest, UpdateStatus } from '../types/update';
 
 export function useUpdater() {
+  const { t } = useTranslation('settings');
   const { notification } = App.useApp();
   const [status, setStatus] = useState<UpdateStatus>('idle');
   const [manifest, setManifest] = useState<UpdateManifest | null>(null);
@@ -36,7 +38,7 @@ export function useUpdater() {
           : 'A new version is available';
 
         notification.info({
-          message: `Update Available: ${result.manifest.version}`,
+          message: `${t('updates.updateAvailable')}: ${result.manifest.version}`,
           description,
           duration: 0, // Don't auto-close
           placement: 'topRight',
@@ -54,14 +56,14 @@ export function useUpdater() {
                   setStatus('error');
                   console.error('Update installation failed:', error);
                   notification.error({
-                    message: 'Update Installation Failed',
-                    description: 'Failed to install the update. Please try again later.',
+                    message: t('updates.updateInstallationFailed'),
+                    description: t('updates.messages.installFailed'),
                     placement: 'topRight',
                   });
                 }
               }}
             >
-              Install & Restart
+              {t('updates.installAndRestart')}
             </Button>
           ),
         });
@@ -74,7 +76,7 @@ export function useUpdater() {
       setStatus('error');
       console.error('Update check failed:', error);
     }
-  }, [notification]);
+  }, [notification, t]);
 
   /**
    * Install the downloaded update and restart the app
@@ -87,12 +89,12 @@ export function useUpdater() {
       setStatus('error');
       console.error('Update installation failed:', error);
       notification.error({
-        message: 'Update Installation Failed',
-        description: 'Failed to install the update. Please try again later.',
+        message: t('updates.updateInstallationFailed'),
+        description: t('updates.messages.installFailed'),
         placement: 'topRight',
       });
     }
-  }, [notification]);
+  }, [notification, t]);
 
   /**
    * Subscribe to updater events (PENDING, DONE, ERROR)

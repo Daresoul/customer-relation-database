@@ -65,6 +65,7 @@
   "retry": "Retry",
   "saveChanges": "Save Changes",
   "never": "Never",
+  "version": "Version",
   "buttons": {
     "save": "Save",
     "cancel": "Cancel",

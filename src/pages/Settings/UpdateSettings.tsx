@@ -7,12 +7,14 @@
 import React, { useState, useEffect } from 'react';
 import { Form, Switch, Button, Typography, Space, App } from 'antd';
 import { getVersion } from '@tauri-apps/api/app';
+import { useTranslation } from 'react-i18next';
 import { updateService } from '../../services/updateService';
 import { useUpdater } from '../../hooks/useUpdater';
 
 const { Text } = Typography;
 
 export function UpdateSettings() {
+  const { t } = useTranslation('settings');
   const { message, notification } = App.useApp();
   const [autoCheckEnabled, setAutoCheckEnabled] = useState(true);
   const [lastCheck, setLastCheck] = useState<Date | null>(null);
@@ -33,8 +35,8 @@ export function UpdateSettings() {
       } catch (error) {
         console.error('Failed to load update preferences:', error);
         notification.error({
-        message: 'Error',
-        description: 'Failed to load update settings',
+        message: t('common:error'),
+        description: t('updates.messages.loadSettingsFailed'),
         placement: 'bottomRight',
         duration: 5,
       });
@@ -63,16 +65,16 @@ export function UpdateSettings() {
       await updateService.setAutoCheckEnabled(checked);
       setAutoCheckEnabled(checked);
       notification.success({
-        message: 'Update settings saved',
-        description: 'Update settings saved',
+        message: t('updates.messages.settingsSaved'),
+        description: t('updates.messages.settingsSaved'),
         placement: 'bottomRight',
         duration: 3,
       });
     } catch (error) {
       console.error('Failed to save update settings:', error);
       notification.error({
-        message: 'Error',
-        description: 'Failed to save settings',
+        message: t('common:error'),
+        description: t('updates.messages.saveSettingsFailed'),
         placement: 'bottomRight',
         duration: 5,
       });
@@ -96,8 +98,8 @@ export function UpdateSettings() {
           : 'A new version is available';
 
         notification.info({
-          message: 'Update Available',
-          description: `Version ${result.manifest.version}: ${description}`,
+          message: t('updates.updateAvailable'),
+          description: `${t('common:version')} ${result.manifest.version}: ${description}`,
           placement: 'bottomRight',
           duration: 0, // Don't auto-close
           key: 'manual-update-check',
@@ -112,15 +114,15 @@ export function UpdateSettings() {
                 } catch (error) {
                   console.error('Update installation failed:', error);
                   notification.error({
-                    message: 'Update Installation Failed',
-                    description: 'Failed to install the update. Please try again later.',
+                    message: t('updates.updateInstallationFailed'),
+                    description: t('updates.messages.installFailed'),
                     placement: 'bottomRight',
                     duration: 5,
                   });
                 }
               }}
             >
-              Install & Restart
+              {t('updates.installAndRestart')}
             </Button>
           ),
         });
@@ -130,8 +132,8 @@ export function UpdateSettings() {
       } else {
         // Up to date
         notification.success({
-          message: 'Up to Date',
-          description: 'You are running the latest version!',
+          message: t('updates.upToDate'),
+          description: t('updates.messages.upToDateDescription'),
           placement: 'bottomRight',
           duration: 3,
         });
@@ -150,8 +152,8 @@ export function UpdateSettings() {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
 
       notification.error({
-        message: 'Update Check Failed',
-        description: `Error: ${errorMessage}`,
+        message: t('updates.updateCheckFailed'),
+        description: t('updates.messages.checkFailedDescription', { error: errorMessage }),
         placement: 'bottomRight',
         duration: 5,
       });
@@ -163,10 +165,10 @@ export function UpdateSettings() {
   return (
     <Space direction="vertical" style={{ width: '100%' }}>
       {currentVersion && (
-        <Text strong>Current Version: {currentVersion}</Text>
+        <Text strong>{t('updates.currentVersion')}: {currentVersion}</Text>
       )}
 
-      <Form.Item label="Automatic Update Checks">
+      <Form.Item label={t('updates.automaticUpdateChecks')}>
         <Switch
           checked={autoCheckEnabled}
           onChange={handleToggleAutoCheck}
@@ -175,11 +177,11 @@ export function UpdateSettings() {
       </Form.Item>
 
       {lastCheck && (
-        <Text type="secondary">Last checked: {lastCheck.toLocaleString()}</Text>
+        <Text type="secondary">{t('updates.lastChecked')}: {lastCheck.toLocaleString()}</Text>
       )}
 
       <Button onClick={handleManualCheck} loading={loading || status === 'checking'} type="primary">
-        Check for Updates
+        {t('updates.checkForUpdates')}
       </Button>
     </Space>
   );

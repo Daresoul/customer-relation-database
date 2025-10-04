@@ -1,0 +1,21 @@
+{
+  "updates": {
+    "currentVersion": "Current Version",
+    "automaticUpdateChecks": "Automatic Update Checks",
+    "lastChecked": "Last checked",
+    "checkForUpdates": "Check for Updates",
+    "updateAvailable": "Update Available",
+    "upToDate": "Up to Date",
+    "updateCheckFailed": "Update Check Failed",
+    "updateInstallationFailed": "Update Installation Failed",
+    "installAndRestart": "Install & Restart",
+    "messages": {
+      "loadSettingsFailed": "Failed to load update settings",
+      "settingsSaved": "Update settings saved",
+      "saveSettingsFailed": "Failed to save settings",
+      "installFailed": "Failed to install the update. Please try again later.",
+      "upToDateDescription": "You are running the latest version!",
+      "checkFailedDescription": "Error: {{error}}"
+    }
+  }
+}
