@@ -99,7 +99,36 @@ export function UpdateSettings() {
           message: 'Update Available',
           description: `Version ${result.manifest.version}: ${description}`,
           placement: 'bottomRight',
-          duration: 5,
+          duration: 0, // Don't auto-close
+          btn: (
+            <button
+              onClick={async () => {
+                notification.close('manual-update-check');
+                try {
+                  await updateService.installAndRestart();
+                } catch (error) {
+                  console.error('Update installation failed:', error);
+                  notification.error({
+                    message: 'Update Installation Failed',
+                    description: 'Failed to install the update. Please try again later.',
+                    placement: 'bottomRight',
+                    duration: 5,
+                  });
+                }
+              }}
+              style={{
+                padding: '4px 15px',
+                background: '#1677ff',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+              }}
+            >
+              Install & Restart
+            </button>
+          ),
+          key: 'manual-update-check',
         });
 
         // Record the check
