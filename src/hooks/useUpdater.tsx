@@ -4,7 +4,7 @@
  * Manages update state and provides update checking/installation functions
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { App } from 'antd';
 import { updateService } from '../services/updateService';
 import type { UpdateManifest, UpdateStatus } from '../types/update';
@@ -30,7 +30,7 @@ export function useUpdater() {
         // Record that we notified the user about this version
         await updateService.recordCheck(result.manifest.version);
 
-        // Show non-intrusive notification
+        // Show non-intrusive notification with install button
         const description = result.manifest.notes
           ? result.manifest.notes.split('\n')[0]
           : 'A new version is available';
@@ -40,6 +40,36 @@ export function useUpdater() {
           description,
           duration: 0, // Don't auto-close
           placement: 'topRight',
+          btn: (
+            <button
+              onClick={async () => {
+                notification.close('update-available');
+                try {
+                  setStatus('installing');
+                  await updateService.installAndRestart();
+                } catch (error) {
+                  setStatus('error');
+                  console.error('Update installation failed:', error);
+                  notification.error({
+                    message: 'Update Installation Failed',
+                    description: 'Failed to install the update. Please try again later.',
+                    placement: 'topRight',
+                  });
+                }
+              }}
+              style={{
+                padding: '4px 15px',
+                background: '#1677ff',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+              }}
+            >
+              Install & Restart
+            </button>
+          ),
+          key: 'update-available',
         });
       } else {
         setStatus('idle');
