@@ -50,7 +50,7 @@ export const PersonCard: React.FC<PersonCardProps> = ({
   canDelete,
   onPrimaryChange
 }) => {
-  const { message } = App.useApp();
+  const { notification } = App.useApp();
   const { t } = useTranslation('households');
   const [isEditing, setIsEditing] = useState(false);
   const [form] = Form.useForm();
@@ -119,13 +119,13 @@ export const PersonCard: React.FC<PersonCardProps> = ({
       }
 
       setIsEditing(false);
-      message.success(t('detail.people.personAdded'));
+      notification.success({ message: "Success", description: t('detail.people.personAdded', placement: "bottomRight", duration: 3 }));
 
       if (values.isPrimary && !person.isPrimary) {
         onPrimaryChange?.(person.id);
       }
     } catch (error) {
-      message.error(t('detail.householdInfo.failedToSave'));
+      notification.error({ message: "Error", description: t('detail.householdInfo.failedToSave', placement: "bottomRight", duration: 5 }));
       console.error('Save failed:', error);
     }
   };
@@ -136,9 +136,9 @@ export const PersonCard: React.FC<PersonCardProps> = ({
         personId: person.id,
         householdId
       });
-      message.success(t('detail.people.personRemoved'));
+      notification.success({ message: "Success", description: t('detail.people.personRemoved', placement: "bottomRight", duration: 3 }));
     } catch (error) {
-      message.error(t('detail.people.failedToDelete'));
+      notification.error({ message: "Error", description: t('detail.people.failedToDelete', placement: "bottomRight", duration: 5 }));
       console.error('Delete failed:', error);
     }
   };

@@ -5,11 +5,12 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { notification } from 'antd';
+import { App } from 'antd';
 import { updateService } from '../services/updateService';
 import type { UpdateManifest, UpdateStatus } from '../types/update';
 
 export function useUpdater() {
+  const { notification } = App.useApp();
   const [status, setStatus] = useState<UpdateStatus>('idle');
   const [manifest, setManifest] = useState<UpdateManifest | null>(null);
 

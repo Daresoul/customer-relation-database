@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Upload, Button, message } from 'antd';
+import { Upload, Button } from 'antd';
 import { UploadOutlined, InboxOutlined } from '@ant-design/icons';
 import { useUploadAttachment } from '@/hooks/useMedicalRecords';
 import { MedicalService } from '@/services/medicalService';
@@ -27,7 +27,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
     // Validate file
     const error = MedicalService.validateFile(file);
     if (error) {
-      message.error(error);
+      notification.error({ message: "Error", description: error, placement: "bottomRight", duration: 5 });
       return false;
     }
 
@@ -37,7 +37,12 @@ const FileUpload: React.FC<FileUploadProps> = ({
 
   const handleUpload = async () => {
     if (fileList.length === 0) {
-      message.warning('Please select files to upload');
+      notification.warning({
+        message: 'Warning',
+        description: 'Please select files to upload',
+        placement: 'bottomRight',
+        duration: 4,
+      });
       return;
     }
 
@@ -51,7 +56,12 @@ const FileUpload: React.FC<FileUploadProps> = ({
 
     try {
       await Promise.all(uploadPromises);
-      message.success(`${fileList.length} file(s) uploaded successfully`);
+      notification.success({
+        message: 'Success',
+        description: `${fileList.length} file(s) uploaded successfully`,
+        placement: 'bottomRight',
+        duration: 3,
+      });
       setFileList([]);
       onUploadSuccess?.();
     } catch (error) {

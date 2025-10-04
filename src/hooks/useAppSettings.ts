@@ -2,11 +2,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { SettingsService, UpdateSettingsRequest } from '../services/settingsService';
 import { useTranslation } from 'react-i18next';
 import { useEffect } from 'react';
-import { message } from 'antd';
+import { App } from 'antd';
 import { updateDateFormatInStorage } from '../utils/dateFormatter';
 import { useTheme } from '../contexts/ThemeContext';
 
 export const useAppSettings = () => {
+  const { notification } = App.useApp();
   const queryClient = useQueryClient();
   const { i18n } = useTranslation();
   const { setThemeMode } = useTheme();
@@ -44,11 +45,22 @@ export const useAppSettings = () => {
         queryClient.invalidateQueries();
       }
 
-      message.success(i18n.t('common:updateSuccess'));
+      notification.success({
+        message: 'Settings Updated',
+        description: i18n.t('common:updateSuccess'),
+        placement: 'bottomRight',
+        duration: 3,
+      });
     },
     onError: (error) => {
       console.error('Failed to update settings:', error);
-      message.error(i18n.t('common:operationFailed'));
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      notification.error({
+        message: 'Failed to Update Settings',
+        description: `${i18n.t('common:operationFailed')}: ${errorMessage}`,
+        placement: 'bottomRight',
+        duration: 5,
+      });
     },
   });
 

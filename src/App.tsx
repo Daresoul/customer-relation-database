@@ -36,7 +36,7 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
           <ViewProvider>
-            <AntApp>
+            <AntApp notification={{ maxCount: 1 }}>
               <Router>
                 <AppWrapper>
                   <Routes>

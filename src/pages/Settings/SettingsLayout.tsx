@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Layout, Menu, Card, Form, Button, Space, Typography, Breadcrumb, message } from 'antd';
+import { Layout, Menu, Card, Form, Button, Space, Typography, Breadcrumb } from 'antd';
 import {
   SettingOutlined,
   GlobalOutlined,
@@ -114,10 +114,10 @@ const SettingsLayout: React.FC = () => {
         setThemeMode(completeValues.theme as 'light' | 'dark');
       }
 
-      message.success(t('common:saveSuccess'));
+      notification.success({ message: "Success", description: t('common:saveSuccess', placement: "bottomRight", duration: 3 }));
     } catch (error) {
       console.error('Settings update error:', error);
-      message.error(t('common:operationFailed'));
+      notification.error({ message: "Error", description: t('common:operationFailed', placement: "bottomRight", duration: 5 }));
     }
   };
 

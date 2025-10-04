@@ -55,20 +55,30 @@ export function useSearchMedicalRecords(
 // Mutation hooks
 export function useCreateMedicalRecord() {
   const queryClient = useQueryClient();
-  const { message } = App.useApp();
+  const { notification } = App.useApp();
 
   return useMutation({
     mutationFn: (input: CreateMedicalRecordInput) =>
       MedicalService.createMedicalRecord(input),
     onSuccess: (data, variables) => {
-      message.success('Medical record created successfully');
+      notification.success({
+        message: 'Medical Record Created',
+        description: 'Medical record created successfully',
+        placement: 'bottomRight',
+        duration: 3,
+      });
       // Invalidate the medical records list for this patient
       queryClient.invalidateQueries({
         queryKey: ['medical-records', variables.patientId]
       });
     },
     onError: (error: Error) => {
-      message.error(`Failed to create medical record: ${error.message}`);
+      notification.error({
+        message: 'Failed to Create Medical Record',
+        description: `Error: ${error.message}`,
+        placement: 'bottomRight',
+        duration: 5,
+      });
       console.error('Create medical record error:', error);
     }
   });
@@ -76,7 +86,7 @@ export function useCreateMedicalRecord() {
 
 export function useUpdateMedicalRecord() {
   const queryClient = useQueryClient();
-  const { message } = App.useApp();
+  const { notification } = App.useApp();
 
   return useMutation({
     mutationFn: ({
@@ -87,7 +97,12 @@ export function useUpdateMedicalRecord() {
       updates: UpdateMedicalRecordInput;
     }) => MedicalService.updateMedicalRecord(recordId, updates),
     onSuccess: (data) => {
-      message.success('Medical record updated successfully');
+      notification.success({
+        message: 'Medical record updated successfully',
+        description: 'Medical record updated successfully',
+        placement: 'bottomRight',
+        duration: 3,
+      });
       // Invalidate all medical records queries
       queryClient.invalidateQueries({
         queryKey: ['medical-records']
@@ -98,7 +113,12 @@ export function useUpdateMedicalRecord() {
       });
     },
     onError: (error: Error) => {
-      message.error(`Failed to update medical record: ${error.message}`);
+      notification.error({
+        message: 'Error',
+        description: `Failed to update medical record: ${error.message}`,
+        placement: 'bottomRight',
+        duration: 5,
+      });
       console.error('Update medical record error:', error);
     }
   });
@@ -106,7 +126,7 @@ export function useUpdateMedicalRecord() {
 
 export function useArchiveMedicalRecord() {
   const queryClient = useQueryClient();
-  const { message } = App.useApp();
+  const { notification } = App.useApp();
 
   return useMutation({
     mutationFn: ({
@@ -117,18 +137,26 @@ export function useArchiveMedicalRecord() {
       archive: boolean;
     }) => MedicalService.archiveMedicalRecord(recordId, archive),
     onSuccess: (_, variables) => {
-      message.success(
-        variables.archive
+      notification.success({
+        message: variables.archive ? 'Medical Record Archived' : 'Medical Record Restored',
+        description: variables.archive
           ? 'Medical record archived successfully'
-          : 'Medical record restored successfully'
-      );
+          : 'Medical record restored successfully',
+        placement: 'bottomRight',
+        duration: 3,
+      });
       // Invalidate all medical records queries
       queryClient.invalidateQueries({
         queryKey: ['medical-records']
       });
     },
     onError: (error: Error) => {
-      message.error(`Failed to archive medical record: ${error.message}`);
+      notification.error({
+        message: 'Error',
+        description: `Failed to archive medical record: ${error.message}`,
+        placement: 'bottomRight',
+        duration: 5,
+      });
       console.error('Archive medical record error:', error);
     }
   });
@@ -136,7 +164,7 @@ export function useArchiveMedicalRecord() {
 
 export function useUploadAttachment() {
   const queryClient = useQueryClient();
-  const { message } = App.useApp();
+  const { notification } = App.useApp();
 
   return useMutation({
     mutationFn: ({
@@ -154,7 +182,12 @@ export function useUploadAttachment() {
       return MedicalService.uploadAttachment(medicalRecordId, file);
     },
     onSuccess: (data) => {
-      message.success('File uploaded successfully');
+      notification.success({
+        message: 'File uploaded successfully',
+        description: 'File uploaded successfully',
+        placement: 'bottomRight',
+        duration: 3,
+      });
       // Invalidate the specific medical record to refresh attachments
       queryClient.invalidateQueries({
         queryKey: ['medical-record', data.medicalRecordId]
@@ -165,7 +198,12 @@ export function useUploadAttachment() {
       });
     },
     onError: (error: Error) => {
-      message.error(`Failed to upload file: ${error.message}`);
+      notification.error({
+        message: 'Error',
+        description: `Failed to upload file: ${error.message}`,
+        placement: 'bottomRight',
+        duration: 5,
+      });
       console.error('Upload attachment error:', error);
     }
   });
@@ -173,13 +211,18 @@ export function useUploadAttachment() {
 
 export function useDeleteAttachment() {
   const queryClient = useQueryClient();
-  const { message } = App.useApp();
+  const { notification } = App.useApp();
 
   return useMutation({
     mutationFn: (attachmentId: number) =>
       MedicalService.deleteAttachment(attachmentId),
     onSuccess: () => {
-      message.success('Attachment deleted successfully');
+      notification.success({
+        message: 'Attachment deleted successfully',
+        description: 'Attachment deleted successfully',
+        placement: 'bottomRight',
+        duration: 3,
+      });
       // Invalidate medical record queries to refresh attachments
       queryClient.invalidateQueries({
         queryKey: ['medical-record']
@@ -189,14 +232,19 @@ export function useDeleteAttachment() {
       });
     },
     onError: (error: Error) => {
-      message.error(`Failed to delete attachment: ${error.message}`);
+      notification.error({
+        message: 'Error',
+        description: `Failed to delete attachment: ${error.message}`,
+        placement: 'bottomRight',
+        duration: 5,
+      });
       console.error('Delete attachment error:', error);
     }
   });
 }
 
 export function useDownloadAttachment() {
-  const { message } = App.useApp();
+  const { notification } = App.useApp();
 
   return useMutation({
     mutationFn: ({
@@ -207,10 +255,20 @@ export function useDownloadAttachment() {
       fileName: string;
     }) => MedicalService.downloadAndOpenAttachment(attachmentId, fileName),
     onSuccess: () => {
-      message.success('File downloaded successfully');
+      notification.success({
+        message: 'File downloaded successfully',
+        description: 'File downloaded successfully',
+        placement: 'bottomRight',
+        duration: 3,
+      });
     },
     onError: (error: Error) => {
-      message.error(`Failed to download file: ${error.message}`);
+      notification.error({
+        message: 'Error',
+        description: `Failed to download file: ${error.message}`,
+        placement: 'bottomRight',
+        duration: 5,
+      });
       console.error('Download attachment error:', error);
     }
   });
@@ -219,7 +277,7 @@ export function useDownloadAttachment() {
 // Batch operations hook
 export function useBulkArchiveMedicalRecords() {
   const queryClient = useQueryClient();
-  const { message } = App.useApp();
+  const { notification } = App.useApp();
 
   return useMutation({
     mutationFn: async ({
@@ -246,14 +304,20 @@ export function useBulkArchiveMedicalRecords() {
       const failCount = results.filter(r => !r.success).length;
 
       if (successCount > 0) {
-        message.success(
-          `${successCount} record(s) ${
-            variables.archive ? 'archived' : 'restored'
-          } successfully`
-        );
+        notification.success({
+          message: 'Bulk Operation Complete',
+          description: `${successCount} record(s) ${variables.archive ? 'archived' : 'restored'} successfully`,
+          placement: 'bottomRight',
+          duration: 3,
+        });
       }
       if (failCount > 0) {
-        message.warning(`Failed to process ${failCount} record(s)`);
+        notification.warning({
+          message: 'Partial Failure',
+          description: `Failed to process ${failCount} record(s)`,
+          placement: 'bottomRight',
+          duration: 4,
+        });
       }
 
       // Invalidate all medical records queries
@@ -262,7 +326,12 @@ export function useBulkArchiveMedicalRecords() {
       });
     },
     onError: (error: Error) => {
-      message.error(`Bulk operation failed: ${error.message}`);
+      notification.error({
+        message: 'Error',
+        description: `Bulk operation failed: ${error.message}`,
+        placement: 'bottomRight',
+        duration: 5,
+      });
       console.error('Bulk archive error:', error);
     }
   });

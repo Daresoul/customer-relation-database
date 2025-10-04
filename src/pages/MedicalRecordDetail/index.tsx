@@ -23,7 +23,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const recordId = parseInt(id || '0', 10);
   const attachmentIdToExpand = searchParams.get('attachmentId');
-  const { message } = App.useApp();
+  const { notification } = App.useApp();
 
   const { data, isLoading, isError, error, refetch } = useMedicalRecord(recordId, true);
   const updateMutation = useUpdateMedicalRecord();
@@ -195,7 +195,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
     const key = String(row.id);
     if (expanded) {
       if (!isPreviewable(row.mimeType, row.originalName)) {
-        message.info(t('medical:detail.previewNotAvailable'));
+        notification.info({ message: "Info", description: t('medical:detail.previewNotAvailable', placement: "bottomRight", duration: 3 }));
         return;
       }
       // Only one open at a time
@@ -231,7 +231,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
           setPreviewBlobs(prev => ({ ...prev, [key]: blob }));
           setPreviewKinds(prev => ({ ...prev, [key]: 'blob' }));
         } catch (e: any) {
-          message.error(e?.message || 'Failed to load preview');
+          notification.error({ message: "Error", description: e?.message || 'Failed to load preview', placement: "bottomRight", duration: 5 });
         }
       }
     } else {

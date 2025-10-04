@@ -61,7 +61,7 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
   mode = 'create',
   rooms: propsRooms,
 }) => {
-  const { message } = App.useApp();
+  const { notification } = App.useApp();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [conflicts, setConflicts] = useState<Appointment[]>([]);
@@ -146,7 +146,12 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
       console.error('Failed to check conflicts:', error);
       // Clear conflicts and show warning instead of blocking
       setConflicts([]);
-      message.warning('Unable to check for conflicts. Please verify manually.');
+      notification.warning({
+        message: 'Warning',
+        description: 'Unable to check for conflicts. Please verify manually.',
+        placement: 'bottomRight',
+        duration: 4,
+      });
     } finally {
       setCheckingConflicts(false);
     }
@@ -172,7 +177,12 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
 
       // Validate time range
       if (endDateTime.isBefore(startDateTime) || endDateTime.isSame(startDateTime)) {
-        message.error('End time must be after start time');
+        notification.error({
+        message: 'Error',
+        description: 'End time must be after start time',
+        placement: 'bottomRight',
+        duration: 5,
+      });
         setLoading(false);
         return;
       }
@@ -182,14 +192,19 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
         startDateTime.minute() % 15 !== 0 ||
         endDateTime.minute() % 15 !== 0
       ) {
-        message.error('Times must be on 15-minute intervals');
+        notification.error({
+        message: 'Error',
+        description: 'Times must be on 15-minute intervals',
+        placement: 'bottomRight',
+        duration: 5,
+      });
         setLoading(false);
         return;
       }
 
       // Check for conflicts before saving
       if (conflicts.length > 0 && values.room_id) {
-        const confirmed = await Modal.confirm({
+        const confirmed = await modal.confirm({
           title: 'Room Conflict Detected',
           content: `There are ${conflicts.length} conflicting appointments. Do you want to continue?`,
           okText: 'Continue Anyway',

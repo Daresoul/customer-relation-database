@@ -16,7 +16,7 @@ interface PatientInfoProps {
 }
 
 export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
-  const { message } = App.useApp();
+  const { notification } = App.useApp();
   const { t } = useTranslation(['patients', 'entities']);
   const updatePatient = useUpdatePatient();
   const themeColors = useThemeColors();
@@ -71,7 +71,7 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
         setLocalValues(prev => ({ ...prev, [field]: patient[field as keyof typeof patient] }));
       }
       console.error('Update failed:', error);
-      message.error(t('detail.patientInfo.failedToSave'));
+      notification.error({ message: "Error", description: t('detail.patientInfo.failedToSave', placement: "bottomRight", duration: 5 }));
     }
   };
 
@@ -145,7 +145,7 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
                 setLocalValues(prev => ({ ...prev, name: value })); // Immediate update
                 const result = nameEdit.onChange(value);
                 if (!result.success && result.error) {
-                  message.error(result.error);
+                  notification.error({ message: "Error", description: result.error, placement: "bottomRight", duration: 5 });
                   setLocalValues(prev => ({ ...prev, name: patient.name || '' })); // Revert on validation error
                 }
               },
@@ -174,7 +174,7 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
                 setLocalValues(prev => ({ ...prev, breed: value })); // Immediate update
                 const result = breedEdit.onChange(value);
                 if (!result.success && result.error) {
-                  message.error(result.error);
+                  notification.error({ message: "Error", description: result.error, placement: "bottomRight", duration: 5 });
                   setLocalValues(prev => ({ ...prev, breed: patient.breed || '' })); // Revert on validation error
                 }
               },
@@ -235,7 +235,7 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
                 setLocalValues(prev => ({ ...prev, color: value })); // Immediate update
                 const result = colorEdit.onChange(value);
                 if (!result.success && result.error) {
-                  message.error(result.error);
+                  notification.error({ message: "Error", description: result.error, placement: "bottomRight", duration: 5 });
                   setLocalValues(prev => ({ ...prev, color: patient.color || '' })); // Revert on validation error
                 }
               },
@@ -254,7 +254,7 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
                 setLocalValues(prev => ({ ...prev, microchipId: value })); // Immediate update
                 const result = microchipEdit.onChange(value);
                 if (!result.success && result.error) {
-                  message.error(result.error);
+                  notification.error({ message: "Error", description: result.error, placement: "bottomRight", duration: 5 });
                   setLocalValues(prev => ({ ...prev, microchipId: patient.microchipId || '' })); // Revert on validation error
                 }
               },

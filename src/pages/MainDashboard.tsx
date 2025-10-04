@@ -3,7 +3,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, Statistic, Space, Tabs, Avatar, TabsProps, App, Modal, InputNumber } from 'antd';
+import { Card, Row, Col, Statistic, Space, Tabs, Avatar, TabsProps, App, InputNumber } from 'antd';
 import {
   TeamOutlined,
   HeartOutlined,
@@ -39,6 +39,7 @@ import styles from './MainDashboard.module.css';
 // Removed TabPane - using items prop instead
 
 export const MainDashboard: React.FC = () => {
+  const { notification, modal } = App.useApp();
   const { t } = useTranslation(['patients', 'common', 'navigation']);
   const navigate = useNavigate();
   const { currentView, setCurrentView } = useViewContext();
@@ -138,11 +139,11 @@ export const MainDashboard: React.FC = () => {
 
       const res = await invoke<string>('populate_database', { households });
 
-      app.message.success(res || `Seeded ${households} households`);
+      app.notification.success(res || `Seeded ${households} households`);
       setSeedOpen(false);
       await loadData();
     } catch (e: any) {
-      app.message.error(e?.message || 'Failed to seed database');
+      app.notification.error(e?.message || 'Failed to seed database');
     } finally {
       setSeeding(false);
     }

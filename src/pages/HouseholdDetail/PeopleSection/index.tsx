@@ -16,7 +16,7 @@ interface PeopleSectionProps {
 }
 
 export const PeopleSection: React.FC<PeopleSectionProps> = ({ people, householdId }) => {
-  const { message } = App.useApp();
+  const { notification } = App.useApp();
   const { t } = useTranslation('households');
   const [isAddingPerson, setIsAddingPerson] = useState(false);
   const addPerson = useAddPerson();
@@ -28,9 +28,9 @@ export const PeopleSection: React.FC<PeopleSectionProps> = ({ people, householdI
         person: personData
       });
       setIsAddingPerson(false);
-      message.success(t('detail.people.personAdded'));
+      notification.success({ message: "Success", description: t('detail.people.personAdded', placement: "bottomRight", duration: 3 }));
     } catch (error) {
-      message.error(t('detail.people.failedToAdd'));
+      notification.error({ message: "Error", description: t('detail.people.failedToAdd', placement: "bottomRight", duration: 5 }));
       console.error('Add person failed:', error);
     }
   };

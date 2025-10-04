@@ -40,6 +40,7 @@ interface PatientFormProps extends Omit<BaseFormProps, 'onSubmit'> {
 const { TextArea } = Input;
 
 export const PatientForm: React.FC<PatientFormProps> = ({
+  const { notification, modal } = App.useApp();
   patient,
   onSubmit,
   onCancel,
@@ -73,12 +74,22 @@ export const PatientForm: React.FC<PatientFormProps> = ({
       };
 
       await onSubmit(formattedData);
-      message.success(`Patient ${mode === 'create' ? 'created' : 'updated'} successfully`);
+      notification.success({
+        message: 'Success',
+        description: `Patient ${mode === 'create' ? 'created' : 'updated'} successfully`,
+        placement: 'bottomRight',
+        duration: 3,
+      });
       if (mode === 'create') {
         form.resetFields();
       }
     } catch (error) {
-      message.error(`Failed to ${mode} patient`);
+      notification.error({
+        message: 'Error',
+        description: `Failed to ${mode} patient`,
+        placement: 'bottomRight',
+        duration: 5,
+      });
     }
   };
 

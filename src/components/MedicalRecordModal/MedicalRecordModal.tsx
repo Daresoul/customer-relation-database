@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Modal, Spin, message, Alert, Button, Divider, List, Typography, Space } from 'antd';
+import { App, Spin, Alert, Button, Divider, List, Typography, Space } from 'antd';
 import { useTranslation } from 'react-i18next';
 import MedicalRecordForm from './MedicalRecordForm';
 import { useMedicalRecord, useCreateMedicalRecord, useUpdateMedicalRecord, useUploadAttachment } from '@/hooks/useMedicalRecords';
@@ -79,9 +79,9 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
 
           try {
             await Promise.all(uploadPromises);
-            message.success(t('messages.uploadSuccess'));
+            notification.success({ message: "Success", description: t('messages.uploadSuccess', placement: "bottomRight", duration: 3 }));
           } catch (uploadError) {
-            message.error(t('messages.uploadFailed'));
+            notification.error({ message: "Error", description: t('messages.uploadFailed', placement: "bottomRight", duration: 5 }));
             console.error('Upload error:', uploadError);
           }
         }

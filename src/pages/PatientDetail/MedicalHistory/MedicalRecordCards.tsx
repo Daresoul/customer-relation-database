@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Typography, Tag, Button, Space, Dropdown, Modal, message, Row, Col, Descriptions } from 'antd';
+import { Card, Typography, Tag, Button, Space, Dropdown, Row, Col, Descriptions } from 'antd';
 import {
   DeleteOutlined,
   MoreOutlined,
@@ -58,7 +58,7 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
       setSelectedRecord(null);
       onRefresh();
     } catch (error) {
-      message.error(selectedRecord.isArchived ? t('messages.restoreFailed') : t('messages.archiveFailed'));
+      notification.error({ message: "Error", description: selectedRecord.isArchived ? t('messages.restoreFailed', placement: "bottomRight", duration: 5 }) : t('messages.archiveFailed'));
     }
   };
 
@@ -69,7 +69,7 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
         fileName,
       });
     } catch (error) {
-      message.error(t('messages.downloadFailed'));
+      notification.error({ message: "Error", description: t('messages.downloadFailed', placement: "bottomRight", duration: 5 }));
     }
   };
 
