@@ -8,6 +8,7 @@ import {
   HomeOutlined,
   ArrowLeftOutlined,
   BankOutlined,
+  CloudDownloadOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, Link } from 'react-router-dom';
@@ -21,11 +22,12 @@ import GeneralSettings from './components/GeneralSettings';
 import BusinessSettings from './components/BusinessSettings';
 import AppointmentsSettings from './components/AppointmentsSettings';
 import RoomsSettings from './components/RoomsSettings';
+import { UpdateSettings } from './UpdateSettings';
 
 const { Content, Sider } = Layout;
 const { Title, Text } = Typography;
 
-type SettingsCategory = 'general' | 'business' | 'appointments' | 'rooms';
+type SettingsCategory = 'general' | 'business' | 'appointments' | 'rooms' | 'updates';
 
 interface MenuItem {
   key: SettingsCategory;
@@ -71,6 +73,12 @@ const SettingsLayout: React.FC = () => {
       icon: <BankOutlined />,
       label: 'Rooms',
       component: RoomsSettings,
+    },
+    {
+      key: 'updates',
+      icon: <CloudDownloadOutlined />,
+      label: 'Updates',
+      component: UpdateSettings,
     },
   ];
 
@@ -184,8 +192,8 @@ const SettingsLayout: React.FC = () => {
 
             {/* Content Area */}
             <Content className={styles.settingsContent}>
-              {/* Rooms tab doesn't need the parent form - it has its own modal form */}
-              {selectedCategory === 'rooms' ? (
+              {/* Rooms and Updates tabs don't need the parent form - they manage their own state */}
+              {selectedCategory === 'rooms' || selectedCategory === 'updates' ? (
                 <CurrentComponent isUpdating={isUpdating} />
               ) : (
                 <Form

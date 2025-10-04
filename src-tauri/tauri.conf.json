@@ -41,6 +41,17 @@
     "security": {
       "csp": null
     },
+    "updater": {
+      "active": true,
+      "dialog": false,
+      "endpoints": [
+        "https://github.com/Daresoul/vet-clinic/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQyOENDM0Q2RjI3RTU5MTEKUldRUldYN3kxc09NUXBlbS9CNkZvZmROTHJBVGVBeEJpZldRNVF4MlpVUDhNbzhoWjVFOS81VzUK",
+      "windows": {
+        "installMode": "passive"
+      }
+    },
     "windows": [
       {
         "title": "Veterinary Clinic Manager",

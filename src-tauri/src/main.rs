@@ -121,6 +121,10 @@ fn main() {
             commands::update_room,
             commands::delete_room,
             commands::get_room_availability,
+            // Update settings commands
+            commands::get_update_preferences,
+            commands::set_auto_check_enabled,
+            commands::record_update_check,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

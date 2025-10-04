@@ -7,6 +7,7 @@ pub mod appointments;
 pub mod rooms;
 pub mod google_calendar;
 pub mod sync_log;
+pub mod update_models;
 
 pub use patient::Patient;
 pub use dto::{CreatePatientDto, UpdatePatientDto};
@@ -48,3 +49,4 @@ pub use sync_log::{
     AppointmentSyncLog, SyncAction, SyncStatus,
     CreateSyncLogInput, SyncQueueItem, SyncResult, SyncError
 };
+pub use update_models::UpdatePreferences;
