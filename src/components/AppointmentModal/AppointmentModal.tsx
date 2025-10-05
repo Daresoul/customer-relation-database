@@ -61,7 +61,7 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
   mode = 'create',
   rooms: propsRooms,
 }) => {
-  const { notification } = App.useApp();
+  const { notification, modal } = App.useApp();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [conflicts, setConflicts] = useState<Appointment[]>([]);
@@ -204,16 +204,25 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
 
       // Check for conflicts before saving
       if (conflicts.length > 0 && values.room_id) {
-        const confirmed = await modal.confirm({
-          title: 'Room Conflict Detected',
-          content: `There are ${conflicts.length} conflicting appointments. Do you want to continue?`,
-          okText: 'Continue Anyway',
-          cancelText: 'Cancel',
-        });
-        
-        if (!confirmed) {
-          setLoading(false);
-          return;
+        // Find the selected room
+        const selectedRoom = rooms?.find(r => r.id === values.room_id);
+
+        // Calculate total appointments at this time (conflicts + current appointment)
+        const totalAppointments = mode === 'edit' ? conflicts.length : conflicts.length + 1;
+
+        // Only warn if capacity is exceeded
+        if (selectedRoom && totalAppointments > selectedRoom.capacity) {
+          const confirmed = await modal.confirm({
+            title: 'Room Capacity Exceeded',
+            content: `Room capacity is ${selectedRoom.capacity}, but there ${totalAppointments === 1 ? 'is' : 'are'} ${totalAppointments} appointment${totalAppointments === 1 ? '' : 's'} at this time. Do you want to continue?`,
+            okText: 'Continue Anyway',
+            cancelText: 'Cancel',
+          });
+
+          if (!confirmed) {
+            setLoading(false);
+            return;
+          }
         }
       }
 
@@ -281,7 +290,7 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
       <Form
         form={form}
         layout="vertical"
-        requiredMark="optional"
+        requiredMark={true}
       >
         <Row gutter={16}>
           <Col span={12}>
@@ -408,27 +417,34 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
           </Form.Item>
         )}
 
-        {conflicts.length > 0 && (
-          <Alert
-            message="Room Conflict Detected"
-            description={
-              <div>
-                <Text>The selected room has conflicting appointments:</Text>
-                <ul>
-                  {conflicts.map((conflict) => (
-                    <li key={conflict.id}>
-                      {conflict.title} ({dayjs(conflict.start_time).format('HH:mm')} -
-                      {dayjs(conflict.end_time).format('HH:mm')})
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            }
-            type="warning"
-            showIcon
-            icon={<InfoCircleOutlined />}
-          />
-        )}
+        {(() => {
+          const roomId = form.getFieldValue('room_id');
+          const selectedRoom = rooms?.find(r => r.id === roomId);
+          const totalAppointments = mode === 'edit' ? conflicts.length : conflicts.length + 1;
+          const capacityExceeded = selectedRoom && totalAppointments > selectedRoom.capacity;
+
+          return conflicts.length > 0 && capacityExceeded && (
+            <Alert
+              message="Room Capacity Exceeded"
+              description={
+                <div>
+                  <Text>Room capacity is {selectedRoom.capacity}, but there {totalAppointments === 1 ? 'is' : 'are'} {totalAppointments} appointment{totalAppointments === 1 ? '' : 's'} at this time:</Text>
+                  <ul>
+                    {conflicts.map((conflict) => (
+                      <li key={conflict.id}>
+                        {conflict.title} ({dayjs(conflict.start_time).format('HH:mm')} -
+                        {dayjs(conflict.end_time).format('HH:mm')})
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              }
+              type="warning"
+              showIcon
+              icon={<InfoCircleOutlined />}
+            />
+          );
+        })()}
       </Form>
     </Modal>
   );

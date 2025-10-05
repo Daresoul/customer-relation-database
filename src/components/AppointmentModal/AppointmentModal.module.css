@@ -26,3 +26,8 @@
   color: var(--error-color);
   margin-top: 8px;
 }
+
+/* Red asterisk for required fields */
+:global(.ant-form-item-required::before) {
+  color: #ff4d4f !important;
+}
