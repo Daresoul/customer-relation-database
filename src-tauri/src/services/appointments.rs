@@ -132,23 +132,8 @@ impl AppointmentService {
         // Validate input
         input.validate()?;
 
-        // Check for conflicts if room is specified
-        if let Some(room_id) = input.room_id {
-            let conflicts = Self::check_conflicts_internal(
-                pool,
-                input.start_time,
-                input.end_time,
-                Some(room_id),
-                None,
-            ).await?;
-
-            if !conflicts.is_empty() {
-                return Err(format!(
-                    "Room conflict detected: {} appointments overlap",
-                    conflicts.len()
-                ));
-            }
-        }
+        // Note: Conflict checking is handled by the frontend with user confirmation
+        // Backend allows overlapping appointments in the same room
 
         // Insert appointment
         let result = sqlx::query(
@@ -196,29 +181,8 @@ impl AppointmentService {
             return Ok(existing);
         }
 
-        // Check for conflicts if time or room is being updated
-        if input.start_time.is_some() || input.end_time.is_some() || input.room_id.is_some() {
-            let start_time = input.start_time.unwrap_or(existing.start_time);
-            let end_time = input.end_time.unwrap_or(existing.end_time);
-            let room_id = input.room_id.or(existing.room_id);
-
-            if let Some(room_id) = room_id {
-                let conflicts = Self::check_conflicts_internal(
-                    pool,
-                    start_time,
-                    end_time,
-                    Some(room_id),
-                    Some(id),
-                ).await?;
-
-                if !conflicts.is_empty() {
-                    return Err(format!(
-                        "Room conflict detected: {} appointments overlap",
-                        conflicts.len()
-                    ));
-                }
-            }
-        }
+        // Note: Conflict checking is handled by the frontend with user confirmation
+        // Backend allows overlapping appointments in the same room
 
         // Update appointment with individual field updates
         let mut query = sqlx::query(
@@ -341,24 +305,29 @@ impl AppointmentService {
         exclude_id: Option<i64>,
     ) -> Result<Vec<Appointment>, String> {
         let mut query = String::from(
-            "SELECT * FROM appointments
-             WHERE deleted_at IS NULL
-             AND status NOT IN ('cancelled', 'completed')"
+            "SELECT
+                a.id, a.patient_id, a.title, a.description, a.start_time, a.end_time,
+                a.room_id, a.status, a.created_at, a.updated_at, a.deleted_at, a.created_by,
+                p.name as patient_name, p.species, p.breed, p.microchip_id
+             FROM appointments a
+             LEFT JOIN patients p ON a.patient_id = p.id
+             WHERE a.deleted_at IS NULL
+             AND a.status NOT IN ('cancelled', 'completed')"
         );
 
         if let Some(room_id) = room_id {
-            query.push_str(&format!(" AND room_id = {}", room_id));
+            query.push_str(&format!(" AND a.room_id = {}", room_id));
         }
 
         if let Some(exclude_id) = exclude_id {
-            query.push_str(&format!(" AND id != {}", exclude_id));
+            query.push_str(&format!(" AND a.id != {}", exclude_id));
         }
 
         // Add time overlap conditions
         query.push_str(&format!(
-            " AND ((start_time <= '{}' AND end_time > '{}')
-               OR (start_time < '{}' AND end_time >= '{}')
-               OR (start_time >= '{}' AND end_time <= '{}'))",
+            " AND ((a.start_time <= '{}' AND a.end_time > '{}')
+               OR (a.start_time < '{}' AND a.end_time >= '{}')
+               OR (a.start_time >= '{}' AND a.end_time <= '{}'))",
             start_time.to_rfc3339(), start_time.to_rfc3339(),
             end_time.to_rfc3339(), end_time.to_rfc3339(),
             start_time.to_rfc3339(), end_time.to_rfc3339()
