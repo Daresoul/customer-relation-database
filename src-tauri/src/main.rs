@@ -10,6 +10,9 @@ use database::{create_pool, get_database_url, run_migrations};
 use tauri::Manager;
 
 fn main() {
+    // Load environment variables from .env file
+    dotenv::dotenv().ok();
+
     tauri::Builder::default()
         .setup(|app| {
             // Get database URL
@@ -34,7 +37,13 @@ fn main() {
             })?;
 
             // Store pool in app state
-            app.manage(pool);
+            app.manage(pool.clone());
+
+            // Start periodic sync scheduler in async runtime
+            let pool_for_scheduler = pool.clone();
+            tauri::async_runtime::spawn(async move {
+                services::sync_scheduler::SyncScheduler::start(pool_for_scheduler);
+            });
 
             Ok(())
         })
@@ -125,6 +134,18 @@ fn main() {
             commands::get_update_preferences,
             commands::set_auto_check_enabled,
             commands::record_update_check,
+            // Google Calendar commands
+            commands::start_oauth_flow,
+            commands::complete_oauth_flow,
+            commands::cancel_oauth_flow,
+            commands::check_oauth_callback,
+            commands::get_google_calendar_settings,
+            commands::update_sync_enabled,
+            commands::disconnect_google_calendar,
+            commands::revoke_google_access,
+            commands::trigger_manual_sync,
+            commands::get_sync_history,
+            commands::check_sync_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

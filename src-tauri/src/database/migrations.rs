@@ -35,6 +35,9 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, "017_create_app_settings_table", create_app_settings_table).await?;
     run_migration(pool, "018_create_appointments_tables", create_appointments_tables).await?;
     run_migration(pool, "019_create_update_preferences_table", create_update_preferences_table).await?;
+    run_migration(pool, "020_create_calendar_event_mappings", create_calendar_event_mappings_table).await?;
+    run_migration(pool, "021_create_sync_logs", create_sync_logs_table).await?;
+    run_migration(pool, "022_add_token_expires_at", add_token_expires_at_column).await?;
 
     Ok(())
 }
@@ -1032,6 +1035,109 @@ fn create_update_preferences_table(pool: &SqlitePool) -> std::pin::Pin<Box<dyn s
         .await?;
 
         println!("Created update_preferences table");
+        Ok(())
+    })
+}
+
+// T001: Create calendar_event_mappings table
+fn create_calendar_event_mappings_table(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        // Create calendar_event_mappings table
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS calendar_event_mappings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                appointment_id INTEGER NOT NULL UNIQUE,
+                event_id TEXT NOT NULL,
+                calendar_id TEXT NOT NULL,
+                last_synced_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (appointment_id) REFERENCES appointments(id) ON DELETE CASCADE
+            )
+        "#)
+        .execute(pool)
+        .await?;
+
+        // Create indexes
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_calendar_event_mappings_appointment ON calendar_event_mappings(appointment_id)")
+            .execute(pool)
+            .await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_calendar_event_mappings_event ON calendar_event_mappings(event_id)")
+            .execute(pool)
+            .await?;
+
+        // Create update trigger
+        sqlx::query(r#"
+            CREATE TRIGGER IF NOT EXISTS update_calendar_event_mappings_timestamp
+            AFTER UPDATE ON calendar_event_mappings
+            BEGIN
+                UPDATE calendar_event_mappings
+                SET updated_at = CURRENT_TIMESTAMP
+                WHERE id = NEW.id;
+            END
+        "#)
+        .execute(pool)
+        .await?;
+
+        println!("Created calendar_event_mappings table with indexes and trigger");
+        Ok(())
+    })
+}
+
+// T002: Create sync_logs table
+fn create_sync_logs_table(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        // Create sync_logs table
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS sync_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                direction TEXT NOT NULL CHECK (direction IN ('to_google', 'from_google')),
+                sync_type TEXT NOT NULL CHECK (sync_type IN ('initial', 'incremental', 'manual')),
+                status TEXT NOT NULL CHECK (status IN ('pending', 'in_progress', 'success', 'failed', 'partial')),
+                items_synced INTEGER DEFAULT 0,
+                items_failed INTEGER DEFAULT 0,
+                error_message TEXT,
+                started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                completed_at TIMESTAMP
+            )
+        "#)
+        .execute(pool)
+        .await?;
+
+        // Create indexes
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_sync_logs_status ON sync_logs(status, started_at)")
+            .execute(pool)
+            .await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_sync_logs_type ON sync_logs(sync_type, completed_at)")
+            .execute(pool)
+            .await?;
+
+        println!("Created sync_logs table with indexes");
+        Ok(())
+    })
+}
+
+// T003: Add token_expires_at column to google_calendar_settings
+fn add_token_expires_at_column(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        // Check if column already exists
+        let column_exists: bool = sqlx::query_scalar(
+            "SELECT COUNT(*) > 0 FROM pragma_table_info('google_calendar_settings') WHERE name = 'token_expires_at'"
+        )
+        .fetch_one(pool)
+        .await?;
+
+        if !column_exists {
+            sqlx::query("ALTER TABLE google_calendar_settings ADD COLUMN token_expires_at TIMESTAMP")
+                .execute(pool)
+                .await?;
+            println!("Added token_expires_at column to google_calendar_settings");
+        } else {
+            println!("token_expires_at column already exists in google_calendar_settings");
+        }
+
         Ok(())
     })
 }

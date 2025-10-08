@@ -5,8 +5,8 @@ use sqlx::FromRow;
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct SyncLog {
     pub id: i64,
-    pub direction: String, // to_google or from_google
-    pub sync_type: String,
+    pub direction: SyncDirection,
+    pub sync_type: SyncType,
     pub status: SyncStatus,
     pub items_synced: i32,
     pub items_failed: i32,
@@ -31,6 +31,30 @@ impl std::fmt::Display for SyncDirection {
         match self {
             SyncDirection::ToGoogle => write!(f, "to_google"),
             SyncDirection::FromGoogle => write!(f, "from_google"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type)]
+#[sqlx(type_name = "TEXT")]
+pub enum SyncType {
+    #[serde(rename = "initial")]
+    #[sqlx(rename = "initial")]
+    Initial,
+    #[serde(rename = "incremental")]
+    #[sqlx(rename = "incremental")]
+    Incremental,
+    #[serde(rename = "manual")]
+    #[sqlx(rename = "manual")]
+    Manual,
+}
+
+impl std::fmt::Display for SyncType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SyncType::Initial => write!(f, "initial"),
+            SyncType::Incremental => write!(f, "incremental"),
+            SyncType::Manual => write!(f, "manual"),
         }
     }
 }
@@ -106,11 +130,18 @@ impl std::fmt::Display for SyncStatus {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateSyncLogInput {
-    pub appointment_id: i64,
-    pub external_id: Option<String>,
-    pub sync_action: SyncAction,
-    pub sync_status: SyncStatus,
+    pub direction: SyncDirection,
+    pub sync_type: SyncType,
+    pub status: SyncStatus,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateSyncLog {
+    pub status: Option<SyncStatus>,
+    pub items_synced: Option<i32>,
+    pub items_failed: Option<i32>,
     pub error_message: Option<String>,
+    pub completed_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

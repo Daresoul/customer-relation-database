@@ -6,3 +6,5 @@ pub mod appointments;
 pub mod rooms;
 pub mod google_calendar;
 pub mod sync;
+pub mod oauth;
+pub mod sync_scheduler;
