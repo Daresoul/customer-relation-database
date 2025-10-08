@@ -10,6 +10,7 @@ pub mod settings;
 pub mod appointments;
 pub mod rooms;
 pub mod update_settings;
+pub mod google_calendar;
 
 pub use patient::*;
 pub use database::*;
@@ -23,3 +24,4 @@ pub use settings::*;
 pub use appointments::*;
 pub use rooms::*;
 pub use update_settings::*;
+pub use google_calendar::*;

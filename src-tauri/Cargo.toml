@@ -25,6 +25,9 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 oauth2 = "4.4"
 reqwest = { version = "0.11", features = ["json"] }
 base64 = "0.21"
+warp = "0.3"
+lazy_static = "1.4"
+dotenv = "0.15"
 
 [features]
 default = ["custom-protocol"]

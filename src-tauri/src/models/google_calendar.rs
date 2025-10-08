@@ -13,25 +13,29 @@ pub struct GoogleCalendarSettings {
     pub calendar_id: Option<String>,
     pub sync_enabled: bool,
     pub last_sync: Option<DateTime<Utc>>,
+    #[serde(skip_serializing)] // Don't expose token expiration to frontend
+    pub token_expires_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GoogleCalendarSettingsResponse {
-    pub sync_enabled: bool,
+    pub connected: bool,
+    pub connected_email: Option<String>,
     pub calendar_id: Option<String>,
-    pub last_sync: Option<DateTime<Utc>>,
-    pub is_authenticated: bool,
+    pub sync_enabled: bool,
+    pub last_sync: Option<String>,
 }
 
 impl From<GoogleCalendarSettings> for GoogleCalendarSettingsResponse {
     fn from(settings: GoogleCalendarSettings) -> Self {
         Self {
-            sync_enabled: settings.sync_enabled,
+            connected: settings.access_token.is_some(),
+            connected_email: None, // Must be fetched separately from UserInfo API
             calendar_id: settings.calendar_id,
-            last_sync: settings.last_sync,
-            is_authenticated: settings.access_token.is_some(),
+            sync_enabled: settings.sync_enabled,
+            last_sync: settings.last_sync.map(|dt| dt.to_rfc3339()),
         }
     }
 }
@@ -119,8 +123,35 @@ pub struct CalendarEventMapping {
     pub appointment_id: i64,
     pub event_id: String,
     pub calendar_id: String,
+    pub last_synced_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateEventMapping {
+    pub appointment_id: i64,
+    pub event_id: String,
+    pub calendar_id: String,
+}
+
+impl CreateEventMapping {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.event_id.is_empty() {
+            return Err("Event ID cannot be empty".to_string());
+        }
+        if self.calendar_id.is_empty() {
+            return Err("Calendar ID cannot be empty".to_string());
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateEventMapping {
+    pub event_id: Option<String>,
+    pub calendar_id: Option<String>,
+    pub last_synced_at: Option<DateTime<Utc>>,
 }
 
 pub type GoogleCalendarSync = GoogleCalendarSettings;
@@ -128,8 +159,15 @@ pub type GoogleCalendarSync = GoogleCalendarSettings;
 impl GoogleCalendarSettings {
     pub fn needs_refresh(&self) -> bool {
         // Check if we need to refresh the access token
-        // This is a simplified check - in production you'd track token expiry
-        self.access_token.is_none() && self.refresh_token.is_some()
+        if let Some(expires_at) = self.token_expires_at {
+            // Token expires soon (within 5 minutes) or already expired
+            Utc::now() >= expires_at - chrono::Duration::minutes(5)
+        } else if self.access_token.is_none() && self.refresh_token.is_some() {
+            // No access token but have refresh token
+            true
+        } else {
+            false
+        }
     }
 
     pub fn is_configured(&self) -> bool {

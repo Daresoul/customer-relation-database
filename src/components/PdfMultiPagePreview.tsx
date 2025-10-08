@@ -106,7 +106,7 @@ const PdfMultiPagePreview: React.FC<Props> = ({ attachmentId, initialPageUrl }) 
       setLoadingMore(false);
       loadingRef.current = false;
     }
-  }, [pageCount, pages, attachmentId, toImageUrl, message]);
+  }, [pageCount, pages, attachmentId, toImageUrl, notification]);
 
   // Regenerate all loaded pages
   const regenerateAll = useCallback(async () => {
@@ -131,7 +131,7 @@ const PdfMultiPagePreview: React.FC<Props> = ({ attachmentId, initialPageUrl }) 
     } finally {
       setRegenerating(false);
     }
-  }, [pages, attachmentId, toImageUrl, message]);
+  }, [pages, attachmentId, toImageUrl, notification]);
 
   // Handle scroll for infinite loading
   const handleScroll = useCallback(() => {
