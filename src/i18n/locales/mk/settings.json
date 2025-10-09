@@ -1,4 +1,11 @@
 {
+  "sections": {
+    "general": "Општо",
+    "business": "Бизнис",
+    "appointments": "Термини",
+    "rooms": "Соби",
+    "updates": "Ажурирања"
+  },
   "updates": {
     "currentVersion": "Тековна верзија",
     "automaticUpdateChecks": "Автоматски проверки за ажурирања",
@@ -17,5 +24,50 @@
       "upToDateDescription": "Користите најнова верзија!",
       "checkFailedDescription": "Грешка: {{error}}"
     }
+  },
+  "googleCalendar": {
+    "title": "Интеграција со Google Calendar",
+    "syncTitle": "Синхронизација со Google Calendar",
+    "syncDescription": "Поврзете го вашиот Google Calendar за автоматска синхронизација на термини помеѓу вашата ветеринарна клиника и Google Calendar. Ова ви овозможува да гледате и управувате со термини од двата системи.",
+    "enableSync": "Овозможи синхронизација со Google Calendar",
+    "syncHint": "Двонасочна синхронизација помеѓу термините на клиниката и Google Calendar",
+    "connectionStatus": "Статус на поврзување",
+    "connected": "Поврзано",
+    "notConnected": "Не е поврзано",
+    "connectButton": "Поврзи Google Calendar",
+    "disconnectButton": "Исклучи",
+    "syncNowButton": "Синхронизирај сега",
+    "messages": {
+      "googleAuthorization": "Google авторизација",
+      "openingBrowser": "Се отвора прелистувач за Google авторизација...",
+      "connectedSuccess": "Поврзано со Google Calendar",
+      "connectedDescription": "Вашиот Google Calendar е успешно поврзан. Термините сега ќе се синхронизираат автоматски.",
+      "authTimeout": "Истече времето за авторизација",
+      "authTimeoutDescription": "Процесот на авторизација истече по 2 минути. Ве молиме обидете се повторно.",
+      "oauthError": "OAuth грешка",
+      "oauthFailed": "Неуспешна OAuth авторизација: {{error}}",
+      "failedToStart": "Неуспешно започнување на OAuth",
+      "failedToStartDescription": "Не може да се иницијализира Google авторизација: {{error}}",
+      "disconnectedSuccess": "Исклучено од Google Calendar",
+      "disconnectedDescription": "Вашиот Google Calendar е исклучен. Термините повеќе нема да се синхронизираат.",
+      "disconnectFailed": "Неуспешно исклучување",
+      "disconnectFailedDescription": "Неуспешно исклучување од Google Calendar: {{error}}",
+      "syncEnabled": "Синхронизацијата е овозможена",
+      "syncEnabledDescription": "Се синхронизираат постоечките термини со Google Calendar...",
+      "initialSyncComplete": "Почетната синхронизација е завршена",
+      "initialSyncCompleteDescription": "Сите идни термини се синхронизирани со Google Calendar.",
+      "initialSyncFailed": "Почетната синхронизација не успеа",
+      "initialSyncFailedDescription": "Синхронизацијата е овозможена, но почетната синхронизација не успеа: {{error}}. Можете рачно да синхронизирате со копчето \"Синхронизирај сега\".",
+      "syncDisabled": "Синхронизацијата е оневозможена",
+      "syncDisabledDescription": "Термините повеќе нема да се синхронизираат со Google Calendar.",
+      "updateSyncFailed": "Неуспешно ажурирање на поставката за синхронизација",
+      "updateSyncFailedDescription": "Не може да се ажурира поставката за синхронизација: {{error}}",
+      "manualSyncStarted": "Рачната синхронизација е започната",
+      "manualSyncStartedDescription": "Се синхронизираат термините со Google Calendar...",
+      "syncFailed": "Синхронизацијата не успеа"
+    }
+  },
+  "rooms": {
+    "confirmDelete": "Дали сте сигурни дека сакате да ја избришете оваа соба?"
   }
 }

@@ -4,6 +4,7 @@ import { ClockCircleOutlined } from '@ant-design/icons';
 import dayjs, { Dayjs } from 'dayjs';
 import { Appointment } from '../../types/appointments';
 import { useThemeColors } from '../../utils/themeStyles';
+import { useTranslation } from 'react-i18next';
 
 import styles from './WeekViewDraggable.module.css';
 interface WeekViewDraggableProps {
@@ -19,6 +20,7 @@ const WeekViewDraggable: React.FC<WeekViewDraggableProps> = ({
   onSelectAppointment,
   onCreateAppointment,
 }) => {
+  const { t } = useTranslation('appointments');
   const themeColors = useThemeColors();
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState<{ day: number; slot: number; y: number } | null>(null);
@@ -267,7 +269,7 @@ const WeekViewDraggable: React.FC<WeekViewDraggableProps> = ({
         <Card className={styles.notificationCard}>
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description="No appointments scheduled for this week"
+            description={t('noAppointmentsWeek')}
           >
             <div className={styles.notificationDescription}>
               <strong>Drag vertically</strong> in any day column to create an appointment

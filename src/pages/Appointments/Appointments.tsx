@@ -24,6 +24,7 @@ import {
   EnvironmentOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import { useTranslation } from 'react-i18next';
 import AppointmentCalendar from '../../components/AppointmentCalendar/AppointmentCalendar';
 import AppointmentList from '../../components/AppointmentList/AppointmentList';
 import AppointmentModal from '../../components/AppointmentModal/AppointmentModal';
@@ -48,7 +49,8 @@ const { Search } = Input;
 const { Option } = Select;
 
 const Appointments: React.FC = () => {
-  const { notification } = App.useApp();
+  const { t } = useTranslation('appointments');
+  const { notification, modal } = App.useApp();
   const [activeTab, setActiveTab] = useState<'calendar' | 'list'>('calendar');
   const [calendarView, setCalendarView] = useState<CalendarView>('month');
   const [modalVisible, setModalVisible] = useState(false);
@@ -103,16 +105,16 @@ const Appointments: React.FC = () => {
   const handleDeleteAppointment = useCallback(
     async (appointment: Appointment) => {
       modal.confirm({
-        title: 'Delete Appointment',
-        content: `Are you sure you want to delete the appointment "${appointment.title}"?`,
-        okText: 'Delete',
+        title: t('messages.deleteTitle'),
+        content: t('messages.deleteConfirm'),
+        okText: t('actions.delete'),
         okType: 'danger',
         onOk: async () => {
           try {
             await deleteAppointment(appointment.id);
             notification.success({
-        message: 'Appointment deleted successfully',
-        description: 'Appointment deleted successfully',
+        message: t('messages.deletedSuccess'),
+        description: t('messages.deletedSuccess'),
         placement: 'bottomRight',
         duration: 3,
       });
@@ -120,7 +122,7 @@ const Appointments: React.FC = () => {
           } catch (error) {
             notification.error({
         message: 'Error',
-        description: 'Failed to delete appointment',
+        description: t('messages.deleteFailed'),
         placement: 'bottomRight',
         duration: 5,
       });
@@ -137,7 +139,7 @@ const Appointments: React.FC = () => {
       const targetDate = await new Promise<Date | null>((resolve) => {
         let selectedDate: Date | null = null;
         modal.confirm({
-          title: 'Duplicate Appointment',
+          title: t('messages.duplicateTitle'),
           content: (
             <div>
               <p>Select a date to duplicate this appointment to:</p>
@@ -164,15 +166,15 @@ const Appointments: React.FC = () => {
           };
           await duplicateAppointment(input);
           notification.success({
-        message: 'Appointment duplicated successfully',
-        description: 'Appointment duplicated successfully',
+        message: t('messages.duplicatedSuccess'),
+        description: t('messages.duplicatedSuccess'),
         placement: 'bottomRight',
         duration: 3,
       });
         } catch (error) {
           notification.error({
         message: 'Error',
-        description: 'Failed to duplicate appointment',
+        description: t('messages.duplicateFailed'),
         placement: 'bottomRight',
         duration: 5,
       });
@@ -190,8 +192,8 @@ const Appointments: React.FC = () => {
       if (modalMode === 'create') {
         await createAppointment(data as CreateAppointmentInput);
         notification.success({
-        message: 'Appointment created successfully',
-        description: 'Appointment created successfully',
+        message: t('messages.createdSuccess'),
+        description: t('messages.createdSuccess'),
         placement: 'bottomRight',
         duration: 3,
       });
@@ -201,8 +203,8 @@ const Appointments: React.FC = () => {
           input: data as UpdateAppointmentInput,
         });
         notification.success({
-        message: 'Appointment updated successfully',
-        description: 'Appointment updated successfully',
+        message: t('messages.updatedSuccess'),
+        description: t('messages.updatedSuccess'),
         placement: 'bottomRight',
         duration: 3,
       });
@@ -210,8 +212,8 @@ const Appointments: React.FC = () => {
       setModalVisible(false);
       refetch();
     } catch (error) {
-      notification.error({ message: "Error", description: 
-        `Failed to ${modalMode === 'create' ? 'create' : 'update'} appointment`
+      notification.error({ message: "Error", description:
+        t(modalMode === 'create' ? 'messages.createFailed' : 'messages.updateFailed')
       , placement: "bottomRight", duration: 5 });
       throw error;
     }
@@ -241,11 +243,11 @@ const Appointments: React.FC = () => {
       <Header className={styles.appointmentsHeader}>
         <div className={styles.appointmentsHeaderContent}>
           <div className={styles.appointmentsHeaderLeft}>
-            <h1>Appointments</h1>
+            <h1>{t('title')}</h1>
             <Space size="large">
-              <Statistic title="Today" value={todayCount} />
-              <Statistic title="This Week" value={weekCount} />
-              <Statistic title="Scheduled" value={scheduledCount} />
+              <Statistic title={t('stats.today')} value={todayCount} />
+              <Statistic title={t('stats.thisWeek')} value={weekCount} />
+              <Statistic title={t('status.scheduled')} value={scheduledCount} />
             </Space>
           </div>
           <Space>
@@ -253,10 +255,10 @@ const Appointments: React.FC = () => {
               icon={<FilterOutlined />}
               onClick={() => setFilterDrawerVisible(true)}
             >
-              Filters
+              {t('filters.title')}
             </Button>
             <Button icon={<ReloadOutlined />} onClick={() => refetch()}>
-              Refresh
+              {t('calendar.refresh')}
             </Button>
             <Button
               type="primary"
@@ -264,7 +266,7 @@ const Appointments: React.FC = () => {
               onClick={() => handleCreateAppointment()}
               loading={isCreating}
             >
-              New Appointment
+              {t('newAppointment')}
             </Button>
           </Space>
         </div>
@@ -279,7 +281,7 @@ const Appointments: React.FC = () => {
               key: 'calendar',
               label: (
                 <span>
-                  <CalendarOutlined /> Calendar View
+                  <CalendarOutlined /> {t('tabs.calendar')}
                 </span>
               ),
               children: (
@@ -296,7 +298,7 @@ const Appointments: React.FC = () => {
               key: 'list',
               label: (
                 <span>
-                  <UnorderedListOutlined /> List View
+                  <UnorderedListOutlined /> {t('tabs.list')}
                 </span>
               ),
               children: (
@@ -323,7 +325,7 @@ const Appointments: React.FC = () => {
       />
 
       <Drawer
-        title="Appointment Details"
+        title={t('details.title')}
         placement="right"
         width={400}
         open={detailDrawerVisible}
@@ -335,14 +337,14 @@ const Appointments: React.FC = () => {
               onClick={() => handleEditAppointment(selectedAppointment!)}
               disabled={!selectedAppointment}
             >
-              Edit
+              {t('actions.update')}
             </Button>
             <Button
               danger
               onClick={() => handleDeleteAppointment(selectedAppointment!)}
               disabled={!selectedAppointment}
             >
-              Delete
+              {t('actions.delete')}
             </Button>
           </Space>
         }
@@ -354,26 +356,26 @@ const Appointments: React.FC = () => {
               <p>{appointmentDetail.appointment.description}</p>
               <div className={styles.detailInfo}>
                 <div>
-                  <strong>Patient:</strong> {appointmentDetail.patient?.name}
+                  <strong>{t('details.patient')}:</strong> {appointmentDetail.patient?.name}
                 </div>
                 <div>
-                  <strong>Date:</strong>{' '}
+                  <strong>{t('fields.date')}:</strong>{' '}
                   {dayjs(appointmentDetail.appointment.start_time).format(
                     'MMMM DD, YYYY'
                   )}
                 </div>
                 <div>
-                  <strong>Time:</strong>{' '}
+                  <strong>{t('details.time')}:</strong>{' '}
                   {dayjs(appointmentDetail.appointment.start_time).format('HH:mm')} -{' '}
                   {dayjs(appointmentDetail.appointment.end_time).format('HH:mm')}
                 </div>
                 {appointmentDetail.room && (
                   <div>
-                    <strong>Room:</strong> {appointmentDetail.room.name}
+                    <strong>{t('details.room')}:</strong> {appointmentDetail.room.name}
                   </div>
                 )}
                 <div>
-                  <strong>Status:</strong> {appointmentDetail.appointment.status}
+                  <strong>{t('fields.status')}:</strong> {appointmentDetail.appointment.status}
                 </div>
               </div>
             </Card>
@@ -382,23 +384,23 @@ const Appointments: React.FC = () => {
       </Drawer>
 
       <Drawer
-        title="Filter Appointments"
+        title={t('filters.title')}
         placement="left"
         width={300}
         open={filterDrawerVisible}
         onClose={() => setFilterDrawerVisible(false)}
         footer={
           <Space>
-            <Button onClick={() => setFilter({})}>Clear</Button>
+            <Button onClick={() => setFilter({})}>{t('calendar.clear')}</Button>
             <Button type="primary" onClick={() => handleApplyFilters(filter)}>
-              Apply
+              {t('calendar.apply')}
             </Button>
           </Space>
         }
       >
         <Space direction="vertical" className={styles.fullWidth}>
           <div>
-            <label>Date Range</label>
+            <label>{t('calendar.dateRange')}</label>
             <RangePicker
               className={styles.fullWidth}
               onChange={(dates) => {
@@ -413,10 +415,10 @@ const Appointments: React.FC = () => {
             />
           </div>
           <div>
-            <label>Room</label>
+            <label>{t('details.room')}</label>
             <Select
               className={styles.fullWidth}
-              placeholder="All rooms"
+              placeholder={t('filters.allRooms')}
               allowClear
               onChange={(value) => setFilter({ ...filter, room_id: value })}
             >
@@ -428,17 +430,17 @@ const Appointments: React.FC = () => {
             </Select>
           </div>
           <div>
-            <label>Status</label>
+            <label>{t('fields.status')}</label>
             <Select
               className={styles.fullWidth}
-              placeholder="All statuses"
+              placeholder={t('filters.allStatuses')}
               allowClear
               onChange={(value) => setFilter({ ...filter, status: value })}
             >
-              <Option value="scheduled">Scheduled</Option>
-              <Option value="in_progress">In Progress</Option>
-              <Option value="completed">Completed</Option>
-              <Option value="cancelled">Cancelled</Option>
+              <Option value="scheduled">{t('status.scheduled')}</Option>
+              <Option value="in_progress">{t('status.inProgress')}</Option>
+              <Option value="completed">{t('status.completed')}</Option>
+              <Option value="cancelled">{t('status.cancelled')}</Option>
             </Select>
           </div>
         </Space>

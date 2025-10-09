@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Upload, Button } from 'antd';
+import { Upload, Button, App } from 'antd';
 import { UploadOutlined, InboxOutlined } from '@ant-design/icons';
 import { useUploadAttachment } from '@/hooks/useMedicalRecords';
 import { MedicalService } from '@/services/medicalService';
@@ -19,6 +19,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
   onUploadSuccess,
   isDragger = false,
 }) => {
+  const { notification } = App.useApp();
   const [fileList, setFileList] = useState<UploadFile[]>([]);
   const [uploading, setUploading] = useState(false);
   const uploadMutation = useUploadAttachment();

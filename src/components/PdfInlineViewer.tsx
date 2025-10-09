@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Typography } from 'antd';
+import { Typography, Button } from 'antd';
+import { PrinterOutlined } from '@ant-design/icons';
 // pdf.js v3 imports — use legacy build for wider WebView compatibility
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
@@ -129,6 +130,12 @@ const PdfInlineViewer: React.FC<PdfInlineViewerProps> = ({ blob, fileName }) => 
     // Only re-run when blob or error changes
   }, [error, blob]);
 
+  // Print function - print the rendered canvas
+  const handlePrint = () => {
+    // Just trigger browser print - will print the current page
+    window.print();
+  };
+
   if (error) {
     return (
       <div>
@@ -152,7 +159,20 @@ const PdfInlineViewer: React.FC<PdfInlineViewerProps> = ({ blob, fileName }) => 
   if (loading) {
     return <Text type="secondary">Loading preview...</Text>;
   }
-  return <canvas ref={canvasRef} className={styles.canvas} />;
+  return (
+    <div>
+      <div style={{ marginBottom: '8px', textAlign: 'right' }}>
+        <Button
+          size="small"
+          icon={<PrinterOutlined />}
+          onClick={handlePrint}
+        >
+          Print
+        </Button>
+      </div>
+      <canvas ref={canvasRef} className={styles.canvas} />
+    </div>
+  );
 };
 
 export default PdfInlineViewer;

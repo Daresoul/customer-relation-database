@@ -31,6 +31,10 @@
       "process": {
         "all": false,
         "relaunch": true
+      },
+      "window": {
+        "all": false,
+        "print": true
       }
     },
     "bundle": {

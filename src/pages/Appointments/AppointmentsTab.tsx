@@ -20,6 +20,7 @@ import {
   FilterOutlined,
   ReloadOutlined,
 } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import AppointmentCalendar from '../../components/AppointmentCalendar/AppointmentCalendar';
 import AppointmentList from '../../components/AppointmentList/AppointmentList';
 import AppointmentModal from '../../components/AppointmentModal/AppointmentModal';
@@ -40,7 +41,8 @@ import styles from './Appointments.module.css';
 const { RangePicker } = DatePicker;
 
 const AppointmentsTab: React.FC = () => {
-  const { notification } = App.useApp();
+  const { t } = useTranslation(['appointments', 'common']);
+  const { notification, modal } = App.useApp();
   const [activeView, setActiveView] = useState<'calendar' | 'list'>('list');
   const [calendarView, setCalendarView] = useState<CalendarView>('month');
   const [modalVisible, setModalVisible] = useState(false);
@@ -126,26 +128,27 @@ const AppointmentsTab: React.FC = () => {
   const handleDeleteAppointment = useCallback(
     async (appointment: Appointment) => {
       modal.confirm({
-        title: 'Delete Appointment',
-        content: `Are you sure you want to delete the appointment for ${appointment.title}?`,
-        okText: 'Delete',
+        title: t('appointments:messages.deleteTitle'),
+        content: t('appointments:messages.deleteConfirm'),
+        okText: t('appointments:actions.delete'),
         okType: 'danger',
+        cancelText: t('common:cancel'),
         onOk: async () => {
           try {
             await deleteAppointment(appointment.id);
             notification.success({
-        message: 'Appointment deleted successfully',
-        description: 'Appointment deleted successfully',
+        message: t('appointments:messages.deletedSuccess'),
+        description: t('appointments:messages.deletedSuccess'),
         placement: 'bottomRight',
         duration: 3,
       });
           } catch (error: any) {
-            notification.error({ message: "Error", description: error.message || 'Failed to delete appointment', placement: "bottomRight", duration: 5 });
+            notification.error({ message: t('common:error'), description: error.message || t('appointments:messages.deleteFailed'), placement: "bottomRight", duration: 5 });
           }
         },
       });
     },
-    [deleteAppointment]
+    [deleteAppointment, t, modal, notification]
   );
 
   // Handle duplicate appointment
@@ -154,16 +157,16 @@ const AppointmentsTab: React.FC = () => {
       try {
         await duplicateAppointment(appointment.id);
         notification.success({
-        message: 'Appointment duplicated successfully',
-        description: 'Appointment duplicated successfully',
+        message: t('appointments:messages.duplicatedSuccess'),
+        description: t('appointments:messages.duplicatedSuccess'),
         placement: 'bottomRight',
         duration: 3,
       });
       } catch (error: any) {
-        notification.error({ message: "Error", description: error.message || 'Failed to duplicate appointment', placement: "bottomRight", duration: 5 });
+        notification.error({ message: t('common:error'), description: error.message || t('appointments:messages.duplicateFailed'), placement: "bottomRight", duration: 5 });
       }
     },
-    [duplicateAppointment]
+    [duplicateAppointment, t, notification]
   );
 
   // Handle save appointment (create or update)
@@ -173,16 +176,16 @@ const AppointmentsTab: React.FC = () => {
         if (modalMode === 'edit' && selectedAppointment) {
           await updateAppointment({ id: selectedAppointment.id, input: values });
           notification.success({
-        message: 'Appointment updated successfully',
-        description: 'Appointment updated successfully',
+        message: t('appointments:messages.updatedSuccess'),
+        description: t('appointments:messages.updatedSuccess'),
         placement: 'bottomRight',
         duration: 3,
       });
         } else {
           await createAppointment(values);
           notification.success({
-        message: 'Appointment created successfully',
-        description: 'Appointment created successfully',
+        message: t('appointments:messages.createdSuccess'),
+        description: t('appointments:messages.createdSuccess'),
         placement: 'bottomRight',
         duration: 3,
       });
@@ -191,10 +194,10 @@ const AppointmentsTab: React.FC = () => {
         setSelectedAppointment(null);
       } catch (error: any) {
         console.error('AppointmentsTab: Save error:', error);
-        notification.error({ message: "Error", description: error.message || 'Failed to save appointment', placement: "bottomRight", duration: 5 });
+        notification.error({ message: t('common:error'), description: error.message || t('appointments:messages.saveFailed'), placement: "bottomRight", duration: 5 });
       }
     },
-    [modalMode, selectedAppointment, updateAppointment, createAppointment]
+    [modalMode, selectedAppointment, updateAppointment, createAppointment, t, notification]
   );
 
   return (
@@ -208,21 +211,21 @@ const AppointmentsTab: React.FC = () => {
               icon={<FilterOutlined />}
               onClick={() => setFilterDrawerVisible(true)}
             >
-              Filter
+              {t('appointments:filters.filter')}
             </Button>
             <Button
               icon={<ReloadOutlined />}
               onClick={() => refetch()}
               loading={false}
             >
-              Refresh
+              {t('appointments:calendar.refresh')}
             </Button>
             <Button
               type="primary"
               icon={<PlusOutlined />}
               onClick={() => handleCreateAppointment()}
             >
-              New Appointment
+              {t('appointments:newAppointment')}
             </Button>
           </Space>
         }
@@ -232,7 +235,7 @@ const AppointmentsTab: React.FC = () => {
             label: (
               <span>
                 <UnorderedListOutlined />
-                Today's Appointments
+                {t('appointments:tabs.todaysAppointments')}
               </span>
             ),
             children: (
@@ -248,7 +251,7 @@ const AppointmentsTab: React.FC = () => {
             label: (
               <span>
                 <CalendarOutlined />
-                Calendar View
+                {t('appointments:tabs.calendarView')}
               </span>
             ),
             children: (
@@ -267,7 +270,7 @@ const AppointmentsTab: React.FC = () => {
 
       {/* Filter Drawer */}
       <Drawer
-        title="Filter Appointments"
+        title={t('appointments:filters.title')}
         placement="right"
         onClose={() => setFilterDrawerVisible(false)}
         open={filterDrawerVisible}
@@ -275,7 +278,7 @@ const AppointmentsTab: React.FC = () => {
       >
         <Space direction="vertical" className={styles.fullWidth} size="large">
           <div>
-            <div className={styles.filterLabel}>Status</div>
+            <div className={styles.filterLabel}>{t('appointments:filters.status')}</div>
             <Select
               className={styles.fullWidth}
               onChange={(value) => {
@@ -293,16 +296,16 @@ const AppointmentsTab: React.FC = () => {
               }}
               value={filter.status || 'all'}
             >
-              <Select.Option value="all">All statuses</Select.Option>
-              <Select.Option value="scheduled">Scheduled</Select.Option>
-              <Select.Option value="in_progress">In Progress</Select.Option>
-              <Select.Option value="completed">Completed</Select.Option>
-              <Select.Option value="cancelled">Cancelled</Select.Option>
+              <Select.Option value="all">{t('appointments:filters.allStatuses')}</Select.Option>
+              <Select.Option value="scheduled">{t('appointments:status.scheduled')}</Select.Option>
+              <Select.Option value="in_progress">{t('appointments:status.inProgress')}</Select.Option>
+              <Select.Option value="completed">{t('appointments:status.completed')}</Select.Option>
+              <Select.Option value="cancelled">{t('appointments:status.cancelled')}</Select.Option>
             </Select>
           </div>
 
           <div>
-            <div className={styles.filterLabel}>Room</div>
+            <div className={styles.filterLabel}>{t('appointments:filters.room')}</div>
             <Select
               className={styles.fullWidth}
               onChange={(value) => {
@@ -315,7 +318,7 @@ const AppointmentsTab: React.FC = () => {
               }}
               value={filter.room_id || 'all'}
             >
-              <Select.Option value="all">All rooms</Select.Option>
+              <Select.Option value="all">{t('appointments:filters.allRooms')}</Select.Option>
               {rooms?.map((room) => (
                 <Select.Option key={room.id} value={room.id}>
                   {room.name}
@@ -337,7 +340,7 @@ const AppointmentsTab: React.FC = () => {
                 }
               }}
             >
-              Include cancelled appointments
+              {t('appointments:filters.includeCancelled')}
             </Checkbox>
           )}
 
@@ -348,7 +351,7 @@ const AppointmentsTab: React.FC = () => {
             }}
             block
           >
-            Clear Filters
+            {t('appointments:filters.clearFilters')}
           </Button>
         </Space>
       </Drawer>

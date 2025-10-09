@@ -13,6 +13,7 @@ import WeekView from './WeekView';
 import DayView from './DayView';
 import DayViewSimple from './DayViewSimple';
 import enUS from 'antd/es/locale/en_US';
+import { useTranslation } from 'react-i18next';
 import styles from './AppointmentCalendar.module.css';
 
 // Configure dayjs to start week on Monday
@@ -40,6 +41,7 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
   onViewChange,
   onDateChange,
 }) => {
+  const { t } = useTranslation('appointments');
   const [selectedDate, setSelectedDate] = useState<Dayjs>(dayjs());
   const themeColors = useThemeColors();
 
@@ -64,24 +66,24 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
     return (
       <div>
         <div className={styles.tooltipLine}>
-          <strong>Patient:</strong> {apt.patient_name || 'Unknown Patient'}
+          <strong>{t('details.patient')}:</strong> {apt.patient_name || t('details.unknownPatient')}
         </div>
         <div className={styles.tooltipLine}>
           <strong>Microchip ID:</strong> {apt.microchip_id || '-'}
         </div>
         <div className={styles.tooltipLine}>
-          <strong>Time:</strong> {dayjs(apt.start_time).format('HH:mm')} - {dayjs(apt.end_time).format('HH:mm')}
+          <strong>{t('details.time')}:</strong> {dayjs(apt.start_time).format('HH:mm')} - {dayjs(apt.end_time).format('HH:mm')}
         </div>
         <div className={styles.tooltipLine}>
-          <strong>Date:</strong> {dayjs(apt.start_time).format('MMM DD, YYYY')}
+          <strong>{t('fields.date')}:</strong> {dayjs(apt.start_time).format('MMM DD, YYYY')}
         </div>
         {room && (
           <div className={styles.tooltipLine}>
-            <strong>Room:</strong> {room.name}
+            <strong>{t('details.room')}:</strong> {room.name}
           </div>
         )}
         <div className={styles.tooltipLine}>
-          <strong>Status:</strong> {apt.status.replace('_', ' ')}
+          <strong>{t('fields.status')}:</strong> {apt.status.replace('_', ' ')}
         </div>
         <div className={styles.tooltipTitle}>{apt.title}</div>
         {apt.description && (
@@ -291,9 +293,9 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
             buttonStyle="solid"
             size="small"
           >
-            <Radio.Button value="month">Month</Radio.Button>
-            <Radio.Button value="week">Week</Radio.Button>
-            <Radio.Button value="day">Day</Radio.Button>
+            <Radio.Button value="month">{t('views.month')}</Radio.Button>
+            <Radio.Button value="week">{t('views.week')}</Radio.Button>
+            <Radio.Button value="day">{t('views.day')}</Radio.Button>
           </Radio.Group>
         </Space>
 
@@ -311,7 +313,7 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
           />
         </div>
 
-        <Button size="small" onClick={handleToday}>Today</Button>
+        <Button size="small" onClick={handleToday}>{t('calendar.today')}</Button>
       </div>
     );
   };

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { App, Spin, Alert, Button, Divider, List, Typography, Space } from 'antd';
+import { App, Spin, Alert, Button, Divider, List, Typography, Space, Modal } from 'antd';
 import { useTranslation } from 'react-i18next';
 import MedicalRecordForm from './MedicalRecordForm';
 import { useMedicalRecord, useCreateMedicalRecord, useUpdateMedicalRecord, useUploadAttachment } from '@/hooks/useMedicalRecords';

@@ -101,6 +101,7 @@ export const HouseholdInfo: React.FC<HouseholdInfoProps> = ({ household }) => {
             onChange: (value) => cityEdit.onChange(value),
             triggerType: ['text'],
           }}
+          className={styles.editableText}
         >
           {household.city || t('detail.householdInfo.placeholders.city')}
         </Text>
@@ -117,6 +118,7 @@ export const HouseholdInfo: React.FC<HouseholdInfoProps> = ({ household }) => {
             },
             triggerType: ['text'],
           }}
+          className={styles.editableText}
         >
           {household.postalCode || t('detail.householdInfo.placeholders.postalCode')}
         </Text>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Layout, Menu, Card, Form, Button, Space, Typography, Breadcrumb } from 'antd';
+import { Layout, Menu, Card, Form, Button, Space, Typography, Breadcrumb, App } from 'antd';
 import {
   SettingOutlined,
   GlobalOutlined,
@@ -37,7 +37,8 @@ interface MenuItem {
 }
 
 const SettingsLayout: React.FC = () => {
-  const { t } = useTranslation(['common', 'entities', 'navigation', 'forms']);
+  const { notification } = App.useApp();
+  const { t } = useTranslation(['common', 'entities', 'navigation', 'forms', 'settings']);
   const navigate = useNavigate();
   const { themeMode, setThemeMode } = useTheme();
   const themeColors = useThemeColors();
@@ -53,31 +54,31 @@ const SettingsLayout: React.FC = () => {
     {
       key: 'general',
       icon: <GlobalOutlined />,
-      label: 'General',
+      label: t('settings:sections.general'),
       component: GeneralSettings,
     },
     {
       key: 'business',
       icon: <DollarOutlined />,
-      label: 'Business',
+      label: t('settings:sections.business'),
       component: BusinessSettings,
     },
     {
       key: 'appointments',
       icon: <CalendarOutlined />,
-      label: 'Appointments',
+      label: t('settings:sections.appointments'),
       component: AppointmentsSettings,
     },
     {
       key: 'rooms',
       icon: <BankOutlined />,
-      label: 'Rooms',
+      label: t('settings:sections.rooms'),
       component: RoomsSettings,
     },
     {
       key: 'updates',
       icon: <CloudDownloadOutlined />,
-      label: 'Updates',
+      label: t('settings:sections.updates'),
       component: UpdateSettings,
     },
   ];

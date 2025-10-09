@@ -32,6 +32,7 @@ import {
 import { useRooms } from '../../hooks/useAppointments';
 import appointmentService from '../../services/appointmentService';
 import { usePatients } from '../../hooks/usePatients';
+import { useTranslation } from 'react-i18next';
 import styles from './AppointmentModal.module.css';
 
 const { TextArea } = Input;
@@ -61,6 +62,7 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
   mode = 'create',
   rooms: propsRooms,
 }) => {
+  const { t } = useTranslation(['appointments', 'common']);
   const { notification, modal } = App.useApp();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
@@ -147,8 +149,8 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
       // Clear conflicts and show warning instead of blocking
       setConflicts([]);
       notification.warning({
-        message: 'Warning',
-        description: 'Unable to check for conflicts. Please verify manually.',
+        message: t('common:error'),
+        description: t('appointments:validation.unableToCheckConflicts'),
         placement: 'bottomRight',
         duration: 4,
       });
@@ -178,8 +180,8 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
       // Validate time range
       if (endDateTime.isBefore(startDateTime) || endDateTime.isSame(startDateTime)) {
         notification.error({
-        message: 'Error',
-        description: 'End time must be after start time',
+        message: t('common:error'),
+        description: t('appointments:validation.endTimeAfterStart'),
         placement: 'bottomRight',
         duration: 5,
       });
@@ -193,8 +195,8 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
         endDateTime.minute() % 15 !== 0
       ) {
         notification.error({
-        message: 'Error',
-        description: 'Times must be on 15-minute intervals',
+        message: t('common:error'),
+        description: t('appointments:validation.fifteenMinuteIntervals'),
         placement: 'bottomRight',
         duration: 5,
       });
@@ -213,10 +215,15 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
         // Only warn if capacity is exceeded
         if (selectedRoom && totalAppointments > selectedRoom.capacity) {
           const confirmed = await modal.confirm({
-            title: 'Room Capacity Exceeded',
-            content: `Room capacity is ${selectedRoom.capacity}, but there ${totalAppointments === 1 ? 'is' : 'are'} ${totalAppointments} appointment${totalAppointments === 1 ? '' : 's'} at this time. Do you want to continue?`,
-            okText: 'Continue Anyway',
-            cancelText: 'Cancel',
+            title: t('appointments:conflicts.confirmTitle'),
+            content: t('appointments:conflicts.confirmMessage', {
+              capacity: selectedRoom.capacity,
+              isPlural: totalAppointments === 1 ? 'is' : 'are',
+              count: totalAppointments,
+              pluralSuffix: totalAppointments === 1 ? '' : 's'
+            }),
+            okText: t('appointments:conflicts.continueAnyway'),
+            cancelText: t('common:cancel'),
           });
 
           if (!confirmed) {
@@ -266,7 +273,7 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
       title={
         <Space>
           <CalendarOutlined />
-          {mode === 'create' ? 'New Appointment' : 'Edit Appointment'}
+          {mode === 'create' ? t('appointments:newAppointment') : t('appointments:editAppointment')}
         </Space>
       }
       open={isVisible}
@@ -275,7 +282,7 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
       width={700}
       footer={[
         <Button key="cancel" onClick={handleCancel}>
-          Cancel
+          {t('common:cancel')}
         </Button>,
         <Button
           key="submit"
@@ -283,7 +290,7 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
           loading={loading}
           onClick={handleSubmit}
         >
-          {mode === 'create' ? 'Create' : 'Update'}
+          {mode === 'create' ? t('common:create') : t('common:update')}
         </Button>,
       ]}
     >
@@ -296,11 +303,11 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
           <Col span={12}>
             <Form.Item
               name="patient_id"
-              label="Patient"
-              rules={[{ required: true, message: 'Please select a patient' }]}
+              label={t('appointments:fields.patient')}
+              rules={[{ required: true, message: t('appointments:validation.selectPatient') }]}
             >
               <Select
-                placeholder="Select a patient"
+                placeholder={t('appointments:placeholders.selectPatient')}
                 showSearch
                 optionFilterProp="children"
                 suffixIcon={<UserOutlined />}
@@ -316,17 +323,17 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
           <Col span={12}>
             <Form.Item
               name="room_id"
-              label="Room (Optional)"
+              label={t('appointments:fields.room')}
             >
               <Select
-                placeholder="Select a room"
+                placeholder={t('appointments:placeholders.selectRoom')}
                 allowClear
                 suffixIcon={<EnvironmentOutlined />}
                 onChange={checkConflicts}
               >
                 {rooms.map((room) => (
                   <Option key={room.id} value={room.id}>
-                    {room.name} (Capacity: {room.capacity})
+                    {room.name} ({t('appointments:fields.capacity')}: {room.capacity})
                   </Option>
                 ))}
               </Select>
@@ -336,33 +343,33 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
 
         <Form.Item
           name="title"
-          label="Title"
+          label={t('appointments:fields.title')}
           rules={[
-            { required: true, message: 'Please enter appointment title' },
-            { max: 200, message: 'Title must be less than 200 characters' },
+            { required: true, message: t('appointments:validation.enterTitle') },
+            { max: 200, message: t('appointments:validation.titleMaxLength') },
           ]}
         >
-          <Input placeholder="e.g., Annual Checkup, Vaccination" />
+          <Input placeholder={t('appointments:placeholders.title')} />
         </Form.Item>
 
         <Form.Item
           name="description"
-          label="Description"
+          label={t('appointments:fields.description')}
         >
           <TextArea
             rows={3}
-            placeholder="Additional notes or instructions"
+            placeholder={t('appointments:placeholders.description')}
           />
         </Form.Item>
 
-        <Divider>Schedule</Divider>
+        <Divider>{t('appointments:schedule')}</Divider>
 
         <Row gutter={16}>
           <Col span={8}>
             <Form.Item
               name="date"
-              label="Date"
-              rules={[{ required: true, message: 'Please select date' }]}
+              label={t('appointments:fields.date')}
+              rules={[{ required: true, message: t('appointments:validation.selectDate') }]}
             >
               <DatePicker
                 className={styles.fullWidth}
@@ -374,8 +381,8 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
           <Col span={8}>
             <Form.Item
               name="start_time"
-              label="Start Time"
-              rules={[{ required: true, message: 'Please select start time' }]}
+              label={t('appointments:fields.startTime')}
+              rules={[{ required: true, message: t('appointments:validation.selectStartTime') }]}
             >
               <TimePicker
                 className={styles.fullWidth}
@@ -389,8 +396,8 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
           <Col span={8}>
             <Form.Item
               name="end_time"
-              label="End Time"
-              rules={[{ required: true, message: 'Please select end time' }]}
+              label={t('appointments:fields.endTime')}
+              rules={[{ required: true, message: t('appointments:validation.selectEndTime') }]}
             >
               <TimePicker
                 className={styles.fullWidth}
@@ -406,13 +413,13 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
         {mode === 'edit' && (
           <Form.Item
             name="status"
-            label="Status"
+            label={t('appointments:fields.status')}
           >
             <Select>
-              <Option value="scheduled">Scheduled</Option>
-              <Option value="in_progress">In Progress</Option>
-              <Option value="completed">Completed</Option>
-              <Option value="cancelled">Cancelled</Option>
+              <Option value="scheduled">{t('appointments:status.scheduled')}</Option>
+              <Option value="in_progress">{t('appointments:status.inProgress')}</Option>
+              <Option value="completed">{t('appointments:status.completed')}</Option>
+              <Option value="cancelled">{t('appointments:status.cancelled')}</Option>
             </Select>
           </Form.Item>
         )}
@@ -425,10 +432,10 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
 
           return conflicts.length > 0 && capacityExceeded && (
             <Alert
-              message="Room Capacity Exceeded"
+              message={t('appointments:conflicts.roomCapacityExceeded')}
               description={
                 <div>
-                  <Text>Room capacity is {selectedRoom.capacity}, but there {totalAppointments === 1 ? 'is' : 'are'} {totalAppointments} appointment{totalAppointments === 1 ? '' : 's'} at this time:</Text>
+                  <Text>{t(`appointments:conflicts.capacityWarning${totalAppointments === 1 ? '' : '_plural'}`, { capacity: selectedRoom.capacity, count: totalAppointments })}</Text>
                   <ul>
                     {conflicts.map((conflict) => (
                       <li key={conflict.id}>

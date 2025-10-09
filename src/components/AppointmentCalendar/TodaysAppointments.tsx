@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import dayjs from 'dayjs';
+import { useTranslation } from 'react-i18next';
 import DayViewSimple from './DayViewSimple';
 import { Appointment } from '../../types/appointments';
 import styles from './TodaysAppointments.module.css';
@@ -15,6 +16,7 @@ const TodaysAppointments: React.FC<TodaysAppointmentsProps> = ({
   onSelectAppointment,
   onCreateAppointment,
 }) => {
+  const { t } = useTranslation('appointments');
   const today = dayjs();
 
   // Filter appointments to only show today's appointments
@@ -28,7 +30,7 @@ const TodaysAppointments: React.FC<TodaysAppointmentsProps> = ({
   return (
     <div className={styles.container}>
       <h3 className={styles.header}>
-        Today's Appointments
+        {t('tabs.todaysAppointments')}
       </h3>
       <DayViewSimple
         selectedDate={today}

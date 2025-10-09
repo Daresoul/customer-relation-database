@@ -15,7 +15,7 @@ interface RoomsSettingsProps {
 }
 
 const RoomsSettings: React.FC<RoomsSettingsProps> = ({ isUpdating }) => {
-  const { t } = useTranslation(['common', 'forms']);
+  const { t } = useTranslation(['common', 'forms', 'settings']);
   const themeColors = useThemeColors();
   const [roomModalVisible, setRoomModalVisible] = useState(false);
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
@@ -146,10 +146,10 @@ const RoomsSettings: React.FC<RoomsSettingsProps> = ({ isUpdating }) => {
           </Button>
           {record.is_active && (
             <Popconfirm
-              title="Are you sure you want to deactivate this room? This will hide it from appointment scheduling but preserve historical data."
+              title={t('settings:rooms.confirmDelete')}
               onConfirm={() => handleDeactivateRoom(record.id)}
-              okText="Yes"
-              cancelText="No"
+              okText={t('common:yes')}
+              cancelText={t('common:no')}
             >
               <Button
                 icon={<DeleteOutlined />}
