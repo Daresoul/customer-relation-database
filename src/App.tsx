@@ -5,7 +5,13 @@
 import React, { Suspense, useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { App as AntApp, Spin } from 'antd';
+import { App as AntApp, Spin, ConfigProvider } from 'antd';
+import { useTranslation } from 'react-i18next';
+import dayjs from 'dayjs';
+import 'dayjs/locale/mk';
+import 'dayjs/locale/en';
+import enUS from 'antd/locale/en_US';
+import mkMK from 'antd/locale/mk_MK';
 import { MainDashboard } from './pages/MainDashboard';
 import { HouseholdDetail } from './pages/HouseholdDetail';
 import { PatientDetail } from './pages/PatientDetail';
@@ -30,28 +36,47 @@ const queryClient = new QueryClient({
   },
 });
 
+// Inner component to use hooks for locale
+function AppContent() {
+  const { i18n } = useTranslation();
+  const [locale, setLocale] = useState(i18n.language === 'mk' ? mkMK : enUS);
+
+  useEffect(() => {
+    // Update dayjs locale when language changes
+    const currentLang = i18n.language;
+    dayjs.locale(currentLang === 'mk' ? 'mk' : 'en');
+    setLocale(currentLang === 'mk' ? mkMK : enUS);
+  }, [i18n.language]);
+
+  return (
+    <ConfigProvider locale={locale}>
+      <ThemeProvider>
+        <ViewProvider>
+          <AntApp notification={{ maxCount: 1 }}>
+            <Router>
+              <AppWrapper>
+                <Routes>
+                  <Route path="/" element={<MainDashboard />} />
+                  <Route path="/households/:id" element={<HouseholdDetail />} />
+                  <Route path="/patients/:id" element={<PatientDetail />} />
+                  <Route path="/medical-records/:id" element={<MedicalRecordDetailPage />} />
+                  <Route path="/appointments" element={<Appointments />} />
+                  <Route path="/settings" element={<Settings />} />
+                </Routes>
+              </AppWrapper>
+            </Router>
+          </AntApp>
+        </ViewProvider>
+      </ThemeProvider>
+    </ConfigProvider>
+  );
+}
+
 function App() {
   return (
     <Suspense fallback={<div className={styles.loadingContainer}><Spin size="large" /></div>}>
       <QueryClientProvider client={queryClient}>
-        <ThemeProvider>
-          <ViewProvider>
-            <AntApp notification={{ maxCount: 1 }}>
-              <Router>
-                <AppWrapper>
-                  <Routes>
-                    <Route path="/" element={<MainDashboard />} />
-                    <Route path="/households/:id" element={<HouseholdDetail />} />
-                    <Route path="/patients/:id" element={<PatientDetail />} />
-                    <Route path="/medical-records/:id" element={<MedicalRecordDetailPage />} />
-                    <Route path="/appointments" element={<Appointments />} />
-                    <Route path="/settings" element={<Settings />} />
-                  </Routes>
-                </AppWrapper>
-              </Router>
-            </AntApp>
-          </ViewProvider>
-        </ThemeProvider>
+        <AppContent />
       </QueryClientProvider>
     </Suspense>
   );

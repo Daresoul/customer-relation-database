@@ -22,7 +22,7 @@ interface GoogleCalendarSettings {
 }
 
 const AppointmentsSettings: React.FC<AppointmentsSettingsProps> = ({ isUpdating }) => {
-  const { t } = useTranslation(['common', 'forms']);
+  const { t } = useTranslation(['common', 'forms', 'settings']);
   const themeColors = useThemeColors();
   const [settings, setSettings] = useState<GoogleCalendarSettings>({
     connected: false,
@@ -55,8 +55,8 @@ const AppointmentsSettings: React.FC<AppointmentsSettingsProps> = ({ isUpdating 
       await invoke('start_oauth_flow');
 
       notify.info(
-        'Google Authorization',
-        'Opening browser for Google authorization...',
+        t('settings:googleCalendar.messages.googleAuthorization'),
+        t('settings:googleCalendar.messages.openingBrowser'),
         { duration: 4 }
       );
 
@@ -86,8 +86,8 @@ const AppointmentsSettings: React.FC<AppointmentsSettingsProps> = ({ isUpdating 
             await loadSettings();
 
             notify.success(
-              'Connected to Google Calendar',
-              'Your Google Calendar has been successfully connected. Appointments will now sync automatically.',
+              t('settings:googleCalendar.messages.connectedSuccess'),
+              t('settings:googleCalendar.messages.connectedDescription'),
               { duration: 8 }
             );
             setLoading(false);
@@ -96,8 +96,8 @@ const AppointmentsSettings: React.FC<AppointmentsSettingsProps> = ({ isUpdating 
             console.warn('OAuth flow timed out after', maxAttempts, 'attempts');
             clearInterval(pollInterval);
             notify.warning(
-              'Authorization Timeout',
-              'The authorization process timed out after 2 minutes. Please try again.',
+              t('settings:googleCalendar.messages.authTimeout'),
+              t('settings:googleCalendar.messages.authTimeoutDescription'),
               { duration: 10 }
             );
             setLoading(false);
@@ -106,8 +106,8 @@ const AppointmentsSettings: React.FC<AppointmentsSettingsProps> = ({ isUpdating 
           console.error('OAuth polling error:', error);
           clearInterval(pollInterval);
           notify.error(
-            'OAuth Error',
-            `Failed to complete OAuth authorization: ${error}`,
+            t('settings:googleCalendar.messages.oauthError'),
+            t('settings:googleCalendar.messages.oauthFailed', { error }),
             { duration: 12 }
           );
           setLoading(false);
@@ -117,8 +117,8 @@ const AppointmentsSettings: React.FC<AppointmentsSettingsProps> = ({ isUpdating 
     } catch (error) {
       console.error('Failed to start OAuth flow:', error);
       notify.error(
-        'Failed to Start OAuth',
-        `Could not initiate Google authorization: ${error}`,
+        t('settings:googleCalendar.messages.failedToStart'),
+        t('settings:googleCalendar.messages.failedToStartDescription', { error }),
         { duration: 12 }
       );
       setLoading(false);
@@ -131,14 +131,14 @@ const AppointmentsSettings: React.FC<AppointmentsSettingsProps> = ({ isUpdating 
       await invoke('disconnect_google_calendar');
       await loadSettings();
       notify.success(
-        'Disconnected from Google Calendar',
-        'Your Google Calendar has been disconnected. Appointments will no longer sync.',
+        t('settings:googleCalendar.messages.disconnectedSuccess'),
+        t('settings:googleCalendar.messages.disconnectedDescription'),
         { duration: 6 }
       );
     } catch (error) {
       notify.error(
-        'Disconnect Failed',
-        `Failed to disconnect from Google Calendar: ${error}`,
+        t('settings:googleCalendar.messages.disconnectFailed'),
+        t('settings:googleCalendar.messages.disconnectFailedDescription', { error }),
         { duration: 10 }
       );
     } finally {
@@ -154,8 +154,8 @@ const AppointmentsSettings: React.FC<AppointmentsSettingsProps> = ({ isUpdating 
 
       if (enabled) {
         notify.success(
-          'Sync Enabled',
-          'Syncing existing appointments to Google Calendar...',
+          t('settings:googleCalendar.messages.syncEnabled'),
+          t('settings:googleCalendar.messages.syncEnabledDescription'),
           { duration: 4 }
         );
 
@@ -163,28 +163,28 @@ const AppointmentsSettings: React.FC<AppointmentsSettingsProps> = ({ isUpdating 
         try {
           await invoke('trigger_manual_sync');
           notify.success(
-            'Initial Sync Complete',
-            'All future appointments have been synced to Google Calendar.',
+            t('settings:googleCalendar.messages.initialSyncComplete'),
+            t('settings:googleCalendar.messages.initialSyncCompleteDescription'),
             { duration: 6 }
           );
         } catch (syncError) {
           notify.warning(
-            'Initial Sync Failed',
-            `Sync enabled but initial sync failed: ${syncError}. You can manually sync using the "Sync Now" button.`,
+            t('settings:googleCalendar.messages.initialSyncFailed'),
+            t('settings:googleCalendar.messages.initialSyncFailedDescription', { error: syncError }),
             { duration: 10 }
           );
         }
       } else {
         notify.info(
-          'Sync Disabled',
-          'Appointments will no longer sync with Google Calendar.',
+          t('settings:googleCalendar.messages.syncDisabled'),
+          t('settings:googleCalendar.messages.syncDisabledDescription'),
           { duration: 4 }
         );
       }
     } catch (error) {
       notify.error(
-        'Failed to Update Sync Setting',
-        `Could not update sync setting: ${error}`,
+        t('settings:googleCalendar.messages.updateSyncFailed'),
+        t('settings:googleCalendar.messages.updateSyncFailedDescription', { error }),
         { duration: 8 }
       );
       // Reload settings to revert the UI
@@ -197,14 +197,14 @@ const AppointmentsSettings: React.FC<AppointmentsSettingsProps> = ({ isUpdating 
       <Card
         title={
           <span className={styles.cardTitle}>
-            <CalendarOutlined /> Google Calendar Integration
+            <CalendarOutlined /> {t('settings:googleCalendar.title')}
           </span>
         }
         className={styles.appointmentsCard}
       >
         <Alert
-          message="Google Calendar Sync"
-          description="Connect your Google Calendar to automatically sync appointments between your veterinary clinic and Google Calendar. This allows you to view and manage appointments from both systems."
+          message={t('settings:googleCalendar.syncTitle')}
+          description={t('settings:googleCalendar.syncDescription')}
           type="info"
           showIcon
           className={styles.alertBox}
@@ -212,8 +212,8 @@ const AppointmentsSettings: React.FC<AppointmentsSettingsProps> = ({ isUpdating 
 
         <Form.Item
           name="googleCalendarSync"
-          label={<span className={styles.formLabel}>Enable Google Calendar Sync</span>}
-          extra={<span className={styles.formHint}>Two-way sync between clinic appointments and Google Calendar</span>}
+          label={<span className={styles.formLabel}>{t('settings:googleCalendar.enableSync')}</span>}
+          extra={<span className={styles.formHint}>{t('settings:googleCalendar.syncHint')}</span>}
           valuePropName="checked"
         >
           <Switch
@@ -225,14 +225,14 @@ const AppointmentsSettings: React.FC<AppointmentsSettingsProps> = ({ isUpdating 
 
         <Space direction="vertical" className={styles.fullWidth}>
           <Paragraph className={styles.connectionStatus}>
-            <strong>Connection Status:</strong>{' '}
+            <strong>{t('settings:googleCalendar.connectionStatus')}:</strong>{' '}
             {settings.connected ? (
               <>
-                <span className={styles.statusConnected}>Connected</span>
+                <span className={styles.statusConnected}>{t('settings:googleCalendar.connected')}</span>
                 {settings.connected_email && <> ({settings.connected_email})</>}
               </>
             ) : (
-              <span className={styles.statusDisconnected}>Not Connected</span>
+              <span className={styles.statusDisconnected}>{t('settings:googleCalendar.notConnected')}</span>
             )}
           </Paragraph>
 
@@ -245,7 +245,7 @@ const AppointmentsSettings: React.FC<AppointmentsSettingsProps> = ({ isUpdating 
                 disabled={isUpdating || loading}
                 loading={loading}
               >
-                Connect Google Calendar
+                {t('settings:googleCalendar.connectButton')}
               </Button>
             ) : (
               <>
@@ -255,9 +255,9 @@ const AppointmentsSettings: React.FC<AppointmentsSettingsProps> = ({ isUpdating 
                     try {
                       setLoading(true);
                       await invoke('trigger_manual_sync');
-                      notify.success('Manual Sync Started', 'Syncing appointments to Google Calendar...');
+                      notify.success(t('settings:googleCalendar.messages.manualSyncStarted'), t('settings:googleCalendar.messages.manualSyncStartedDescription'));
                     } catch (error) {
-                      notify.error('Sync Failed', `${error}`);
+                      notify.error(t('settings:googleCalendar.messages.syncFailed'), `${error}`);
                     } finally {
                       setLoading(false);
                     }
@@ -265,7 +265,7 @@ const AppointmentsSettings: React.FC<AppointmentsSettingsProps> = ({ isUpdating 
                   disabled={isUpdating || loading}
                   loading={loading}
                 >
-                  Sync Now
+                  {t('settings:googleCalendar.syncNowButton')}
                 </Button>
                 <Button
                   danger
@@ -274,7 +274,7 @@ const AppointmentsSettings: React.FC<AppointmentsSettingsProps> = ({ isUpdating 
                   disabled={isUpdating || loading}
                   loading={loading}
                 >
-                  Disconnect
+                  {t('settings:googleCalendar.disconnectButton')}
                 </Button>
               </>
             )}

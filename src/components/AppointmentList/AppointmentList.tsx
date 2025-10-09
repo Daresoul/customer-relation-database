@@ -26,6 +26,7 @@ import { useAppointments } from '../../hooks/useAppointments';
 import appointmentService from '../../services/appointmentService';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
+import { useTranslation } from 'react-i18next';
 import styles from './AppointmentList.module.css';
 
 dayjs.extend(relativeTime);
@@ -47,6 +48,7 @@ const AppointmentList: React.FC<AppointmentListProps> = ({
   onDuplicate,
   onSelect,
 }) => {
+  const { t } = useTranslation('appointments');
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
@@ -232,7 +234,7 @@ const AppointmentList: React.FC<AppointmentListProps> = ({
   if (!isLoading && appointments.length === 0) {
     return (
       <Empty
-        description="No appointments found"
+        description={t('noAppointments')}
         image={Empty.PRESENTED_IMAGE_SIMPLE}
       />
     );

@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Card, Tag, Button, Empty, Tooltip } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import dayjs, { Dayjs } from 'dayjs';
+import { useTranslation } from 'react-i18next';
 import { Appointment } from '../../types/appointments';
 import { useThemeColors } from '../../utils/themeStyles';
 import { useRooms } from '../../hooks/useRooms';
@@ -22,6 +23,7 @@ const DayViewSimple: React.FC<DayViewSimpleProps> = ({
   onCreateAppointment,
   onUpdateAppointment,
 }) => {
+  const { t } = useTranslation('appointments');
   const themeColors = useThemeColors();
   const { data: rooms = [] } = useRooms({ active_only: true });
   const containerRef = useRef<HTMLDivElement>(null);
@@ -446,7 +448,7 @@ const DayViewSimple: React.FC<DayViewSimpleProps> = ({
       {/* Header with day label - EXACTLY like WeekView */}
       <div className={styles.dayHeader}>
         <div className={styles.dayTimeColumn}>
-          <span className={styles.secondaryText}>Time</span>
+          <span className={styles.secondaryText}>{t('calendar.timeLabel')}</span>
         </div>
         <div className={styles.dayContentColumn}>
           <div className={styles.secondaryText}>

@@ -1,0 +1,118 @@
+{
+  "title": "Закажани термини",
+  "newAppointment": "Нов термин",
+  "editAppointment": "Уреди термин",
+  "appointmentDetails": "Детали за терминот",
+  "noAppointments": "Нема пронајдено термини",
+  "noAppointmentsDay": "Нема закажани термини за денес",
+  "noAppointmentsWeek": "Нема закажани термини за оваа недела",
+  "fields": {
+    "patient": "Пациент",
+    "room": "Соба (Опционално)",
+    "title": "Наслов",
+    "description": "Опис",
+    "date": "Датум",
+    "startTime": "Почетно време",
+    "endTime": "Крајно време",
+    "status": "Статус",
+    "capacity": "Капацитет"
+  },
+  "placeholders": {
+    "selectPatient": "Изберете пациент",
+    "selectRoom": "Изберете соба",
+    "title": "на пр., Годишен преглед, Вакцинација",
+    "description": "Дополнителни забелешки или инструкции"
+  },
+  "status": {
+    "scheduled": "Закажан",
+    "inProgress": "Во тек",
+    "completed": "Завршен",
+    "cancelled": "Откажан"
+  },
+  "validation": {
+    "selectPatient": "Ве молиме изберете пациент",
+    "enterTitle": "Ве молиме внесете наслов на терминот",
+    "titleMaxLength": "Насловот мора да биде помалку од 200 знаци",
+    "selectDate": "Ве молиме изберете датум",
+    "selectStartTime": "Ве молиме изберете почетно време",
+    "selectEndTime": "Ве молиме изберете крајно време",
+    "endTimeAfterStart": "Крајното време мора да биде по почетното време",
+    "fifteenMinuteIntervals": "Времињата мора да бидат на 15-минутни интервали",
+    "unableToCheckConflicts": "Не може да се провери за конфликти. Ве молиме проверете рачно."
+  },
+  "conflicts": {
+    "roomCapacityExceeded": "Капацитетот на собата е надминат",
+    "capacityWarning": "Капацитетот на собата е {{capacity}}, но има {{count}} термин во ова време",
+    "capacityWarning_plural": "Капацитетот на собата е {{capacity}}, но има {{count}} термини во ова време",
+    "confirmTitle": "Капацитетот на собата е надминат",
+    "confirmMessage": "Капацитетот на собата е {{capacity}}, но {{isPlural}} {{count}} термин{{pluralSuffix}} во ова време. Дали сакате да продолжите?",
+    "continueAnyway": "Продолжи сепак"
+  },
+  "schedule": "Распоред",
+  "actions": {
+    "create": "Создај",
+    "update": "Ажурирај",
+    "cancel": "Откажи",
+    "duplicate": "Дуплирај",
+    "delete": "Избриши"
+  },
+  "tabs": {
+    "calendar": "Календар",
+    "list": "Листа"
+  },
+  "views": {
+    "day": "Ден",
+    "week": "Недела",
+    "month": "Месец"
+  },
+  "filters": {
+    "title": "Филтрирај термини",
+    "allRooms": "Сите соби",
+    "allStatuses": "Сите статуси",
+    "searchPlaceholder": "Пребарај термини...",
+    "includeCancelled": "Вклучи откажани термини",
+    "clearFilters": "Избриши филтри",
+    "filter": "Филтрирај",
+    "status": "Статус",
+    "room": "Соба"
+  },
+  "messages": {
+    "deleteTitle": "Избриши термин",
+    "deleteConfirm": "Дали сте сигурни дека сакате да го избришете овој термин?",
+    "deletedSuccess": "Терминот е успешно избришан",
+    "deleteFailed": "Неуспешно бришење на терминот",
+    "duplicateTitle": "Дуплирај термин",
+    "duplicatedSuccess": "Терминот е успешно дуплиран",
+    "duplicateFailed": "Неуспешно дуплирање на терминот",
+    "createdSuccess": "Терминот е успешно создаден",
+    "createFailed": "Неуспешно создавање на терминот",
+    "updatedSuccess": "Терминот е успешно ажуриран",
+    "updateFailed": "Неуспешно ажурирање на терминот",
+    "saveFailed": "Неуспешно зачувување на терминот"
+  },
+  "details": {
+    "title": "Детали за терминот",
+    "patient": "Пациент",
+    "unknownPatient": "Непознат пациент",
+    "room": "Соба",
+    "time": "Време",
+    "duration": "Времетраење"
+  },
+  "stats": {
+    "today": "Денес",
+    "thisWeek": "Оваа недела",
+    "total": "Вкупно"
+  },
+  "calendar": {
+    "today": "Денес",
+    "refresh": "Освежи",
+    "dateRange": "Временски опсег",
+    "clear": "Избриши",
+    "apply": "Примени",
+    "timeLabel": "Време"
+  },
+  "tabs": {
+    "todaysAppointments": "Денешни термини",
+    "calendarView": "Календарски преглед"
+  }
+}

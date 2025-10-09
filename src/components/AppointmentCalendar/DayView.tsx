@@ -4,6 +4,7 @@ import { PlusOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import dayjs, { Dayjs } from 'dayjs';
 import { Appointment } from '../../types/appointments';
 import { useThemeColors } from '../../utils/themeStyles';
+import { useTranslation } from 'react-i18next';
 
 import styles from './DayView.module.css';
 interface DayViewProps {
@@ -19,6 +20,7 @@ const DayView: React.FC<DayViewProps> = ({
   onSelectAppointment,
   onCreateAppointment,
 }) => {
+  const { t } = useTranslation('appointments');
   const themeColors = useThemeColors();
 
 
@@ -152,7 +154,7 @@ const DayView: React.FC<DayViewProps> = ({
         <Card className={styles.notificationCard}>
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description="No appointments scheduled for this day"
+            description={t('noAppointmentsDay')}
           >
             <Button
               type="primary"

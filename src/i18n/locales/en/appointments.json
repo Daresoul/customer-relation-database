@@ -1,0 +1,118 @@
+{
+  "title": "Appointments",
+  "newAppointment": "New Appointment",
+  "editAppointment": "Edit Appointment",
+  "appointmentDetails": "Appointment Details",
+  "noAppointments": "No appointments found",
+  "noAppointmentsDay": "No appointments scheduled for this day",
+  "noAppointmentsWeek": "No appointments scheduled for this week",
+  "fields": {
+    "patient": "Patient",
+    "room": "Room (Optional)",
+    "title": "Title",
+    "description": "Description",
+    "date": "Date",
+    "startTime": "Start Time",
+    "endTime": "End Time",
+    "status": "Status",
+    "capacity": "Capacity"
+  },
+  "placeholders": {
+    "selectPatient": "Select a patient",
+    "selectRoom": "Select a room",
+    "title": "e.g., Annual Checkup, Vaccination",
+    "description": "Additional notes or instructions"
+  },
+  "status": {
+    "scheduled": "Scheduled",
+    "inProgress": "In Progress",
+    "completed": "Completed",
+    "cancelled": "Cancelled"
+  },
+  "validation": {
+    "selectPatient": "Please select a patient",
+    "enterTitle": "Please enter appointment title",
+    "titleMaxLength": "Title must be less than 200 characters",
+    "selectDate": "Please select date",
+    "selectStartTime": "Please select start time",
+    "selectEndTime": "Please select end time",
+    "endTimeAfterStart": "End time must be after start time",
+    "fifteenMinuteIntervals": "Times must be on 15-minute intervals",
+    "unableToCheckConflicts": "Unable to check for conflicts. Please verify manually."
+  },
+  "conflicts": {
+    "roomCapacityExceeded": "Room Capacity Exceeded",
+    "capacityWarning": "Room capacity is {{capacity}}, but there {{count}} appointment at this time",
+    "capacityWarning_plural": "Room capacity is {{capacity}}, but there are {{count}} appointments at this time",
+    "confirmTitle": "Room Capacity Exceeded",
+    "confirmMessage": "Room capacity is {{capacity}}, but there {{isPlural}} {{count}} appointment{{pluralSuffix}} at this time. Do you want to continue?",
+    "continueAnyway": "Continue Anyway"
+  },
+  "schedule": "Schedule",
+  "actions": {
+    "create": "Create",
+    "update": "Update",
+    "cancel": "Cancel",
+    "duplicate": "Duplicate",
+    "delete": "Delete"
+  },
+  "tabs": {
+    "calendar": "Calendar",
+    "list": "List"
+  },
+  "views": {
+    "day": "Day",
+    "week": "Week",
+    "month": "Month"
+  },
+  "filters": {
+    "title": "Filter Appointments",
+    "allRooms": "All rooms",
+    "allStatuses": "All statuses",
+    "searchPlaceholder": "Search appointments...",
+    "includeCancelled": "Include cancelled appointments",
+    "clearFilters": "Clear Filters",
+    "filter": "Filter",
+    "status": "Status",
+    "room": "Room"
+  },
+  "messages": {
+    "deleteTitle": "Delete Appointment",
+    "deleteConfirm": "Are you sure you want to delete this appointment?",
+    "deletedSuccess": "Appointment deleted successfully",
+    "deleteFailed": "Failed to delete appointment",
+    "duplicateTitle": "Duplicate Appointment",
+    "duplicatedSuccess": "Appointment duplicated successfully",
+    "duplicateFailed": "Failed to duplicate appointment",
+    "createdSuccess": "Appointment created successfully",
+    "createFailed": "Failed to create appointment",
+    "updatedSuccess": "Appointment updated successfully",
+    "updateFailed": "Failed to update appointment",
+    "saveFailed": "Failed to save appointment"
+  },
+  "details": {
+    "title": "Appointment Details",
+    "patient": "Patient",
+    "unknownPatient": "Unknown Patient",
+    "room": "Room",
+    "time": "Time",
+    "duration": "Duration"
+  },
+  "stats": {
+    "today": "Today",
+    "thisWeek": "This Week",
+    "total": "Total"
+  },
+  "calendar": {
+    "today": "Today",
+    "refresh": "Refresh",
+    "dateRange": "Date Range",
+    "clear": "Clear",
+    "apply": "Apply",
+    "timeLabel": "Time"
+  },
+  "tabs": {
+    "todaysAppointments": "Today's Appointments",
+    "calendarView": "Calendar View"
+  }
+}

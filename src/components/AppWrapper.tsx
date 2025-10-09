@@ -10,6 +10,12 @@ export const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }
 
   // T025: Check for updates on app startup (10s delay)
   useEffect(() => {
+    // Skip update checks in dev mode
+    if (import.meta.env.DEV) {
+      console.log('Update checks disabled in dev mode');
+      return;
+    }
+
     async function checkOnStartup() {
       try {
         const prefs = await updateService.getPreferences();

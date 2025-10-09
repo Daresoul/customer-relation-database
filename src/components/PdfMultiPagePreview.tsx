@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { App, Button, Typography, Spin } from 'antd';
-import { ReloadOutlined } from '@ant-design/icons';
+import { ReloadOutlined, PrinterOutlined } from '@ant-design/icons';
 // We prefer blob URLs generated from reading the PNG file to avoid scheme issues
 import { MedicalService } from '@/services/medicalService';
 import styles from './PdfMultiPagePreview.module.css';
@@ -155,6 +155,44 @@ const PdfMultiPagePreview: React.FC<Props> = ({ attachmentId, initialPageUrl }) 
     return () => container.removeEventListener('scroll', handleScroll);
   }, [handleScroll]);
 
+  // Print function - print the rendered pages
+  const handlePrint = useCallback(() => {
+    if (!pages.length) return;
+
+    // Create a temporary container for printing
+    const printContainer = document.createElement('div');
+    printContainer.style.display = 'none';
+    printContainer.innerHTML = `
+      <style>
+        @media print {
+          body * { visibility: hidden; }
+          #print-content, #print-content * { visibility: visible; }
+          #print-content { position: absolute; left: 0; top: 0; width: 100%; }
+          #print-content img {
+            display: block;
+            max-width: 100%;
+            page-break-after: always;
+            page-break-inside: avoid;
+            margin: 0 auto;
+          }
+          #print-content img:last-child { page-break-after: auto; }
+        }
+      </style>
+      <div id="print-content">
+        ${pages.map(p => `<img src="${p.url}" alt="Page ${p.page}" />`).join('')}
+      </div>
+    `;
+
+    document.body.appendChild(printContainer);
+    printContainer.style.display = 'block';
+
+    // Trigger print
+    window.print();
+
+    // Clean up
+    document.body.removeChild(printContainer);
+  }, [pages]);
+
   if (!pages.length && !error) {
     return (
       <div className={styles.loadingContainer}>
@@ -174,14 +212,24 @@ const PdfMultiPagePreview: React.FC<Props> = ({ attachmentId, initialPageUrl }) 
         <Text>
           {pageCount && `${pages.length} of ${pageCount} pages loaded`}
         </Text>
-        <Button
-          size="small"
-          icon={<ReloadOutlined />}
-          onClick={regenerateAll}
-          loading={regenerating}
-        >
-          Regenerate
-        </Button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <Button
+            size="small"
+            icon={<PrinterOutlined />}
+            onClick={handlePrint}
+            disabled={!pages.length}
+          >
+            Print
+          </Button>
+          <Button
+            size="small"
+            icon={<ReloadOutlined />}
+            onClick={regenerateAll}
+            loading={regenerating}
+          >
+            Regenerate
+          </Button>
+        </div>
       </div>
 
       <div

@@ -148,6 +148,22 @@
 
 .fullWidth {
   width: 100%;
+  display: block;
+  cursor: pointer;
+}
+
+.fullWidth:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.editableText {
+  display: block;
+  width: 100%;
+  cursor: pointer;
+}
+
+.editableText:hover {
+  background: rgba(255, 255, 255, 0.05);
 }
 
 /* Content layout styles */

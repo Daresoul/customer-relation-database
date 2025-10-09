@@ -112,6 +112,13 @@
 
 .textPrimary {
   color: var(--text-primary);
+  display: block;
+  width: 100%;
+  cursor: pointer;
+}
+
+.textPrimary:hover {
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .textSecondary {

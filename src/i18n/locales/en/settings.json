@@ -1,4 +1,11 @@
 {
+  "sections": {
+    "general": "General",
+    "business": "Business",
+    "appointments": "Appointments",
+    "rooms": "Rooms",
+    "updates": "Updates"
+  },
   "updates": {
     "currentVersion": "Current Version",
     "automaticUpdateChecks": "Automatic Update Checks",
@@ -17,5 +24,50 @@
       "upToDateDescription": "You are running the latest version!",
       "checkFailedDescription": "Error: {{error}}"
     }
+  },
+  "googleCalendar": {
+    "title": "Google Calendar Integration",
+    "syncTitle": "Google Calendar Sync",
+    "syncDescription": "Connect your Google Calendar to automatically sync appointments between your veterinary clinic and Google Calendar. This allows you to view and manage appointments from both systems.",
+    "enableSync": "Enable Google Calendar Sync",
+    "syncHint": "Two-way sync between clinic appointments and Google Calendar",
+    "connectionStatus": "Connection Status",
+    "connected": "Connected",
+    "notConnected": "Not Connected",
+    "connectButton": "Connect Google Calendar",
+    "disconnectButton": "Disconnect",
+    "syncNowButton": "Sync Now",
+    "messages": {
+      "googleAuthorization": "Google Authorization",
+      "openingBrowser": "Opening browser for Google authorization...",
+      "connectedSuccess": "Connected to Google Calendar",
+      "connectedDescription": "Your Google Calendar has been successfully connected. Appointments will now sync automatically.",
+      "authTimeout": "Authorization Timeout",
+      "authTimeoutDescription": "The authorization process timed out after 2 minutes. Please try again.",
+      "oauthError": "OAuth Error",
+      "oauthFailed": "Failed to complete OAuth authorization: {{error}}",
+      "failedToStart": "Failed to Start OAuth",
+      "failedToStartDescription": "Could not initiate Google authorization: {{error}}",
+      "disconnectedSuccess": "Disconnected from Google Calendar",
+      "disconnectedDescription": "Your Google Calendar has been disconnected. Appointments will no longer sync.",
+      "disconnectFailed": "Disconnect Failed",
+      "disconnectFailedDescription": "Failed to disconnect from Google Calendar: {{error}}",
+      "syncEnabled": "Sync Enabled",
+      "syncEnabledDescription": "Syncing existing appointments to Google Calendar...",
+      "initialSyncComplete": "Initial Sync Complete",
+      "initialSyncCompleteDescription": "All future appointments have been synced to Google Calendar.",
+      "initialSyncFailed": "Initial Sync Failed",
+      "initialSyncFailedDescription": "Sync enabled but initial sync failed: {{error}}. You can manually sync using the \"Sync Now\" button.",
+      "syncDisabled": "Sync Disabled",
+      "syncDisabledDescription": "Appointments will no longer sync with Google Calendar.",
+      "updateSyncFailed": "Failed to Update Sync Setting",
+      "updateSyncFailedDescription": "Could not update sync setting: {{error}}",
+      "manualSyncStarted": "Manual Sync Started",
+      "manualSyncStartedDescription": "Syncing appointments to Google Calendar...",
+      "syncFailed": "Sync Failed"
+    }
+  },
+  "rooms": {
+    "confirmDelete": "Are you sure you want to delete this room?"
   }
 }
