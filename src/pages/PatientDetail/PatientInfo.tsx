@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Descriptions, Typography, Spin, App, Select, DatePicker, InputNumber } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { PatientDetail, SPECIES_OPTIONS, GENDER_OPTIONS, PATIENT_FIELD_RULES } from '../../types/patient';
+import { PatientDetail, GENDER_OPTIONS, PATIENT_FIELD_RULES } from '../../types/patient';
 import { useUpdatePatient } from '../../hooks/usePatient';
 import { useInlineEdit } from '../../hooks/useAutoSave';
+import { useSpecies } from '../../hooks/useSpecies';
 import dayjs from 'dayjs';
 import { formatDateTime, getDatePickerFormat } from '../../utils/dateFormatter';
 import { useThemeColors } from '../../utils/themeStyles';
@@ -21,10 +22,13 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
   const updatePatient = useUpdatePatient();
   const themeColors = useThemeColors();
 
-  // Create translated options for dropdowns
-  const translatedSpeciesOptions = SPECIES_OPTIONS.map(option => ({
-    value: option.value,
-    label: t(`entities:species.${option.value}`)
+  // Fetch species from database
+  const { data: speciesData = [], isLoading: isLoadingSpecies } = useSpecies(true);
+
+  // Create options for species dropdown from database
+  const speciesOptions = speciesData.map(species => ({
+    value: species.name,
+    label: species.name,
   }));
 
   const translatedGenderOptions = GENDER_OPTIONS.map(option => ({
@@ -161,9 +165,10 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
           <Select
             value={patient.species}
             onChange={(value) => handleFieldUpdate('species', value)}
-            options={translatedSpeciesOptions}
+            options={speciesOptions}
             className={styles.fullWidth}
-            disabled={isSaving}
+            disabled={isSaving || isLoadingSpecies}
+            loading={isLoadingSpecies}
           />
         </Descriptions.Item>
 

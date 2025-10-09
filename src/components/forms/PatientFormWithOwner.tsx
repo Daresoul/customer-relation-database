@@ -31,6 +31,7 @@ import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
 import { invoke } from '@tauri-apps/api/tauri';
 import { Patient, CreatePatientInput, UpdatePatientInput } from '../../types';
+import { useSpecies } from '../../hooks/useSpecies';
 import styles from './Forms.module.css';
 
 const { TextArea } = Input;
@@ -77,6 +78,9 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { notification } = App.useApp();
+
+  // Fetch species from database
+  const { data: speciesData = [], isLoading: isLoadingSpecies } = useSpecies(true);
 
   // Load initial data
   useEffect(() => {
@@ -303,17 +307,14 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
               label="Species"
               rules={[{ required: true, message: 'Please select species' }]}
             >
-              <Select placeholder="Select species">
-                <Option value="Dog">Dog</Option>
-                <Option value="Cat">Cat</Option>
-                <Option value="Bird">Bird</Option>
-                <Option value="Rabbit">Rabbit</Option>
-                <Option value="Hamster">Hamster</Option>
-                <Option value="Guinea Pig">Guinea Pig</Option>
-                <Option value="Reptile">Reptile</Option>
-                <Option value="Fish">Fish</Option>
-                <Option value="Other">Other</Option>
-              </Select>
+              <Select
+                placeholder="Select species"
+                loading={isLoadingSpecies}
+                options={speciesData.map(species => ({
+                  value: species.name,
+                  label: species.name,
+                }))}
+              />
             </Form.Item>
           </Col>
         </Row>
