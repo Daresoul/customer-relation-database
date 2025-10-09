@@ -38,6 +38,8 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, "020_create_calendar_event_mappings", create_calendar_event_mappings_table).await?;
     run_migration(pool, "021_create_sync_logs", create_sync_logs_table).await?;
     run_migration(pool, "022_add_token_expires_at", add_token_expires_at_column).await?;
+    run_migration(pool, "023_create_species_table", create_species_table).await?;
+    run_migration(pool, "024_add_room_color", add_room_color_column).await?;
 
     Ok(())
 }
@@ -776,7 +778,7 @@ fn create_app_settings_table(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::fu
                 user_id TEXT NOT NULL DEFAULT 'default',
                 language TEXT NOT NULL DEFAULT 'en' CHECK(language IN ('en', 'mk')),
                 currency_id INTEGER,
-                theme TEXT DEFAULT 'light' CHECK(theme IN ('light', 'dark')),
+                theme TEXT DEFAULT 'dark' CHECK(theme IN ('light', 'dark')),
                 date_format TEXT DEFAULT 'MM/DD/YYYY',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -1138,6 +1140,73 @@ fn add_token_expires_at_column(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::
             println!("token_expires_at column already exists in google_calendar_settings");
         }
 
+        Ok(())
+    })
+}
+
+// T023: Create species table
+fn create_species_table(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        // Create species table
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS species (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                active BOOLEAN NOT NULL DEFAULT 1,
+                display_order INTEGER NOT NULL DEFAULT 0,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        "#)
+        .execute(pool)
+        .await?;
+
+        // Insert default species
+        sqlx::query(r#"
+            INSERT OR IGNORE INTO species (name, display_order) VALUES
+                ('Dog', 1),
+                ('Cat', 2),
+                ('Bird', 3),
+                ('Rabbit', 4),
+                ('Hamster', 5),
+                ('Guinea Pig', 6),
+                ('Reptile', 7),
+                ('Fish', 8),
+                ('Other', 9)
+        "#)
+        .execute(pool)
+        .await?;
+
+        // Create index on active species
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_species_active ON species(active)")
+            .execute(pool)
+            .await?;
+
+        // Create trigger for updated_at
+        sqlx::query(r#"
+            CREATE TRIGGER IF NOT EXISTS update_species_timestamp
+            AFTER UPDATE ON species
+            BEGIN
+                UPDATE species SET updated_at = CURRENT_TIMESTAMP
+                WHERE id = NEW.id;
+            END
+        "#)
+        .execute(pool)
+        .await?;
+
+        println!("Created species table with default data");
+        Ok(())
+    })
+}
+
+fn add_room_color_column(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        // Add color column to rooms table with a default value
+        sqlx::query("ALTER TABLE rooms ADD COLUMN color TEXT NOT NULL DEFAULT '#000000'")
+            .execute(pool)
+            .await?;
+
+        println!("Added color column to rooms table");
         Ok(())
     })
 }

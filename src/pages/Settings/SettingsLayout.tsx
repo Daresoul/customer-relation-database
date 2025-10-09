@@ -9,6 +9,7 @@ import {
   ArrowLeftOutlined,
   BankOutlined,
   CloudDownloadOutlined,
+  AppstoreOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, Link } from 'react-router-dom';
@@ -22,12 +23,13 @@ import GeneralSettings from './components/GeneralSettings';
 import BusinessSettings from './components/BusinessSettings';
 import AppointmentsSettings from './components/AppointmentsSettings';
 import RoomsSettings from './components/RoomsSettings';
+import SpeciesSettings from './components/SpeciesSettings';
 import { UpdateSettings } from './UpdateSettings';
 
 const { Content, Sider } = Layout;
 const { Title, Text } = Typography;
 
-type SettingsCategory = 'general' | 'business' | 'appointments' | 'rooms' | 'updates';
+type SettingsCategory = 'general' | 'business' | 'appointments' | 'rooms' | 'species' | 'updates';
 
 interface MenuItem {
   key: SettingsCategory;
@@ -74,6 +76,12 @@ const SettingsLayout: React.FC = () => {
       icon: <BankOutlined />,
       label: t('settings:sections.rooms'),
       component: RoomsSettings,
+    },
+    {
+      key: 'species',
+      icon: <AppstoreOutlined />,
+      label: 'Species',
+      component: SpeciesSettings,
     },
     {
       key: 'updates',
@@ -193,8 +201,8 @@ const SettingsLayout: React.FC = () => {
 
             {/* Content Area */}
             <Content className={styles.settingsContent}>
-              {/* Rooms and Updates tabs don't need the parent form - they manage their own state */}
-              {selectedCategory === 'rooms' || selectedCategory === 'updates' ? (
+              {/* Rooms, Species and Updates tabs don't need the parent form - they manage their own state */}
+              {selectedCategory === 'rooms' || selectedCategory === 'species' || selectedCategory === 'updates' ? (
                 <CurrentComponent isUpdating={isUpdating} />
               ) : (
                 <Form

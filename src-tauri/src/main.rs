@@ -146,6 +146,12 @@ fn main() {
             commands::trigger_manual_sync,
             commands::get_sync_history,
             commands::check_sync_status,
+            // Species commands
+            commands::get_species,
+            commands::get_species_by_id,
+            commands::create_species,
+            commands::update_species,
+            commands::delete_species,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

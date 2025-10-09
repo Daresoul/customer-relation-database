@@ -16,7 +16,7 @@ import {
   Col,
   Card,
   Switch,
-  message,
+  App,
 } from 'antd';
 import {
   SaveOutlined,
@@ -28,6 +28,7 @@ import type { Dayjs } from 'dayjs';
 import { getDatePickerFormat } from '../../utils/dateFormatter';
 import { Patient, CreatePatientInput, UpdatePatientInput } from '../../types';
 import type { BaseFormProps } from '../../types/ui.types';
+import { useSpecies } from '../../hooks/useSpecies';
 import styles from './Forms.module.css';
 
 interface PatientFormProps extends Omit<BaseFormProps, 'onSubmit'> {
@@ -40,7 +41,6 @@ interface PatientFormProps extends Omit<BaseFormProps, 'onSubmit'> {
 const { TextArea } = Input;
 
 export const PatientForm: React.FC<PatientFormProps> = ({
-  const { notification, modal } = App.useApp();
   patient,
   onSubmit,
   onCancel,
@@ -48,8 +48,12 @@ export const PatientForm: React.FC<PatientFormProps> = ({
   mode = 'create',
   householdId,
 }) => {
+  const { notification } = App.useApp();
   const { t } = useTranslation(['entities', 'forms']);
   const [form] = Form.useForm();
+
+  // Fetch species from database
+  const { data: speciesData = [], isLoading: isLoadingSpecies } = useSpecies(true);
 
   useEffect(() => {
     if (patient) {
@@ -139,16 +143,14 @@ export const PatientForm: React.FC<PatientFormProps> = ({
               label="Species"
               rules={[{ required: true, message: 'Please select species' }]}
             >
-              <Select placeholder="Select species">
-                <Select.Option value="Dog">{t('entities:species.dog')}</Select.Option>
-                <Select.Option value="Cat">{t('entities:species.cat')}</Select.Option>
-                <Select.Option value="Bird">{t('entities:species.bird')}</Select.Option>
-                <Select.Option value="Rabbit">{t('entities:species.rabbit')}</Select.Option>
-                <Select.Option value="Hamster">{t('entities:species.hamster')}</Select.Option>
-                <Select.Option value="Guinea Pig">{t('entities:species.guineaPig')}</Select.Option>
-                <Select.Option value="Reptile">{t('entities:species.reptile')}</Select.Option>
-                <Select.Option value="Other">{t('entities:species.other')}</Select.Option>
-              </Select>
+              <Select
+                placeholder="Select species"
+                loading={isLoadingSpecies}
+                options={speciesData.map(species => ({
+                  value: species.name,
+                  label: species.name,
+                }))}
+              />
             </Form.Item>
           </Col>
         </Row>
