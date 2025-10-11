@@ -151,21 +151,31 @@ pub async fn populate_database(
         "Pepper", "Cookie", "Mochi", "Biscuit", "Peanut", "Waffles", "Nugget", "Pickles"
     ];
 
-    let dog_breeds = vec![
-        "Labrador Retriever", "German Shepherd", "Golden Retriever", "French Bulldog",
-        "Bulldog", "Poodle", "Beagle", "Rottweiler", "Yorkshire Terrier", "Dachshund",
-        "Boxer", "Siberian Husky", "Great Dane", "Pug", "Boston Terrier", "Shih Tzu",
-        "Pomeranian", "Cocker Spaniel", "Border Collie", "Maltese", "Mixed Breed"
-    ];
-
-    let cat_breeds = vec![
-        "Domestic Shorthair", "Domestic Longhair", "Siamese", "Maine Coon", "Persian",
-        "Ragdoll", "British Shorthair", "Bengal", "Russian Blue", "Scottish Fold",
-        "Sphynx", "Abyssinian", "Birman", "Burmese", "Mixed Breed"
-    ];
-
-    let species = vec!["dog", "cat", "bird", "rabbit", "hamster", "guinea_pig", "ferret"];
     let genders = vec!["Male", "Female", "Unknown"];
+
+    // Query all active species from the database dynamically
+    let pool_guard = pool.lock().await;
+    let all_species: Vec<(i64, String)> = sqlx::query_as(
+        "SELECT id, name FROM species WHERE active = 1"
+    )
+    .fetch_all(&*pool_guard)
+    .await
+    .map_err(|e| format!("Failed to fetch species: {}", e))?;
+
+    if all_species.is_empty() {
+        return Err("No species found in database. Please add species first.".to_string());
+    }
+
+    // Query all active breeds from the database
+    let all_breeds: Vec<(i64, String, i64)> = sqlx::query_as(
+        "SELECT id, name, species_id FROM breeds WHERE active = 1"
+    )
+    .fetch_all(&*pool_guard)
+    .await
+    .map_err(|e| format!("Failed to fetch breeds: {}", e))?;
+    drop(pool_guard);
+
+    println!("[SEED] Found {} species and {} breeds in database", all_species.len(), all_breeds.len());
 
     let medical_procedures = vec![
         // Common procedures
@@ -318,11 +328,21 @@ pub async fn populate_database(
         println!("[SEED]   -> Creating {} pets", pet_count);
 
         for pet_num in 0..pet_count {
-            let pet_species = species.choose(&mut rng).unwrap();
-            let breed = match *pet_species {
-                "dog" => Some(dog_breeds.choose(&mut rng).unwrap().to_string()),
-                "cat" => Some(cat_breeds.choose(&mut rng).unwrap().to_string()),
-                _ => None
+            // Choose a random species from the database
+            let (species_id, species_name) = all_species.choose(&mut rng).unwrap();
+
+            // Find breeds for this species
+            let species_breeds: Vec<&(i64, String, i64)> = all_breeds
+                .iter()
+                .filter(|(_, _, sid)| sid == species_id)
+                .collect();
+
+            // Choose a breed if available (80% chance)
+            let breed_id = if !species_breeds.is_empty() && rng.gen_bool(0.8) {
+                let (bid, _, _) = species_breeds.choose(&mut rng).unwrap();
+                Some(*bid)
+            } else {
+                None
             };
 
             // 80% chance to use human first name from faker, 20% chance for special pet name
@@ -333,14 +353,15 @@ pub async fn populate_database(
             };
             let gender = Some(genders.choose(&mut rng).unwrap().to_string());
 
-            // Realistic weight ranges
-            let weight = Some(match *pet_species {
-                "dog" => rng.gen_range(5.0..=80.0),
-                "cat" => rng.gen_range(3.0..=15.0),
-                "bird" => rng.gen_range(0.02..=2.0),
-                "rabbit" => rng.gen_range(1.0..=10.0),
-                "hamster" => rng.gen_range(0.02..=0.3),
-                "guinea_pig" => rng.gen_range(0.7..=1.5),
+            // Realistic weight ranges based on species name
+            let weight = Some(match species_name.as_str() {
+                "Dog" => rng.gen_range(5.0..=80.0),
+                "Cat" => rng.gen_range(3.0..=15.0),
+                "Bird" => rng.gen_range(0.02..=2.0),
+                "Rabbit" => rng.gen_range(1.0..=10.0),
+                "Hamster" => rng.gen_range(0.02..=0.3),
+                "Guinea Pig" => rng.gen_range(0.7..=1.5),
+                "Ferret" => rng.gen_range(0.5..=2.5),
                 _ => rng.gen_range(0.5..=5.0),
             });
 
@@ -356,8 +377,8 @@ pub async fn populate_database(
 
             let dto = CreatePatientDto {
                 name: name.clone(),
-                species: pet_species.to_string(),
-                breed,
+                species_id: *species_id,
+                breed_id,
                 gender,
                 date_of_birth: None,
                 weight,
@@ -366,7 +387,7 @@ pub async fn populate_database(
             };
 
             println!("[SEED]      Pet #{}: {} ({}, {}kg)",
-                    pet_num + 1, name, pet_species,
+                    pet_num + 1, name, species_name,
                     weight.map_or("?".to_string(), |w| format!("{:.2}", w)));
 
             let patient = match crate::database::queries::patient::create_patient(&*pool, dto).await {

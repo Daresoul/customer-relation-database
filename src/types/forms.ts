@@ -4,8 +4,8 @@
 
 export interface CreatePatientInput {
   name: string;
-  species: string;
-  breed?: string;
+  speciesId: number;
+  breedId?: number;
   dateOfBirth?: string;
   color?: string;
   gender?: 'Male' | 'Female' | 'Unknown';
@@ -17,8 +17,8 @@ export interface CreatePatientInput {
 
 export interface UpdatePatientInput {
   name?: string;
-  species?: string;
-  breed?: string;
+  speciesId?: number;
+  breedId?: number;
   dateOfBirth?: string;
   color?: string;
   gender?: 'Male' | 'Female' | 'Unknown';

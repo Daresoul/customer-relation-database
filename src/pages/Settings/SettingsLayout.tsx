@@ -80,7 +80,7 @@ const SettingsLayout: React.FC = () => {
     {
       key: 'species',
       icon: <AppstoreOutlined />,
-      label: 'Species',
+      label: 'Species & Breeds',
       component: SpeciesSettings,
     },
     {

@@ -1,13 +1,16 @@
 use sqlx::SqlitePool;
 use crate::models::{Patient, CreatePatientDto, UpdatePatientDto};
+use crate::models::dto::MaybeNull;
 
 pub async fn get_all_patients(pool: &SqlitePool) -> Result<Vec<Patient>, sqlx::Error> {
     sqlx::query_as::<_, Patient>(
         "SELECT
             p.id,
             p.name,
-            p.species,
-            p.breed,
+            p.species_id,
+            p.breed_id,
+            s.name as species,
+            b.name as breed,
             p.gender,
             p.date_of_birth,
             p.color,
@@ -19,6 +22,8 @@ pub async fn get_all_patients(pool: &SqlitePool) -> Result<Vec<Patient>, sqlx::E
             p.created_at,
             p.updated_at
          FROM patients p
+         LEFT JOIN species s ON p.species_id = s.id
+         LEFT JOIN breeds b ON p.breed_id = b.id
          LEFT JOIN patient_households ph ON p.id = ph.patient_id AND ph.is_primary = 1
          ORDER BY p.created_at DESC"
     )
@@ -31,8 +36,10 @@ pub async fn get_patient_by_id(pool: &SqlitePool, id: i64) -> Result<Option<Pati
         "SELECT
             p.id,
             p.name,
-            p.species,
-            p.breed,
+            p.species_id,
+            p.breed_id,
+            s.name as species,
+            b.name as breed,
             p.gender,
             p.date_of_birth,
             p.color,
@@ -44,6 +51,8 @@ pub async fn get_patient_by_id(pool: &SqlitePool, id: i64) -> Result<Option<Pati
             p.created_at,
             p.updated_at
          FROM patients p
+         LEFT JOIN species s ON p.species_id = s.id
+         LEFT JOIN breeds b ON p.breed_id = b.id
          LEFT JOIN patient_households ph ON p.id = ph.patient_id AND ph.is_primary = 1
          WHERE p.id = ?"
     )
@@ -58,12 +67,12 @@ pub async fn create_patient(pool: &SqlitePool, dto: CreatePatientDto) -> Result<
 
     // Insert the patient
     let result = sqlx::query(
-        "INSERT INTO patients (name, species, breed, gender, date_of_birth, weight, medical_notes, is_active)
+        "INSERT INTO patients (name, species_id, breed_id, gender, date_of_birth, weight, medical_notes, is_active)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
     )
     .bind(&dto.name)
-    .bind(&dto.species)
-    .bind(&dto.breed)
+    .bind(dto.species_id)
+    .bind(dto.breed_id)
     .bind(&dto.gender)
     .bind(&dto.date_of_birth)
     .bind(&dto.weight)
@@ -101,12 +110,14 @@ pub async fn update_patient(pool: &SqlitePool, id: i64, dto: UpdatePatientDto) -
         updates.push("name = ?");
         has_updates = true;
     }
-    if dto.species.is_some() {
-        updates.push("species = ?");
+    // For species_id and breed_id, we use MaybeNull to distinguish:
+    // Undefined = not provided, Null = set to null, Value(id) = set to id
+    if !matches!(dto.species_id, MaybeNull::Undefined) {
+        updates.push("species_id = ?");
         has_updates = true;
     }
-    if dto.breed.is_some() {
-        updates.push("breed = ?");
+    if !matches!(dto.breed_id, MaybeNull::Undefined) {
+        updates.push("breed_id = ?");
         has_updates = true;
     }
     if dto.gender.is_some() {
@@ -147,16 +158,24 @@ pub async fn update_patient(pool: &SqlitePool, id: i64, dto: UpdatePatientDto) -
         updates.join(", ")
     );
 
+    println!("Executing UPDATE query: {}", query_str);
+    println!("With dto: {:?}", dto);
+
     let mut query = sqlx::query(&query_str);
 
     if let Some(name) = dto.name {
         query = query.bind(name);
     }
-    if let Some(species) = dto.species {
-        query = query.bind(species);
+    // Convert MaybeNull to Option<i64> for binding
+    match dto.species_id {
+        MaybeNull::Undefined => {},
+        MaybeNull::Null => { query = query.bind(Option::<i64>::None); },
+        MaybeNull::Value(id) => { query = query.bind(Some(id)); },
     }
-    if let Some(breed) = dto.breed {
-        query = query.bind(breed);
+    match dto.breed_id {
+        MaybeNull::Undefined => {},
+        MaybeNull::Null => { query = query.bind(Option::<i64>::None); },
+        MaybeNull::Value(id) => { query = query.bind(Some(id)); },
     }
     if let Some(gender) = dto.gender {
         query = query.bind(gender);
@@ -184,8 +203,12 @@ pub async fn update_patient(pool: &SqlitePool, id: i64, dto: UpdatePatientDto) -
 
     let result = query.execute(pool).await?;
 
+    println!("UPDATE affected {} rows", result.rows_affected());
+
     if result.rows_affected() > 0 {
-        get_patient_by_id(pool, id).await
+        let updated_patient = get_patient_by_id(pool, id).await?;
+        println!("get_patient_by_id returned: {:?}", updated_patient);
+        Ok(updated_patient)
     } else {
         Ok(None)
     }
@@ -205,8 +228,10 @@ pub async fn get_patients_by_species(pool: &SqlitePool, species: &str) -> Result
         "SELECT
             p.id,
             p.name,
-            p.species,
-            p.breed,
+            p.species_id,
+            p.breed_id,
+            s.name as species,
+            b.name as breed,
             p.gender,
             p.date_of_birth,
             p.color,
@@ -218,8 +243,10 @@ pub async fn get_patients_by_species(pool: &SqlitePool, species: &str) -> Result
             p.created_at,
             p.updated_at
          FROM patients p
+         LEFT JOIN species s ON p.species_id = s.id
+         LEFT JOIN breeds b ON p.breed_id = b.id
          LEFT JOIN patient_households ph ON p.id = ph.patient_id AND ph.is_primary = 1
-         WHERE p.species = ?
+         WHERE s.name = ?
          ORDER BY p.name"
     )
     .bind(species)

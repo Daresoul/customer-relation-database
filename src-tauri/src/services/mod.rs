@@ -9,3 +9,4 @@ pub mod sync;
 pub mod oauth;
 pub mod sync_scheduler;
 pub mod species;
+pub mod breed;

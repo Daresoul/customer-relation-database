@@ -32,6 +32,7 @@ import { Patient, PatientWithHousehold } from '../../types';
 import type { BaseTableProps } from '../../types/ui.types';
 import dayjs from 'dayjs';
 import { formatDate } from '../../utils/dateFormatter';
+import { useSpecies } from '../../hooks/useSpecies';
 import styles from './Tables.module.css';
 
 const { Text } = Typography;
@@ -56,6 +57,18 @@ export const PatientTable: React.FC<PatientTableProps> = ({
   const [searchText, setSearchText] = useState('');
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
+  // Fetch species to get colors
+  const { data: speciesList = [] } = useSpecies(true);
+
+  // Create species color lookup map
+  const speciesColorMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    speciesList.forEach(species => {
+      map[species.name] = species.color || '#1890ff';
+    });
+    return map;
+  }, [speciesList]);
+
   // Filter data based on search
   const filteredData = useMemo(() => {
     if (!searchText) return patients;
@@ -72,21 +85,6 @@ export const PatientTable: React.FC<PatientTableProps> = ({
   // Get status color
   const getStatusColor = (isActive: boolean | undefined) => {
     return isActive !== false ? 'success' : 'default';
-  };
-
-  // Get species icon/color
-  const getSpeciesColor = (species: string) => {
-    const speciesColors: Record<string, string> = {
-      'Dog': 'blue',
-      'Cat': 'purple',
-      'Bird': 'cyan',
-      'Rabbit': 'magenta',
-      'Reptile': 'green',
-      'Fish': 'geekblue',
-      'Hamster': 'orange',
-      'Other': 'default',
-    };
-    return speciesColors[species] || 'default';
   };
 
   // Calculate age from date of birth
@@ -126,18 +124,16 @@ export const PatientTable: React.FC<PatientTableProps> = ({
       title: t('patients:tableColumns.species'),
       dataIndex: 'species',
       key: 'species',
-      width: 100,
+      width: 120,
       render: (species) => {
         if (!species) return null;
 
         // Convert species to translation key format
-        // Try different formats to find a matching translation
         let speciesKey = species.toLowerCase();
 
         // For species with spaces, also try with underscore
         if (species.includes(' ')) {
           const underscoreKey = species.toLowerCase().replace(/\s+/g, '_');
-          // Try underscore version first, then space version, then camelCase
           const camelKey = species === 'Guinea Pig' ? 'guineaPig' : speciesKey;
 
           // Try to find which key has a translation
@@ -151,10 +147,22 @@ export const PatientTable: React.FC<PatientTableProps> = ({
         // Try to get the translation, fallback to original species name if not found
         const translatedSpecies = t(`entities:species.${speciesKey}`, { defaultValue: species });
 
+        // Get color from database or use default
+        const speciesColor = speciesColorMap[species] || '#1890ff';
+
         return (
-          <Tag color={getSpeciesColor(species)}>
-            {translatedSpecies}
-          </Tag>
+          <Space>
+            <div
+              style={{
+                width: '12px',
+                height: '12px',
+                borderRadius: '50%',
+                backgroundColor: speciesColor,
+                display: 'inline-block',
+              }}
+            />
+            <Text>{translatedSpecies}</Text>
+          </Space>
         );
       },
       filters: [

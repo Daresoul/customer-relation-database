@@ -1,10 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Descriptions, Typography, Spin, App, Select, DatePicker, InputNumber } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { useQueryClient } from '@tanstack/react-query';
 import { PatientDetail, GENDER_OPTIONS, PATIENT_FIELD_RULES } from '../../types/patient';
 import { useUpdatePatient } from '../../hooks/usePatient';
 import { useInlineEdit } from '../../hooks/useAutoSave';
 import { useSpecies } from '../../hooks/useSpecies';
+import { useBreeds } from '../../hooks/useBreeds';
+import { SearchableSelect } from '../../components/SearchableSelect';
+import { CreateSpeciesModal } from '../../components/CreateSpeciesModal';
+import { CreateBreedModal } from '../../components/CreateBreedModal';
 import dayjs from 'dayjs';
 import { formatDateTime, getDatePickerFormat } from '../../utils/dateFormatter';
 import { useThemeColors } from '../../utils/themeStyles';
@@ -21,9 +26,38 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
   const { t } = useTranslation(['patients', 'entities']);
   const updatePatient = useUpdatePatient();
   const themeColors = useThemeColors();
+  const queryClient = useQueryClient();
 
   // Fetch species from database
   const { data: speciesData = [], isLoading: isLoadingSpecies } = useSpecies(true);
+
+  // Track currently selected species (for breed filtering)
+  const [selectedSpeciesName, setSelectedSpeciesName] = useState<string | undefined>(patient.species);
+
+  // Clear stale breed cache on mount to prevent showing wrong breeds
+  useEffect(() => {
+    queryClient.invalidateQueries({ queryKey: ['breeds'] });
+  }, []); // Only run once on mount
+
+  // Update selected species when patient data changes
+  useEffect(() => {
+    setSelectedSpeciesName(patient.species);
+  }, [patient.species]);
+
+  // Get species ID from selected species name
+  const selectedSpecies = speciesData.find(s => s.name === selectedSpeciesName);
+  const selectedSpeciesId = selectedSpecies?.id;
+
+  // Fetch breeds for the selected species
+  const { data: breedsData = [], isLoading: isLoadingBreeds } = useBreeds(selectedSpeciesId, true);
+
+  // Modal state for creating new species
+  const [showCreateSpeciesModal, setShowCreateSpeciesModal] = useState(false);
+  const [newSpeciesName, setNewSpeciesName] = useState('');
+
+  // Modal state for creating new breed
+  const [showCreateBreedModal, setShowCreateBreedModal] = useState(false);
+  const [newBreedName, setNewBreedName] = useState('');
 
   // Create options for species dropdown from database
   const speciesOptions = speciesData.map(species => ({
@@ -162,33 +196,93 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
         </Descriptions.Item>
 
         <Descriptions.Item label={t('detail.patientInfo.labels.species')} span={1}>
-          <Select
-            value={patient.species}
-            onChange={(value) => handleFieldUpdate('species', value)}
+          <SearchableSelect
+            value={selectedSpeciesName}
+            onChange={(value) => {
+              // Handle clear
+              if (!value) {
+                setSelectedSpeciesName(undefined);
+                handleFieldUpdate('speciesId', null);
+                // Also clear breed when species is cleared
+                if (patient.breed) {
+                  handleFieldUpdate('breedId', null);
+                }
+                return;
+              }
+
+              // Find the species ID from the name
+              const species = speciesData.find(s => s.name === value);
+              console.log('Species selected:', value, 'Found species:', species, 'All species:', speciesData);
+              if (species) {
+                // Update local state immediately to filter breeds
+                setSelectedSpeciesName(value);
+
+                // Clear breed if it doesn't belong to the new species
+                if (patient.breed) {
+                  const currentBreed = breedsData.find(b => b.name === patient.breed);
+                  if (!currentBreed || currentBreed.speciesId !== species.id) {
+                    // Breed doesn't match new species, clear it
+                    handleFieldUpdate('breedId', null);
+                  }
+                }
+
+                // Update species
+                handleFieldUpdate('speciesId', species.id);
+              } else {
+                console.error('Species not found in speciesData:', value);
+                notification.error({
+                  message: "Error",
+                  description: `Species "${value}" not found. Please refresh and try again.`,
+                  placement: "bottomRight",
+                  duration: 5
+                });
+              }
+            }}
             options={speciesOptions}
+            placeholder={t('detail.patientInfo.placeholders.species') || 'Search species...'}
             className={styles.fullWidth}
             disabled={isSaving || isLoadingSpecies}
             loading={isLoadingSpecies}
+            allowClear
+            showSearch
+            onCreateNew={(name) => {
+              setNewSpeciesName(name);
+              setShowCreateSpeciesModal(true);
+            }}
           />
         </Descriptions.Item>
 
         <Descriptions.Item label={t('detail.patientInfo.labels.breed')} span={1}>
-          <Text
-            editable={{
-              onChange: (value) => {
-                setLocalValues(prev => ({ ...prev, breed: value })); // Immediate update
-                const result = breedEdit.onChange(value);
-                if (!result.success && result.error) {
-                  notification.error({ message: "Error", description: result.error, placement: "bottomRight", duration: 5 });
-                  setLocalValues(prev => ({ ...prev, breed: patient.breed || '' })); // Revert on validation error
-                }
-              },
-              triggerType: ['text'],
+          <SearchableSelect
+            value={patient.breed}
+            onChange={(value) => {
+              // Handle clear
+              if (!value) {
+                handleFieldUpdate('breedId', null);
+                return;
+              }
+
+              // Find the breed ID from the name
+              const breed = breedsData.find(b => b.name === value);
+              if (breed) {
+                handleFieldUpdate('breedId', breed.id);
+              }
             }}
-            className={styles.textPrimary}
-          >
-            {localValues.breed || '-'}
-          </Text>
+            options={breedsData.map(breed => ({
+              value: breed.name,
+              label: breed.name,
+            }))}
+            placeholder={t('detail.patientInfo.placeholders.breed') || 'Search breed...'}
+            className={styles.fullWidth}
+            disabled={isSaving || isLoadingBreeds || !selectedSpeciesName}
+            loading={isLoadingBreeds}
+            allowClear
+            showSearch
+            onCreateNew={(name) => {
+              setNewBreedName(name);
+              setShowCreateBreedModal(true);
+            }}
+          />
         </Descriptions.Item>
 
         <Descriptions.Item label={t('detail.patientInfo.labels.gender')} span={1}>
@@ -289,6 +383,39 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
           </Text>
         </Descriptions.Item>
       </Descriptions>
+
+      <CreateSpeciesModal
+        open={showCreateSpeciesModal}
+        initialName={newSpeciesName}
+        onClose={() => {
+          setShowCreateSpeciesModal(false);
+          setNewSpeciesName('');
+        }}
+        onSuccess={(speciesName) => {
+          // Find the newly created species ID
+          const species = speciesData.find(s => s.name === speciesName);
+          if (species) {
+            handleFieldUpdate('speciesId', species.id);
+          }
+        }}
+      />
+
+      <CreateBreedModal
+        open={showCreateBreedModal}
+        initialName={newBreedName}
+        speciesId={selectedSpeciesId}
+        onClose={() => {
+          setShowCreateBreedModal(false);
+          setNewBreedName('');
+        }}
+        onSuccess={(breedName) => {
+          // Find the newly created breed ID
+          const breed = breedsData.find(b => b.name === breedName);
+          if (breed) {
+            handleFieldUpdate('breedId', breed.id);
+          }
+        }}
+      />
     </div>
   );
 };

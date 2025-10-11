@@ -7,7 +7,12 @@ use chrono::{DateTime, NaiveDate, Utc};
 pub struct Patient {
     pub id: i64,
     pub name: String,
-    pub species: String,
+    pub species_id: i64,
+    pub breed_id: Option<i64>,
+    // These fields are populated via JOINs for backward compatibility
+    #[sqlx(default)]
+    pub species: Option<String>,
+    #[sqlx(default)]
     pub breed: Option<String>,
     pub gender: Option<String>,
     pub date_of_birth: Option<NaiveDate>,
