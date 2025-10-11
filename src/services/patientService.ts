@@ -80,16 +80,16 @@ export class PatientService {
    * Create a new patient
    */
   static async createPatient(input: CreatePatientInput): Promise<Patient> {
-    // Transform camelCase frontend data to snake_case backend format
+    // Backend expects camelCase with ID fields
     const dto = {
       name: input.name,
-      species: input.species,
-      breed: input.breed || null,
+      speciesId: input.speciesId,
+      breedId: input.breedId || null,
       gender: input.gender || null,
-      date_of_birth: input.dateOfBirth || null,
+      dateOfBirth: input.dateOfBirth || null,
       weight: input.weight || null,
-      medical_notes: input.notes || null,
-      household_id: input.householdId || null
+      medicalNotes: input.notes || null,
+      householdId: input.householdId || null
     };
 
     // Create the patient
@@ -104,13 +104,15 @@ export class PatientService {
    * Update an existing patient
    */
   static async updatePatient(id: number, updates: UpdatePatientInput): Promise<Patient> {
+    console.log('🎯 PatientService.updatePatient called with:', { id, updates });
+
     // Backend has #[serde(rename_all = "camelCase")] so it expects camelCase!
     // Only include fields that are actually being updated (not undefined)
     const dto: any = {};
 
     if (updates.name !== undefined) dto.name = updates.name;
-    if (updates.species !== undefined) dto.species = updates.species;
-    if (updates.breed !== undefined) dto.breed = updates.breed || null;
+    if (updates.speciesId !== undefined) dto.speciesId = updates.speciesId;
+    if (updates.breedId !== undefined) dto.breedId = updates.breedId || null;
     if (updates.gender !== undefined) dto.gender = updates.gender || null;
     if (updates.dateOfBirth !== undefined) {
       // Backend expects dateOfBirth in camelCase, not date_of_birth!
@@ -121,6 +123,8 @@ export class PatientService {
     if (updates.color !== undefined) dto.color = updates.color || null;
     if (updates.microchipId !== undefined) dto.microchipId = updates.microchipId || null;
     if (updates.isActive !== undefined) dto.isActive = updates.isActive;
+
+    console.log('🎯 PatientService: Sending DTO to backend:', dto);
 
     const response = await ApiService.invoke<any>('update_patient', { id, dto });
 

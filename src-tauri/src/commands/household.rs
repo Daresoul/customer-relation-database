@@ -328,10 +328,12 @@ pub async fn get_household_detail(
     // Get associated patients - CAST weight to REAL to avoid type conversion issues
     let patients = sqlx::query(
         r#"
-        SELECT p.id, p.name, p.species, p.breed, p.date_of_birth,
+        SELECT p.id, p.name, s.name as species, b.name as breed, p.date_of_birth,
                CAST(p.weight AS REAL) as weight, p.gender
         FROM patients p
         JOIN patient_households ph ON p.id = ph.patient_id
+        LEFT JOIN species s ON p.species_id = s.id
+        LEFT JOIN breeds b ON p.breed_id = b.id
         WHERE ph.household_id = ?
         ORDER BY p.name
         "#
@@ -638,10 +640,12 @@ pub async fn get_household_patients(
     // Get associated patients - CAST weight to REAL to avoid type conversion issues
     let patients = sqlx::query(
         r#"
-        SELECT p.id, p.name, p.species, p.breed, p.date_of_birth,
+        SELECT p.id, p.name, s.name as species, b.name as breed, p.date_of_birth,
                CAST(p.weight AS REAL) as weight, p.gender
         FROM patients p
         JOIN patient_households ph ON p.id = ph.patient_id
+        LEFT JOIN species s ON p.species_id = s.id
+        LEFT JOIN breeds b ON p.breed_id = b.id
         WHERE ph.household_id = ?
         ORDER BY p.name
         "#

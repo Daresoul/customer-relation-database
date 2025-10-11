@@ -9,6 +9,7 @@ pub mod google_calendar;
 pub mod sync_log;
 pub mod update_models;
 pub mod species;
+pub mod breed;
 
 pub use patient::Patient;
 pub use dto::{CreatePatientDto, UpdatePatientDto};
@@ -53,4 +54,7 @@ pub use sync_log::{
 pub use update_models::UpdatePreferences;
 pub use species::{
     Species, CreateSpeciesInput, UpdateSpeciesInput
+};
+pub use breed::{
+    Breed, CreateBreedInput, UpdateBreedInput
 };

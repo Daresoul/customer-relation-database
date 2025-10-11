@@ -135,13 +135,13 @@ pub async fn create_patient_with_household(
     // Create patient
     let patient_id = sqlx::query(
         r#"
-        INSERT INTO patients (name, species, breed, date_of_birth, weight, medical_notes)
+        INSERT INTO patients (name, species_id, breed_id, date_of_birth, weight, medical_notes)
         VALUES (?, ?, ?, ?, ?, ?)
         "#
     )
     .bind(&dto.patient.name)
-    .bind(&dto.patient.species)
-    .bind(&dto.patient.breed)
+    .bind(dto.patient.species_id)
+    .bind(dto.patient.breed_id)
     .bind(&dto.patient.date_of_birth)
     .bind(&dto.patient.weight)
     .bind(&dto.patient.medical_notes)

@@ -40,6 +40,9 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, "022_add_token_expires_at", add_token_expires_at_column).await?;
     run_migration(pool, "023_create_species_table", create_species_table).await?;
     run_migration(pool, "024_add_room_color", add_room_color_column).await?;
+    run_migration(pool, "025_create_breeds_table", create_breeds_table).await?;
+    run_migration(pool, "026_add_species_color", add_species_color_column).await?;
+    run_migration(pool, "027_convert_patient_species_breed_to_fk", convert_patient_species_breed_to_fk).await?;
 
     Ok(())
 }
@@ -1207,6 +1210,259 @@ fn add_room_color_column(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future
             .await?;
 
         println!("Added color column to rooms table");
+        Ok(())
+    })
+}
+
+// T025: Create breeds table
+fn create_breeds_table(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        // Create breeds table with foreign key to species
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS breeds (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                species_id INTEGER NOT NULL,
+                active BOOLEAN NOT NULL DEFAULT 1,
+                display_order INTEGER NOT NULL DEFAULT 0,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (species_id) REFERENCES species(id),
+                UNIQUE(name, species_id)
+            )
+        "#)
+        .execute(pool)
+        .await?;
+
+        // Create index on species_id and active
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_breeds_species_id ON breeds(species_id)")
+            .execute(pool)
+            .await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_breeds_active ON breeds(active)")
+            .execute(pool)
+            .await?;
+
+        // Create trigger for updated_at
+        sqlx::query(r#"
+            CREATE TRIGGER IF NOT EXISTS update_breeds_timestamp
+            AFTER UPDATE ON breeds
+            BEGIN
+                UPDATE breeds SET updated_at = CURRENT_TIMESTAMP
+                WHERE id = NEW.id;
+            END
+        "#)
+        .execute(pool)
+        .await?;
+
+        println!("Created breeds table");
+        Ok(())
+    })
+}
+
+// T026: Add color column to species table
+fn add_species_color_column(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        // Add color column to species table
+        sqlx::query("ALTER TABLE species ADD COLUMN color TEXT NOT NULL DEFAULT '#1890ff'")
+            .execute(pool)
+            .await?;
+
+        // Update colors for existing species with distinctive colors
+        sqlx::query("UPDATE species SET color = '#1890ff' WHERE name = 'Dog'")
+            .execute(pool)
+            .await?;
+
+        sqlx::query("UPDATE species SET color = '#ff7a45' WHERE name = 'Cat'")
+            .execute(pool)
+            .await?;
+
+        sqlx::query("UPDATE species SET color = '#52c41a' WHERE name = 'Bird'")
+            .execute(pool)
+            .await?;
+
+        sqlx::query("UPDATE species SET color = '#fa8c16' WHERE name = 'Rabbit'")
+            .execute(pool)
+            .await?;
+
+        sqlx::query("UPDATE species SET color = '#fadb14' WHERE name = 'Hamster'")
+            .execute(pool)
+            .await?;
+
+        sqlx::query("UPDATE species SET color = '#13c2c2' WHERE name = 'Guinea Pig'")
+            .execute(pool)
+            .await?;
+
+        sqlx::query("UPDATE species SET color = '#722ed1' WHERE name = 'Reptile'")
+            .execute(pool)
+            .await?;
+
+        sqlx::query("UPDATE species SET color = '#2f54eb' WHERE name = 'Fish'")
+            .execute(pool)
+            .await?;
+
+        sqlx::query("UPDATE species SET color = '#8c8c8c' WHERE name = 'Other'")
+            .execute(pool)
+            .await?;
+
+        println!("Added color column to species table");
+        Ok(())
+    })
+}
+
+fn convert_patient_species_breed_to_fk(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        // Check if species_id already exists
+        let column_check: Result<(i64,), _> = sqlx::query_as(
+            "SELECT COUNT(*) FROM pragma_table_info('patients') WHERE name = 'species_id'"
+        )
+        .fetch_one(pool)
+        .await;
+
+        let species_id_exists = match column_check {
+            Ok((count,)) => count > 0,
+            Err(_) => false,
+        };
+
+        if species_id_exists {
+            println!("Migration 027: species_id already exists, skipping column creation");
+            return Ok(());
+        }
+
+        // Step 1: Add new foreign key columns
+        sqlx::query("ALTER TABLE patients ADD COLUMN species_id INTEGER")
+            .execute(pool)
+            .await?;
+
+        sqlx::query("ALTER TABLE patients ADD COLUMN breed_id INTEGER")
+            .execute(pool)
+            .await?;
+
+        // Step 2: Migrate existing species data
+        // Update species_id based on matching species names
+        sqlx::query(r#"
+            UPDATE patients
+            SET species_id = (
+                SELECT s.id
+                FROM species s
+                WHERE s.name = patients.species
+            )
+            WHERE species IS NOT NULL
+        "#)
+        .execute(pool)
+        .await?;
+
+        // Step 3: Migrate existing breed data
+        // For breeds, we need to match both breed name AND species
+        sqlx::query(r#"
+            UPDATE patients
+            SET breed_id = (
+                SELECT b.id
+                FROM breeds b
+                INNER JOIN species s ON b.species_id = s.id
+                WHERE b.name = patients.breed
+                AND s.name = patients.species
+            )
+            WHERE breed IS NOT NULL
+        "#)
+        .execute(pool)
+        .await?;
+
+        // Step 4: Create backup columns for old data (for safety)
+        sqlx::query("ALTER TABLE patients ADD COLUMN species_backup TEXT")
+            .execute(pool)
+            .await?;
+
+        sqlx::query("ALTER TABLE patients ADD COLUMN breed_backup TEXT")
+            .execute(pool)
+            .await?;
+
+        // Step 5: Backup old text values
+        sqlx::query("UPDATE patients SET species_backup = species")
+            .execute(pool)
+            .await?;
+
+        sqlx::query("UPDATE patients SET breed_backup = breed")
+            .execute(pool)
+            .await?;
+
+        // Step 6: Create new patients table with foreign keys
+        sqlx::query(r#"
+            CREATE TABLE patients_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL CHECK(length(name) <= 100),
+                species_id INTEGER NOT NULL,
+                breed_id INTEGER,
+                date_of_birth DATE,
+                color TEXT,
+                gender TEXT CHECK(gender IN ('Male', 'Female', 'Unknown')),
+                weight DECIMAL(6,2) CHECK(weight IS NULL OR weight > 0),
+                microchip_id TEXT CHECK(microchip_id IS NULL OR length(microchip_id) <= 50),
+                medical_notes TEXT CHECK(medical_notes IS NULL OR length(medical_notes) <= 10000),
+                is_active BOOLEAN NOT NULL DEFAULT 1,
+                household_id INTEGER,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (species_id) REFERENCES species(id),
+                FOREIGN KEY (breed_id) REFERENCES breeds(id),
+                FOREIGN KEY (household_id) REFERENCES households(id)
+            )
+        "#)
+        .execute(pool)
+        .await?;
+
+        // Step 7: Copy data to new table (only records with valid species_id)
+        sqlx::query(r#"
+            INSERT INTO patients_new (
+                id, name, species_id, breed_id, date_of_birth, color,
+                gender, weight, microchip_id, medical_notes, is_active,
+                household_id, created_at, updated_at
+            )
+            SELECT
+                id, name, species_id, breed_id, date_of_birth, color,
+                gender, weight, microchip_id, medical_notes, is_active,
+                household_id, created_at, updated_at
+            FROM patients
+            WHERE species_id IS NOT NULL
+        "#)
+        .execute(pool)
+        .await?;
+
+        // Step 8: Drop old table and rename new one
+        sqlx::query("DROP TABLE patients")
+            .execute(pool)
+            .await?;
+
+        sqlx::query("ALTER TABLE patients_new RENAME TO patients")
+            .execute(pool)
+            .await?;
+
+        // Step 9: Recreate indexes
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_patients_species_id ON patients(species_id)")
+            .execute(pool)
+            .await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_patients_breed_id ON patients(breed_id)")
+            .execute(pool)
+            .await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_patients_household_id ON patients(household_id)")
+            .execute(pool)
+            .await?;
+
+        // Step 10: Recreate update trigger
+        sqlx::query(r#"
+            CREATE TRIGGER IF NOT EXISTS update_patients_timestamp
+            AFTER UPDATE ON patients
+            BEGIN
+                UPDATE patients SET updated_at = CURRENT_TIMESTAMP
+                WHERE id = NEW.id;
+            END
+        "#)
+        .execute(pool)
+        .await?;
+
+        println!("Converted patient species and breed to foreign keys");
         Ok(())
     })
 }

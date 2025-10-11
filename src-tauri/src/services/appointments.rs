@@ -17,9 +17,11 @@ impl AppointmentService {
         offset: i64,
     ) -> Result<AppointmentListResponse, String> {
         let mut query = String::from(
-            "SELECT a.*, p.name as patient_name, p.species, p.breed, p.microchip_id
+            "SELECT a.*, p.name as patient_name, s.name as species, b.name as breed, p.microchip_id
              FROM appointments a
              JOIN patients p ON a.patient_id = p.id
+             LEFT JOIN species s ON p.species_id = s.id
+             LEFT JOIN breeds b ON p.breed_id = b.id
              WHERE 1=1"
         );
 
@@ -86,9 +88,11 @@ impl AppointmentService {
         id: i64,
     ) -> Result<AppointmentDetail, String> {
         let appointment = sqlx::query_as::<_, Appointment>(
-            "SELECT a.*, p.name as patient_name, p.species, p.breed, p.microchip_id
+            "SELECT a.*, p.name as patient_name, s.name as species, b.name as breed, p.microchip_id
              FROM appointments a
              JOIN patients p ON a.patient_id = p.id
+             LEFT JOIN species s ON p.species_id = s.id
+             LEFT JOIN breeds b ON p.breed_id = b.id
              WHERE a.id = ? AND a.deleted_at IS NULL"
         )
         .bind(id)
@@ -308,9 +312,11 @@ impl AppointmentService {
             "SELECT
                 a.id, a.patient_id, a.title, a.description, a.start_time, a.end_time,
                 a.room_id, a.status, a.created_at, a.updated_at, a.deleted_at, a.created_by,
-                p.name as patient_name, p.species, p.breed, p.microchip_id
+                p.name as patient_name, s.name as species, b.name as breed, p.microchip_id
              FROM appointments a
              LEFT JOIN patients p ON a.patient_id = p.id
+             LEFT JOIN species s ON p.species_id = s.id
+             LEFT JOIN breeds b ON p.breed_id = b.id
              WHERE a.deleted_at IS NULL
              AND a.status NOT IN ('cancelled', 'completed')"
         );
@@ -345,9 +351,11 @@ impl AppointmentService {
         id: i64,
     ) -> Result<Appointment, String> {
         sqlx::query_as::<_, Appointment>(
-            "SELECT a.*, p.name as patient_name, p.species, p.breed, p.microchip_id
+            "SELECT a.*, p.name as patient_name, s.name as species, b.name as breed, p.microchip_id
              FROM appointments a
              JOIN patients p ON a.patient_id = p.id
+             LEFT JOIN species s ON p.species_id = s.id
+             LEFT JOIN breeds b ON p.breed_id = b.id
              WHERE a.id = ?"
         )
         .bind(id)

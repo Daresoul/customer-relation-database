@@ -124,15 +124,15 @@ export function useUpdatePatient() {
 
       // Map fields correctly - only include fields that are being updated
       if (updates.name !== undefined) transformedUpdates.name = updates.name;
-      if (updates.species !== undefined) transformedUpdates.species = updates.species;
-      if (updates.breed !== undefined) transformedUpdates.breed = updates.breed;
+      if (updates.speciesId !== undefined) transformedUpdates.speciesId = updates.speciesId;
+      if (updates.breedId !== undefined) transformedUpdates.breedId = updates.breedId;
       if (updates.gender !== undefined) transformedUpdates.gender = updates.gender;
       if (updates.dateOfBirth !== undefined) transformedUpdates.dateOfBirth = updates.dateOfBirth;
       if (updates.weight !== undefined) transformedUpdates.weight = updates.weight;
       if (updates.color !== undefined) transformedUpdates.color = updates.color;
       if (updates.microchipId !== undefined) transformedUpdates.microchipId = updates.microchipId;
       if (updates.notes !== undefined) transformedUpdates.notes = updates.notes;
-      if (updates.householdId !== undefined) transformedUpdates.householdId = updates.householdId;
+      if (updates.isActive !== undefined) transformedUpdates.isActive = updates.isActive;
 
       return PatientService.updatePatient(patientId, transformedUpdates);
     },

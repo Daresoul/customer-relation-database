@@ -29,6 +29,10 @@ import { getDatePickerFormat } from '../../utils/dateFormatter';
 import { Patient, CreatePatientInput, UpdatePatientInput } from '../../types';
 import type { BaseFormProps } from '../../types/ui.types';
 import { useSpecies } from '../../hooks/useSpecies';
+import { useBreeds } from '../../hooks/useBreeds';
+import { SearchableSelect } from '../../components/SearchableSelect';
+import { CreateSpeciesModal } from '../../components/CreateSpeciesModal';
+import { CreateBreedModal } from '../../components/CreateBreedModal';
 import styles from './Forms.module.css';
 
 interface PatientFormProps extends Omit<BaseFormProps, 'onSubmit'> {
@@ -54,6 +58,22 @@ export const PatientForm: React.FC<PatientFormProps> = ({
 
   // Fetch species from database
   const { data: speciesData = [], isLoading: isLoadingSpecies } = useSpecies(true);
+
+  // Watch selected species to filter breeds
+  const selectedSpeciesName = Form.useWatch('species', form);
+  const selectedSpecies = speciesData.find(s => s.name === selectedSpeciesName);
+  const selectedSpeciesId = selectedSpecies?.id;
+
+  // Fetch breeds for selected species
+  const { data: breedsData = [], isLoading: isLoadingBreeds } = useBreeds(selectedSpeciesId, true);
+
+  // Modal state for creating new species
+  const [showCreateSpeciesModal, setShowCreateSpeciesModal] = useState(false);
+  const [newSpeciesName, setNewSpeciesName] = useState('');
+
+  // Modal state for creating new breed
+  const [showCreateBreedModal, setShowCreateBreedModal] = useState(false);
+  const [newBreedName, setNewBreedName] = useState('');
 
   useEffect(() => {
     if (patient) {
@@ -143,13 +163,18 @@ export const PatientForm: React.FC<PatientFormProps> = ({
               label="Species"
               rules={[{ required: true, message: 'Please select species' }]}
             >
-              <Select
-                placeholder="Select species"
+              <SearchableSelect
+                placeholder="Search species..."
                 loading={isLoadingSpecies}
                 options={speciesData.map(species => ({
                   value: species.name,
                   label: species.name,
                 }))}
+                className={styles.fullWidth}
+                onCreateNew={(name) => {
+                  setNewSpeciesName(name);
+                  setShowCreateSpeciesModal(true);
+                }}
               />
             </Form.Item>
           </Col>
@@ -162,7 +187,20 @@ export const PatientForm: React.FC<PatientFormProps> = ({
               label="Breed"
               rules={[{ max: 50, message: 'Breed cannot exceed 50 characters' }]}
             >
-              <Input placeholder="Enter breed" />
+              <SearchableSelect
+                placeholder="Search breed..."
+                loading={isLoadingBreeds}
+                options={breedsData.map(breed => ({
+                  value: breed.name,
+                  label: breed.name,
+                }))}
+                className={styles.fullWidth}
+                disabled={!selectedSpeciesName}
+                onCreateNew={(name) => {
+                  setNewBreedName(name);
+                  setShowCreateBreedModal(true);
+                }}
+              />
             </Form.Item>
           </Col>
 
@@ -295,6 +333,31 @@ export const PatientForm: React.FC<PatientFormProps> = ({
           </Space>
         </Form.Item>
       </Form>
+
+      <CreateSpeciesModal
+        open={showCreateSpeciesModal}
+        initialName={newSpeciesName}
+        onClose={() => {
+          setShowCreateSpeciesModal(false);
+          setNewSpeciesName('');
+        }}
+        onSuccess={(speciesName) => {
+          form.setFieldsValue({ species: speciesName });
+        }}
+      />
+
+      <CreateBreedModal
+        open={showCreateBreedModal}
+        initialName={newBreedName}
+        speciesId={selectedSpeciesId}
+        onClose={() => {
+          setShowCreateBreedModal(false);
+          setNewBreedName('');
+        }}
+        onSuccess={(breedName) => {
+          form.setFieldsValue({ breed: breedName });
+        }}
+      />
     </Card>
   );
 };

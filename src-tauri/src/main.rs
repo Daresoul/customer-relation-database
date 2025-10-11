@@ -152,6 +152,12 @@ fn main() {
             commands::create_species,
             commands::update_species,
             commands::delete_species,
+            // Breed commands
+            commands::get_breeds,
+            commands::get_breed,
+            commands::create_breed,
+            commands::update_breed,
+            commands::delete_breed,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

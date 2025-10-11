@@ -29,10 +29,13 @@ pub async fn create_patient(pool: State<'_, DatabasePool>, dto: CreatePatientDto
 
 #[tauri::command]
 pub async fn update_patient(pool: State<'_, DatabasePool>, id: i64, dto: UpdatePatientDto) -> Result<Option<Patient>, String> {
+    println!("update_patient called with id: {}, dto: {:?}", id, dto);
     let pool = pool.lock().await;
-    patient_queries::update_patient(&*pool, id, dto)
+    let result = patient_queries::update_patient(&*pool, id, dto)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    println!("update_patient result: {:?}", result);
+    Ok(result)
 }
 
 #[tauri::command]

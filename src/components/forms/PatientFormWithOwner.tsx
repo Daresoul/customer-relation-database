@@ -32,6 +32,10 @@ import type { Dayjs } from 'dayjs';
 import { invoke } from '@tauri-apps/api/tauri';
 import { Patient, CreatePatientInput, UpdatePatientInput } from '../../types';
 import { useSpecies } from '../../hooks/useSpecies';
+import { useBreeds } from '../../hooks/useBreeds';
+import { SearchableSelect } from '../../components/SearchableSelect';
+import { CreateSpeciesModal } from '../../components/CreateSpeciesModal';
+import { CreateBreedModal } from '../../components/CreateBreedModal';
 import styles from './Forms.module.css';
 
 const { TextArea } = Input;
@@ -81,6 +85,22 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
 
   // Fetch species from database
   const { data: speciesData = [], isLoading: isLoadingSpecies } = useSpecies(true);
+
+  // Watch selected species to filter breeds
+  const selectedSpeciesName = Form.useWatch('species', form);
+  const selectedSpecies = speciesData.find(s => s.name === selectedSpeciesName);
+  const selectedSpeciesId = selectedSpecies?.id;
+
+  // Fetch breeds for selected species
+  const { data: breedsData = [], isLoading: isLoadingBreeds } = useBreeds(selectedSpeciesId, true);
+
+  // Modal state for creating new species
+  const [showCreateSpeciesModal, setShowCreateSpeciesModal] = useState(false);
+  const [newSpeciesName, setNewSpeciesName] = useState('');
+
+  // Modal state for creating new breed
+  const [showCreateBreedModal, setShowCreateBreedModal] = useState(false);
+  const [newBreedName, setNewBreedName] = useState('');
 
   // Load initial data
   useEffect(() => {
@@ -188,13 +208,23 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
       const values = await form.validateFields();
       setSubmitting(true);
       
+      // Convert species/breed names to IDs
+      const selectedSpeciesObj = speciesData.find(s => s.name === values.species);
+      const selectedBreedObj = breedsData.find(b => b.name === values.breed);
+
       // Format the data
       const formData = {
         ...values,
+        speciesId: selectedSpeciesObj?.id,
+        breedId: selectedBreedObj?.id || null,
         dateOfBirth: values.dateOfBirth ? values.dateOfBirth.format('YYYY-MM-DD') : null,
         weight: values.weight || null,
         householdId: values.householdId || null, // Include the selected household ID
       };
+
+      // Remove the old string fields
+      delete formData.species;
+      delete formData.breed;
 
       // Create owner if needed
       if (showCreateOwner && values.newOwnerFirstName && values.newOwnerLastName) {
@@ -307,13 +337,18 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
               label="Species"
               rules={[{ required: true, message: 'Please select species' }]}
             >
-              <Select
-                placeholder="Select species"
+              <SearchableSelect
+                placeholder="Search species..."
                 loading={isLoadingSpecies}
                 options={speciesData.map(species => ({
                   value: species.name,
                   label: species.name,
                 }))}
+                className={styles.fullWidth}
+                onCreateNew={(name) => {
+                  setNewSpeciesName(name);
+                  setShowCreateSpeciesModal(true);
+                }}
               />
             </Form.Item>
           </Col>
@@ -322,7 +357,20 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
         <Row gutter={16}>
           <Col xs={24} sm={8}>
             <Form.Item name="breed" label="Breed">
-              <Input placeholder="Enter breed" />
+              <SearchableSelect
+                placeholder="Search breed..."
+                loading={isLoadingBreeds}
+                options={breedsData.map(breed => ({
+                  value: breed.name,
+                  label: breed.name,
+                }))}
+                className={styles.fullWidth}
+                disabled={!selectedSpeciesName}
+                onCreateNew={(name) => {
+                  setNewBreedName(name);
+                  setShowCreateBreedModal(true);
+                }}
+              />
             </Form.Item>
           </Col>
 
@@ -506,6 +554,31 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
           </Space>
         </Form.Item>
       </Form>
+
+      <CreateSpeciesModal
+        open={showCreateSpeciesModal}
+        initialName={newSpeciesName}
+        onClose={() => {
+          setShowCreateSpeciesModal(false);
+          setNewSpeciesName('');
+        }}
+        onSuccess={(speciesName) => {
+          form.setFieldsValue({ species: speciesName });
+        }}
+      />
+
+      <CreateBreedModal
+        open={showCreateBreedModal}
+        initialName={newBreedName}
+        speciesId={selectedSpeciesId}
+        onClose={() => {
+          setShowCreateBreedModal(false);
+          setNewBreedName('');
+        }}
+        onSuccess={(breedName) => {
+          form.setFieldsValue({ breed: breedName });
+        }}
+      />
     </Card>
   );
 };
