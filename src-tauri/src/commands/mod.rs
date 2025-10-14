@@ -13,6 +13,9 @@ pub mod update_settings;
 pub mod google_calendar;
 pub mod species;
 pub mod breed;
+pub mod device_input;
+pub mod device_integration;
+pub mod pdf_report;
 
 pub use patient::*;
 pub use database::*;
@@ -29,3 +32,6 @@ pub use update_settings::*;
 pub use google_calendar::*;
 pub use species::*;
 pub use breed::*;
+pub use device_input::*;
+pub use device_integration::*;
+pub use pdf_report::*;

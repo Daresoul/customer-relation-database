@@ -1,0 +1,15 @@
+.fullWidth {
+  width: 100%;
+}
+
+.deviceFileItem {
+  margin-bottom: 8px;
+}
+
+.patientDetectedBadge {
+  background-color: #52c41a;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+}

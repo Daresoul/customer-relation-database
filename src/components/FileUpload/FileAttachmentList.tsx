@@ -1,5 +1,5 @@
 import React from 'react';
-import { List, Button, Space, Typography, Popconfirm, Avatar } from 'antd';
+import { List, Button, Space, Typography, Popconfirm, Avatar, App } from 'antd';
 import {
   FileOutlined,
   DownloadOutlined,
@@ -10,7 +10,9 @@ import {
   FileImageOutlined,
   FileTextOutlined,
   EyeOutlined,
+  ReloadOutlined,
 } from '@ant-design/icons';
+import { invoke } from '@tauri-apps/api/tauri';
 import { useDeleteAttachment } from '@/hooks/useMedicalRecords';
 import { MedicalService } from '@/services/medicalService';
 import type { MedicalAttachment } from '@/types/medical';
@@ -32,6 +34,8 @@ const FileAttachmentList: React.FC<FileAttachmentListProps> = ({
   const deleteMutation = useDeleteAttachment();
   const [savingId, setSavingId] = React.useState<number | null>(null);
   const [openingId, setOpeningId] = React.useState<number | null>(null);
+  const [regeneratingId, setRegeneratingId] = React.useState<number | null>(null);
+  const { notification } = App.useApp();
 
   const getFileIcon = (mimeType?: string, fileName?: string) => {
     if (!mimeType && fileName) {
@@ -79,6 +83,46 @@ const FileAttachmentList: React.FC<FileAttachmentListProps> = ({
     onDelete?.();
   };
 
+  const handleRegeneratePdf = async (attachment: MedicalAttachment) => {
+    try {
+      setRegeneratingId(attachment.id);
+      console.log('🔄 Regenerating PDF from attachment:', attachment.id);
+
+      const newAttachment = await invoke<MedicalAttachment>('regenerate_pdf_from_attachment', {
+        attachmentId: attachment.id,
+      });
+
+      notification.success({
+        message: 'PDF Regenerated',
+        description: `Successfully regenerated PDF report from ${attachment.originalName}`,
+        placement: 'bottomRight',
+        duration: 5,
+      });
+
+      console.log('✅ PDF regenerated successfully:', newAttachment);
+
+      // Refresh the list
+      onDelete?.();
+    } catch (error: any) {
+      console.error('❌ Failed to regenerate PDF:', error);
+      notification.error({
+        message: 'PDF Regeneration Failed',
+        description: error?.toString() || 'An unknown error occurred',
+        placement: 'bottomRight',
+        duration: 7,
+      });
+    } finally {
+      setRegeneratingId(null);
+    }
+  };
+
+  const canRegeneratePdf = (attachment: MedicalAttachment): boolean => {
+    // Can regenerate if it's an XML file with device metadata
+    const isXml = attachment.mimeType?.includes('xml') || attachment.originalName.toLowerCase().endsWith('.xml');
+    const hasDeviceMetadata = !!attachment.deviceType && !!attachment.deviceName;
+    return isXml && hasDeviceMetadata;
+  };
+
   if (attachments.length === 0) {
     return <Text type="secondary">No attachments</Text>;
   }
@@ -97,6 +141,17 @@ const FileAttachmentList: React.FC<FileAttachmentListProps> = ({
             <Button type="link" icon={<DownloadOutlined />} onClick={() => handleSaveAs(item)} loading={savingId === item.id}>
               Save As
             </Button>,
+            ...(canRegeneratePdf(item) ? [
+              <Button
+                type="link"
+                icon={<ReloadOutlined />}
+                onClick={() => handleRegeneratePdf(item)}
+                loading={regeneratingId === item.id}
+                title="Regenerate PDF report from this device data"
+              >
+                Regenerate PDF
+              </Button>
+            ] : []),
             <Popconfirm
               title="Delete this attachment?"
               description="This action cannot be undone."

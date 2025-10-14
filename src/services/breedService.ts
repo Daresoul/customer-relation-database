@@ -3,18 +3,12 @@ import { Breed, CreateBreedInput, UpdateBreedInput } from '../types/breed';
 
 export class BreedService {
   static async getBreeds(speciesId?: number, activeOnly?: boolean): Promise<Breed[]> {
-    console.log('🔍 BreedService.getBreeds called:', { speciesId, activeOnly });
-
-    // Send filter object to match Rust BreedFilter struct
     const filter = {
       species_id: speciesId !== undefined ? speciesId : null,
       active_only: activeOnly !== undefined ? activeOnly : null
     };
 
-    console.log('🔍 Sending to backend:', JSON.stringify({ filter }));
-    const result = await invoke('get_breeds', { filter });
-    console.log('🔍 Backend returned:', result);
-    return result;
+    return await invoke('get_breeds', { filter });
   }
 
   static async getBreed(id: number): Promise<Breed> {

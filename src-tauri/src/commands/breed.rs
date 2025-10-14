@@ -8,14 +8,9 @@ pub async fn get_breeds(
     pool: State<'_, DatabasePool>,
     filter: BreedFilter,
 ) -> Result<Vec<Breed>, String> {
-    println!("🔍 Backend get_breeds received filter: species_id={:?}, active_only={:?}",
-             filter.species_id, filter.active_only);
-
     let pool = pool.lock().await;
     let active_only = filter.active_only.unwrap_or(true);
-    let result = breed::get_all(&*pool, filter.species_id, active_only).await;
-    println!("🔍 Backend returning {} breeds", result.as_ref().map(|v| v.len()).unwrap_or(0));
-    result
+    breed::get_all(&*pool, filter.species_id, active_only).await
 }
 
 #[tauri::command]

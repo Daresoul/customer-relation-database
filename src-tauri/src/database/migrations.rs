@@ -43,6 +43,8 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, "025_create_breeds_table", create_breeds_table).await?;
     run_migration(pool, "026_add_species_color", add_species_color_column).await?;
     run_migration(pool, "027_convert_patient_species_breed_to_fk", convert_patient_species_breed_to_fk).await?;
+    run_migration(pool, "028_create_device_integrations_table", create_device_integrations_table).await?;
+    run_migration(pool, "029_add_device_metadata_to_attachments", add_device_metadata_to_attachments).await?;
 
     Ok(())
 }
@@ -1463,6 +1465,92 @@ fn convert_patient_species_breed_to_fk(pool: &SqlitePool) -> std::pin::Pin<Box<d
         .await?;
 
         println!("Converted patient species and breed to foreign keys");
+        Ok(())
+    })
+}
+
+// T028: Create device_integrations table
+fn create_device_integrations_table(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        // Create device_integrations table
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS device_integrations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                device_type TEXT NOT NULL CHECK(device_type IN ('exigo_eos_vet', 'healvet_hv_fia_3000', 'mnchip_pointcare_pcr_v1')),
+                connection_type TEXT NOT NULL CHECK(connection_type IN ('file_watch', 'serial_port', 'hl7_tcp')),
+                watch_directory TEXT,
+                file_pattern TEXT,
+                serial_port_name TEXT,
+                serial_baud_rate INTEGER DEFAULT 9600,
+                tcp_host TEXT,
+                tcp_port INTEGER,
+                enabled INTEGER DEFAULT 1 CHECK(enabled IN (0, 1)),
+                last_connected_at TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                deleted_at TEXT
+            )
+        "#)
+        .execute(pool)
+        .await?;
+
+        // Create indexes
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_device_integrations_device_type ON device_integrations(device_type)")
+            .execute(pool)
+            .await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_device_integrations_connection_type ON device_integrations(connection_type)")
+            .execute(pool)
+            .await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_device_integrations_enabled ON device_integrations(enabled)")
+            .execute(pool)
+            .await?;
+
+        // Create trigger for updated_at
+        sqlx::query(r#"
+            CREATE TRIGGER IF NOT EXISTS update_device_integrations_timestamp
+            AFTER UPDATE ON device_integrations
+            BEGIN
+                UPDATE device_integrations SET updated_at = CURRENT_TIMESTAMP
+                WHERE id = NEW.id;
+            END
+        "#)
+        .execute(pool)
+        .await?;
+
+        println!("Created device_integrations table");
+        Ok(())
+    })
+}
+
+// T029: Add device metadata columns to medical_attachments for PDF regeneration
+fn add_device_metadata_to_attachments(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        // Helper to check and add a column safely
+        async fn ensure_column(pool: &SqlitePool, table: &str, column: &str, ddl: &str) -> Result<(), sqlx::Error> {
+            let exists: (i64,) = sqlx::query_as(
+                "SELECT COUNT(1) FROM pragma_table_info(?) WHERE name = ?"
+            )
+            .bind(table)
+            .bind(column)
+            .fetch_one(pool)
+            .await?;
+
+            if exists.0 == 0 {
+                let sql = format!("ALTER TABLE {} ADD COLUMN {} {}", table, column, ddl);
+                sqlx::query(&sql).execute(pool).await?;
+            }
+            Ok(())
+        }
+
+        // Add device metadata columns for PDF regeneration feature
+        ensure_column(pool, "medical_attachments", "device_type", "TEXT").await?;
+        ensure_column(pool, "medical_attachments", "device_name", "TEXT").await?;
+        ensure_column(pool, "medical_attachments", "connection_method", "TEXT").await?;
+
+        println!("Added device metadata columns to medical_attachments table");
         Ok(())
     })
 }

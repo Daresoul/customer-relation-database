@@ -10,6 +10,7 @@ import {
   BankOutlined,
   CloudDownloadOutlined,
   AppstoreOutlined,
+  UsbOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, Link } from 'react-router-dom';
@@ -24,12 +25,13 @@ import BusinessSettings from './components/BusinessSettings';
 import AppointmentsSettings from './components/AppointmentsSettings';
 import RoomsSettings from './components/RoomsSettings';
 import SpeciesSettings from './components/SpeciesSettings';
+import DeviceInputSettings from './components/DeviceInputSettings';
 import { UpdateSettings } from './UpdateSettings';
 
 const { Content, Sider } = Layout;
 const { Title, Text } = Typography;
 
-type SettingsCategory = 'general' | 'business' | 'appointments' | 'rooms' | 'species' | 'updates';
+type SettingsCategory = 'general' | 'business' | 'appointments' | 'rooms' | 'species' | 'devices' | 'updates';
 
 interface MenuItem {
   key: SettingsCategory;
@@ -82,6 +84,12 @@ const SettingsLayout: React.FC = () => {
       icon: <AppstoreOutlined />,
       label: 'Species & Breeds',
       component: SpeciesSettings,
+    },
+    {
+      key: 'devices',
+      icon: <UsbOutlined />,
+      label: 'Device Inputs',
+      component: DeviceInputSettings,
     },
     {
       key: 'updates',
@@ -201,8 +209,8 @@ const SettingsLayout: React.FC = () => {
 
             {/* Content Area */}
             <Content className={styles.settingsContent}>
-              {/* Rooms, Species and Updates tabs don't need the parent form - they manage their own state */}
-              {selectedCategory === 'rooms' || selectedCategory === 'species' || selectedCategory === 'updates' ? (
+              {/* Rooms, Species, Devices and Updates tabs don't need the parent form - they manage their own state */}
+              {selectedCategory === 'rooms' || selectedCategory === 'species' || selectedCategory === 'devices' || selectedCategory === 'updates' ? (
                 <CurrentComponent isUpdating={isUpdating} />
               ) : (
                 <Form

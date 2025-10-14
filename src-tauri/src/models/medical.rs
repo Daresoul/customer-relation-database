@@ -35,6 +35,10 @@ pub struct MedicalAttachment {
     pub file_size: Option<i64>,
     pub mime_type: Option<String>,
     pub uploaded_at: DateTime<Utc>,
+    // T029: Device metadata for PDF regeneration
+    pub device_type: Option<String>,
+    pub device_name: Option<String>,
+    pub connection_method: Option<String>,
 }
 
 // T025: MedicalRecordHistory model

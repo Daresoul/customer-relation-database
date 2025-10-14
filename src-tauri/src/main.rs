@@ -45,6 +45,27 @@ fn main() {
                 services::sync_scheduler::SyncScheduler::start(pool_for_scheduler);
             });
 
+            // Initialize file watcher for device integrations
+            let pool_for_file_watcher = pool.clone();
+            let app_handle_for_watcher = app.handle();
+            tauri::async_runtime::spawn(async move {
+                let mut file_watcher = {
+                    let pool_guard = pool_for_file_watcher.lock().await;
+                    let mut watcher = services::file_watcher::FileWatcherService::new(pool_guard.clone());
+                    watcher.set_app_handle(app_handle_for_watcher);
+                    if let Err(e) = watcher.initialize().await {
+                        eprintln!("Failed to initialize file watcher: {}", e);
+                    }
+                    watcher
+                    // pool_guard is dropped here, releasing the lock
+                };
+
+                // Keep file watcher alive for the duration of the app
+                loop {
+                    tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+                }
+            });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -97,6 +118,7 @@ fn main() {
             commands::render_medical_attachment_pdf_page_png,
             commands::get_medical_attachment_pdf_page_count,
             commands::revert_medical_record,
+            commands::regenerate_pdf_from_attachment,
             // Settings commands
             commands::get_app_settings,
             commands::update_app_settings,
@@ -158,6 +180,19 @@ fn main() {
             commands::create_breed,
             commands::update_breed,
             commands::delete_breed,
+            // Device input commands
+            commands::get_available_ports,
+            commands::resolve_patient_from_identifier,
+            // Device integration commands
+            commands::get_device_integrations,
+            commands::get_device_integration,
+            commands::create_device_integration,
+            commands::update_device_integration,
+            commands::delete_device_integration,
+            commands::toggle_device_integration_enabled,
+            // PDF Report commands
+            commands::generate_device_report_pdf,
+            commands::generate_device_report_pdf_custom,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

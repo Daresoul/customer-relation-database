@@ -82,7 +82,7 @@ impl MedicalRecordService {
             // Fetch attachments for this record
             let attachments = sqlx::query_as::<_, MedicalAttachment>(
                 "SELECT id, medical_record_id, file_id, original_name, mime_type, \
-                 file_size, uploaded_at \
+                 file_size, uploaded_at, device_type, device_name, connection_method \
                  FROM medical_attachments WHERE medical_record_id = ?"
             )
             .bind(record_id)
@@ -201,7 +201,7 @@ impl MedicalRecordService {
         // Get attachments (tolerant to different datetime formats)
         let attachment_rows = sqlx::query(
             "SELECT id, medical_record_id, file_id, original_name, mime_type, \
-             file_size, uploaded_at \
+             file_size, uploaded_at, device_type, device_name, connection_method \
              FROM medical_attachments WHERE medical_record_id = ?"
         )
         .bind(record_id)
@@ -239,6 +239,9 @@ impl MedicalRecordService {
                     file_size: row.try_get("file_size").ok(),
                     mime_type: row.try_get("mime_type").ok(),
                     uploaded_at,
+                    device_type: row.try_get("device_type").ok(),
+                    device_name: row.try_get("device_name").ok(),
+                    connection_method: row.try_get("connection_method").ok(),
                 }
             })
             .collect();

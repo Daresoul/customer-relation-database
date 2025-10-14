@@ -27,6 +27,9 @@ export interface MedicalAttachment {
   fileSize?: number;
   mimeType?: string;
   uploadedAt: string;
+  deviceType?: string;
+  deviceName?: string;
+  connectionMethod?: string;
 }
 
 export interface MedicalRecordHistory {

@@ -10,6 +10,7 @@ pub mod sync_log;
 pub mod update_models;
 pub mod species;
 pub mod breed;
+pub mod device_integration;
 
 pub use patient::Patient;
 pub use dto::{CreatePatientDto, UpdatePatientDto};
@@ -57,4 +58,8 @@ pub use species::{
 };
 pub use breed::{
     Breed, CreateBreedInput, UpdateBreedInput
+};
+pub use device_integration::{
+    DeviceIntegration, DeviceIntegrationRow, DeviceType, ConnectionType,
+    CreateDeviceIntegrationInput, UpdateDeviceIntegrationInput
 };

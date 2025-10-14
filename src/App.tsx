@@ -20,7 +20,10 @@ import Settings from './pages/Settings';
 import Appointments from './pages/Appointments/Appointments';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ViewProvider } from './contexts';
+import { DeviceImportProvider } from './contexts/DeviceImportContext';
 import { AppWrapper } from './components/AppWrapper';
+import DeviceImportModal from './components/DeviceImportModal/DeviceImportModal';
+import { useDeviceDataListener } from './hooks/useDeviceDataListener';
 
 // Import global styles
 import './styles/globals.css';
@@ -35,6 +38,12 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+// Component to listen for device data events
+function DeviceDataHandler() {
+  useDeviceDataListener();
+  return null;
+}
 
 // Inner component to use hooks for locale
 function AppContent() {
@@ -52,20 +61,24 @@ function AppContent() {
     <ConfigProvider locale={locale}>
       <ThemeProvider>
         <ViewProvider>
-          <AntApp notification={{ maxCount: 1 }}>
-            <Router>
-              <AppWrapper>
-                <Routes>
-                  <Route path="/" element={<MainDashboard />} />
-                  <Route path="/households/:id" element={<HouseholdDetail />} />
-                  <Route path="/patients/:id" element={<PatientDetail />} />
-                  <Route path="/medical-records/:id" element={<MedicalRecordDetailPage />} />
-                  <Route path="/appointments" element={<Appointments />} />
-                  <Route path="/settings" element={<Settings />} />
-                </Routes>
-              </AppWrapper>
-            </Router>
-          </AntApp>
+          <DeviceImportProvider>
+            <AntApp notification={{ maxCount: 1 }}>
+              <DeviceDataHandler />
+              <DeviceImportModal />
+              <Router>
+                <AppWrapper>
+                  <Routes>
+                    <Route path="/" element={<MainDashboard />} />
+                    <Route path="/households/:id" element={<HouseholdDetail />} />
+                    <Route path="/patients/:id" element={<PatientDetail />} />
+                    <Route path="/medical-records/:id" element={<MedicalRecordDetailPage />} />
+                    <Route path="/appointments" element={<Appointments />} />
+                    <Route path="/settings" element={<Settings />} />
+                  </Routes>
+                </AppWrapper>
+              </Router>
+            </AntApp>
+          </DeviceImportProvider>
         </ViewProvider>
       </ThemeProvider>
     </ConfigProvider>

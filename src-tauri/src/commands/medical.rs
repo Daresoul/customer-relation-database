@@ -4,6 +4,10 @@ use crate::models::medical::*;
 use crate::services::medical_record::MedicalRecordService;
 use crate::services::file_storage::FileStorageService;
 use crate::services::pdf_render::PdfRenderService;
+use crate::services::device_parser::DeviceParserService;
+use crate::services::device_pdf_service::{DevicePdfService, PatientData, DeviceTestData};
+use std::collections::HashMap;
+use sqlx::Row;
 
 // T031: Implement get_medical_records command
 #[tauri::command]
@@ -108,6 +112,12 @@ pub async fn upload_medical_attachment(
     fileData: Vec<u8>,
     #[allow(non_snake_case)]
     mimeType: String,
+    #[allow(non_snake_case)]
+    deviceType: Option<String>,
+    #[allow(non_snake_case)]
+    deviceName: Option<String>,
+    #[allow(non_snake_case)]
+    connectionMethod: Option<String>,
 ) -> Result<MedicalAttachment, String> {
     let pool_guard = pool.lock().await;
 
@@ -128,6 +138,9 @@ pub async fn upload_medical_attachment(
         fileName,
         fileData,
         mimeType,
+        deviceType,
+        deviceName,
+        connectionMethod,
     ).await
 }
 
@@ -407,4 +420,152 @@ pub async fn get_medical_record_at_version(
         Err(e) => eprintln!("Error: get_medical_record_at_version failed: {}", e),
     }
     res
+}
+
+// T029: Regenerate PDF from device data attachment
+#[tauri::command]
+pub async fn regenerate_pdf_from_attachment(
+    app_handle: AppHandle,
+    pool: State<'_, DatabasePool>,
+    attachment_id: i64,
+) -> Result<MedicalAttachment, String> {
+    println!("Debug: regenerate_pdf_from_attachment attachment_id={}", attachment_id);
+    let pool_guard = pool.lock().await;
+
+    // 1. Fetch the attachment with device metadata
+    let attachment_row = sqlx::query(
+        "SELECT id, medical_record_id, file_id, original_name, mime_type, \
+         file_size, uploaded_at, device_type, device_name, connection_method \
+         FROM medical_attachments WHERE id = ?"
+    )
+    .bind(attachment_id)
+    .fetch_optional(&*pool_guard)
+    .await
+    .map_err(|e| format!("Failed to fetch attachment: {}", e))?
+    .ok_or("Attachment not found".to_string())?;
+
+    let medical_record_id: i64 = attachment_row.try_get("medical_record_id")
+        .map_err(|e| format!("Failed to get medical_record_id: {}", e))?;
+    let device_type: Option<String> = attachment_row.try_get("device_type").ok();
+    let device_name: Option<String> = attachment_row.try_get("device_name").ok();
+    let connection_method: Option<String> = attachment_row.try_get("connection_method").ok();
+    let original_name: String = attachment_row.try_get("original_name")
+        .map_err(|e| format!("Failed to get original_name: {}", e))?;
+
+    // 2. Validate that this attachment has device metadata
+    let device_type = device_type.ok_or("This attachment does not have device metadata. Cannot regenerate PDF.".to_string())?;
+    let device_name = device_name.ok_or("This attachment is missing device name metadata.".to_string())?;
+    let connection_method = connection_method.unwrap_or_else(|| "unknown".to_string()); // Default for old attachments without this field
+
+    println!("Debug: Regenerating PDF for device_type={}, device_name={}, connection_method={}", device_type, device_name, connection_method);
+
+    // 3. Download the XML file data
+    let xml_data = FileStorageService::download_attachment(&app_handle, &*pool_guard, attachment_id).await?;
+
+    // 4. Parse the device data
+    let device_data = DeviceParserService::parse_device_data(
+        &device_type,
+        &device_name,
+        &xml_data.file_name,
+        &xml_data.file_data,
+        &connection_method,
+    )?;
+
+    println!("Debug: Parsed device data, patient_identifier={:?}", device_data.patient_identifier);
+
+    // 5. Get patient info from the medical record
+    let record_row = sqlx::query(
+        "SELECT patient_id FROM medical_records WHERE id = ?"
+    )
+    .bind(medical_record_id)
+    .fetch_optional(&*pool_guard)
+    .await
+    .map_err(|e| format!("Failed to fetch medical record: {}", e))?
+    .ok_or("Medical record not found".to_string())?;
+
+    let patient_id: i64 = record_row.try_get("patient_id")
+        .map_err(|e| format!("Failed to get patient_id: {}", e))?;
+
+    // Fetch patient details (simplified query to avoid schema issues)
+    let patient_row = sqlx::query(
+        "SELECT id, name, species, breed, microchip_id, gender, date_of_birth \
+         FROM patients \
+         WHERE id = ?"
+    )
+    .bind(patient_id)
+    .fetch_optional(&*pool_guard)
+    .await
+    .map_err(|e| format!("Failed to fetch patient: {}", e))?
+    .ok_or("Patient not found".to_string())?;
+
+    // Try to fetch owner information separately (optional, won't fail if tables don't exist)
+    let owner_name = sqlx::query_scalar::<_, String>(
+        "SELECT o.name FROM patient_owners po \
+         JOIN owners o ON po.owner_id = o.id \
+         WHERE po.patient_id = ? AND po.is_primary = 1 \
+         LIMIT 1"
+    )
+    .bind(patient_id)
+    .fetch_optional(&*pool_guard)
+    .await
+    .unwrap_or(None)
+    .unwrap_or_else(|| "Unknown Owner".to_string());
+
+    let patient_data = PatientData {
+        name: patient_row.try_get("name").unwrap_or_else(|_| "Unknown Patient".to_string()),
+        owner: owner_name,
+        species: patient_row.try_get("species").unwrap_or_else(|_| "Unknown Species".to_string()),
+        microchip_id: patient_row.try_get("microchip_id").ok(),
+        gender: patient_row.try_get("gender").unwrap_or_else(|_| "Unknown".to_string()),
+        date_of_birth: patient_row.try_get("date_of_birth").ok(),
+    };
+
+    println!("Debug: Patient info: name={}, microchip={:?}", patient_data.name, patient_data.microchip_id);
+
+    // 6. Generate PDF using centralized service (same function as file watcher)
+    let pdf_filename = format!("{}_regenerated.pdf", original_name.trim_end_matches(".xml"));
+    let pdf_path = std::env::temp_dir().join(&pdf_filename);
+
+    let test_data = DeviceTestData {
+        device_type: device_data.device_type.clone(),
+        device_name: device_data.device_name.clone(),
+        test_results: device_data.test_results.clone(),
+        detected_at: device_data.detected_at,
+        patient_identifier: device_data.patient_identifier.clone(),
+    };
+
+    // Generate PDF using centralized service (single source of truth)
+    DevicePdfService::generate_pdf(
+        pdf_path.to_str().ok_or("Invalid PDF path")?,
+        patient_data,
+        test_data,
+    )?;
+
+    println!("Debug: PDF generated at {:?}", pdf_path);
+
+    // 8. Read the generated PDF
+    let pdf_bytes = std::fs::read(&pdf_path)
+        .map_err(|e| format!("Failed to read generated PDF: {}", e))?;
+
+    println!("Debug: Read {} bytes from PDF", pdf_bytes.len());
+
+    // 9. Upload the PDF as a new attachment to the same medical record
+    let pdf_attachment = FileStorageService::upload_attachment(
+        &app_handle,
+        &*pool_guard,
+        medical_record_id,
+        pdf_filename.clone(),
+        pdf_bytes,
+        "application/pdf".to_string(),
+        Some(format!("{}_report", device_type)),
+        Some(format!("{} Report", device_name)),
+        Some("regenerated".to_string()),
+    ).await?;
+
+    println!("Debug: PDF attachment uploaded with id={}", pdf_attachment.id);
+
+    // Clean up temp file
+    let _ = std::fs::remove_file(&pdf_path);
+
+    Ok(pdf_attachment)
 }

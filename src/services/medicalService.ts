@@ -77,7 +77,10 @@ export class MedicalService {
 
   static async uploadAttachment(
     medicalRecordId: number,
-    file: File
+    file: File,
+    deviceType?: string,
+    deviceName?: string,
+    connectionMethod?: string
   ): Promise<MedicalAttachment> {
     const arrayBuffer = await file.arrayBuffer();
     const fileData = new Uint8Array(arrayBuffer);
@@ -86,7 +89,10 @@ export class MedicalService {
       medicalRecordId: medicalRecordId,
       fileName: file.name,
       fileData: Array.from(fileData),
-      mimeType: file.type
+      mimeType: file.type,
+      deviceType: deviceType,
+      deviceName: deviceName,
+      connectionMethod: connectionMethod
     });
   }
 
@@ -239,25 +245,8 @@ export class MedicalService {
       return `File size exceeds ${maxSizeInMB}MB limit`;
     }
 
-    // List of allowed MIME types
-    const allowedTypes = [
-      'application/pdf',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/vnd.ms-excel',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'text/plain',
-      'text/csv',
-      'image/jpeg',
-      'image/png',
-      'image/gif',
-      'image/bmp',
-      'image/svg+xml'
-    ];
-
-    if (!allowedTypes.includes(file.type)) {
-      return 'File type not supported';
-    }
+    // Allow all file types - doctors can upload any medical records, device data, etc.
+    // Only restriction is file size for practical storage reasons
 
     return null; // No validation errors
   }
@@ -287,7 +276,11 @@ export class MedicalService {
     if (mimeType === 'application/pdf') return '📑';
     if (mimeType.includes('word')) return '📝';
     if (mimeType.includes('excel') || mimeType.includes('spreadsheet')) return '📊';
+    if (mimeType.includes('xml')) return '📋';
+    if (mimeType === 'application/json') return '{ }';
     if (mimeType.startsWith('text/')) return '📃';
+    if (mimeType.startsWith('video/')) return '🎥';
+    if (mimeType.startsWith('audio/')) return '🎵';
 
     return '📄';
   }
