@@ -38,6 +38,9 @@ impl FileStorageService {
         file_name: String,
         file_data: Vec<u8>,
         mime_type: String,
+        device_type: Option<String>,
+        device_name: Option<String>,
+        connection_method: Option<String>,
     ) -> Result<MedicalAttachment, String> {
         // Generate unique file ID
         let file_id = Uuid::new_v4().to_string();
@@ -53,11 +56,12 @@ impl FileStorageService {
         let file_size = file_data.len() as i64;
         let now = Utc::now();
 
-        // Insert attachment record into database
+        // Insert attachment record into database with device metadata
         let result = sqlx::query(
             "INSERT INTO medical_attachments \
-             (medical_record_id, file_id, original_name, file_size, mime_type, uploaded_at) \
-             VALUES (?, ?, ?, ?, ?, ?)"
+             (medical_record_id, file_id, original_name, file_size, mime_type, uploaded_at, \
+              device_type, device_name, connection_method) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
         )
         .bind(medical_record_id)
         .bind(&file_id)
@@ -65,6 +69,9 @@ impl FileStorageService {
         .bind(file_size)
         .bind(&mime_type)
         .bind(now)
+        .bind(&device_type)
+        .bind(&device_name)
+        .bind(&connection_method)
         .execute(pool)
         .await
         .map_err(|e| format!("Failed to save attachment record: {}", e))?;
@@ -79,6 +86,9 @@ impl FileStorageService {
             mime_type: Some(mime_type),
             file_size: Some(file_size),
             uploaded_at: now,
+            device_type,
+            device_name,
+            connection_method,
         })
     }
 
@@ -175,21 +185,9 @@ impl FileStorageService {
             return Err(format!("File size exceeds {}MB limit", max_size_mb));
         }
 
-        // Check file extension
-        let extension = Path::new(file_name)
-            .extension()
-            .and_then(|ext| ext.to_str())
-            .unwrap_or("")
-            .to_lowercase();
-
-        let allowed_extensions = vec![
-            "pdf", "doc", "docx", "xls", "xlsx", "txt", "csv",
-            "jpg", "jpeg", "png", "gif", "bmp", "svg"
-        ];
-
-        if !allowed_extensions.contains(&extension.as_str()) {
-            return Err(format!("File type '{}' is not supported", extension));
-        }
+        // Allow all file types - doctors need to upload various medical records,
+        // device data (XML, JSON, CSV), images, PDFs, videos, etc.
+        // Only restriction is file size for practical storage reasons.
 
         Ok(())
     }

@@ -137,5 +137,20 @@
     "versionHistory": "Version History",
     "noHistory": "No history yet",
     "noAttachments": "No attachments"
+  },
+  "deviceImport": {
+    "title": "Import Device Data to Medical Record",
+    "filesCount": "files pending",
+    "pendingFiles": "Pending Device Files",
+    "medicalRecordDetails": "Medical Record Details",
+    "selectPatient": "Select Patient",
+    "selectPatientPlaceholder": "Choose the patient for this medical record",
+    "patientDetected": "Patient Detected",
+    "identifier": "ID",
+    "confirmCancel": "Are you sure you want to cancel? All pending device files will be discarded.",
+    "successMessage_one": "Medical record created successfully with {{count}} device file attached",
+    "successMessage_other": "Medical record created successfully with {{count}} device files attached",
+    "partialSuccess": "Medical record created but some files failed to upload",
+    "saveFailed": "Failed to create medical record. Please try again."
   }
 }

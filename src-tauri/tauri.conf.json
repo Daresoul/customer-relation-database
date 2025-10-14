@@ -26,7 +26,8 @@
       },
       "dialog": {
         "all": false,
-        "save": true
+        "save": true,
+        "open": true
       },
       "process": {
         "all": false,

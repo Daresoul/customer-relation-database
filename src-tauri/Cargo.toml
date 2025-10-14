@@ -9,7 +9,7 @@ edition = "2021"
 tauri-build = { version = "1.5", features = [] }
 
 [dependencies]
-tauri = { version = "1.5", features = [ "window-print", "process-relaunch", "updater", "dialog-save", "fs-read-file", "shell-open"] }
+tauri = { version = "1.5", features = [ "dialog-open", "window-print", "process-relaunch", "updater", "dialog-save", "fs-read-file", "shell-open"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sqlx = { version = "0.7", features = ["runtime-tokio-native-tls", "sqlite", "chrono"] }
@@ -28,6 +28,14 @@ base64 = "0.21"
 warp = "0.3"
 lazy_static = "1.4"
 dotenv = "0.15"
+serialport = "4.3"
+hidapi = { version = "2.6", default-features = false, features = ["linux-static-hidraw"] }
+notify = "6.1"
+glob = "0.3"
+quick-xml = "0.31"
+printpdf = "0.7"
+genpdf = "0.2"
+dirs = "5.0"
 
 [features]
 default = ["custom-protocol"]

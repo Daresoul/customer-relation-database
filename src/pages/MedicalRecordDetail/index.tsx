@@ -5,9 +5,10 @@ import { invoke, convertFileSrc } from '@tauri-apps/api/tauri';
 import { useTranslation } from 'react-i18next';
 import PdfInlineViewer from '@/components/PdfInlineViewer';
 import PdfMultiPagePreview from '@/components/PdfMultiPagePreview';
-import { HomeOutlined, ArrowLeftOutlined, EditOutlined, SaveOutlined, CloseOutlined } from '@ant-design/icons';
+import { HomeOutlined, ArrowLeftOutlined, EditOutlined, SaveOutlined, CloseOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useMedicalRecord, useUpdateMedicalRecord, useCurrencies } from '@/hooks/useMedicalRecords';
 import { MedicalService } from '@/services/medicalService';
+import type { MedicalAttachment } from '@/types/medical';
 import MedicalRecordForm from '@/components/MedicalRecordModal/MedicalRecordForm';
 // Inline PDF viewer handled by PdfInlineViewer with reliable fallbacks
 import type { MedicalRecord, MedicalRecordHistory, UpdateMedicalRecordInput } from '@/types/medical';
@@ -33,6 +34,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
   const [selectedHistory, setSelectedHistory] = useState<MedicalRecordHistory | null>(null);
   const [showDiffs, setShowDiffs] = useState(false);
   const [displayRecord, setDisplayRecord] = useState<MedicalRecord | null>(null);
+  const [regeneratingId, setRegeneratingId] = useState<number | null>(null);
 
   const record = data?.record;
   const history = (data?.history || []) as MedicalRecordHistory[];
@@ -189,6 +191,44 @@ export const MedicalRecordDetailPage: React.FC = () => {
       if (["txt","csv","md","log"].includes(ext)) return true;
     }
     return false;
+  };
+
+  const canRegeneratePdf = (attachment: MedicalAttachment): boolean => {
+    // Can regenerate if it's an XML file with device metadata
+    const isXml = attachment.mimeType?.includes('xml') || attachment.originalName?.toLowerCase().endsWith('.xml');
+    const hasDeviceMetadata = !!attachment.deviceType && !!attachment.deviceName;
+    return isXml && hasDeviceMetadata;
+  };
+
+  const handleRegeneratePdf = async (attachment: MedicalAttachment) => {
+    try {
+      setRegeneratingId(attachment.id);
+      console.log('🔄 Regenerating PDF from attachment:', attachment.id);
+
+      await invoke<MedicalAttachment>('regenerate_pdf_from_attachment', {
+        attachmentId: attachment.id,
+      });
+
+      notification.success({
+        message: 'PDF Regenerated',
+        description: `Successfully regenerated PDF report from ${attachment.originalName}`,
+        placement: 'bottomRight',
+        duration: 5,
+      });
+
+      // Refresh the medical record to show the new attachment
+      await refetch();
+    } catch (error: any) {
+      console.error('❌ Failed to regenerate PDF:', error);
+      notification.error({
+        message: 'PDF Regeneration Failed',
+        description: error?.toString() || 'An unknown error occurred',
+        placement: 'bottomRight',
+        duration: 7,
+      });
+    } finally {
+      setRegeneratingId(null);
+    }
   };
 
   const onExpand = async (expanded: boolean, row: any) => {
@@ -567,7 +607,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
             {
               title: t('common:actions.actions') || t('common:actionsLabel'),
               key: 'actions',
-              width: 150,
+              width: 250,
               render: (_: any, row: any) => (
                 <Space>
                   <Button
@@ -588,6 +628,20 @@ export const MedicalRecordDetailPage: React.FC = () => {
                   >
                     {t('common:download')}
                   </Button>
+                  {canRegeneratePdf(row) && (
+                    <Button
+                      size="small"
+                      icon={<ReloadOutlined />}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRegeneratePdf(row);
+                      }}
+                      loading={regeneratingId === row.id}
+                      title="Regenerate PDF report from this device data"
+                    >
+                      Regenerate PDF
+                    </Button>
+                  )}
                 </Space>
               )
             }

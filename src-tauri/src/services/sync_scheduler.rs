@@ -18,6 +18,8 @@ impl SyncScheduler {
             println!("Running initial sync on startup...");
             if let Err(e) = Self::sync_from_google(pool.clone()).await {
                 eprintln!("Initial sync error: {}", e);
+            } else {
+                println!("Initial sync completed successfully");
             }
 
             let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(60)); // 1 minute
@@ -34,19 +36,29 @@ impl SyncScheduler {
 
     /// Sync from Google Calendar - check for cancelled events
     async fn sync_from_google(pool: Arc<Mutex<SqlitePool>>) -> Result<(), String> {
+        println!("[DEBUG] sync_from_google: Acquiring pool lock...");
         let pool_guard = pool.lock().await;
+        println!("[DEBUG] sync_from_google: Pool lock acquired");
 
         // Check if sync is enabled
+        println!("[DEBUG] sync_from_google: Checking if sync is enabled...");
         let settings: Option<GoogleCalendarSettings> = sqlx::query_as(
             "SELECT * FROM google_calendar_settings WHERE user_id = 'default' AND sync_enabled = 1"
         )
         .fetch_optional(&*pool_guard)
         .await
         .map_err(|e| format!("Failed to check sync settings: {}", e))?;
+        println!("[DEBUG] sync_from_google: Query completed");
 
         let settings = match settings {
-            Some(s) => s,
-            None => return Ok(()), // Sync not enabled
+            Some(s) => {
+                println!("[DEBUG] sync_from_google: Sync is enabled");
+                s
+            },
+            None => {
+                println!("[DEBUG] sync_from_google: Sync not enabled, returning early");
+                return Ok(())
+            }, // Sync not enabled
         };
 
         let calendar_id = match settings.calendar_id {

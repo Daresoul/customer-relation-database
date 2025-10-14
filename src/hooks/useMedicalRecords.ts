@@ -169,17 +169,23 @@ export function useUploadAttachment() {
   return useMutation({
     mutationFn: ({
       medicalRecordId,
-      file
+      file,
+      deviceType,
+      deviceName,
+      connectionMethod
     }: {
       medicalRecordId: number;
       file: File;
+      deviceType?: string;
+      deviceName?: string;
+      connectionMethod?: string;
     }) => {
       // Validate file before uploading
       const validationError = MedicalService.validateFile(file);
       if (validationError) {
         return Promise.reject(new Error(validationError));
       }
-      return MedicalService.uploadAttachment(medicalRecordId, file);
+      return MedicalService.uploadAttachment(medicalRecordId, file, deviceType, deviceName, connectionMethod);
     },
     onSuccess: (data) => {
       notification.success({
