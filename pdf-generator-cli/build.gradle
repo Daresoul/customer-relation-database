@@ -1,0 +1,65 @@
+plugins {
+    id 'java'
+    id 'application'
+    // GraalVM not needed for JAR approach
+    // id 'org.graalvm.buildtools.native' version '0.10.2'
+}
+
+group = 'com.vetclinic.pdf'
+version = '1.0.0'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // iText 5.5.13 (same as print-app - no changes needed!)
+    implementation 'com.itextpdf:itextpdf:5.5.13'
+
+    // JSON parsing
+    implementation 'com.google.code.gson:gson:2.10.1'
+
+    // Apache Commons (for StringUtils used in enums)
+    implementation 'org.apache.commons:commons-lang3:3.13.0'
+
+    // Logging
+    implementation 'org.slf4j:slf4j-api:2.0.9'
+    implementation 'org.slf4j:slf4j-simple:2.0.9'
+}
+
+application {
+    mainClass = 'com.vetclinic.pdf.PdfGeneratorCLI'
+}
+
+// GraalVM not needed for JAR approach
+// graalvmNative {
+//     binaries {
+//         main {
+//             imageName = 'pdf-generator'
+//             mainClass = 'com.vetclinic.pdf.PdfGeneratorCLI'
+//
+//             buildArgs.addAll([
+//                 '--no-fallback',
+//                 '--enable-url-protocols=file',
+//                 '--initialize-at-build-time=org.slf4j',
+//                 '-H:+ReportExceptionStackTraces',
+//                 '--verbose'
+//             ])
+//         }
+//     }
+// }
+
+jar {
+    manifest {
+        attributes 'Main-Class': 'com.vetclinic.pdf.PdfGeneratorCLI'
+    }
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}

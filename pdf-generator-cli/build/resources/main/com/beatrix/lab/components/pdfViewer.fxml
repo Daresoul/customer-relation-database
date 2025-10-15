@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import com.jfoenix.controls.JFXButton?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.control.ScrollPane?>
+<AnchorPane stylesheets="@../assets/main.css" xmlns="http://javafx.com/javafx/8.0.171"
+            xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.beatrix.lab.controllers.PdfViewerController"
+            fx:id="root" styleClass="vbox">
+    <VBox  AnchorPane.bottomAnchor="30" AnchorPane.leftAnchor="30"
+           AnchorPane.rightAnchor="30" AnchorPane.topAnchor="30" alignment="CENTER">
+        <children>
+            <ScrollPane fitToWidth="true" fitToHeight="true" vbarPolicy="NEVER"
+                        styleClass="edge-to-edge" fx:id="scrollPane">
+                <content>
+                    <HBox spacing="10" fx:id="viewsWrapper" alignment="CENTER">
+                        <children>
+                        </children>
+                    </HBox>
+                </content>
+            </ScrollPane>
+
+            <HBox>
+                <padding>
+                    <Insets top="10" right="25" bottom="0" left="0"/>
+                </padding>
+                <children>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <JFXButton fx:id="btnSave" buttonType="RAISED" onAction="#onSavePdf"
+                               styleClass="primary-button" text="Зачувај" />
+                </children>
+            </HBox>
+        </children>
+    </VBox>
+
+
+</AnchorPane>

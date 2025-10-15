@@ -58,6 +58,10 @@ export interface CreateMedicalRecordInput {
   description: string;
   price?: number;
   currencyId?: number;
+  // Optional device test data for PDF generation
+  deviceTestData?: any;
+  deviceType?: string;
+  deviceName?: string;
 }
 
 export interface UpdateMedicalRecordInput {

@@ -76,6 +76,10 @@ pub struct CreateMedicalRecordInput {
     pub description: String,
     pub price: Option<f64>,
     pub currency_id: Option<i64>,
+    // Optional device test data for PDF generation
+    pub device_test_data: Option<serde_json::Value>,
+    pub device_type: Option<String>,
+    pub device_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
