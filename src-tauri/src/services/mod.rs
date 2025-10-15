@@ -14,7 +14,5 @@ pub mod device_input;
 pub mod file_watcher;
 pub mod device_integration;
 pub mod device_parser;
-pub mod pdf_report_generator;
-pub mod exigo_pdf_generator;
 pub mod device_pdf_service;
 pub mod java_pdf_service;

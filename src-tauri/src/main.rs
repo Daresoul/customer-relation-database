@@ -190,9 +190,6 @@ fn main() {
             commands::update_device_integration,
             commands::delete_device_integration,
             commands::toggle_device_integration_enabled,
-            // PDF Report commands
-            commands::generate_device_report_pdf,
-            commands::generate_device_report_pdf_custom,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
