@@ -74,6 +74,33 @@ pub struct PatientInfo {
     pub date_of_birth: Option<String>,
 }
 
+/// Translate gender from English to Macedonian
+/// Matches Java Gender enum behavior
+fn translate_gender(gender: &str) -> String {
+    let gender_lower = gender.to_lowercase();
+    if gender_lower.contains("male") || gender_lower == "m" || gender_lower == "м" {
+        "мажјак".to_string()
+    } else if gender_lower.contains("female") || gender_lower == "f" || gender_lower == "ж" {
+        "женка".to_string()
+    } else {
+        "мажјак".to_string() // Default to male as per Java code
+    }
+}
+
+/// Translate species from English to Macedonian
+/// Matches Java PatientType enum behavior
+fn translate_species(species: &str) -> String {
+    let species_lower = species.to_lowercase();
+    if species_lower.contains("dog") || species_lower.contains("куче") {
+        "куче".to_string()
+    } else if species_lower.contains("cat") || species_lower.contains("мачка") {
+        "маче".to_string()
+    } else {
+        // Return as-is if not recognized
+        species.to_string()
+    }
+}
+
 /// Clinic information
 #[derive(Debug, Clone)]
 pub struct ClinicInfo {
@@ -142,8 +169,8 @@ impl ExigoPdfGenerator {
         // Starting position from top
         let mut current_y = page_height - Mm(20.0);
 
-        // 1. Add header
-        current_y = self.add_header(&current_layer, &font, current_y, page_width)?;
+        // 1. Add header with logo
+        current_y = self.add_header(&doc, &current_layer, &font, current_y, page_width)?;
 
         // 2. Add title line
         current_y = self.add_title_line(&current_layer, &font, current_y, page_width)?;
@@ -168,6 +195,32 @@ impl ExigoPdfGenerator {
         Ok(())
     }
 
+    /// Load an image from the assets directory and convert to printpdf Image
+    fn load_image(&self, filename: &str) -> Result<Image, String> {
+        // Try to load from src-tauri/assets/images/ directory
+        let asset_path = std::path::Path::new("assets/images").join(filename);
+
+        let dynamic_img = ::image::open(&asset_path)
+            .map_err(|e| format!("Failed to load image {}: {}", filename, e))?;
+
+        // Convert to RGB8 format for printpdf
+        let rgb_img = dynamic_img.to_rgb8();
+        let (width, height) = rgb_img.dimensions();
+
+        // Create ImageXObject from raw RGB data
+        Ok(Image::from(ImageXObject {
+            width: Px(width as usize),
+            height: Px(height as usize),
+            color_space: ColorSpace::Rgb,
+            bits_per_component: ColorBits::Bit8,
+            interpolate: true,
+            image_data: rgb_img.into_raw(),
+            image_filter: None,
+            clipping_bbox: None,
+            smask: None,
+        }))
+    }
+
     /// Load font with Cyrillic support
     fn load_cyrillic_font(&self, doc: &PdfDocumentReference) -> Result<IndirectFontRef, String> {
         // Try to load system font with Cyrillic support
@@ -190,9 +243,10 @@ impl ExigoPdfGenerator {
             .map_err(|e| format!("Failed to add font to PDF: {}", e))
     }
 
-    /// Add clinic header
+    /// Add clinic header with logo
     fn add_header(
         &self,
+        doc: &PdfDocumentReference,
         layer: &PdfLayerReference,
         font: &IndirectFontRef,
         start_y: Mm,
@@ -200,6 +254,30 @@ impl ExigoPdfGenerator {
     ) -> Result<Mm, String> {
         let mut y = start_y;
         let left_margin = Mm(20.0);
+        let right_margin = Mm(20.0);
+
+        // Add logo on the right side
+        // Logo dimensions from Java: 192x195 pixels scaled to appropriate PDF size
+        let logo_width_mm = Mm(50.0);  // Scaled width
+        let logo_height_mm = Mm(51.0); // Scaled height
+
+        if let Ok(logo_image) = self.load_image("logo.png") {
+            let logo_x = page_width - right_margin - logo_width_mm;
+            let logo_y = start_y - logo_height_mm;
+
+            // Add image to PDF
+            logo_image.add_to_layer(
+                layer.clone(),
+                ImageTransform {
+                    translate_x: Some(logo_x),
+                    translate_y: Some(logo_y),
+                    rotate: None,
+                    scale_x: Some(logo_width_mm.0 / 300.0),  // Adjust scaling factor
+                    scale_y: Some(logo_height_mm.0 / 300.0),
+                    dpi: Some(300.0),
+                },
+            );
+        }
 
         // Vet clinic label
         layer.use_text(&self.clinic_info.vet_clinic_label, VET_CLINIC_SIZE, left_margin, y, font);
@@ -292,10 +370,14 @@ impl ExigoPdfGenerator {
         // Patient details with light gray borders
         layer.set_fill_color(dark_gray_color());
 
+        // Translate species and gender to Macedonian (matching Java behavior)
+        let species_translated = translate_species(&patient.species);
+        let gender_translated = translate_gender(&patient.gender);
+
         let details = vec![
             format!("Име: {}", patient.name),
             format!("Сопственик: {}", patient.owner),
-            format!("Вид: {}", patient.species),
+            format!("Вид: {}", species_translated),
         ];
 
         for detail in &details {
@@ -314,21 +396,29 @@ impl ExigoPdfGenerator {
             layer.add_line(line);
         }
 
-        if let Some(microchip) = &patient.microchip_id {
-            let detail = format!("Микрочип: {}", microchip);
-            layer.use_text(&detail, CELL_FONT_SIZE, left_margin + Mm(2.0), y, font);
-            y -= Mm(6.0);
-        }
-
-        let detail = format!("Пол: {}", patient.gender);
+        // Always show microchip field, use "8070500000" as default if not available (matching Java)
+        let microchip_value = patient.microchip_id.as_deref().unwrap_or("8070500000");
+        let detail = format!("Микрочип: {}", microchip_value);
         layer.use_text(&detail, CELL_FONT_SIZE, left_margin + Mm(2.0), y, font);
         y -= Mm(6.0);
 
-        if let Some(dob) = &patient.date_of_birth {
-            let detail = format!("Датум на раѓање: {}", dob);
-            layer.use_text(&detail, CELL_FONT_SIZE, left_margin + Mm(2.0), y, font);
-            y -= Mm(6.0);
-        }
+        // Bottom border for microchip
+        layer.set_outline_color(light_gray_color());
+        let line = Line {
+            points: vec![
+                (Point::new(left_margin, y + Mm(2.0)), false),
+                (Point::new(left_margin + box_width, y + Mm(2.0)), false),
+            ],
+            is_closed: false,
+        };
+        layer.add_line(line);
+
+        let detail = format!("Пол: {}", gender_translated);
+        layer.use_text(&detail, CELL_FONT_SIZE, left_margin + Mm(2.0), y, font);
+        y -= Mm(6.0);
+
+        // Do NOT show date of birth in patient box (matching Java behavior)
+        // Java only shows: Name, Owner, Species, Microchip, Gender
 
         layer.set_fill_color(black_color());
         Ok(y - Mm(10.0))
@@ -476,7 +566,7 @@ impl ExigoPdfGenerator {
         Ok(y - Mm(10.0))
     }
 
-    /// Add footer
+    /// Add footer with social media icons
     fn add_footer(
         &self,
         layer: &PdfLayerReference,
@@ -485,22 +575,46 @@ impl ExigoPdfGenerator {
         page_width: Mm,
     ) -> Result<(), String> {
         let left_margin = Mm(20.0);
+        let right_margin = Mm(20.0);
 
         // Cyan separator line
         layer.set_outline_color(cyan_color());
         let line = Line {
             points: vec![
                 (Point::new(left_margin, y + Mm(2.0)), false),
-                (Point::new(page_width - Mm(20.0), y + Mm(2.0)), false),
+                (Point::new(page_width - right_margin, y + Mm(2.0)), false),
             ],
             is_closed: false,
         };
         layer.add_line(line);
 
-        // Website
+        // Website on the left
         layer.set_fill_color(dark_gray_color());
         layer.use_text(&self.clinic_info.website, CELL_FONT_SIZE, left_margin, y - Mm(2.0), font);
         layer.set_fill_color(black_color());
+
+        // Add social media icons on the right
+        if let Ok(socials_image) = self.load_image("socials.png") {
+            // Social icons: scale to reasonable size (approx 80mm width to match Java)
+            let socials_width_mm = Mm(80.0);
+            let socials_height_mm = Mm(15.0);  // Approximate height
+
+            let socials_x = page_width - right_margin - socials_width_mm;
+            let socials_y = y - socials_height_mm - Mm(4.0);
+
+            // Add image to PDF
+            socials_image.add_to_layer(
+                layer.clone(),
+                ImageTransform {
+                    translate_x: Some(socials_x),
+                    translate_y: Some(socials_y),
+                    rotate: None,
+                    scale_x: Some(socials_width_mm.0 / 300.0),  // Adjust scaling factor
+                    scale_y: Some(socials_height_mm.0 / 300.0),
+                    dpi: Some(300.0),
+                },
+            );
+        }
 
         Ok(())
     }
@@ -521,15 +635,8 @@ pub fn parse_exigo_sample_data(
     let results_map = test_results.as_object()
         .ok_or("Test results must be an object")?;
 
-    // Extract parameters in the CORRECT order as per specification
+    // Extract parameters in the CORRECT order - matching Java version (print-app)
     let parameter_order = vec![
-        ("RBC", "RBC - еритроцити", "10e+12/L"),
-        ("MCV", "MCV", "fL"),
-        ("HCT", "HCT - хематокрит", "%"),
-        ("MCH", "MCH", "pg"),
-        ("MCHC", "MCHC", "g/dL"),
-        ("RDWR", "RDW %", "%"),
-        ("RDWA", "RDW", "fL"),
         ("PLT", "PLT - тромбоцити", "10e+9/L"),
         ("MPV", "MPV", "fL"),
         ("HGB", "HGB - хемоглобин", "g/dL"),
@@ -542,6 +649,13 @@ pub fn parse_exigo_sample_data(
         ("GR", "GR - гранулоцити %", "%"),
         ("EA", "EA - еозинофили", "10e+9/L"),
         ("ER", "ER - еозинофили %", "%"),
+        ("RBC", "RBC - еритроцити", "10e+12/L"),
+        ("MCV", "MCV", "fL"),
+        ("HCT", "HCT - хематокрит", "%"),
+        ("MCH", "MCH", "pg"),
+        ("MCHC", "MCHC", "g/dL"),
+        ("RDWR", "RDW %", "%"),
+        ("RDWA", "RDW", "fL"),
     ];
 
     let mut parameters = Vec::new();

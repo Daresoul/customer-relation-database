@@ -274,6 +274,11 @@ impl MedicalRecordService {
         pool: &SqlitePool,
         input: CreateMedicalRecordInput,
     ) -> Result<MedicalRecord, String> {
+        println!("🔍 Creating medical record with input:");
+        println!("   device_test_data: {:?}", input.device_test_data.is_some());
+        println!("   device_type: {:?}", input.device_type);
+        println!("   device_name: {:?}", input.device_name);
+
         let now = Utc::now();
 
         // Development: do not populate procedure_name; use name as the single source of truth
@@ -347,7 +352,214 @@ impl MedicalRecordService {
             new_snapshot
         );
 
+        // Generate PDFs if device test data is present
+        if input.device_test_data.is_some() && input.device_type.is_some() && input.device_name.is_some() {
+            println!("📄 Device data present - generating PDFs...");
+
+            // Get patient data for PDF generation
+            let patient_data = match Self::get_patient_for_pdf(pool, input.patient_id).await {
+                Ok(p) => p,
+                Err(e) => {
+                    eprintln!("⚠️  Failed to get patient data for PDF: {}", e);
+                    return Ok(record); // Return the record anyway, just skip PDF generation
+                }
+            };
+
+            let device_data = crate::services::device_pdf_service::DeviceTestData {
+                device_type: input.device_type.unwrap(),
+                device_name: input.device_name.unwrap(),
+                test_results: input.device_test_data.unwrap(),
+                detected_at: now,
+                patient_identifier: Some(patient_data.microchip_id.clone().unwrap_or_else(|| patient_data.name.clone())),
+            };
+
+            // Generate both PDFs
+            if let Err(e) = Self::generate_and_save_pdfs(pool, id, &patient_data, &device_data).await {
+                eprintln!("⚠️  Failed to generate PDFs: {}", e);
+                // Continue anyway - the record was created successfully
+            }
+        }
+
         Ok(record)
+    }
+
+    /// Helper to get patient data for PDF generation
+    async fn get_patient_for_pdf(
+        pool: &SqlitePool,
+        patient_id: i64,
+    ) -> Result<crate::services::device_pdf_service::PatientData, String> {
+        // Simple query - just get patient and species data
+        let row = sqlx::query(
+            "SELECT p.name, p.gender, p.date_of_birth, p.microchip_id, \
+             s.name as species_name \
+             FROM patients p \
+             LEFT JOIN species s ON p.species_id = s.id \
+             WHERE p.id = ?"
+        )
+        .bind(patient_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| format!("Failed to fetch patient: {}", e))?
+        .ok_or("Patient not found".to_string())?;
+
+        let birthdate: Option<String> = row.try_get("date_of_birth").ok().flatten();
+
+        // Try to get owner information - prefer primary contact's full name, fall back to household name
+        println!("   🔍 Looking up owner for patient_id: {}", patient_id);
+
+        let owner_result = sqlx::query_scalar::<_, String>(
+            "SELECT COALESCE( \
+                (SELECT p.first_name || ' ' || p.last_name \
+                 FROM people p \
+                 WHERE p.household_id = h.id AND p.is_primary = 1 \
+                 LIMIT 1), \
+                h.household_name \
+             ) as owner_name \
+             FROM households h \
+             JOIN patient_households ph ON h.id = ph.household_id \
+             WHERE ph.patient_id = ? \
+             LIMIT 1"
+        )
+        .bind(patient_id)
+        .fetch_optional(pool)
+        .await;
+
+        let owner = match owner_result {
+            Ok(Some(name)) => {
+                println!("   ✅ Found owner: {}", name);
+                name
+            }
+            Ok(None) => {
+                println!("   ⚠️  No household link found for patient");
+                "Unknown Owner".to_string()
+            }
+            Err(e) => {
+                println!("   ❌ Owner query failed: {}", e);
+                "Unknown Owner".to_string()
+            }
+        };
+
+        Ok(crate::services::device_pdf_service::PatientData {
+            name: row.get("name"),
+            owner,
+            species: row.try_get("species_name").ok().flatten().unwrap_or_else(|| "Unknown Species".to_string()),
+            microchip_id: row.try_get("microchip_id").ok().flatten(),
+            gender: row.try_get("gender").ok().flatten().unwrap_or_else(|| "Unknown".to_string()),
+            date_of_birth: birthdate,
+        })
+    }
+
+    /// Generate both Rust and Java PDFs and save as attachments
+    async fn generate_and_save_pdfs(
+        pool: &SqlitePool,
+        medical_record_id: i64,
+        patient_data: &crate::services::device_pdf_service::PatientData,
+        device_data: &crate::services::device_pdf_service::DeviceTestData,
+    ) -> Result<(), String> {
+        use crate::services::device_pdf_service::DevicePdfService;
+        use crate::services::java_pdf_service::JavaPdfService;
+
+        // Create reports directory
+        let reports_dir = std::env::temp_dir().join("device_reports");
+        std::fs::create_dir_all(&reports_dir)
+            .map_err(|e| format!("Failed to create reports directory: {}", e))?;
+
+        // Generate unique filenames
+        let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
+        let safe_device_name = device_data.device_name.replace(" ", "_").replace("/", "_");
+
+        let rust_filename = format!("{}_{}_rust.pdf", safe_device_name, timestamp);
+        let java_filename = format!("{}_{}_java.pdf", safe_device_name, timestamp);
+
+        let rust_pdf_path = reports_dir.join(&rust_filename);
+        let java_pdf_path = reports_dir.join(&java_filename);
+
+        // Generate Rust PDF
+        println!("   🦀 Generating Rust PDF...");
+        DevicePdfService::generate_pdf(
+            rust_pdf_path.to_str().ok_or("Invalid Rust PDF path")?,
+            patient_data.clone(),
+            device_data.clone(),
+        )?;
+
+        // Generate Java PDF
+        println!("   ☕ Generating Java PDF...");
+        JavaPdfService::generate_pdf(
+            java_pdf_path.to_str().ok_or("Invalid Java PDF path")?,
+            patient_data,
+            device_data,
+        )?;
+
+        // Save both PDFs as attachments
+        Self::save_pdf_attachment(pool, medical_record_id, &rust_pdf_path, &rust_filename, "Rust (printpdf)", &device_data.device_type, &device_data.device_name).await?;
+        Self::save_pdf_attachment(pool, medical_record_id, &java_pdf_path, &java_filename, "Java (iText 5)", &device_data.device_type, &device_data.device_name).await?;
+
+        println!("✅ Both PDFs generated and saved as attachments");
+        Ok(())
+    }
+
+    /// Save a PDF file as an attachment to a medical record
+    async fn save_pdf_attachment(
+        pool: &SqlitePool,
+        medical_record_id: i64,
+        pdf_path: &std::path::Path,
+        filename: &str,
+        pdf_type: &str,
+        device_type: &str,
+        device_name: &str,
+    ) -> Result<(), String> {
+        use uuid::Uuid;
+
+        // Read PDF file
+        let pdf_bytes = std::fs::read(pdf_path)
+            .map_err(|e| format!("Failed to read {} PDF: {}", pdf_type, e))?;
+
+        // Generate unique file ID
+        let file_id = Uuid::new_v4().to_string();
+
+        // Get storage directory - construct from home directory
+        let home_dir = dirs::home_dir().ok_or("Failed to get home directory")?;
+        let storage_dir = home_dir
+            .join("Library")
+            .join("Application Support")
+            .join("com.vetclinic.app")
+            .join("files")
+            .join("medical");
+
+        // Create directory if it doesn't exist
+        std::fs::create_dir_all(&storage_dir)
+            .map_err(|e| format!("Failed to create storage directory: {}", e))?;
+
+        // Copy PDF to storage location
+        let dest_path = storage_dir.join(&file_id);
+        std::fs::copy(pdf_path, &dest_path)
+            .map_err(|e| format!("Failed to copy {} PDF to storage: {}", pdf_type, e))?;
+
+        println!("   📁 Copied {} PDF to: {}", pdf_type, dest_path.display());
+
+        // Create attachment record
+        let now = chrono::Utc::now();
+        sqlx::query(
+            "INSERT INTO medical_attachments \
+             (medical_record_id, file_id, original_name, mime_type, file_size, uploaded_at, device_type, device_name, connection_method) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        )
+        .bind(medical_record_id)
+        .bind(&file_id)
+        .bind(filename)
+        .bind("application/pdf")
+        .bind(pdf_bytes.len() as i64)
+        .bind(now)
+        .bind(format!("{}_report", device_type))
+        .bind(format!("{} Report ({})", device_name, pdf_type))
+        .bind("pdf_generation")
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Failed to create attachment record: {}", e))?;
+
+        println!("   💾 Saved {} PDF attachment: {} (file_id: {})", pdf_type, filename, file_id);
+
+        Ok(())
     }
 
     pub async fn update_medical_record(

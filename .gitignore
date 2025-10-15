@@ -47,3 +47,5 @@ Thumbs.db
 .specify/**
 CLAUDE.md
 **.md
+# Java PDF Generator - built by CI
+src-tauri/resources/pdf-generator.jar

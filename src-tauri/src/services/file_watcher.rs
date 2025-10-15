@@ -8,9 +8,6 @@ use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::Manager;
 use crate::services::device_parser::DeviceParserService;
-use crate::services::device_pdf_service::{DevicePdfService, PatientData, DeviceTestData};
-use chrono::Utc;
-use serde_json;
 
 pub struct FileWatcherService {
     pool: SqlitePool,
@@ -174,23 +171,12 @@ impl FileWatcherService {
                                                         println!("   Patient ID: {}", patient_id);
                                                     }
 
-                                                    // Emit original device data to frontend
+                                                    // Emit device data to frontend
                                                     if let Some(ref app_handle) = app_handle_clone {
                                                         if let Err(e) = app_handle.emit_all("device-data-received", &device_data) {
                                                             eprintln!("   ❌ Failed to emit event: {}", e);
                                                         } else {
-                                                            println!("   📤 Event emitted to frontend (original data)");
-                                                        }
-                                                    }
-
-                                                    // Auto-generate PDF report and send as separate file
-                                                    let pdf_result = Self::generate_and_emit_pdf(&device_data, &name_clone, &app_handle_clone);
-                                                    match pdf_result {
-                                                        Ok(pdf_path) => {
-                                                            println!("   📄 PDF generated and emitted: {}", pdf_path);
-                                                        }
-                                                        Err(e) => {
-                                                            eprintln!("   ⚠️  Failed to generate/emit PDF: {}", e);
+                                                            println!("   📤 Device data emitted to frontend");
                                                         }
                                                     }
                                                 }
@@ -240,94 +226,5 @@ impl FileWatcherService {
 
     pub fn active_watcher_count(&self) -> usize {
         self.watchers.len()
-    }
-
-    /// Generate a PDF report from device data and emit it as a new device file
-    fn generate_and_emit_pdf(
-        device_data: &crate::services::device_parser::DeviceData,
-        device_name: &str,
-        app_handle: &Option<tauri::AppHandle>,
-    ) -> Result<String, String> {
-        // Create reports directory
-        let reports_dir = Self::get_reports_directory()?;
-        std::fs::create_dir_all(&reports_dir)
-            .map_err(|e| format!("Failed to create reports directory: {}", e))?;
-
-        // Generate unique filename with timestamp
-        let timestamp = Utc::now().format("%Y%m%d_%H%M%S");
-        let safe_device_name = device_name.replace(" ", "_").replace("/", "_");
-        let filename = format!("{}_{}.pdf", safe_device_name, timestamp);
-        let pdf_path = reports_dir.join(&filename);
-
-        // Create patient data (generic, since we don't have full patient data yet)
-        let patient_data = PatientData {
-            name: device_data.patient_identifier.clone()
-                .unwrap_or_else(|| "Unknown Patient".to_string()),
-            owner: "To Be Determined".to_string(),
-            species: "Unknown".to_string(),
-            microchip_id: device_data.patient_identifier.clone(),
-            gender: "Unknown".to_string(),
-            date_of_birth: None,
-        };
-
-        // Create device test data
-        let test_data = DeviceTestData {
-            device_type: device_data.device_type.clone(),
-            device_name: device_data.device_name.clone(),
-            test_results: device_data.test_results.clone(),
-            detected_at: device_data.detected_at,
-            patient_identifier: device_data.patient_identifier.clone(),
-        };
-
-        // Generate PDF using centralized service (single source of truth)
-        DevicePdfService::generate_pdf(
-            pdf_path.to_str().ok_or("Invalid PDF path")?,
-            patient_data,
-            test_data,
-        )?;
-
-        // Read the generated PDF file
-        let pdf_bytes = std::fs::read(&pdf_path)
-            .map_err(|e| format!("Failed to read generated PDF: {}", e))?;
-
-        // Create a new DeviceData for the PDF file
-        let pdf_device_data = crate::services::device_parser::DeviceData {
-            device_type: format!("{}_report", device_data.device_type),
-            device_name: format!("{} Report", device_data.device_name),
-            connection_method: device_data.connection_method.clone(),
-            patient_identifier: device_data.patient_identifier.clone(),
-            test_results: serde_json::json!({"report_type": "auto_generated_pdf"}),
-            original_file_name: filename.clone(),
-            file_data: pdf_bytes,
-            mime_type: "application/pdf".to_string(),
-            detected_at: Utc::now(),
-        };
-
-        // Emit PDF as a separate device file
-        if let Some(ref handle) = app_handle {
-            if let Err(e) = handle.emit_all("device-data-received", &pdf_device_data) {
-                eprintln!("   ❌ Failed to emit PDF event: {}", e);
-            } else {
-                println!("   📤 PDF file emitted to frontend");
-            }
-        }
-
-        Ok(pdf_path.display().to_string())
-    }
-
-    /// Get the reports directory path (in user's Documents or app data directory)
-    fn get_reports_directory() -> Result<PathBuf, String> {
-        // Try to use Documents directory first
-        if let Some(docs_dir) = dirs::document_dir() {
-            return Ok(docs_dir.join("VetClinic").join("DeviceReports"));
-        }
-
-        // Fallback to app data directory
-        if let Some(data_dir) = dirs::data_local_dir() {
-            return Ok(data_dir.join("VetClinic").join("DeviceReports"));
-        }
-
-        // Last resort: current directory
-        Ok(PathBuf::from("./device_reports"))
     }
 }

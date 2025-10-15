@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.layout.AnchorPane?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.control.TableView?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.TableColumn?>
+<?import javafx.scene.layout.HBox?>
+<?import com.jfoenix.controls.JFXButton?>
+<AnchorPane xmlns="http://javafx.com/javafx"
+            xmlns:fx="http://javafx.com/fxml"
+            fx:controller="com.beatrix.lab.controllers.ExigoSamplesController"
+            stylesheets="@../assets/main.css" fx:id="root">
+    <VBox styleClass="vbox" AnchorPane.bottomAnchor="30" AnchorPane.leftAnchor="0" AnchorPane.rightAnchor="0"
+          AnchorPane.topAnchor="0">
+        <children>
+            <Region prefHeight="50"/>
+            <ScrollPane fitToWidth="true" fitToHeight="true" hbarPolicy="NEVER"
+                        styleClass="edge-to-edge" VBox.vgrow="ALWAYS" fx:id="scrollPane" visible="false">
+                <content>
+                    <TableView fx:id="table">
+                        <padding>
+                            <Insets top="0" right="25" bottom="0" left="25"/>
+                        </padding>
+                        <placeholder>
+                            <Label text="Нема хематолошки анализи за избраниот датум" />
+                        </placeholder>
+                        <columns>
+                            <TableColumn fx:id="columnDateTime" text="Датум и време на проба" />
+                            <TableColumn fx:id="columnAnalysisType" text="Тип на анализа (пациент)" />
+                            <TableColumn fx:id="columnId" text="Идентификациски број на пациент (ID)" />
+                            <TableColumn fx:id="columnId2" text="Идентификациски број на пациент (ID2)" />
+                        </columns>
+                    </TableView>
+                </content>
+            </ScrollPane>
+            <HBox>
+                <padding>
+                    <Insets top="20" right="35" bottom="20"/>
+                </padding>
+                <children>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <JFXButton fx:id="btnDelete" buttonType="RAISED" onAction="#onSelect"
+                               styleClass="primary-button" text="Избери" />
+                </children>
+            </HBox>
+        </children>
+    </VBox>
+</AnchorPane>

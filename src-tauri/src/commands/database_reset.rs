@@ -444,6 +444,9 @@ pub async fn populate_database(
                     description,
                     price,
                     currency_id,
+                    device_test_data: None,
+                    device_type: None,
+                    device_name: None,
                 };
 
                 match MedicalRecordService::create_medical_record(&*pool, input).await {
@@ -499,6 +502,9 @@ pub async fn populate_database(
                     description,
                     price: None,
                     currency_id: None,
+                    device_test_data: None,
+                    device_type: None,
+                    device_name: None,
                 };
 
                 match MedicalRecordService::create_medical_record(&*pool, input).await {

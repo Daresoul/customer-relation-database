@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import com.jfoenix.controls.JFXTabPane?>
+<?import javafx.scene.control.Tab?>
+
+<?import javafx.scene.layout.AnchorPane?>
+<AnchorPane xmlns="http://javafx.com/javafx"
+            xmlns:fx="http://javafx.com/fxml"
+            fx:controller="com.beatrix.lab.controllers.MainController"
+            stylesheets="@../assets/main.css" fx:id="root">
+    <children>
+        <JFXTabPane AnchorPane.rightAnchor="0" AnchorPane.bottomAnchor="0" AnchorPane.topAnchor="0"
+            AnchorPane.leftAnchor="0">
+            <tabs>
+                <Tab fx:id="tabReport" text="Нов извештај">
+                    <content>
+                        <fx:include fx:id="newReport" source="newReport.fxml"/>
+                    </content>
+                </Tab>
+                <Tab fx:id="tabData" text="Клиенти">
+                    <content>
+                        <fx:include fx:id="data" source="data.fxml"/>
+                    </content>
+                </Tab>
+                <Tab fx:id="tabSettings" text="Подесувања">
+                    <content>
+                        <fx:include fx:id="settings" source="settings.fxml"/>
+                    </content>
+                </Tab>
+            </tabs>
+        </JFXTabPane>
+    </children>
+</AnchorPane>

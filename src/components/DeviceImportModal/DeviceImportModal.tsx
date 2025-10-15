@@ -142,7 +142,8 @@ const DeviceImportModal: React.FC = () => {
         });
       });
 
-      // Create medical record
+      // Create medical record with device data from first file (for PDF generation)
+      const firstFile = pendingFiles[0];
       const input: CreateMedicalRecordInput = {
         patientId: values.patientId,
         recordType: values.recordType,
@@ -150,7 +151,17 @@ const DeviceImportModal: React.FC = () => {
         description: values.description,
         price: values.price,
         currencyId: values.currencyId,
+        // Include device data for PDF generation (from first file)
+        deviceTestData: firstFile?.testResults,
+        deviceType: firstFile?.deviceType,
+        deviceName: firstFile?.deviceName,
       };
+
+      console.log('💾 Creating medical record with device data:', {
+        hasDeviceData: !!firstFile?.testResults,
+        deviceType: firstFile?.deviceType,
+        deviceName: firstFile?.deviceName,
+      });
 
       const createdRecord = await createMutation.mutateAsync(input);
       console.log('✅ Medical record created, ID:', createdRecord.id);
