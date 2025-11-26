@@ -6,7 +6,6 @@ use crate::services::file_storage::FileStorageService;
 use crate::services::pdf_render::PdfRenderService;
 use crate::services::device_parser::DeviceParserService;
 use crate::services::device_pdf_service::{DevicePdfService, PatientData, DeviceTestData};
-use std::collections::HashMap;
 use sqlx::Row;
 
 // T031: Implement get_medical_records command

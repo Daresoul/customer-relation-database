@@ -136,6 +136,7 @@ pub struct CreateEventMapping {
 }
 
 impl CreateEventMapping {
+    #[allow(dead_code)]
     pub fn validate(&self) -> Result<(), String> {
         if self.event_id.is_empty() {
             return Err("Event ID cannot be empty".to_string());
@@ -154,9 +155,11 @@ pub struct UpdateEventMapping {
     pub last_synced_at: Option<DateTime<Utc>>,
 }
 
+#[allow(dead_code)]
 pub type GoogleCalendarSync = GoogleCalendarSettings;
 
 impl GoogleCalendarSettings {
+    #[allow(dead_code)]
     pub fn needs_refresh(&self) -> bool {
         // Check if we need to refresh the access token
         if let Some(expires_at) = self.token_expires_at {
@@ -170,6 +173,7 @@ impl GoogleCalendarSettings {
         }
     }
 
+    #[allow(dead_code)]
     pub fn is_configured(&self) -> bool {
         self.access_token.is_some() && self.calendar_id.is_some()
     }

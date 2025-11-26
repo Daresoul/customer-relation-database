@@ -1,6 +1,8 @@
 // T038: Periodic sync scheduler - checks Google Calendar for cancellations every 1 minute (with immediate check on startup)
+#[allow(unused_imports)]
 use crate::database::connection::DatabasePool;
 use crate::models::google_calendar::GoogleCalendarSettings;
+#[allow(unused_imports)]
 use crate::models::appointments::AppointmentStatus;
 use crate::services::oauth::get_valid_access_token;
 use chrono::{Utc, Duration};

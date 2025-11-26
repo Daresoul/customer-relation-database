@@ -195,6 +195,7 @@ impl SettingsService {
         Self::get_settings(pool, user_id).await
     }
 
+    #[allow(dead_code)]
     pub async fn get_currencies(pool: &DatabasePool) -> Result<Vec<Currency>, String> {
         let pool = pool.lock().await;
 

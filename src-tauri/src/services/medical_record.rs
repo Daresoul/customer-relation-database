@@ -1,7 +1,7 @@
 use sqlx::{SqlitePool, Row};
 use crate::models::medical::*;
 use chrono::{Utc, DateTime};
-use serde_json::{json, Map, Value};
+use serde_json::json;
 
 // T027: MedicalRecordService with CRUD operations
 pub struct MedicalRecordService;
@@ -549,6 +549,7 @@ impl MedicalRecordService {
     }
 
     /// Generate Java PDF report and save as attachment (legacy single-device wrapper)
+    #[allow(dead_code)]
     async fn generate_and_save_pdfs(
         pool: &SqlitePool,
         medical_record_id: i64,

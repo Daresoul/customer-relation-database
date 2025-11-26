@@ -135,16 +135,6 @@ const DeviceImportModal: React.FC = () => {
       const values = await form.validateFields();
       setLoading(true);
 
-      console.log('💾 Creating medical record with', pendingFiles.length, 'files');
-      pendingFiles.forEach((file, index) => {
-        console.log(`   File ${index + 1}:`, {
-          fileName: file.fileName,
-          deviceName: file.deviceName,
-          mimeType: file.mimeType,
-          size: file.fileData.length,
-        });
-      });
-
       // Create medical record with ALL device data for multi-device PDF generation
       const deviceDataList = pendingFiles.map(file => ({
         deviceTestData: file.testResults,
@@ -163,20 +153,11 @@ const DeviceImportModal: React.FC = () => {
         deviceDataList,
       };
 
-      console.log('💾 Creating medical record with device data:', {
-        deviceCount: deviceDataList.length,
-        devices: deviceDataList.map(d => d.deviceType),
-      });
-
       const createdRecord = await createMutation.mutateAsync(input);
-      console.log('✅ Medical record created, ID:', createdRecord.id);
 
       // Upload all device files as attachments
       if (createdRecord && pendingFiles.length > 0) {
-        console.log('📤 Starting upload of', pendingFiles.length, 'files...');
-
-        const uploadPromises = pendingFiles.map((file, index) => {
-          console.log(`   Uploading file ${index + 1}/${pendingFiles.length}:`, file.fileName);
+        const uploadPromises = pendingFiles.map((file) => {
           return uploadMutation.mutateAsync({
             medicalRecordId: createdRecord.id,
             file: new File([new Uint8Array(file.fileData)], file.fileName, {
@@ -190,8 +171,7 @@ const DeviceImportModal: React.FC = () => {
         });
 
         try {
-          const results = await Promise.all(uploadPromises);
-          console.log('✅ All', results.length, 'files uploaded successfully');
+          await Promise.all(uploadPromises);
 
           notification.success({
             message: t('common:success'),
@@ -201,9 +181,7 @@ const DeviceImportModal: React.FC = () => {
             placement: 'bottomRight',
             duration: 5,
           });
-        } catch (uploadError) {
-          console.error('❌ Upload error:', uploadError);
-          console.error('   Error details:', JSON.stringify(uploadError, null, 2));
+        } catch (_uploadError) {
           notification.warning({
             message: t('common:warning'),
             description: t('medical:deviceImport.partialSuccess'),
@@ -217,8 +195,7 @@ const DeviceImportModal: React.FC = () => {
       form.resetFields();
       clearAllFiles();
       closeModal();
-    } catch (error) {
-      console.error('Save error:', error);
+    } catch (_error) {
       notification.error({
         message: t('common:error'),
         description: t('medical:deviceImport.saveFailed'),

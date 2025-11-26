@@ -214,34 +214,24 @@ pub fn start_listen(
     {
         let mut listeners = get_active_listeners().lock().unwrap();
         if listeners.contains(&listener_key) {
-            println!("⚠️  Listener already active for device '{}' on port '{}', skipping duplicate", device_type, port_name);
             return Ok(());
         }
         listeners.insert(listener_key.clone());
-        println!("✅ Registered listener: {}", listener_key);
     }
 
     // Get protocol configuration for the device type
     let protocol = get_device_protocol(&device_type);
 
-    println!("🎧 Starting listener for device type '{}' on port '{}'", device_type, port_name);
-    println!("   Protocol: baud={}, start={:?}, end=0x{:02X}",
-        protocol.baud_rate,
-        protocol.start_symbol.map(|b| format!("0x{:02X}", b)),
-        protocol.end_symbol
-    );
-
-    let port_name_clone = port_name.clone();
+    let _port_name_clone = port_name.clone();
     let device_type_clone = device_type.clone();
     thread::spawn(move || {
         if let Err(e) = handle_listening_serial(port_name, app_handle, protocol, device_type_clone) {
-            eprintln!("❌ Listener error: {}", e);
+            eprintln!("Listener error: {}", e);
         }
 
         // Remove from active listeners when thread exits
         let mut listeners = get_active_listeners().lock().unwrap();
         listeners.remove(&listener_key);
-        println!("🔌 Unregistered listener: {}", listener_key);
     });
 
     Ok(())
@@ -249,8 +239,6 @@ pub fn start_listen(
 
 /// Handle incoming device data: parse and emit to frontend
 fn handle_device_data(app_handle: &AppHandle, data: &[u8], device_name: &str, device_type: &str) {
-    println!("📦 [DEBUG] Parsing device data ({} bytes) for device type '{}'...", data.len(), device_type);
-
     // Parse the device data based on device type
     let result = match device_type {
         "healvet_hv_fia_3000" => {
@@ -260,49 +248,34 @@ fn handle_device_data(app_handle: &AppHandle, data: &[u8], device_name: &str, de
             DeviceParserService::parse_mnchip_data(device_name, "serial_data", data, "serial_port")
         }
         _ => {
-            eprintln!("❌ [ERROR] Unknown device type: {}", device_type);
+            eprintln!("Unknown device type: {}", device_type);
             return;
         }
     };
 
     match result {
         Ok(device_data) => {
-            println!("✅ [DEBUG] Successfully parsed device data");
-            println!("   Device: {}", device_data.device_name);
-            if let Some(ref patient_id) = device_data.patient_identifier {
-                println!("   Patient ID: {}", patient_id);
-            }
-
             // Emit to frontend
-            println!("📤 [DEBUG] Emitting 'device-data-received' event...");
             if let Err(e) = app_handle.emit_all("device-data-received", &device_data) {
-                eprintln!("❌ [ERROR] Failed to emit device data: {}", e);
-            } else {
-                println!("✅ [DEBUG] Device data emitted successfully!");
+                eprintln!("Failed to emit device data: {}", e);
             }
         }
         Err(e) => {
-            eprintln!("❌ [ERROR] Failed to parse device data: {}", e);
-            eprintln!("   Raw data: {}", String::from_utf8_lossy(data));
+            eprintln!("Failed to parse device data: {}", e);
         }
     }
 }
 
 fn handle_listening_serial(port_name: String, app_handle: AppHandle, protocol: DeviceProtocol, device_type: String) -> Result<(), String> {
-    println!("🔧 [DEBUG] Opening serial port: {}", port_name);
-
     // Detect if this is a PTY device (macOS virtual serial port workaround)
     // PTY devices on macOS (created by socat, etc.) need baud_rate=0 to avoid ENOTTY error
     // See: https://github.com/serialport/serialport-rs/issues/22
     let is_pty = port_name.contains("/dev/tty") || port_name.contains("/tmp/");
     let baud_rate = if cfg!(target_os = "macos") && is_pty {
-        println!("🔧 [DEBUG] Detected PTY device on macOS, using baud_rate=0 to avoid ENOTTY");
         0
     } else {
         protocol.baud_rate
     };
-
-    println!("🔧 [DEBUG] Port settings: baud={}, timeout=100ms", baud_rate);
 
     let mut port = serialport::new(&port_name, baud_rate)
         .timeout(Duration::from_millis(100))
@@ -312,37 +285,24 @@ fn handle_listening_serial(port_name: String, app_handle: AppHandle, protocol: D
         .flow_control(serialport::FlowControl::None)
         .open()
         .map_err(|e| {
-            eprintln!("❌ [ERROR] Failed to open port {}: {}", port_name, e);
-            eprintln!("❌ [ERROR] Error details: {:?}", e);
+            eprintln!("Failed to open port {}: {}", port_name, e);
             format!("Failed to open port: {}", e)
         })?;
-
-    println!("✅ [DEBUG] Serial port {} opened successfully!", port_name);
-    println!("🎧 [DEBUG] Now listening for data on {}...", port_name);
 
     let mut data: Vec<u8> = Vec::new();
     let mut buffer = vec![0; 1024];
     let mut started: bool = protocol.start_symbol.is_none(); // If no start symbol, always "started"
     let mut consecutive_end_symbols = 0; // For devices that use "EE" as end marker
-    let mut read_count = 0;
 
     loop {
         match port.read(&mut buffer) {
             Ok(bytes_read) if bytes_read > 0 => {
-                read_count += 1;
-                println!("📥 [DEBUG] Read #{}: {} bytes from {}", read_count, bytes_read, port_name);
-                println!("📥 [DEBUG] Raw bytes: {:?}", &buffer[..bytes_read]);
-                println!("📥 [DEBUG] As string: {:?}", String::from_utf8_lossy(&buffer[..bytes_read]));
                 for i in 0..bytes_read {
                     if buffer[i] == protocol.end_symbol && started {
                         consecutive_end_symbols += 1;
 
                         // Healvet uses "EE" (two E's) as end marker
                         if protocol.end_symbol == b'E' && consecutive_end_symbols == 2 {
-                            let message = String::from_utf8_lossy(&data).to_string();
-                            println!("📨 [SUCCESS] Received complete Healvet message ({} bytes)", data.len());
-                            println!("📨 [SUCCESS] Raw data: {}", message);
-
                             // Parse and emit device data
                             handle_device_data(&app_handle, &data, &port_name, &device_type);
 
@@ -355,10 +315,6 @@ fn handle_listening_serial(port_name: String, app_handle: AppHandle, protocol: D
                         else if protocol.end_symbol == 0x0D && consecutive_end_symbols == 2 {
                             // Only process if we have actual data (not just the \r characters)
                             if !data.is_empty() {
-                                let message = String::from_utf8_lossy(&data).to_string();
-                                println!("📨 [SUCCESS] Received complete Pointcare HL7 message ({} bytes)", data.len());
-                                println!("📨 [SUCCESS] Raw data: {}", message.replace('\r', "\\r"));
-
                                 // Parse and emit device data
                                 handle_device_data(&app_handle, &data, &port_name, &device_type);
 
@@ -373,9 +329,6 @@ fn handle_listening_serial(port_name: String, app_handle: AppHandle, protocol: D
                         }
                         else if protocol.end_symbol != b'E' && protocol.end_symbol != 0x0D {
                             // Single end symbol (like newline) for other devices
-                            let message = String::from_utf8_lossy(&data).to_string();
-                            println!("📨 [SUCCESS] Received message ({} bytes): {}", data.len(), message);
-
                             // Parse and emit device data
                             handle_device_data(&app_handle, &data, &port_name, &device_type);
 
@@ -407,24 +360,22 @@ fn handle_listening_serial(port_name: String, app_handle: AppHandle, protocol: D
             e.kind() == std::io::ErrorKind::ConnectionRefused ||
             e.kind() == std::io::ErrorKind::NotFound ||
             e.kind() == std::io::ErrorKind::PermissionDenied => {
-                eprintln!("❌ [ERROR] Fatal error on port {}: {:?} - {}", port_name, e.kind(), e);
-                app_handle.emit_all("rust-error", e.to_string()).unwrap();
+                eprintln!("Fatal error on port {}: {}", port_name, e);
+                let _ = app_handle.emit_all("rust-error", e.to_string());
                 break;
             }
             Err(ref e) if e.kind() == std::io::ErrorKind::Other => {
                 let err_str = e.to_string().to_lowercase();
                 if err_str.contains("device") || err_str.contains("failed") {
-                    eprintln!("❌ [ERROR] Device error on port {}: {}", port_name, e);
-                    app_handle.emit_all("rust-error", e.to_string()).unwrap();
+                    eprintln!("Device error on port {}: {}", port_name, e);
+                    let _ = app_handle.emit_all("rust-error", e.to_string());
                     break;
                 }
             }
             Err(err) => {
-                eprintln!("⚠️  [WARN] Unexpected error reading from serial port {}: {}", port_name, err);
-                app_handle.emit_all("rust-error", err.to_string()).unwrap();
+                let _ = app_handle.emit_all("rust-error", err.to_string());
             }
         }
     }
-    println!("📡 [DEBUG] Serial port listener stopped for {}", port_name);
     Ok(())
 }

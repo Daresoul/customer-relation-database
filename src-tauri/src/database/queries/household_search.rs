@@ -346,6 +346,7 @@ pub async fn quick_search_households(
 }
 
 // Search households by contact value (phone, email)
+#[allow(dead_code)]
 pub async fn search_households_by_contact(
     pool: &SqlitePool,
     contact_value: &str,

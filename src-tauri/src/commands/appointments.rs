@@ -182,7 +182,7 @@ async fn trigger_sync_after_create(
     let mut desc_parts = Vec::new();
     desc_parts.push(format!("Patient: {}", patient_name));
 
-    if let Some(patient) = &appointment.patient {
+    if let Some(_patient) = &appointment.patient {
         desc_parts.push(format!("Microchip ID: {}",
             appointment.appointment.microchip_id.as_deref().unwrap_or("-")));
     }
@@ -316,7 +316,7 @@ async fn trigger_sync_after_update(
     let mut desc_parts = Vec::new();
     desc_parts.push(format!("Patient: {}", patient_name));
 
-    if let Some(patient) = &appointment.patient {
+    if let Some(_patient) = &appointment.patient {
         desc_parts.push(format!("Microchip ID: {}",
             appointment.appointment.microchip_id.as_deref().unwrap_or("-")));
     }

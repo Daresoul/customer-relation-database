@@ -66,6 +66,8 @@
   "saveChanges": "Save Changes",
   "never": "Never",
   "version": "Version",
+  "remove": "Remove",
+  "warning": "Warning",
   "buttons": {
     "save": "Save",
     "cancel": "Cancel",

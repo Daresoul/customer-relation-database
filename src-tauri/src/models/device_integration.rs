@@ -28,6 +28,7 @@ impl DeviceType {
         }
     }
 
+    #[allow(dead_code)]
     pub fn display_name(&self) -> &str {
         match self {
             DeviceType::ExigoEosVet => "Exigo Eos Vet",

@@ -1,10 +1,11 @@
 use tauri::State;
-use sqlx::{Row, query, query_as};
 use serde::Deserialize;
+use sqlx::Row;
 use crate::database::DatabasePool;
 use crate::models::household::*;
 use crate::database::queries::{household, household_search};
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct CreateHouseholdRequest {
     #[serde(rename = "lastName")]
@@ -12,6 +13,7 @@ pub struct CreateHouseholdRequest {
     pub contacts: Option<Vec<ContactInfo>>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct ContactInfo {
     pub name: Option<String>,

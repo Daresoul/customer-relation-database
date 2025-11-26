@@ -59,6 +59,7 @@ impl std::fmt::Display for SyncType {
     }
 }
 
+#[allow(dead_code)]
 pub type SyncLogCreate = CreateSyncLogInput;
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -167,14 +168,17 @@ pub struct SyncError {
 }
 
 impl AppointmentSyncLog {
+    #[allow(dead_code)]
     pub fn is_success(&self) -> bool {
         matches!(self.sync_status, SyncStatus::Success)
     }
 
+    #[allow(dead_code)]
     pub fn is_failed(&self) -> bool {
         matches!(self.sync_status, SyncStatus::Failed)
     }
 
+    #[allow(dead_code)]
     pub fn is_pending(&self) -> bool {
         matches!(self.sync_status, SyncStatus::Pending)
     }

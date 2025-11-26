@@ -1,17 +1,20 @@
 use chrono::{DateTime, Utc};
 use reqwest::Client;
 use serde_json::json;
+#[allow(unused_imports)]
 use crate::models::{
     google_calendar::{GoogleCalendarEvent, GoogleCalendarSync, CalendarEventMapping},
     Appointment,
 };
 use sqlx::SqlitePool;
 
+#[allow(dead_code)]
 pub struct GoogleCalendarService {
     client: Client,
     access_token: Option<String>,
 }
 
+#[allow(dead_code)]
 impl GoogleCalendarService {
     pub fn new() -> Self {
         Self {

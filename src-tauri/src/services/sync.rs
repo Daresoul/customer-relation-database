@@ -1,17 +1,21 @@
 use chrono::{DateTime, Utc};
 use sqlx::{SqlitePool, Row};
+#[allow(unused_imports)]
 use crate::models::{
     sync_log::{SyncLog, SyncLogCreate, SyncStatus, SyncDirection},
     AppointmentFilter,
     google_calendar::CalendarEventMapping,
 };
+#[allow(unused_imports)]
 use crate::services::{
     appointments::AppointmentService,
     google_calendar::GoogleCalendarService,
 };
 
+#[allow(dead_code)]
 pub struct SyncService;
 
+#[allow(dead_code)]
 impl SyncService {
     pub async fn sync_appointments_to_calendar(
         pool: &SqlitePool,
@@ -125,8 +129,8 @@ impl SyncService {
         ).await?;
 
         let mut sync_count = 0;
-        let mut error_count = 0;
-        let mut errors: Vec<String> = Vec::new();
+        let error_count = 0;
+        let errors: Vec<String> = Vec::new();
 
         let google_service = GoogleCalendarService::new()
             .with_token(access_token);
@@ -140,7 +144,7 @@ impl SyncService {
 
         for event in events {
             // Check if event has appointment ID in extended properties
-            if let Some(appointment_id) = Self::extract_appointment_id(&event) {
+            if let Some(_appointment_id) = Self::extract_appointment_id(&event) {
                 // This is an existing appointment, skip it
                 continue;
             }
