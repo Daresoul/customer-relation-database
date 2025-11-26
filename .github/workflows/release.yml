@@ -42,18 +42,34 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Build Java PDF Generator
+      - name: Build Java PDF Generator (Unix)
+        if: runner.os != 'Windows'
         run: |
           cd pdf-generator-cli
           chmod +x gradlew
           ./gradlew clean build
           cd ..
 
-      - name: Copy JAR to Tauri resources
+      - name: Build Java PDF Generator (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cd pdf-generator-cli
+          .\gradlew.bat clean build
+          cd ..
+
+      - name: Copy JAR to Tauri resources (Unix)
+        if: runner.os != 'Windows'
         run: |
           mkdir -p src-tauri/resources
           cp pdf-generator-cli/build/libs/pdf-generator-cli-1.0.0.jar src-tauri/resources/pdf-generator.jar
           ls -lh src-tauri/resources/
+
+      - name: Copy JAR to Tauri resources (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          New-Item -ItemType Directory -Force -Path src-tauri/resources
+          Copy-Item pdf-generator-cli/build/libs/pdf-generator-cli-1.0.0.jar src-tauri/resources/pdf-generator.jar
+          Get-ChildItem src-tauri/resources/
 
       - name: Update version from tag
         run: node .github/scripts/update-version.cjs
