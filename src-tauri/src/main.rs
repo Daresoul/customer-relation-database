@@ -66,6 +66,48 @@ fn main() {
                 }
             });
 
+            // Initialize serial port listeners for device integrations
+            let pool_for_serial = pool.clone();
+            let app_handle_for_serial = app.handle();
+            tauri::async_runtime::spawn(async move {
+                use models::device_integration::DeviceIntegrationRow;
+
+                // Query enabled serial_port integrations
+                let integrations = {
+                    let pool_guard = pool_for_serial.lock().await;
+                    sqlx::query_as::<_, DeviceIntegrationRow>(
+                        "SELECT * FROM device_integrations
+                         WHERE enabled = 1
+                         AND connection_type = 'serial_port'
+                         AND deleted_at IS NULL"
+                    )
+                    .fetch_all(&*pool_guard)
+                    .await
+                    .unwrap_or_else(|e| {
+                        eprintln!("Failed to query serial port integrations: {}", e);
+                        vec![]
+                    })
+                };
+
+                println!("📡 Found {} enabled serial port integrations", integrations.len());
+
+                // Start listener for each
+                for integration in integrations {
+                    if let Some(port_name) = integration.serial_port_name {
+                        println!("🎧 Auto-starting listener for: {} ({})", integration.name, port_name);
+                        if let Err(e) = services::device_input::start_listen(
+                            app_handle_for_serial.clone(),
+                            port_name,
+                            integration.device_type,
+                        ) {
+                            eprintln!("❌ Failed to start listener for {}: {}", integration.name, e);
+                        }
+                    } else {
+                        eprintln!("⚠️  Integration '{}' has no serial port configured", integration.name);
+                    }
+                }
+            });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -106,6 +148,7 @@ fn main() {
             commands::upload_medical_attachment,
             commands::download_medical_attachment,
             commands::delete_medical_attachment,
+            commands::get_attachment_content,
             commands::search_medical_records,
             commands::get_currencies,
             commands::cleanup_orphaned_files,
@@ -113,12 +156,14 @@ fn main() {
             commands::materialize_medical_attachment,
             commands::write_medical_attachment_to_path,
             commands::open_medical_attachment,
+            commands::print_medical_attachment,
             commands::render_medical_attachment_pdf_thumbnail,
             commands::render_medical_attachment_pdf_thumbnail_force,
             commands::render_medical_attachment_pdf_page_png,
             commands::get_medical_attachment_pdf_page_count,
             commands::revert_medical_record,
             commands::regenerate_pdf_from_attachment,
+            commands::regenerate_pdf_from_medical_record,
             // Settings commands
             commands::get_app_settings,
             commands::update_app_settings,
@@ -183,6 +228,7 @@ fn main() {
             // Device input commands
             commands::get_available_ports,
             commands::resolve_patient_from_identifier,
+            commands::start_device_integration_listener,
             // Device integration commands
             commands::get_device_integrations,
             commands::get_device_integration,

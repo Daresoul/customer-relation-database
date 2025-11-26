@@ -1,10 +1,13 @@
 // Medical History Types
 
+// Record types: 'procedure' (billable), 'note' (general notes), 'test_result' (device test data)
+export type RecordType = 'procedure' | 'note' | 'test_result';
+
 export interface MedicalRecord {
   id: number;
   patientId: number;
-  recordType: 'procedure' | 'note';
-  name: string; // This will hold procedureName for procedures, title for notes
+  recordType: RecordType;
+  name: string; // This will hold procedureName for procedures, title for notes/test_results
   procedureName?: string; // Deprecated - kept for backward compatibility
   description: string;
   price?: number;
@@ -19,6 +22,9 @@ export interface MedicalRecord {
   currency?: Currency;
 }
 
+// Attachment types: 'file' (manual uploads), 'test_result' (device data like Exigo XML), 'generated_pdf'
+export type AttachmentType = 'file' | 'test_result' | 'generated_pdf';
+
 export interface MedicalAttachment {
   id: number;
   medicalRecordId: number;
@@ -30,6 +36,7 @@ export interface MedicalAttachment {
   deviceType?: string;
   deviceName?: string;
   connectionMethod?: string;
+  attachmentType?: AttachmentType;
 }
 
 export interface MedicalRecordHistory {
@@ -50,18 +57,26 @@ export interface Currency {
   symbol?: string;
 }
 
+export interface DeviceDataInput {
+  deviceTestData: any;
+  deviceType: string;
+  deviceName: string;
+}
+
 export interface CreateMedicalRecordInput {
   patientId: number;
-  recordType: 'procedure' | 'note';
-  name: string; // This will hold procedureName for procedures, title for notes
+  recordType: RecordType;
+  name: string; // This will hold procedureName for procedures, title for notes/test_results
   procedureName?: string; // Deprecated - backend ignores this
   description: string;
   price?: number;
   currencyId?: number;
-  // Optional device test data for PDF generation
+  // Optional device test data for PDF generation (legacy single device)
   deviceTestData?: any;
   deviceType?: string;
   deviceName?: string;
+  // New: support for multiple devices
+  deviceDataList?: DeviceDataInput[];
 }
 
 export interface UpdateMedicalRecordInput {
@@ -74,7 +89,7 @@ export interface UpdateMedicalRecordInput {
 }
 
 export interface MedicalRecordFilter {
-  recordType?: 'procedure' | 'note';
+  recordType?: RecordType;
   isArchived?: boolean;
   searchTerm?: string;
 }

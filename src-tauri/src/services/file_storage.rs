@@ -41,6 +41,7 @@ impl FileStorageService {
         device_type: Option<String>,
         device_name: Option<String>,
         connection_method: Option<String>,
+        attachment_type: Option<String>,
     ) -> Result<MedicalAttachment, String> {
         // Generate unique file ID
         let file_id = Uuid::new_v4().to_string();
@@ -56,12 +57,15 @@ impl FileStorageService {
         let file_size = file_data.len() as i64;
         let now = Utc::now();
 
+        // Default attachment_type to 'file' if not provided
+        let attachment_type = attachment_type.unwrap_or_else(|| "file".to_string());
+
         // Insert attachment record into database with device metadata
         let result = sqlx::query(
             "INSERT INTO medical_attachments \
              (medical_record_id, file_id, original_name, file_size, mime_type, uploaded_at, \
-              device_type, device_name, connection_method) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+              device_type, device_name, connection_method, attachment_type) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         )
         .bind(medical_record_id)
         .bind(&file_id)
@@ -72,6 +76,7 @@ impl FileStorageService {
         .bind(&device_type)
         .bind(&device_name)
         .bind(&connection_method)
+        .bind(&attachment_type)
         .execute(pool)
         .await
         .map_err(|e| format!("Failed to save attachment record: {}", e))?;
@@ -89,6 +94,7 @@ impl FileStorageService {
             device_type,
             device_name,
             connection_method,
+            attachment_type: Some(attachment_type),
         })
     }
 
@@ -266,6 +272,67 @@ impl FileStorageService {
                 .arg(path)
                 .spawn()
                 .map_err(|e| format!("Failed to open file: {}", e))?;
+            return Ok(());
+        }
+
+        #[allow(unreachable_code)]
+        Err("Unsupported platform".to_string())
+    }
+
+    /// Print a file using the system's native print dialog
+    pub fn print_file(path: &str) -> Result<(), String> {
+        #[cfg(target_os = "macos")]
+        {
+            // On macOS, use AppleScript to open the PDF in Preview and trigger the print dialog
+            let script = format!(
+                r#"
+                set theFile to POSIX file "{}"
+                tell application "Preview"
+                    activate
+                    open theFile
+                    delay 0.5
+                    print front document with print dialog
+                end tell
+                "#,
+                path
+            );
+            Command::new("osascript")
+                .args(["-e", &script])
+                .spawn()
+                .map_err(|e| format!("Failed to open print dialog: {}", e))?;
+            return Ok(());
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            // On Windows, use PowerShell to open the PDF in the default viewer
+            // and trigger the print dialog via shell verb
+            // This works with Adobe Reader, Edge, and other PDF viewers
+            let script = format!(
+                r#"
+                $shell = New-Object -ComObject Shell.Application
+                $folder = $shell.Namespace((Split-Path -Parent '{}'))
+                $file = $folder.ParseName((Split-Path -Leaf '{}'))
+                $file.InvokeVerb('Print')
+                "#,
+                path.replace("'", "''"),
+                path.replace("'", "''")
+            );
+            Command::new("powershell")
+                .args(["-NoProfile", "-Command", &script])
+                .spawn()
+                .map_err(|e| format!("Failed to open print dialog: {}", e))?;
+            return Ok(());
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            // On Linux, try xdg-open with a print-capable application
+            // or fall back to lpr if available
+            Command::new("xdg-open")
+                .arg(path)
+                .spawn()
+                .map_err(|e| format!("Failed to open file for printing: {}", e))?;
             return Ok(());
         }
 

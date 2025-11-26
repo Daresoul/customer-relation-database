@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<results>
+    <sample ID2="123456789" SNO="EXIGO-001" DATE="2025-01-14 14:30:00" SEQ="001" APNA="CBC"
+            RBC="5.4" RBC_L="5.0" RBC_H="8.5"
+            MCV="78.7" MCV_L="60.0" MCV_H="77.0"
+            HCT="42.5" HCT_L="37.0" HCT_H="55.0"
+            MCH="26.3" MCH_L="19.5" MCH_H="24.5"
+            MCHC="33.4" MCHC_L="31.0" MCHC_H="36.0"
+            RDWR="13.5" RDWR_L="11.0" RDWR_H="15.5"
+            RDWA="45.2" RDWA_L="35.0" RDWA_H="55.0"
+            PLT="250" PLT_L="150" PLT_H="500"
+            MPV="8.5" MPV_L="5.0" MPV_H="11.0"
+            HGB="14.2" HGB_L="12.0" HGB_H="18.0"
+            WBC="7.2" WBC_L="6.0" WBC_H="17.0"
+            LA="2.5" LA_L="1.0" LA_H="4.8"
+            MA="0.8" MA_L="0.0" MA_H="1.8"
+            GA="3.9" GA_L="3.0" GA_H="11.5"
+            LR="34.7" LR_L="12.0" LR_H="30.0"
+            MR="11.1" MR_L="3.0" MR_H="10.0"
+            GR="54.2" GR_L="60.0" GR_H="83.0"
+            EA="0.1" EA_L="0.0" EA_H="1.5"
+            ER="1.4" ER_L="0.0" ER_H="10.0" />
+</results>

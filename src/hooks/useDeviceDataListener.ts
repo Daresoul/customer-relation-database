@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api';
 import { useDeviceImport, PendingDeviceFile } from '../contexts/DeviceImportContext';
@@ -20,17 +20,34 @@ export const useDeviceDataListener = () => {
   const { addDeviceFile, setSuggestedPatient } = useDeviceImport();
   const { notification } = App.useApp();
 
+  // Use refs to avoid recreating the listener when these functions change
+  const addDeviceFileRef = useRef(addDeviceFile);
+  const setSuggestedPatientRef = useRef(setSuggestedPatient);
+  const notificationRef = useRef(notification);
+
+  // Keep refs up to date
+  useEffect(() => {
+    addDeviceFileRef.current = addDeviceFile;
+    setSuggestedPatientRef.current = setSuggestedPatient;
+    notificationRef.current = notification;
+  }, [addDeviceFile, setSuggestedPatient, notification]);
+
   useEffect(() => {
     let unlisten: (() => void) | undefined;
 
     const setupListener = async () => {
+      const listenerNumber = Math.floor(Math.random() * 10000);
+      console.log(`🎧 [LISTENER-${listenerNumber}] Setting up device-data-received listener`);
+
       unlisten = await listen<DeviceDataPayload>('device-data-received', async (event) => {
+        console.log(`📥 [LISTENER-${listenerNumber}] Received event:`, event.payload.testResults?.parameter_code);
         const data = event.payload;
 
         console.log('📥 Device data received:', {
           device: data.deviceName,
           fileName: data.originalFileName,
           patientId: data.patientIdentifier,
+          timestamp: new Date().toISOString(),
         });
 
         // Try to resolve patient if identifier is provided
@@ -46,7 +63,7 @@ export const useDeviceDataListener = () => {
               resolvedPatientId = result.id;
               console.log('✅ Patient resolved:', result);
 
-              notification.success({
+              notificationRef.current.success({
                 message: 'Device Data Received',
                 description: `File from ${data.deviceName} - Patient auto-detected`,
                 placement: 'bottomRight',
@@ -55,7 +72,7 @@ export const useDeviceDataListener = () => {
             } else {
               console.log('⚠️  Patient not found for identifier:', data.patientIdentifier);
 
-              notification.info({
+              notificationRef.current.info({
                 message: 'Device Data Received',
                 description: `File from ${data.deviceName} - Please select patient manually`,
                 placement: 'bottomRight',
@@ -66,7 +83,7 @@ export const useDeviceDataListener = () => {
             console.error('Failed to resolve patient:', error);
           }
         } else {
-          notification.info({
+          notificationRef.current.info({
             message: 'Device Data Received',
             description: `File from ${data.deviceName} - Please select patient`,
             placement: 'bottomRight',
@@ -90,21 +107,24 @@ export const useDeviceDataListener = () => {
         };
 
         // Add to context (will auto-open modal on first file)
-        addDeviceFile(pendingFile);
+        addDeviceFileRef.current(pendingFile);
 
         // Set suggested patient if this is the first file with a resolved patient
         if (resolvedPatientId) {
-          setSuggestedPatient(resolvedPatientId);
+          setSuggestedPatientRef.current(resolvedPatientId);
         }
       });
+
+      console.log(`✅ [LISTENER-${listenerNumber}] Device-data-received listener registered`);
     };
 
     setupListener();
 
     return () => {
       if (unlisten) {
+        console.log('🔌 Unregistering device-data-received listener');
         unlisten();
       }
     };
-  }, [addDeviceFile, setSuggestedPatient, notification]);
+  }, []); // IMPORTANT: Empty dependency array - only set up listener ONCE
 };

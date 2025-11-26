@@ -82,7 +82,7 @@ impl MedicalRecordService {
             // Fetch attachments for this record
             let attachments = sqlx::query_as::<_, MedicalAttachment>(
                 "SELECT id, medical_record_id, file_id, original_name, mime_type, \
-                 file_size, uploaded_at, device_type, device_name, connection_method \
+                 file_size, uploaded_at, device_type, device_name, connection_method, attachment_type \
                  FROM medical_attachments WHERE medical_record_id = ?"
             )
             .bind(record_id)
@@ -201,7 +201,7 @@ impl MedicalRecordService {
         // Get attachments (tolerant to different datetime formats)
         let attachment_rows = sqlx::query(
             "SELECT id, medical_record_id, file_id, original_name, mime_type, \
-             file_size, uploaded_at, device_type, device_name, connection_method \
+             file_size, uploaded_at, device_type, device_name, connection_method, attachment_type \
              FROM medical_attachments WHERE medical_record_id = ?"
         )
         .bind(record_id)
@@ -242,6 +242,7 @@ impl MedicalRecordService {
                     device_type: row.try_get("device_type").ok(),
                     device_name: row.try_get("device_name").ok(),
                     connection_method: row.try_get("connection_method").ok(),
+                    attachment_type: row.try_get("attachment_type").ok(),
                 }
             })
             .collect();
@@ -353,8 +354,42 @@ impl MedicalRecordService {
         );
 
         // Generate PDFs if device test data is present
+        println!("🔍 [PDF] Checking for device data:");
+        println!("   device_test_data (legacy): {}", input.device_test_data.is_some());
+        println!("   device_data_list: {}", input.device_data_list.is_some());
+
+        // Collect all device data (either from device_data_list or legacy single device)
+        let mut all_device_data: Vec<crate::services::device_pdf_service::DeviceTestData> = Vec::new();
+
+        // Add devices from device_data_list (new multi-device format)
+        if let Some(ref device_list) = input.device_data_list {
+            println!("📄 [PDF] Found {} devices in device_data_list", device_list.len());
+            for device in device_list {
+                all_device_data.push(crate::services::device_pdf_service::DeviceTestData {
+                    device_type: device.device_type.clone(),
+                    device_name: device.device_name.clone(),
+                    test_results: device.device_test_data.clone(),
+                    detected_at: now,
+                    patient_identifier: None, // Will be filled below
+                });
+            }
+        }
+
+        // Add legacy single device if present
         if input.device_test_data.is_some() && input.device_type.is_some() && input.device_name.is_some() {
-            println!("📄 Device data present - generating PDFs...");
+            println!("📄 [PDF] Found legacy single device data");
+            all_device_data.push(crate::services::device_pdf_service::DeviceTestData {
+                device_type: input.device_type.unwrap(),
+                device_name: input.device_name.unwrap(),
+                test_results: input.device_test_data.unwrap(),
+                detected_at: now,
+                patient_identifier: None,
+            });
+        }
+
+        // Generate PDF if we have any device data
+        if !all_device_data.is_empty() {
+            println!("📄 [PDF] Generating PDF with {} device samples...", all_device_data.len());
 
             // Get patient data for PDF generation
             let patient_data = match Self::get_patient_for_pdf(pool, input.patient_id).await {
@@ -365,16 +400,14 @@ impl MedicalRecordService {
                 }
             };
 
-            let device_data = crate::services::device_pdf_service::DeviceTestData {
-                device_type: input.device_type.unwrap(),
-                device_name: input.device_name.unwrap(),
-                test_results: input.device_test_data.unwrap(),
-                detected_at: now,
-                patient_identifier: Some(patient_data.microchip_id.clone().unwrap_or_else(|| patient_data.name.clone())),
-            };
+            // Fill in patient identifier for all devices
+            let patient_identifier = Some(patient_data.microchip_id.clone().unwrap_or_else(|| patient_data.name.clone()));
+            for device in all_device_data.iter_mut() {
+                device.patient_identifier = patient_identifier.clone();
+            }
 
-            // Generate both PDFs
-            if let Err(e) = Self::generate_and_save_pdfs(pool, id, &patient_data, &device_data).await {
+            // Generate PDF with all devices
+            if let Err(e) = Self::generate_and_save_pdfs_multi(pool, id, &patient_data, &all_device_data).await {
                 eprintln!("⚠️  Failed to generate PDFs: {}", e);
                 // Continue anyway - the record was created successfully
             }
@@ -449,53 +482,80 @@ impl MedicalRecordService {
         })
     }
 
-    /// Generate both Rust and Java PDFs and save as attachments
-    async fn generate_and_save_pdfs(
+    /// Generate Java PDF report with multiple device samples and save as attachment
+    async fn generate_and_save_pdfs_multi(
         pool: &SqlitePool,
         medical_record_id: i64,
         patient_data: &crate::services::device_pdf_service::PatientData,
-        device_data: &crate::services::device_pdf_service::DeviceTestData,
+        device_data_list: &[crate::services::device_pdf_service::DeviceTestData],
     ) -> Result<(), String> {
-        use crate::services::device_pdf_service::DevicePdfService;
         use crate::services::java_pdf_service::JavaPdfService;
+
+        if device_data_list.is_empty() {
+            return Ok(());
+        }
 
         // Create reports directory
         let reports_dir = std::env::temp_dir().join("device_reports");
         std::fs::create_dir_all(&reports_dir)
             .map_err(|e| format!("Failed to create reports directory: {}", e))?;
 
-        // Generate unique filenames
+        // Generate unique filename based on first device or combined name
         let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
-        let safe_device_name = device_data.device_name.replace(" ", "_").replace("/", "_");
+        let pdf_filename = if device_data_list.len() == 1 {
+            let device = &device_data_list[0];
+            let safe_device_name = device.device_name.replace(" ", "_").replace("/", "_");
+            let safe_device_type = device.device_type.replace("_", "-");
+            format!("{}_{}_report_{}.pdf", safe_device_type, safe_device_name, timestamp)
+        } else {
+            format!("combined_device_report_{}.pdf", timestamp)
+        };
+        let pdf_path = reports_dir.join(&pdf_filename);
 
-        let rust_filename = format!("{}_{}_rust.pdf", safe_device_name, timestamp);
-        let java_filename = format!("{}_{}_java.pdf", safe_device_name, timestamp);
-
-        let rust_pdf_path = reports_dir.join(&rust_filename);
-        let java_pdf_path = reports_dir.join(&java_filename);
-
-        // Generate Rust PDF
-        println!("   🦀 Generating Rust PDF...");
-        DevicePdfService::generate_pdf(
-            rust_pdf_path.to_str().ok_or("Invalid Rust PDF path")?,
-            patient_data.clone(),
-            device_data.clone(),
-        )?;
-
-        // Generate Java PDF
-        println!("   ☕ Generating Java PDF...");
-        JavaPdfService::generate_pdf(
-            java_pdf_path.to_str().ok_or("Invalid Java PDF path")?,
+        // Generate Java PDF with all devices
+        println!("   ☕ Generating combined PDF report using Java...");
+        JavaPdfService::generate_pdf_multi(
+            pdf_path.to_str().ok_or("Invalid PDF path")?,
             patient_data,
-            device_data,
+            device_data_list,
         )?;
 
-        // Save both PDFs as attachments
-        Self::save_pdf_attachment(pool, medical_record_id, &rust_pdf_path, &rust_filename, "Rust (printpdf)", &device_data.device_type, &device_data.device_name).await?;
-        Self::save_pdf_attachment(pool, medical_record_id, &java_pdf_path, &java_filename, "Java (iText 5)", &device_data.device_type, &device_data.device_name).await?;
+        // Determine device metadata for attachment (use first device for now)
+        let first_device = &device_data_list[0];
+        let device_type_str = if device_data_list.len() > 1 {
+            "combined"
+        } else {
+            &first_device.device_type
+        };
+        let device_name_str = if device_data_list.len() > 1 {
+            "Multiple Devices"
+        } else {
+            &first_device.device_name
+        };
 
-        println!("✅ Both PDFs generated and saved as attachments");
+        // Save PDF as attachment
+        Self::save_pdf_attachment(
+            pool,
+            medical_record_id,
+            &pdf_path,
+            &pdf_filename,
+            "Device Test Report",
+            device_type_str,
+            device_name_str
+        ).await?;
+
+        println!("✅ PDF report generated and saved as attachment");
         Ok(())
+    }
+
+    /// Generate Java PDF report and save as attachment (legacy single-device wrapper)
+    async fn generate_and_save_pdfs(
+        pool: &SqlitePool,
+        medical_record_id: i64,
+        patient_data: &crate::services::device_pdf_service::PatientData,
+        device_data: &crate::services::device_pdf_service::DeviceTestData,
+    ) -> Result<(), String> {
+        Self::generate_and_save_pdfs_multi(pool, medical_record_id, patient_data, &[device_data.clone()]).await
     }
 
     /// Save a PDF file as an attachment to a medical record
@@ -541,8 +601,8 @@ impl MedicalRecordService {
         let now = chrono::Utc::now();
         sqlx::query(
             "INSERT INTO medical_attachments \
-             (medical_record_id, file_id, original_name, mime_type, file_size, uploaded_at, device_type, device_name, connection_method) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+             (medical_record_id, file_id, original_name, mime_type, file_size, uploaded_at, device_type, device_name, connection_method, attachment_type) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         )
         .bind(medical_record_id)
         .bind(&file_id)
@@ -553,6 +613,7 @@ impl MedicalRecordService {
         .bind(format!("{}_report", device_type))
         .bind(format!("{} Report ({})", device_name, pdf_type))
         .bind("pdf_generation")
+        .bind("generated_pdf") // Attachment type for auto-generated PDFs
         .execute(pool)
         .await
         .map_err(|e| format!("Failed to create attachment record: {}", e))?;

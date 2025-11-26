@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { App, Button, Typography, Spin } from 'antd';
 import { ReloadOutlined, PrinterOutlined } from '@ant-design/icons';
-// We prefer blob URLs generated from reading the PNG file to avoid scheme issues
 import { MedicalService } from '@/services/medicalService';
 import styles from './PdfMultiPagePreview.module.css';
 
@@ -155,43 +154,21 @@ const PdfMultiPagePreview: React.FC<Props> = ({ attachmentId, initialPageUrl }) 
     return () => container.removeEventListener('scroll', handleScroll);
   }, [handleScroll]);
 
-  // Print function - print the rendered pages
-  const handlePrint = useCallback(() => {
-    if (!pages.length) return;
-
-    // Create a temporary container for printing
-    const printContainer = document.createElement('div');
-    printContainer.style.display = 'none';
-    printContainer.innerHTML = `
-      <style>
-        @media print {
-          body * { visibility: hidden; }
-          #print-content, #print-content * { visibility: visible; }
-          #print-content { position: absolute; left: 0; top: 0; width: 100%; }
-          #print-content img {
-            display: block;
-            max-width: 100%;
-            page-break-after: always;
-            page-break-inside: avoid;
-            margin: 0 auto;
-          }
-          #print-content img:last-child { page-break-after: auto; }
-        }
-      </style>
-      <div id="print-content">
-        ${pages.map(p => `<img src="${p.url}" alt="Page ${p.page}" />`).join('')}
-      </div>
-    `;
-
-    document.body.appendChild(printContainer);
-    printContainer.style.display = 'block';
-
-    // Trigger print
-    window.print();
-
-    // Clean up
-    document.body.removeChild(printContainer);
-  }, [pages]);
+  // Print function - open native print dialog via Tauri command
+  const handlePrint = useCallback(async () => {
+    try {
+      await MedicalService.printAttachment(attachmentId);
+      // No success notification needed - the print dialog will open
+    } catch (e: any) {
+      console.error('[PdfMultiPagePreview] Print failed:', e);
+      notification.error({
+        message: 'Print failed',
+        description: e?.message || 'Failed to open print dialog',
+        placement: 'bottomRight',
+        duration: 5,
+      });
+    }
+  }, [attachmentId, notification]);
 
   if (!pages.length && !error) {
     return (

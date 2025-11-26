@@ -39,16 +39,19 @@ const DeviceImportModal: React.FC = () => {
   const { notification, modal: modalHook } = App.useApp();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
-  const [recordType, setRecordType] = useState<'procedure' | 'note'>('note');
+  const [recordType, setRecordType] = useState<'procedure' | 'note' | 'test_result'>('test_result');
 
   const {
-    pendingFiles,
     modalOpen,
     suggestedPatientId,
     removeDeviceFile,
     clearAllFiles,
     closeModal,
+    getGroupedFiles,
   } = useDeviceImport();
+
+  // Get grouped files (sessions + individual files)
+  const pendingFiles = getGroupedFiles();
 
   const { patients } = usePatients();
   const { data: currencies } = useCurrencies();
@@ -59,7 +62,7 @@ const DeviceImportModal: React.FC = () => {
   // Compute default form values based on device data
   const getDefaultFormValues = () => {
     const defaults: any = {
-      recordType: 'note',
+      recordType: 'test_result',
     };
 
     if (suggestedPatientId) {
@@ -92,10 +95,10 @@ const DeviceImportModal: React.FC = () => {
     }
   }, [modalOpen, suggestedPatientId, settings?.currencyId, pendingFiles]);
 
-  const handleRecordTypeChange = (value: 'procedure' | 'note') => {
+  const handleRecordTypeChange = (value: 'procedure' | 'note' | 'test_result') => {
     setRecordType(value);
-    if (value === 'note') {
-      // Clear financial fields for notes
+    if (value === 'note' || value === 'test_result') {
+      // Clear financial fields for notes and test results
       form.setFieldValue('price', undefined);
       form.setFieldValue('currencyId', undefined);
     } else if (value === 'procedure') {
@@ -142,8 +145,13 @@ const DeviceImportModal: React.FC = () => {
         });
       });
 
-      // Create medical record with device data from first file (for PDF generation)
-      const firstFile = pendingFiles[0];
+      // Create medical record with ALL device data for multi-device PDF generation
+      const deviceDataList = pendingFiles.map(file => ({
+        deviceTestData: file.testResults,
+        deviceType: file.deviceType,
+        deviceName: file.deviceName,
+      }));
+
       const input: CreateMedicalRecordInput = {
         patientId: values.patientId,
         recordType: values.recordType,
@@ -151,16 +159,13 @@ const DeviceImportModal: React.FC = () => {
         description: values.description,
         price: values.price,
         currencyId: values.currencyId,
-        // Include device data for PDF generation (from first file)
-        deviceTestData: firstFile?.testResults,
-        deviceType: firstFile?.deviceType,
-        deviceName: firstFile?.deviceName,
+        // Send all device data for multi-device PDF generation
+        deviceDataList,
       };
 
       console.log('💾 Creating medical record with device data:', {
-        hasDeviceData: !!firstFile?.testResults,
-        deviceType: firstFile?.deviceType,
-        deviceName: firstFile?.deviceName,
+        deviceCount: deviceDataList.length,
+        devices: deviceDataList.map(d => d.deviceType),
       });
 
       const createdRecord = await createMutation.mutateAsync(input);
@@ -180,6 +185,7 @@ const DeviceImportModal: React.FC = () => {
             deviceType: file.deviceType,
             deviceName: file.deviceName,
             connectionMethod: file.connectionMethod,
+            attachmentType: 'test_result', // Device files are test results, not regular files
           });
         });
 
@@ -272,6 +278,16 @@ const DeviceImportModal: React.FC = () => {
                   <Space>
                     <Text strong>{file.fileName}</Text>
                     <Tag color="green">{file.deviceName}</Tag>
+                    {file.isSession && (
+                      <>
+                        <Tag color="purple">
+                          {file.parameterCount} {file.parameterCount === 1 ? 'parameter' : 'parameters'}
+                        </Tag>
+                        {file.sessionInProgress && (
+                          <Tag color="orange">In Progress...</Tag>
+                        )}
+                      </>
+                    )}
                     {file.patientId && (
                       <Tag color="blue" icon={<CheckCircleOutlined />}>
                         {t('medical:deviceImport.patientDetected')}
@@ -287,6 +303,11 @@ const DeviceImportModal: React.FC = () => {
                     {file.patientIdentifier && (
                       <Text type="secondary">
                         {t('medical:deviceImport.identifier')}: {file.patientIdentifier}
+                      </Text>
+                    )}
+                    {file.isSession && file.testResults?.parameters && (
+                      <Text type="secondary" style={{ fontSize: '0.85em' }}>
+                        {file.testResults.parameters.map((p: any) => p.code).join(', ')}
                       </Text>
                     )}
                   </Space>
@@ -330,6 +351,7 @@ const DeviceImportModal: React.FC = () => {
           rules={[{ required: true, message: t('forms:validation.required') }]}
         >
           <Select onChange={handleRecordTypeChange}>
+            <Option value="test_result">{t('medical:recordTypes.testResult')}</Option>
             <Option value="note">{t('medical:recordTypes.note')}</Option>
             <Option value="procedure">{t('medical:recordTypes.procedure')}</Option>
           </Select>

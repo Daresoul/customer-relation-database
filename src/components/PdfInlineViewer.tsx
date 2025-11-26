@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Typography, Button } from 'antd';
+import { Typography, Button, App } from 'antd';
 import { PrinterOutlined } from '@ant-design/icons';
 // pdf.js v3 imports — use legacy build for wider WebView compatibility
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -8,6 +8,7 @@ import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist/legacy/build/pdf';
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
 import workerSrc from 'pdfjs-dist/legacy/build/pdf.worker.min.js?url';
+import { MedicalService } from '@/services/medicalService';
 import styles from './PdfInlineViewer.module.css';
 
 const { Text } = Typography;
@@ -15,11 +16,13 @@ const { Text } = Typography;
 interface PdfInlineViewerProps {
   blob: Blob;
   fileName: string;
+  attachmentId?: number; // Optional attachment ID for native printing
 }
 
 // Best-effort inline PDF viewer using pdfjs-dist if available.
 // Falls back to a helpful message if the lib is not installed.
-const PdfInlineViewer: React.FC<PdfInlineViewerProps> = ({ blob, fileName }) => {
+const PdfInlineViewer: React.FC<PdfInlineViewerProps> = ({ blob, fileName, attachmentId }) => {
+  const { notification } = App.useApp();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -130,10 +133,25 @@ const PdfInlineViewer: React.FC<PdfInlineViewerProps> = ({ blob, fileName }) => 
     // Only re-run when blob or error changes
   }, [error, blob]);
 
-  // Print function - print the rendered canvas
-  const handlePrint = () => {
-    // Just trigger browser print - will print the current page
-    window.print();
+  // Print function - open native print dialog if attachmentId is available
+  const handlePrint = async () => {
+    if (attachmentId) {
+      try {
+        await MedicalService.printAttachment(attachmentId);
+        // No success notification needed - the print dialog will open
+      } catch (e: any) {
+        console.error('[PdfInlineViewer] Print failed:', e);
+        notification.error({
+          message: 'Print failed',
+          description: e?.message || 'Failed to open print dialog',
+          placement: 'bottomRight',
+          duration: 5,
+        });
+      }
+    } else {
+      // Fallback to browser print if no attachmentId (shouldn't happen in practice)
+      window.print();
+    }
   };
 
   if (error) {
