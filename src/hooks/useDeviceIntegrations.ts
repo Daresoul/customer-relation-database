@@ -1,7 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { App } from 'antd';
+import { useEffect, useState, useCallback } from 'react';
+import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import { invoke } from '@tauri-apps/api';
 import { DeviceIntegrationService } from '../services/deviceIntegrationService';
-import { DeviceIntegration, CreateDeviceIntegrationInput, UpdateDeviceIntegrationInput } from '../types/deviceIntegration';
+import { DeviceIntegration, CreateDeviceIntegrationInput, UpdateDeviceIntegrationInput, DeviceConnectionStatus } from '../types/deviceIntegration';
 
 export const useDeviceIntegrations = () => {
   return useQuery({
@@ -131,4 +134,68 @@ export const useToggleDeviceIntegration = () => {
       });
     },
   });
+};
+
+// Hook to track device connection statuses with real-time updates
+export const useDeviceConnectionStatus = () => {
+  const [statuses, setStatuses] = useState<Map<number, DeviceConnectionStatus>>(new Map());
+
+  // Fetch initial statuses
+  const fetchStatuses = useCallback(async () => {
+    try {
+      const statusList = await invoke<DeviceConnectionStatus[]>('get_device_connection_statuses');
+      const statusMap = new Map<number, DeviceConnectionStatus>();
+      statusList.forEach((status) => {
+        statusMap.set(status.integration_id, status);
+      });
+      setStatuses(statusMap);
+    } catch (_error) {
+      // Silently fail - statuses are not critical
+    }
+  }, []);
+
+  useEffect(() => {
+    // Fetch initial statuses
+    fetchStatuses();
+
+    // Listen for status updates
+    let unlisten: UnlistenFn | undefined;
+
+    const setupListener = async () => {
+      unlisten = await listen<DeviceConnectionStatus>('device-connection-status', (event) => {
+        const status = event.payload;
+        setStatuses((prev) => {
+          const newMap = new Map(prev);
+          newMap.set(status.integration_id, status);
+          return newMap;
+        });
+      });
+    };
+
+    setupListener();
+
+    // Refresh statuses periodically (every 10 seconds)
+    const interval = setInterval(fetchStatuses, 10000);
+
+    return () => {
+      if (unlisten) {
+        unlisten();
+      }
+      clearInterval(interval);
+    };
+  }, [fetchStatuses]);
+
+  // Get status for a specific integration
+  const getStatus = useCallback(
+    (integrationId: number): DeviceConnectionStatus | undefined => {
+      return statuses.get(integrationId);
+    },
+    [statuses]
+  );
+
+  return {
+    statuses,
+    getStatus,
+    refetch: fetchStatuses,
+  };
 };

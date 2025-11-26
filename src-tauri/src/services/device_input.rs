@@ -1,19 +1,83 @@
 use std::thread;
 use std::time::Duration;
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 use std::sync::{Mutex, OnceLock};
 use serialport::{available_ports, SerialPortType, UsbPortInfo};
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 use hidapi::HidApi;
 use tauri::{AppHandle, Manager};
+use chrono::Utc;
 use crate::services::device_input::PortType::HIDDevice;
 use crate::services::device_parser::DeviceParserService;
 
 // Track active listeners to prevent duplicates
 static ACTIVE_LISTENERS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 
+// Track connection status for each device
+static CONNECTION_STATUS: OnceLock<Mutex<HashMap<String, DeviceConnectionStatus>>> = OnceLock::new();
+
 fn get_active_listeners() -> &'static Mutex<HashSet<String>> {
     ACTIVE_LISTENERS.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+fn get_connection_status() -> &'static Mutex<HashMap<String, DeviceConnectionStatus>> {
+    CONNECTION_STATUS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct DeviceConnectionStatus {
+    pub integration_id: i64,
+    pub port_name: String,
+    pub device_type: String,
+    pub status: ConnectionState,
+    pub last_connected: Option<String>,
+    pub last_error: Option<String>,
+    pub retry_count: u32,
+    pub next_retry: Option<String>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
+pub enum ConnectionState {
+    Connected,
+    Disconnected,
+    Connecting,
+    Error,
+}
+
+/// Update connection status and emit event to frontend
+fn update_connection_status(app_handle: &AppHandle, integration_id: i64, port_name: &str, device_type: &str, status: ConnectionState, error: Option<String>, retry_count: u32) {
+    let now = Utc::now();
+    let next_retry = if status == ConnectionState::Disconnected || status == ConnectionState::Error {
+        Some((now + chrono::Duration::seconds(5)).to_rfc3339())
+    } else {
+        None
+    };
+
+    let connection_status = DeviceConnectionStatus {
+        integration_id,
+        port_name: port_name.to_string(),
+        device_type: device_type.to_string(),
+        status: status.clone(),
+        last_connected: if status == ConnectionState::Connected { Some(now.to_rfc3339()) } else { None },
+        last_error: error,
+        retry_count,
+        next_retry,
+    };
+
+    // Store in global state
+    {
+        let mut statuses = get_connection_status().lock().unwrap();
+        statuses.insert(format!("{}:{}", integration_id, port_name), connection_status.clone());
+    }
+
+    // Emit to frontend
+    let _ = app_handle.emit_all("device-connection-status", &connection_status);
+}
+
+/// Get all connection statuses
+pub fn get_all_connection_statuses() -> Vec<DeviceConnectionStatus> {
+    let statuses = get_connection_status().lock().unwrap();
+    statuses.values().cloned().collect()
 }
 
 #[derive(Serialize)]
@@ -203,10 +267,12 @@ pub fn scan_ports() -> Result<Vec<PortInfo>, String> {
 }
 
 /// Start listening to a serial port with the given device protocol
+/// With auto-reconnect on failure (5-second intervals)
 pub fn start_listen(
     app_handle: AppHandle,
     port_name: String,
     device_type: String,
+    integration_id: i64,
 ) -> Result<(), String> {
     // Check if listener already exists for this port
     let listener_key = format!("{}:{}", port_name, device_type);
@@ -219,22 +285,60 @@ pub fn start_listen(
         listeners.insert(listener_key.clone());
     }
 
-    // Get protocol configuration for the device type
-    let protocol = get_device_protocol(&device_type);
-
-    let _port_name_clone = port_name.clone();
     let device_type_clone = device_type.clone();
+    let port_name_clone = port_name.clone();
+
     thread::spawn(move || {
-        if let Err(e) = handle_listening_serial(port_name, app_handle, protocol, device_type_clone) {
-            eprintln!("Listener error: {}", e);
+        let mut retry_count: u32 = 0;
+
+        loop {
+            // Update status to connecting
+            update_connection_status(&app_handle, integration_id, &port_name_clone, &device_type_clone, ConnectionState::Connecting, None, retry_count);
+
+            // Get protocol configuration for the device type
+            let protocol = get_device_protocol(&device_type_clone);
+
+            match handle_listening_serial(&port_name_clone, &app_handle, protocol, &device_type_clone, integration_id) {
+                Ok(_) => {
+                    // Normal exit (shouldn't happen in normal operation)
+                    update_connection_status(&app_handle, integration_id, &port_name_clone, &device_type_clone, ConnectionState::Disconnected, Some("Connection closed".to_string()), retry_count);
+                }
+                Err(e) => {
+                    retry_count += 1;
+                    update_connection_status(&app_handle, integration_id, &port_name_clone, &device_type_clone, ConnectionState::Error, Some(e.clone()), retry_count);
+                    eprintln!("Listener error on {}: {} (retry #{})", port_name_clone, e, retry_count);
+                }
+            }
+
+            // Check if we should stop retrying (listener was removed)
+            {
+                let listeners = get_active_listeners().lock().unwrap();
+                if !listeners.contains(&listener_key) {
+                    break;
+                }
+            }
+
+            // Wait 5 seconds before retrying
+            thread::sleep(Duration::from_secs(5));
         }
 
         // Remove from active listeners when thread exits
         let mut listeners = get_active_listeners().lock().unwrap();
         listeners.remove(&listener_key);
+
+        // Clear connection status
+        let mut statuses = get_connection_status().lock().unwrap();
+        statuses.remove(&format!("{}:{}", integration_id, port_name_clone));
     });
 
     Ok(())
+}
+
+/// Stop listening to a serial port
+pub fn stop_listen(port_name: &str, device_type: &str) {
+    let listener_key = format!("{}:{}", port_name, device_type);
+    let mut listeners = get_active_listeners().lock().unwrap();
+    listeners.remove(&listener_key);
 }
 
 /// Handle incoming device data: parse and emit to frontend
@@ -266,7 +370,7 @@ fn handle_device_data(app_handle: &AppHandle, data: &[u8], device_name: &str, de
     }
 }
 
-fn handle_listening_serial(port_name: String, app_handle: AppHandle, protocol: DeviceProtocol, device_type: String) -> Result<(), String> {
+fn handle_listening_serial(port_name: &str, app_handle: &AppHandle, protocol: DeviceProtocol, device_type: &str, integration_id: i64) -> Result<(), String> {
     // Detect if this is a PTY device (macOS virtual serial port workaround)
     // PTY devices on macOS (created by socat, etc.) need baud_rate=0 to avoid ENOTTY error
     // See: https://github.com/serialport/serialport-rs/issues/22
@@ -277,7 +381,7 @@ fn handle_listening_serial(port_name: String, app_handle: AppHandle, protocol: D
         protocol.baud_rate
     };
 
-    let mut port = serialport::new(&port_name, baud_rate)
+    let mut port = serialport::new(port_name, baud_rate)
         .timeout(Duration::from_millis(100))
         .data_bits(serialport::DataBits::Eight)
         .parity(serialport::Parity::None)
@@ -288,6 +392,9 @@ fn handle_listening_serial(port_name: String, app_handle: AppHandle, protocol: D
             eprintln!("Failed to open port {}: {}", port_name, e);
             format!("Failed to open port: {}", e)
         })?;
+
+    // Successfully connected - update status
+    update_connection_status(app_handle, integration_id, port_name, device_type, ConnectionState::Connected, None, 0);
 
     let mut data: Vec<u8> = Vec::new();
     let mut buffer = vec![0; 1024];
@@ -360,20 +467,20 @@ fn handle_listening_serial(port_name: String, app_handle: AppHandle, protocol: D
             e.kind() == std::io::ErrorKind::ConnectionRefused ||
             e.kind() == std::io::ErrorKind::NotFound ||
             e.kind() == std::io::ErrorKind::PermissionDenied => {
+                let err_msg = format!("Connection lost: {}", e);
                 eprintln!("Fatal error on port {}: {}", port_name, e);
-                let _ = app_handle.emit_all("rust-error", e.to_string());
-                break;
+                return Err(err_msg);
             }
             Err(ref e) if e.kind() == std::io::ErrorKind::Other => {
                 let err_str = e.to_string().to_lowercase();
                 if err_str.contains("device") || err_str.contains("failed") {
+                    let err_msg = format!("Device error: {}", e);
                     eprintln!("Device error on port {}: {}", port_name, e);
-                    let _ = app_handle.emit_all("rust-error", e.to_string());
-                    break;
+                    return Err(err_msg);
                 }
             }
-            Err(err) => {
-                let _ = app_handle.emit_all("rust-error", err.to_string());
+            Err(_err) => {
+                // Transient errors - continue reading
             }
         }
     }

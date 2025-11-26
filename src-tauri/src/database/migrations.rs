@@ -89,22 +89,45 @@ where
 
 fn create_patients_table(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
     Box::pin(async move {
-        // Patients table (unchanged)
+        // Patients table with foreign keys to species and breeds
+        // Note: species and breeds tables are created in later migrations,
+        // but SQLite doesn't enforce FK constraints at table creation time
         sqlx::query(r#"
             CREATE TABLE IF NOT EXISTS patients (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL CHECK(length(name) <= 100),
-                species TEXT NOT NULL CHECK(length(species) <= 50),
-                breed TEXT CHECK(breed IS NULL OR length(breed) <= 50),
+                species_id INTEGER NOT NULL,
+                breed_id INTEGER,
                 date_of_birth DATE,
+                color TEXT,
+                gender TEXT CHECK(gender IN ('Male', 'Female', 'Unknown')),
                 weight DECIMAL(6,2) CHECK(weight IS NULL OR weight > 0),
+                microchip_id TEXT CHECK(microchip_id IS NULL OR length(microchip_id) <= 50),
                 medical_notes TEXT CHECK(medical_notes IS NULL OR length(medical_notes) <= 10000),
+                is_active BOOLEAN NOT NULL DEFAULT 1,
+                household_id INTEGER,
                 created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (species_id) REFERENCES species(id),
+                FOREIGN KEY (breed_id) REFERENCES breeds(id),
+                FOREIGN KEY (household_id) REFERENCES households(id)
             )
         "#)
         .execute(pool)
         .await?;
+
+        // Create indexes
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_patients_species_id ON patients(species_id)")
+            .execute(pool)
+            .await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_patients_breed_id ON patients(breed_id)")
+            .execute(pool)
+            .await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_patients_household_id ON patients(household_id)")
+            .execute(pool)
+            .await?;
 
         // Create update trigger
         sqlx::query(r#"
@@ -402,8 +425,21 @@ fn create_household_search_fts5(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std:
 }
 
 // Migration 007: Add gender column to patients table
+// Note: For fresh databases, this column already exists in migration 001
 fn add_patient_gender(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
     Box::pin(async move {
+        // Check if gender column already exists
+        let exists: (i64,) = sqlx::query_as(
+            "SELECT COUNT(1) FROM pragma_table_info('patients') WHERE name = 'gender'"
+        )
+        .fetch_one(pool)
+        .await?;
+
+        if exists.0 > 0 {
+            println!("Migration 007: gender column already exists, skipping");
+            return Ok(());
+        }
+
         // Add gender column to patients table
         sqlx::query(r#"
             ALTER TABLE patients
@@ -495,7 +531,7 @@ fn create_medical_records_table(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std:
             CREATE TABLE IF NOT EXISTS medical_records (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 patient_id INTEGER NOT NULL,
-                record_type TEXT NOT NULL CHECK(record_type IN ('procedure', 'note')),
+                record_type TEXT NOT NULL CHECK(record_type IN ('procedure', 'note', 'test_result')),
                 name TEXT NOT NULL CHECK(length(name) <= 200),
                 procedure_name TEXT CHECK(procedure_name IS NULL OR length(procedure_name) <= 200),
                 description TEXT NOT NULL,
@@ -741,9 +777,10 @@ fn recreate_medical_record_history(pool: &SqlitePool) -> std::pin::Pin<Box<dyn s
 }
 
 // Migration 016: Add missing columns to patients table used by queries/models
+// Note: For fresh databases, these columns already exist in migration 001
 fn add_missing_patient_columns(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
     Box::pin(async move {
-        // Helper to check and add a column
+        // Helper to check and add a column only if it doesn't exist
         async fn ensure_column(pool: &SqlitePool, table: &str, column: &str, ddl: &str) -> Result<(), sqlx::Error> {
             let exists: (i64,) = sqlx::query_as(
                 "SELECT COUNT(1) FROM pragma_table_info(?) WHERE name = ?"
@@ -757,19 +794,17 @@ fn add_missing_patient_columns(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::
                 let sql = format!("ALTER TABLE {} ADD COLUMN {} {}", table, column, ddl);
                 // NOTE: SQLite only supports limited ALTER; this form is safe for simple adds
                 sqlx::query(&sql).execute(pool).await?;
+                println!("Migration 016: Added column {} to {}", column, table);
             }
             Ok(())
         }
 
-        // Add gender (TEXT) if missing
+        // These columns are added for legacy databases; fresh databases already have them
         ensure_column(pool, "patients", "gender", "TEXT").await?;
-        // Add color (TEXT) if missing
         ensure_column(pool, "patients", "color", "TEXT").await?;
-        // Add microchip_id (TEXT) if missing
         ensure_column(pool, "patients", "microchip_id", "TEXT").await?;
-        // Add is_active (BOOLEAN) if missing, default to 1
-        // SQLite treats BOOLEAN as NUMERIC; default only applies to new rows
         ensure_column(pool, "patients", "is_active", "BOOLEAN DEFAULT 1").await?;
+        ensure_column(pool, "patients", "household_id", "INTEGER REFERENCES households(id)").await?;
 
         Ok(())
     })
@@ -1316,7 +1351,25 @@ fn add_species_color_column(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::fut
 
 fn convert_patient_species_breed_to_fk(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
     Box::pin(async move {
-        // Check if species_id already exists
+        // Check if this is a fresh database (created with new schema that already has species_id)
+        // by checking if the old TEXT-based 'species' column exists
+        let old_species_column_check: Result<(i64,), _> = sqlx::query_as(
+            "SELECT COUNT(*) FROM pragma_table_info('patients') WHERE name = 'species' AND type = 'TEXT'"
+        )
+        .fetch_one(pool)
+        .await;
+
+        let has_old_species_column = match old_species_column_check {
+            Ok((count,)) => count > 0,
+            Err(_) => false,
+        };
+
+        if !has_old_species_column {
+            println!("Migration 027: Fresh database with correct schema, skipping migration");
+            return Ok(());
+        }
+
+        // Check if species_id already exists (partial migration or already done)
         let column_check: Result<(i64,), _> = sqlx::query_as(
             "SELECT COUNT(*) FROM pragma_table_info('patients') WHERE name = 'species_id'"
         )
@@ -1332,6 +1385,11 @@ fn convert_patient_species_breed_to_fk(pool: &SqlitePool) -> std::pin::Pin<Box<d
             println!("Migration 027: species_id already exists, skipping column creation");
             return Ok(());
         }
+
+        // Clean up any leftover patients_new table from previous failed migrations
+        sqlx::query("DROP TABLE IF EXISTS patients_new")
+            .execute(pool)
+            .await?;
 
         // Step 1: Add new foreign key columns
         sqlx::query("ALTER TABLE patients ADD COLUMN species_id INTEGER")
@@ -1588,8 +1646,22 @@ fn add_attachment_type_column(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::f
 // Migration 031: Add 'test_result' as a valid record_type for medical_records
 // SQLite doesn't support ALTER CONSTRAINT, so we need to recreate the table
 // This adds 'test_result' type for device-generated test data records
+// Note: For fresh databases, migration 010 already includes 'test_result' in the constraint
 fn add_test_result_record_type(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
     Box::pin(async move {
+        // Check if test_result is already allowed by trying to get the table's SQL
+        // and checking if it contains 'test_result'
+        let table_sql: Result<(String,), _> = sqlx::query_as(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='medical_records'"
+        ).fetch_one(pool).await;
+
+        if let Ok((sql,)) = table_sql {
+            if sql.contains("test_result") {
+                println!("Migration 031: test_result already in constraint, skipping");
+                return Ok(());
+            }
+        }
+
         // Check if medical_records table exists
         let table_exists: (i32,) = sqlx::query_as(
             "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='medical_records'"
@@ -1599,6 +1671,11 @@ fn add_test_result_record_type(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::
         let new_table_exists: (i32,) = sqlx::query_as(
             "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='medical_records_new'"
         ).fetch_one(pool).await?;
+
+        // Clean up any leftover new table from previous failed migrations
+        if new_table_exists.0 > 0 {
+            sqlx::query("DROP TABLE IF EXISTS medical_records_new").execute(pool).await?;
+        }
 
         // If the new table exists but old doesn't, just rename it (recover from partial migration)
         if new_table_exists.0 > 0 && table_exists.0 == 0 {

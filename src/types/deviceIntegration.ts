@@ -71,6 +71,20 @@ export interface UpdateDeviceIntegrationInput {
   enabled?: boolean;
 }
 
+// Connection status types
+export type ConnectionState = 'Connected' | 'Disconnected' | 'Connecting' | 'Error';
+
+export interface DeviceConnectionStatus {
+  integration_id: number;
+  port_name: string;
+  device_type: string;
+  status: ConnectionState;
+  last_connected?: string;
+  last_error?: string;
+  retry_count: number;
+  next_retry?: string;
+}
+
 // Helper function to get display name for device type
 export function getDeviceTypeDisplayName(deviceType: DeviceType): string {
   switch (deviceType) {
