@@ -46,7 +46,7 @@ interface PortInfo {
 }
 
 const DeviceInputSettings: React.FC = () => {
-  const { t } = useTranslation(['common']);
+  const { t } = useTranslation(['devices', 'common']);
   const [ports, setPorts] = useState<PortInfo[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -75,7 +75,7 @@ const DeviceInputSettings: React.FC = () => {
       // No status yet - show gray (unknown)
       return (
         <span
-          title="Status unknown"
+          title={t('messages.statusUnknown')}
           style={{
             display: 'inline-block',
             width: 10,
@@ -105,15 +105,15 @@ const DeviceInputSettings: React.FC = () => {
     const getStatusTitle = (): string => {
       switch (status.status) {
         case 'Connected':
-          return 'Connected';
+          return t('status.connected');
         case 'Connecting':
-          return `Connecting... (attempt ${status.retry_count + 1})`;
+          return t('status.connectingAttempt', { count: status.retry_count + 1 });
         case 'Disconnected':
-          return `Disconnected - retrying in 5s`;
+          return t('status.disconnectedRetrying');
         case 'Error':
-          return `Error: ${status.last_error || 'Unknown'} - retrying in 5s`;
+          return t('status.errorRetrying', { message: status.last_error || t('status.unknown') });
         default:
-          return 'Unknown status';
+          return t('messages.statusUnknown');
       }
     };
 
@@ -151,18 +151,18 @@ const DeviceInputSettings: React.FC = () => {
 
   const getPortTypeDisplay = (portType: PortType): { text: string; color: string } => {
     if (typeof portType === 'object' && 'SerialUSBPort' in portType) {
-      return { text: 'Serial USB', color: 'blue' };
+      return { text: t('portTypes.serialUsb'), color: 'blue' };
     }
     if (typeof portType === 'object' && 'HIDDevice' in portType) {
-      return { text: 'HID', color: 'purple' };
+      return { text: t('portTypes.hid'), color: 'purple' };
     }
     if (portType === 'SerialPciPort') {
-      return { text: 'Serial PCI', color: 'green' };
+      return { text: t('portTypes.serialPci'), color: 'green' };
     }
     if (portType === 'SerialBluetoothPort') {
-      return { text: 'Serial Bluetooth', color: 'cyan' };
+      return { text: t('portTypes.serialBluetooth'), color: 'cyan' };
     }
-    return { text: 'Unknown', color: 'default' };
+    return { text: t('portTypes.unknown'), color: 'default' };
   };
 
   const getPortDetails = (portType: PortType): string | null => {
@@ -199,7 +199,7 @@ const DeviceInputSettings: React.FC = () => {
       const selected = await open({
         directory: true,
         multiple: false,
-        title: 'Select Directory to Watch',
+        title: t('modal.selectDirectory'),
       });
 
       if (selected && typeof selected === 'string') {
@@ -276,11 +276,36 @@ const DeviceInputSettings: React.FC = () => {
       };
 
       if (editingIntegration) {
+        // Stop existing listener before updating (if enabled and config changed)
+        const configChanged =
+          editingIntegration.serial_port_name !== values.serial_port_name ||
+          editingIntegration.watch_directory !== values.watch_directory ||
+          editingIntegration.file_pattern !== values.file_pattern ||
+          editingIntegration.tcp_host !== values.tcp_host ||
+          editingIntegration.tcp_port !== values.tcp_port;
+
+        if (editingIntegration.enabled && configChanged) {
+          try {
+            await invoke('stop_device_integration_listener', { integrationId: editingIntegration.id });
+          } catch (_stopError) {
+            // Ignore stop errors - listener might not be running
+          }
+        }
+
         const updateData = { ...integrationData, enabled: values.enabled };
         await updateIntegrationMutation.mutateAsync({
           id: editingIntegration.id,
           data: updateData,
         });
+
+        // Restart listener if still enabled and config changed
+        if (values.enabled && configChanged) {
+          try {
+            await invoke('start_device_integration_listener', { integrationId: editingIntegration.id });
+          } catch (_startError) {
+            // Error will be reflected in connection status
+          }
+        }
       } else {
         await createIntegrationMutation.mutateAsync(integrationData);
       }
@@ -297,19 +322,19 @@ const DeviceInputSettings: React.FC = () => {
   // Device integrations table columns
   const integrationColumns = [
     {
-      title: 'Name',
+      title: t('table.name'),
       dataIndex: 'name',
       key: 'name',
       render: (text: string, record: DeviceIntegration) => (
         <Space>
           {renderConnectionStatus(record)}
           <Text strong>{text}</Text>
-          {!record.enabled && <Tag color="default">Disabled</Tag>}
+          {!record.enabled && <Tag color="default">{t('status.disabled')}</Tag>}
         </Space>
       ),
     },
     {
-      title: 'Device',
+      title: t('table.device'),
       dataIndex: 'device_type',
       key: 'device_type',
       render: (deviceType: DeviceType) => (
@@ -317,7 +342,7 @@ const DeviceInputSettings: React.FC = () => {
       ),
     },
     {
-      title: 'Connection',
+      title: t('table.connection'),
       dataIndex: 'connection_type',
       key: 'connection_type',
       render: (connectionType: ConnectionType) => (
@@ -325,7 +350,7 @@ const DeviceInputSettings: React.FC = () => {
       ),
     },
     {
-      title: 'Configuration',
+      title: t('table.configuration'),
       key: 'config',
       render: (_: any, record: DeviceIntegration) => {
         if (record.connection_type === 'file_watch') {
@@ -339,7 +364,7 @@ const DeviceInputSettings: React.FC = () => {
       },
     },
     {
-      title: 'Actions',
+      title: t('table.actions'),
       key: 'actions',
       render: (_: any, record: DeviceIntegration) => (
         <Space>
@@ -350,20 +375,20 @@ const DeviceInputSettings: React.FC = () => {
             onClick={() => handleToggleIntegration(record.id)}
             loading={toggleIntegrationMutation.isPending}
           >
-            {record.enabled ? 'Disable' : 'Enable'}
+            {record.enabled ? t('buttons.disable') : t('buttons.enable')}
           </Button>
           <Button
             icon={<EditOutlined />}
             size="small"
             onClick={() => handleEditIntegration(record)}
           >
-            Edit
+            {t('common:edit')}
           </Button>
           <Popconfirm
-            title="Delete this device integration?"
+            title={t('messages.deleteConfirm')}
             onConfirm={() => handleDeleteIntegration(record.id)}
-            okText="Yes"
-            cancelText="No"
+            okText={t('common:yes')}
+            cancelText={t('common:no')}
           >
             <Button
               icon={<DeleteOutlined />}
@@ -371,7 +396,7 @@ const DeviceInputSettings: React.FC = () => {
               danger
               loading={deleteIntegrationMutation.isPending}
             >
-              Delete
+              {t('common:delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -381,13 +406,13 @@ const DeviceInputSettings: React.FC = () => {
 
   const columns = [
     {
-      title: 'Port Name',
+      title: t('table.portName'),
       dataIndex: 'port_name',
       key: 'port_name',
       render: (text: string) => <Text strong>{text}</Text>,
     },
     {
-      title: 'Type',
+      title: t('table.type'),
       dataIndex: 'port_type',
       key: 'type',
       render: (portType: PortType) => {
@@ -396,7 +421,7 @@ const DeviceInputSettings: React.FC = () => {
       },
     },
     {
-      title: 'Details',
+      title: t('table.details'),
       dataIndex: 'port_type',
       key: 'details',
       render: (portType: PortType) => {
@@ -412,7 +437,7 @@ const DeviceInputSettings: React.FC = () => {
         <Card
           title={
             <span className={styles.cardTitle}>
-              <UsbOutlined /> Available Input Devices
+              <UsbOutlined /> {t('sections.availableDevices')}
             </span>
           }
           className={styles.settingsCard}
@@ -423,13 +448,13 @@ const DeviceInputSettings: React.FC = () => {
               loading={loading}
               type="text"
             >
-              Refresh
+              {t('buttons.refresh')}
             </Button>
           }
         >
           <Space direction="vertical" style={{ width: '100%' }} size="large">
             <Text type="secondary">
-              <ApiOutlined /> Detected {ports.length} device{ports.length !== 1 ? 's' : ''} (Serial Ports & HID Devices)
+              <ApiOutlined /> {t('messages.detectedDevices', { count: ports.length })}
             </Text>
 
             <Table
@@ -446,7 +471,7 @@ const DeviceInputSettings: React.FC = () => {
         <Card
           title={
             <span className={styles.cardTitle}>
-              <ApiOutlined /> Device Integrations
+              <ApiOutlined /> {t('sections.integrations')}
             </span>
           }
           className={styles.settingsCard}
@@ -456,7 +481,7 @@ const DeviceInputSettings: React.FC = () => {
               icon={<PlusOutlined />}
               onClick={handleAddIntegration}
             >
-              Add Integration
+              {t('buttons.addIntegration')}
             </Button>
           }
         >
@@ -473,7 +498,7 @@ const DeviceInputSettings: React.FC = () => {
 
       {/* Add/Edit Integration Modal */}
       <Modal
-        title={editingIntegration ? 'Edit Device Integration' : 'Add New Device Integration'}
+        title={editingIntegration ? t('modal.editTitle') : t('modal.addTitle')}
         open={integrationModalVisible}
         onCancel={() => {
           setIntegrationModalVisible(false);
@@ -492,27 +517,26 @@ const DeviceInputSettings: React.FC = () => {
         >
           <Form.Item
             name="name"
-            label="Integration Name"
-            rules={[{ required: true, message: 'Please enter integration name' }]}
+            label={t('form.labels.integrationName')}
+            rules={[{ required: true, message: t('form.validation.nameRequired') }]}
           >
-            <Input placeholder="e.g., Lab Analyzer 1" />
+            <Input placeholder={t('form.placeholders.integrationName')} />
           </Form.Item>
 
           <Form.Item
             name="device_type"
-            label="Device Type"
-            rules={[{ required: true, message: 'Please select device type' }]}
-            extra="Connection type options will update based on device capabilities"
+            label={t('form.labels.deviceType')}
+            rules={[{ required: true, message: t('form.validation.deviceTypeRequired') }]}
           >
-            <Select placeholder="Select device type">
+            <Select placeholder={t('form.placeholders.deviceType')}>
               <Select.Option value="exigo_eos_vet">
-                Exigo Eos Vet <Tag color="blue" style={{ marginLeft: 8 }}>File Watch</Tag>
+                {t('deviceTypes.exigoEosVet')} <Tag color="blue" style={{ marginLeft: 8 }}>{t('connectionTypes.fileWatch')}</Tag>
               </Select.Option>
               <Select.Option value="healvet_hv_fia3000">
-                Healvet HV-FIA 3000 <Tag color="green" style={{ marginLeft: 8 }}>Serial Port</Tag>
+                {t('deviceTypes.healvetHvFia3000')} <Tag color="green" style={{ marginLeft: 8 }}>{t('connectionTypes.serialPort')}</Tag>
               </Select.Option>
               <Select.Option value="mnchip_pointcare_pcr_v1">
-                MNCHIP PointCare PCR V1 <Tag color="blue" style={{ marginLeft: 8 }}>File Watch</Tag> <Tag color="green" style={{ marginLeft: 4 }}>Serial</Tag>
+                {t('deviceTypes.mnchipPointcarePcrV1')} <Tag color="blue" style={{ marginLeft: 8 }}>{t('connectionTypes.fileWatch')}</Tag> <Tag color="green" style={{ marginLeft: 4 }}>{t('connectionTypes.serialPort')}</Tag>
               </Select.Option>
             </Select>
           </Form.Item>
@@ -534,18 +558,18 @@ const DeviceInputSettings: React.FC = () => {
               return (
                 <Form.Item
                   name="connection_type"
-                  label="Connection Type"
-                  rules={[{ required: true, message: 'Please select connection type' }]}
+                  label={t('form.labels.connectionType')}
+                  rules={[{ required: true, message: t('form.validation.connectionTypeRequired') }]}
                 >
-                  <Select placeholder="Select connection type">
+                  <Select placeholder={t('form.placeholders.connectionType')}>
                     {availableTypes.includes('file_watch') && (
-                      <Select.Option value="file_watch">File Watch</Select.Option>
+                      <Select.Option value="file_watch">{t('connectionTypes.fileWatch')}</Select.Option>
                     )}
                     {availableTypes.includes('serial_port') && (
-                      <Select.Option value="serial_port">Serial Port</Select.Option>
+                      <Select.Option value="serial_port">{t('connectionTypes.serialPort')}</Select.Option>
                     )}
                     {availableTypes.includes('hl7_tcp') && (
-                      <Select.Option value="hl7_tcp">HL7 TCP</Select.Option>
+                      <Select.Option value="hl7_tcp">{t('connectionTypes.hl7Tcp')}</Select.Option>
                     )}
                   </Select>
                 </Form.Item>
@@ -565,11 +589,11 @@ const DeviceInputSettings: React.FC = () => {
                   <>
                     <Form.Item
                       name="watch_directory"
-                      label="Watch Directory"
-                      rules={[{ required: true, message: 'Please select directory' }]}
+                      label={t('form.labels.watchDirectory')}
+                      rules={[{ required: true, message: t('form.validation.directoryRequired') }]}
                     >
                       <Input
-                        placeholder="Select a directory to watch..."
+                        placeholder={t('form.placeholders.watchDirectory')}
                         readOnly
                         addonAfter={
                           <Button
@@ -578,17 +602,16 @@ const DeviceInputSettings: React.FC = () => {
                             type="text"
                             size="small"
                           >
-                            Browse
+                            {t('buttons.browse')}
                           </Button>
                         }
                       />
                     </Form.Item>
                     <Form.Item
                       name="file_pattern"
-                      label="File Pattern (Optional)"
-                      extra="Glob pattern to match files (e.g., *.xml, result_*.csv)"
+                      label={t('form.labels.filePattern')}
                     >
-                      <Input placeholder="*.xml" />
+                      <Input placeholder={t('form.placeholders.filePattern')} />
                     </Form.Item>
                   </>
                 );
@@ -596,11 +619,11 @@ const DeviceInputSettings: React.FC = () => {
                 return (
                   <Form.Item
                     name="serial_port_name"
-                    label="Serial Port"
-                    rules={[{ required: true, message: 'Please select or enter serial port name' }]}
+                    label={t('form.labels.serialPort')}
+                    rules={[{ required: true, message: t('form.validation.serialPortRequired') }]}
                   >
                     <AutoComplete
-                      placeholder="Select or type a port name"
+                      placeholder={t('form.placeholders.serialPort')}
                       options={ports.map(port => {
                         const details = getPortDetails(port.port_type);
                         const typeInfo = getPortTypeDisplay(port.port_type);
@@ -622,7 +645,7 @@ const DeviceInputSettings: React.FC = () => {
                       }
                       notFoundContent={
                         <div style={{ padding: '8px', textAlign: 'center' }}>
-                          <Text type="secondary">No ports found. Type a custom path.</Text>
+                          <Text type="secondary">{t('messages.noPortsFound')}</Text>
                         </div>
                       }
                     />
@@ -633,20 +656,20 @@ const DeviceInputSettings: React.FC = () => {
                   <>
                     <Form.Item
                       name="tcp_host"
-                      label="TCP Host"
-                      rules={[{ required: true, message: 'Please enter TCP host' }]}
+                      label={t('form.labels.tcpHost')}
+                      rules={[{ required: true, message: t('form.validation.tcpHostRequired') }]}
                     >
-                      <Input placeholder="localhost or 192.168.1.100" />
+                      <Input placeholder={t('form.placeholders.tcpHost')} />
                     </Form.Item>
                     <Form.Item
                       name="tcp_port"
-                      label="TCP Port"
-                      rules={[{ required: true, message: 'Please enter TCP port' }]}
+                      label={t('form.labels.tcpPort')}
+                      rules={[{ required: true, message: t('form.validation.tcpPortRequired') }]}
                     >
                       <InputNumber
                         min={1}
                         max={65535}
-                        placeholder="2575"
+                        placeholder={t('form.placeholders.tcpPort')}
                         style={{ width: '100%' }}
                       />
                     </Form.Item>
@@ -660,7 +683,7 @@ const DeviceInputSettings: React.FC = () => {
           {editingIntegration && (
             <Form.Item
               name="enabled"
-              label="Enabled"
+              label={t('form.labels.enabled')}
               valuePropName="checked"
             >
               <Switch />

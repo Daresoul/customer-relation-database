@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Table, Tag, Space, Button, Tooltip, Popconfirm } from 'antd';
+import { Table, Tag, Space, Button, Tooltip, Popconfirm, App } from 'antd';
 import {
   EditOutlined,
   DeleteOutlined,
@@ -33,10 +33,11 @@ const MedicalRecordTable: React.FC<MedicalRecordTableProps> = ({
 }) => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const archiveMutation = useArchiveMedicalRecord();
+  const { notification } = App.useApp();
 
   const handleArchive = async (recordId: number, archive: boolean) => {
     try {
-      await archiveMutation.mutateAsync({ recordId, archive });
+      await archiveMutation.mutateAsync({ recordId, archive, patientId });
       onRefresh();
     } catch (error) {
       console.error('Archive error:', error);
@@ -55,7 +56,7 @@ const MedicalRecordTable: React.FC<MedicalRecordTableProps> = ({
     }
 
     const promises = selectedRowKeys.map(id =>
-      archiveMutation.mutateAsync({ recordId: Number(id), archive: true })
+      archiveMutation.mutateAsync({ recordId: Number(id), archive: true, patientId })
     );
 
     try {

@@ -153,6 +153,12 @@
     "successMessage_one": "Medical record created successfully with {{count}} device file attached",
     "successMessage_other": "Medical record created successfully with {{count}} device files attached",
     "partialSuccess": "Medical record created but some files failed to upload",
-    "saveFailed": "Failed to create medical record. Please try again."
+    "saveFailed": "Failed to create medical record. Please try again.",
+    "parameter_one": "{{count}} parameter",
+    "parameter_other": "{{count}} parameters",
+    "sessionInProgress": "In Progress...",
+    "loadingPatients": "Loading patients...",
+    "noPatientsFound": "No patients found",
+    "autoFilledTooltip": "Auto-filled from device data - you can edit if needed"
   }
 }

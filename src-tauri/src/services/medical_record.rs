@@ -1,5 +1,6 @@
 use sqlx::{SqlitePool, Row};
 use crate::models::medical::*;
+use crate::models::dto::MaybeNull;
 use chrono::{Utc, DateTime};
 use serde_json::json;
 
@@ -655,10 +656,11 @@ impl MedicalRecordService {
         if updates.description.is_some() {
             update_fields.push("description = ?3");
         }
-        if updates.price.is_some() {
+        // MaybeNull fields - check for Null or Value, not Undefined
+        if !matches!(updates.price, MaybeNull::Undefined) {
             update_fields.push("price = ?4");
         }
-        if updates.currency_id.is_some() {
+        if !matches!(updates.currency_id, MaybeNull::Undefined) {
             update_fields.push("currency_id = ?5");
         }
         if updates.is_archived.is_some() {
@@ -677,12 +679,24 @@ impl MedicalRecordService {
             update_fields.join(", ")
         );
 
+        // Convert MaybeNull to Option for binding
+        let price_opt: Option<f64> = match &updates.price {
+            MaybeNull::Undefined => None, // Won't be used since field not in query
+            MaybeNull::Null => None,
+            MaybeNull::Value(v) => Some(*v),
+        };
+        let currency_id_opt: Option<i64> = match &updates.currency_id {
+            MaybeNull::Undefined => None, // Won't be used since field not in query
+            MaybeNull::Null => None,
+            MaybeNull::Value(v) => Some(*v),
+        };
+
         sqlx::query(&query)
             .bind(&updates.name)
             .bind(&updates.procedure_name)
             .bind(&updates.description)
-            .bind(updates.price)
-            .bind(updates.currency_id)
+            .bind(price_opt)
+            .bind(currency_id_opt)
             .bind(updates.is_archived)
             .bind(now)
             .bind(record_id)
@@ -1010,24 +1024,36 @@ impl MedicalRecordService {
             name: None,
             procedure_name: None,
             description: None,
-            price: None,
-            currency_id: None,
+            price: MaybeNull::Undefined,
+            currency_id: MaybeNull::Undefined,
             is_archived: None,
         };
 
         if let Some(v) = old_vals.get("name") { updates.name = v.as_str().map(|s| s.to_string()); }
         if let Some(v) = old_vals.get("procedure_name") { updates.procedure_name = v.as_str().map(|s| s.to_string()); }
         if let Some(v) = old_vals.get("description") { updates.description = v.as_str().map(|s| s.to_string()); }
-        if let Some(v) = old_vals.get("price") { updates.price = v.as_f64().or_else(|| v.as_i64().map(|i| i as f64)); }
-        if let Some(v) = old_vals.get("currency_id") { updates.currency_id = v.as_i64(); }
+        if let Some(v) = old_vals.get("price") {
+            updates.price = match v.as_f64().or_else(|| v.as_i64().map(|i| i as f64)) {
+                Some(p) => MaybeNull::Value(p),
+                None if v.is_null() => MaybeNull::Null,
+                None => MaybeNull::Undefined,
+            };
+        }
+        if let Some(v) = old_vals.get("currency_id") {
+            updates.currency_id = match v.as_i64() {
+                Some(id) => MaybeNull::Value(id),
+                None if v.is_null() => MaybeNull::Null,
+                None => MaybeNull::Undefined,
+            };
+        }
         if let Some(v) = old_vals.get("is_archived") { updates.is_archived = v.as_bool(); }
 
         // If no fields present, abort
         if updates.name.is_none()
             && updates.procedure_name.is_none()
             && updates.description.is_none()
-            && updates.price.is_none()
-            && updates.currency_id.is_none()
+            && matches!(updates.price, MaybeNull::Undefined)
+            && matches!(updates.currency_id, MaybeNull::Undefined)
             && updates.is_archived.is_none() {
             return Err("No revertable fields in previous version".to_string());
         }

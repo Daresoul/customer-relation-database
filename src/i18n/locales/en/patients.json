@@ -148,7 +148,16 @@
       "contactInfo": "Contact Info",
       "otherMembers": "Other Members",
       "viewDetails": "View Household Details →",
-      "primary": "Primary"
+      "primary": "Primary",
+      "assignHousehold": "Assign Household",
+      "selectHousehold": "Select a household...",
+      "assign": "Assign",
+      "changeHousehold": "Change Household",
+      "unlinkHousehold": "Unlink from Household",
+      "assignSuccess": "Household assigned successfully",
+      "assignFailed": "Failed to assign household",
+      "unlinkSuccess": "Unlinked from household successfully",
+      "unlinkFailed": "Failed to unlink from household"
     },
     "medicalHistory": {
       "title": "Medical History",

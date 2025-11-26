@@ -108,8 +108,11 @@ const FileAttachmentList: React.FC<FileAttachmentListProps> = ({
     }
   };
 
-  const handleDelete = async (attachmentId: number) => {
-    await deleteMutation.mutateAsync(attachmentId);
+  const handleDelete = async (attachment: MedicalAttachment) => {
+    await deleteMutation.mutateAsync({
+      attachmentId: attachment.id,
+      medicalRecordId: attachment.medicalRecordId,
+    });
     onDelete?.();
   };
 
@@ -187,7 +190,7 @@ const FileAttachmentList: React.FC<FileAttachmentListProps> = ({
               <Popconfirm
                 title="Delete this attachment?"
                 description="This action cannot be undone."
-                onConfirm={() => handleDelete(item.id)}
+                onConfirm={() => handleDelete(item)}
                 okText="Delete"
                 cancelText="Cancel"
               >

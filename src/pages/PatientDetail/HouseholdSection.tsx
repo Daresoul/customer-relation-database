@@ -1,19 +1,91 @@
-import React from 'react';
-import { Card, Typography, Empty, Descriptions, Tag, Space } from 'antd';
-import { HomeOutlined, UserOutlined, PhoneOutlined, MailOutlined } from '@ant-design/icons';
+import React, { useState } from 'react';
+import { Card, Typography, Empty, Descriptions, Tag, Space, Button, Select, App } from 'antd';
+import { HomeOutlined, UserOutlined, PhoneOutlined, MailOutlined, PlusOutlined, SwapOutlined, DisconnectOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { HouseholdSummary } from '../../types/patient';
+import { PatientService } from '../../services/patientService';
+import { invoke } from '@tauri-apps/api/tauri';
 import styles from './PatientDetail.module.css';
 
 const { Title, Text } = Typography;
+const { Option } = Select;
 
 interface HouseholdSectionProps {
   household?: HouseholdSummary;
+  patientId?: number;
+  onHouseholdChanged?: () => void;
 }
 
-export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household }) => {
+export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household, patientId, onHouseholdChanged }) => {
   const { t } = useTranslation('patients');
+  const { notification } = App.useApp();
+  const queryClient = useQueryClient();
+  const [isAssigning, setIsAssigning] = useState(false);
+  const [selectedHouseholdId, setSelectedHouseholdId] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Fetch all households for the select dropdown
+  const { data: allHouseholds = [], isLoading: isLoadingHouseholds } = useQuery({
+    queryKey: ['all-households'],
+    queryFn: () => invoke<any[]>('get_all_households', { limit: 1000 }),
+    enabled: isAssigning,
+  });
+
+  const handleAssignHousehold = async () => {
+    if (!selectedHouseholdId || !patientId) return;
+
+    setIsLoading(true);
+    try {
+      await PatientService.updatePatientHousehold(patientId, selectedHouseholdId);
+      notification.success({
+        message: t('detail.householdInfo.assignSuccess'),
+        placement: 'bottomRight',
+        duration: 3,
+      });
+      setIsAssigning(false);
+      setSelectedHouseholdId(null);
+      // Invalidate patient query to refresh
+      queryClient.invalidateQueries({ queryKey: ['patient', patientId] });
+      onHouseholdChanged?.();
+    } catch (error) {
+      notification.error({
+        message: t('detail.householdInfo.assignFailed'),
+        description: String(error),
+        placement: 'bottomRight',
+        duration: 5,
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleUnlinkHousehold = async () => {
+    if (!patientId) return;
+
+    setIsLoading(true);
+    try {
+      await PatientService.updatePatientHousehold(patientId, null);
+      notification.success({
+        message: t('detail.householdInfo.unlinkSuccess'),
+        placement: 'bottomRight',
+        duration: 3,
+      });
+      queryClient.invalidateQueries({ queryKey: ['patient', patientId] });
+      onHouseholdChanged?.();
+    } catch (error) {
+      notification.error({
+        message: t('detail.householdInfo.unlinkFailed'),
+        description: String(error),
+        placement: 'bottomRight',
+        duration: 5,
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   if (!household) {
     return (
       <Card
@@ -25,15 +97,54 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household })
           </Title>
         }
       >
-        <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={
-            <Text type="secondary">
-              {t('detail.householdInfo.noHousehold')}
-            </Text>
-          }
-          className={styles.emptyHousehold}
-        />
+        {isAssigning ? (
+          <Space direction="vertical" style={{ width: '100%' }}>
+            <Select
+              placeholder={t('detail.householdInfo.selectHousehold')}
+              style={{ width: '100%' }}
+              loading={isLoadingHouseholds}
+              showSearch
+              optionFilterProp="children"
+              onChange={(value) => setSelectedHouseholdId(value)}
+              value={selectedHouseholdId}
+            >
+              {allHouseholds.map((h: any) => (
+                <Option key={h.household?.id || h.id} value={h.household?.id || h.id}>
+                  {h.household?.householdName || h.householdName || h.household?.household_name || 'Unknown'}
+                </Option>
+              ))}
+            </Select>
+            <Space>
+              <Button
+                type="primary"
+                onClick={handleAssignHousehold}
+                loading={isLoading}
+                disabled={!selectedHouseholdId}
+              >
+                {t('detail.householdInfo.assign')}
+              </Button>
+              <Button onClick={() => { setIsAssigning(false); setSelectedHouseholdId(null); }}>
+                {t('common:cancel')}
+              </Button>
+            </Space>
+          </Space>
+        ) : (
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={
+              <Text type="secondary">
+                {t('detail.householdInfo.noHousehold')}
+              </Text>
+            }
+            className={styles.emptyHousehold}
+          >
+            {patientId && (
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => setIsAssigning(true)}>
+                {t('detail.householdInfo.assignHousehold')}
+              </Button>
+            )}
+          </Empty>
+        )}
       </Card>
     );
   }

@@ -3,6 +3,7 @@ use crate::models::{
     Room, CreateRoomInput, UpdateRoomInput, RoomFilter,
     RoomAvailability, RoomAppointmentSlot
 };
+use crate::models::dto::MaybeNull;
 use chrono::{DateTime, Utc};
 
 pub struct RoomService;
@@ -102,37 +103,54 @@ impl RoomService {
             }
         }
 
-        if input.name.is_none() && input.description.is_none()
-            && input.capacity.is_none() && input.color.is_none() && input.is_active.is_none() {
+        if !input.has_updates() {
             return Ok(existing);
         }
 
-        // Update room with individual field updates
-        let mut query = sqlx::query(
-            r#"
-            UPDATE rooms
-            SET name = CASE WHEN ? IS NOT NULL THEN ? ELSE name END,
-                description = CASE WHEN ? IS NOT NULL THEN ? ELSE description END,
-                capacity = CASE WHEN ? IS NOT NULL THEN ? ELSE capacity END,
-                color = CASE WHEN ? IS NOT NULL THEN ? ELSE color END,
-                is_active = CASE WHEN ? IS NOT NULL THEN ? ELSE is_active END,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-            "#
+        // Build dynamic update query based on provided fields
+        let mut set_clauses = Vec::new();
+        if input.name.is_some() {
+            set_clauses.push("name = ?");
+        }
+        if input.description.is_some() {
+            set_clauses.push("description = ?");
+        }
+        if input.capacity.is_some() {
+            set_clauses.push("capacity = ?");
+        }
+        if !matches!(input.color, MaybeNull::Undefined) {
+            set_clauses.push("color = ?");
+        }
+        if input.is_active.is_some() {
+            set_clauses.push("is_active = ?");
+        }
+        set_clauses.push("updated_at = CURRENT_TIMESTAMP");
+
+        let query_str = format!(
+            "UPDATE rooms SET {} WHERE id = ?",
+            set_clauses.join(", ")
         );
 
-        query = query
-            .bind(&input.name)
-            .bind(&input.name)
-            .bind(&input.description)
-            .bind(&input.description)
-            .bind(&input.capacity)
-            .bind(&input.capacity)
-            .bind(&input.color)
-            .bind(&input.color)
-            .bind(&input.is_active)
-            .bind(&input.is_active)
-            .bind(id);
+        let mut query = sqlx::query(&query_str);
+
+        if let Some(ref name) = input.name {
+            query = query.bind(name);
+        }
+        if let Some(ref description) = input.description {
+            query = query.bind(description);
+        }
+        if let Some(capacity) = input.capacity {
+            query = query.bind(capacity);
+        }
+        match &input.color {
+            MaybeNull::Undefined => {},
+            MaybeNull::Null => { query = query.bind(Option::<String>::None); },
+            MaybeNull::Value(v) => { query = query.bind(Some(v)); },
+        }
+        if let Some(is_active) = input.is_active {
+            query = query.bind(is_active);
+        }
+        query = query.bind(id);
 
         query
             .execute(pool)

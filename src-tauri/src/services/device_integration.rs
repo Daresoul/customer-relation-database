@@ -3,6 +3,7 @@ use crate::models::device_integration::{
     DeviceIntegration, DeviceIntegrationRow, CreateDeviceIntegrationInput,
     UpdateDeviceIntegrationInput
 };
+use crate::models::dto::MaybeNull;
 use sqlx::Row;
 use chrono::Utc;
 
@@ -93,12 +94,36 @@ impl DeviceIntegrationService {
         // Use new values if provided, otherwise use current values
         let name = input.name.unwrap_or(current.name);
         let connection_type = input.connection_type.unwrap_or(current.connection_type);
-        let watch_directory = input.watch_directory.or(current.watch_directory);
+
+        // Handle MaybeNull fields - only update if not Undefined
+        let watch_directory = match input.watch_directory {
+            MaybeNull::Undefined => current.watch_directory,
+            MaybeNull::Null => None,
+            MaybeNull::Value(v) => Some(v),
+        };
+        // file_pattern stays as Option (clearable)
         let file_pattern = input.file_pattern.or(current.file_pattern);
-        let serial_port_name = input.serial_port_name.or(current.serial_port_name);
-        let serial_baud_rate = input.serial_baud_rate.or(current.serial_baud_rate);
-        let tcp_host = input.tcp_host.or(current.tcp_host);
-        let tcp_port = input.tcp_port.or(current.tcp_port);
+
+        let serial_port_name = match input.serial_port_name {
+            MaybeNull::Undefined => current.serial_port_name,
+            MaybeNull::Null => None,
+            MaybeNull::Value(v) => Some(v),
+        };
+        let serial_baud_rate = match input.serial_baud_rate {
+            MaybeNull::Undefined => current.serial_baud_rate,
+            MaybeNull::Null => None,
+            MaybeNull::Value(v) => Some(v),
+        };
+        let tcp_host = match input.tcp_host {
+            MaybeNull::Undefined => current.tcp_host,
+            MaybeNull::Null => None,
+            MaybeNull::Value(v) => Some(v),
+        };
+        let tcp_port = match input.tcp_port {
+            MaybeNull::Undefined => current.tcp_port,
+            MaybeNull::Null => None,
+            MaybeNull::Value(v) => Some(v),
+        };
         let enabled = input.enabled.unwrap_or(current.enabled);
 
         // Now acquire lock for the update
@@ -172,11 +197,12 @@ impl DeviceIntegrationService {
             .map_err(|e| format!("Failed to fetch device integration: {}", e))?
             .get(0);
 
-            // Toggle the status
+            // Toggle the status and update timestamp
             sqlx::query(
-                "UPDATE device_integrations SET enabled = ? WHERE id = ?"
+                "UPDATE device_integrations SET enabled = ?, updated_at = ? WHERE id = ?"
             )
             .bind(!current_enabled)
+            .bind(Utc::now().to_rfc3339())
             .bind(id)
             .execute(&*pool_guard)
             .await

@@ -120,27 +120,27 @@ pub async fn update_patient(pool: &SqlitePool, id: i64, dto: UpdatePatientDto) -
         updates.push("breed_id = ?");
         has_updates = true;
     }
-    if dto.gender.is_some() {
+    if !matches!(dto.gender, MaybeNull::Undefined) {
         updates.push("gender = ?");
         has_updates = true;
     }
-    if dto.date_of_birth.is_some() {
+    if !matches!(dto.date_of_birth, MaybeNull::Undefined) {
         updates.push("date_of_birth = ?");
         has_updates = true;
     }
-    if dto.weight.is_some() {
+    if !matches!(dto.weight, MaybeNull::Undefined) {
         updates.push("weight = ?");
         has_updates = true;
     }
-    if dto.medical_notes.is_some() {
+    if !matches!(dto.medical_notes, MaybeNull::Undefined) {
         updates.push("medical_notes = ?");
         has_updates = true;
     }
-    if dto.color.is_some() {
+    if !matches!(dto.color, MaybeNull::Undefined) {
         updates.push("color = ?");
         has_updates = true;
     }
-    if dto.microchip_id.is_some() {
+    if !matches!(dto.microchip_id, MaybeNull::Undefined) {
         updates.push("microchip_id = ?");
         has_updates = true;
     }
@@ -177,23 +177,35 @@ pub async fn update_patient(pool: &SqlitePool, id: i64, dto: UpdatePatientDto) -
         MaybeNull::Null => { query = query.bind(Option::<i64>::None); },
         MaybeNull::Value(id) => { query = query.bind(Some(id)); },
     }
-    if let Some(gender) = dto.gender {
-        query = query.bind(gender);
+    match dto.gender {
+        MaybeNull::Undefined => {},
+        MaybeNull::Null => { query = query.bind(Option::<String>::None); },
+        MaybeNull::Value(v) => { query = query.bind(Some(v)); },
     }
-    if let Some(date_of_birth) = dto.date_of_birth {
-        query = query.bind(date_of_birth);
+    match dto.date_of_birth {
+        MaybeNull::Undefined => {},
+        MaybeNull::Null => { query = query.bind(Option::<chrono::NaiveDate>::None); },
+        MaybeNull::Value(v) => { query = query.bind(Some(v)); },
     }
-    if let Some(weight) = dto.weight {
-        query = query.bind(weight);
+    match dto.weight {
+        MaybeNull::Undefined => {},
+        MaybeNull::Null => { query = query.bind(Option::<f64>::None); },
+        MaybeNull::Value(v) => { query = query.bind(Some(v)); },
     }
-    if let Some(medical_notes) = dto.medical_notes {
-        query = query.bind(medical_notes);
+    match dto.medical_notes {
+        MaybeNull::Undefined => {},
+        MaybeNull::Null => { query = query.bind(Option::<String>::None); },
+        MaybeNull::Value(v) => { query = query.bind(Some(v)); },
     }
-    if let Some(color) = dto.color {
-        query = query.bind(color);
+    match dto.color {
+        MaybeNull::Undefined => {},
+        MaybeNull::Null => { query = query.bind(Option::<String>::None); },
+        MaybeNull::Value(v) => { query = query.bind(Some(v)); },
     }
-    if let Some(microchip_id) = dto.microchip_id {
-        query = query.bind(microchip_id);
+    match dto.microchip_id {
+        MaybeNull::Undefined => {},
+        MaybeNull::Null => { query = query.bind(Option::<String>::None); },
+        MaybeNull::Value(v) => { query = query.bind(Some(v)); },
     }
     if let Some(is_active) = dto.is_active {
         query = query.bind(is_active);

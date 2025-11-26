@@ -150,6 +150,43 @@ export class PatientService {
       limit: limit || 100
     });
   }
+
+  /**
+   * Update a patient's household assignment
+   */
+  static async updatePatientHousehold(patientId: number, householdId: number | null): Promise<void> {
+    return ApiService.invoke<void>('update_patient_household', {
+      patientId,
+      householdId
+    });
+  }
+
+  /**
+   * Link a patient to a household
+   */
+  static async linkPatientToHousehold(
+    patientId: number,
+    householdId: number,
+    relationshipType?: string,
+    isPrimary?: boolean
+  ): Promise<void> {
+    return ApiService.invoke<void>('link_patient_to_household', {
+      patientId,
+      householdId,
+      relationshipType,
+      isPrimary
+    });
+  }
+
+  /**
+   * Unlink a patient from a household
+   */
+  static async unlinkPatientFromHousehold(patientId: number, householdId: number): Promise<void> {
+    return ApiService.invoke<void>('unlink_patient_from_household', {
+      patientId,
+      householdId
+    });
+  }
 }
 
 export default PatientService;

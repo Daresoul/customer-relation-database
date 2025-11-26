@@ -1,0 +1,114 @@
+{
+  "title": "Device Inputs",
+  "sections": {
+    "availableDevices": "Available Input Devices",
+    "integrations": "Device Integrations"
+  },
+  "status": {
+    "connected": "Connected",
+    "connecting": "Connecting",
+    "connectingAttempt": "Connecting (attempt {{count}})",
+    "disconnected": "Disconnected",
+    "disconnectedRetrying": "Disconnected - retrying...",
+    "error": "Error",
+    "errorWithMessage": "Error: {{message}}",
+    "errorRetrying": "Error: {{message}} - retrying...",
+    "unknown": "Unknown",
+    "watching": "Watching for files",
+    "stopped": "Stopped",
+    "enabled": "Enabled",
+    "disabled": "Disabled"
+  },
+  "connectionTypes": {
+    "serialPort": "Serial Port",
+    "fileWatch": "File Watch",
+    "hl7Tcp": "HL7 TCP"
+  },
+  "portTypes": {
+    "serialUsb": "Serial USB",
+    "hid": "HID",
+    "serialPci": "Serial PCI",
+    "serialBluetooth": "Serial Bluetooth",
+    "unknown": "Unknown"
+  },
+  "deviceTypes": {
+    "exigoEosVet": "Exigo EOS Vet (Hematology)",
+    "healvetHvFia3000": "Healvet HV-FIA 3000 (Immunofluorescence)",
+    "mnchipPointcarePcrV1": "MNChip Pointcare PCV V1 (Chemistry)"
+  },
+  "form": {
+    "labels": {
+      "integrationName": "Integration Name",
+      "deviceType": "Device Type",
+      "connectionType": "Connection Type",
+      "watchDirectory": "Watch Directory",
+      "filePattern": "File Pattern (Optional)",
+      "serialPort": "Serial Port",
+      "tcpHost": "TCP Host",
+      "tcpPort": "TCP Port",
+      "enabled": "Enabled"
+    },
+    "placeholders": {
+      "integrationName": "e.g., Lab Analyzer 1",
+      "deviceType": "Select device type",
+      "connectionType": "Select connection type",
+      "watchDirectory": "Select a directory to watch...",
+      "filePattern": "*.xml",
+      "serialPort": "Select or type a port name",
+      "tcpHost": "localhost or 192.168.1.100",
+      "tcpPort": "2575"
+    },
+    "validation": {
+      "nameRequired": "Please enter integration name",
+      "deviceTypeRequired": "Please select device type",
+      "connectionTypeRequired": "Please select connection type",
+      "directoryRequired": "Please select directory",
+      "serialPortRequired": "Please select or enter serial port name",
+      "tcpHostRequired": "Please enter TCP host",
+      "tcpPortRequired": "Please enter TCP port"
+    }
+  },
+  "table": {
+    "name": "Name",
+    "device": "Device",
+    "connection": "Connection",
+    "configuration": "Configuration",
+    "actions": "Actions",
+    "portName": "Port Name",
+    "type": "Type",
+    "details": "Details"
+  },
+  "tooltips": {
+    "deviceSettings": "Device Settings",
+    "port": "Port: {{port}}",
+    "status": "Status: {{status}}",
+    "directory": "Directory: {{directory}}",
+    "pattern": "Pattern: {{pattern}}"
+  },
+  "buttons": {
+    "refresh": "Refresh",
+    "addIntegration": "Add Integration",
+    "enable": "Enable",
+    "disable": "Disable",
+    "browse": "Browse"
+  },
+  "modal": {
+    "addTitle": "Add New Device Integration",
+    "editTitle": "Edit Device Integration",
+    "selectDirectory": "Select Directory to Watch"
+  },
+  "messages": {
+    "detectedDevices": "Detected {{count}} device (Serial Ports & HID Devices)",
+    "detectedDevices_plural": "Detected {{count}} devices (Serial Ports & HID Devices)",
+    "noPortsFound": "No ports found. Type a custom path.",
+    "deleteConfirm": "Delete this device integration?",
+    "statusUnknown": "Status unknown",
+    "addSuccess": "Device integration added successfully",
+    "updateSuccess": "Device integration updated successfully",
+    "deleteSuccess": "Device integration deleted successfully",
+    "operationFailed": "Operation failed"
+  },
+  "labels": {
+    "devices": "Devices:"
+  }
+}

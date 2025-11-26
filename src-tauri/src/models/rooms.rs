@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
+use crate::models::dto::MaybeNull;
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct Room {
@@ -27,7 +28,8 @@ pub struct UpdateRoomInput {
     pub name: Option<String>,
     pub description: Option<String>,
     pub capacity: Option<i32>,
-    pub color: Option<String>,
+    #[serde(default)]
+    pub color: MaybeNull<String>,
     pub is_active: Option<bool>,
 }
 
@@ -97,5 +99,13 @@ impl UpdateRoomInput {
         }
 
         Ok(())
+    }
+
+    pub fn has_updates(&self) -> bool {
+        self.name.is_some()
+            || self.description.is_some()
+            || self.capacity.is_some()
+            || !matches!(self.color, MaybeNull::Undefined)
+            || self.is_active.is_some()
     }
 }
