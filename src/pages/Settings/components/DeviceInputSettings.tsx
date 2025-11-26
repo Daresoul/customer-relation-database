@@ -64,8 +64,8 @@ const DeviceInputSettings: React.FC = () => {
     try {
       const result = await invoke<PortInfo[]>('get_available_ports');
       setPorts(result);
-    } catch (error) {
-      console.error('Failed to fetch ports:', error);
+    } catch (_error) {
+      // Silent fail - ports list is optional
     } finally {
       setLoading(false);
     }
@@ -131,8 +131,8 @@ const DeviceInputSettings: React.FC = () => {
       if (selected && typeof selected === 'string') {
         integrationForm.setFieldsValue({ watch_directory: selected });
       }
-    } catch (error) {
-      console.error('Error selecting folder:', error);
+    } catch (_error) {
+      // Silent fail - folder selection cancelled
     }
   };
 
@@ -173,8 +173,8 @@ const DeviceInputSettings: React.FC = () => {
     try {
       await deleteIntegrationMutation.mutateAsync(id);
       refetchIntegrations();
-    } catch (error) {
-      console.error('Delete integration error:', error);
+    } catch (_error) {
+      // Error handled by mutation
     }
   };
 
@@ -182,14 +182,12 @@ const DeviceInputSettings: React.FC = () => {
     try {
       await toggleIntegrationMutation.mutateAsync(id);
       refetchIntegrations();
-    } catch (error) {
-      console.error('Toggle integration error:', error);
+    } catch (_error) {
+      // Error handled by mutation
     }
   };
 
   const handleIntegrationSubmit = async (values: any) => {
-    console.log('Form values:', values);
-    console.log('editingIntegration:', editingIntegration);
     try {
       const integrationData = {
         name: values.name,
@@ -203,29 +201,22 @@ const DeviceInputSettings: React.FC = () => {
         tcp_port: values.tcp_port || undefined,
       };
 
-      console.log('Integration data to send:', integrationData);
-
       if (editingIntegration) {
-        console.log('Updating integration with ID:', editingIntegration.id);
         const updateData = { ...integrationData, enabled: values.enabled };
-        console.log('Update data:', updateData);
         await updateIntegrationMutation.mutateAsync({
           id: editingIntegration.id,
           data: updateData,
         });
       } else {
-        console.log('Creating new integration...');
-        const result = await createIntegrationMutation.mutateAsync(integrationData);
-        console.log('Create result:', result);
+        await createIntegrationMutation.mutateAsync(integrationData);
       }
 
-      console.log('Success! Closing modal...');
       setIntegrationModalVisible(false);
       integrationForm.resetFields();
       setEditingIntegration(null);
       refetchIntegrations();
-    } catch (error) {
-      console.error('Save integration error:', error);
+    } catch (_error) {
+      // Error handled by mutation
     }
   };
 

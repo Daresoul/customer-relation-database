@@ -1,5 +1,5 @@
 use notify::{Watcher, RecursiveMode, Event, Result as NotifyResult, EventKind};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::mpsc::channel;
 use glob::Pattern;
 use sqlx::{SqlitePool, Row};
@@ -30,8 +30,6 @@ impl FileWatcherService {
 
     /// Initialize file watchers for all enabled file-watch device integrations
     pub async fn initialize(&mut self) -> Result<(), String> {
-        println!("🔍 Initializing file watchers...");
-
         // Query all enabled file-watch device integrations
         let integrations = sqlx::query(
             "SELECT id, name, watch_directory, file_pattern, device_type
@@ -45,7 +43,6 @@ impl FileWatcherService {
         .map_err(|e| format!("Failed to query device integrations: {}", e))?;
 
         if integrations.is_empty() {
-            println!("ℹ️  No file-watch integrations configured");
             return Ok(());
         }
 
@@ -60,16 +57,13 @@ impl FileWatcherService {
             match (watch_directory, file_pattern) {
                 (Some(dir), Some(pattern)) => {
                     if let Err(e) = self.setup_watcher(id, &name, &dir, &pattern, &device_type).await {
-                        eprintln!("⚠️  Failed to setup watcher for '{}': {}", name, e);
+                        eprintln!("Failed to setup watcher for '{}': {}", name, e);
                     }
                 }
-                _ => {
-                    println!("⚠️  Device integration '{}' missing watch_directory or file_pattern", name);
-                }
+                _ => {}
             }
         }
 
-        println!("✅ File watchers initialized ({} active)", self.watchers.len());
         Ok(())
     }
 
@@ -93,7 +87,7 @@ impl FileWatcherService {
         }
 
         // Create channel for file events
-        let (tx, rx) = channel::<NotifyResult<Event>>();
+        let (_tx, _rx) = channel::<NotifyResult<Event>>();
 
         // Compile glob pattern
         let glob_pattern = Pattern::new(pattern)
@@ -102,7 +96,7 @@ impl FileWatcherService {
         // Clone values for the watcher closure
         let name_clone = name.to_string();
         let device_type_clone = device_type.to_string();
-        let dir_clone = directory.to_string();
+        let _dir_clone = directory.to_string();
         let app_handle_clone = self.app_handle.clone();
 
         // Create a deduplication cache (file path -> last processed timestamp)
@@ -135,7 +129,6 @@ impl FileWatcherService {
 
                                         if let Some(&last_processed) = cache.get(&path_str) {
                                             if now - last_processed < 5 {
-                                                println!("⏭️  [{}] Skipping duplicate event for: {}", name_clone, file_name_str);
                                                 continue;
                                             }
                                         }
@@ -147,16 +140,9 @@ impl FileWatcherService {
                                         cache.retain(|_, &mut timestamp| now - timestamp < 30);
                                     }
 
-                                    println!("📄 [{}] New file detected: {}", name_clone, path.display());
-                                    println!("   Device Type: {}", device_type_clone);
-                                    println!("   Directory: {}", dir_clone);
-                                    println!("   Pattern: {}", glob_pattern.as_str());
-
                                     // Read and parse the file
                                     match std::fs::read(&path) {
                                         Ok(file_data) => {
-                                            println!("   File size: {} bytes", file_data.len());
-
                                             // Parse the file based on device type
                                             match DeviceParserService::parse_device_data(
                                                 &device_type_clone,
@@ -166,37 +152,28 @@ impl FileWatcherService {
                                                 "file_watch",
                                             ) {
                                                 Ok(device_data) => {
-                                                    println!("   ✅ Parsed successfully");
-                                                    if let Some(ref patient_id) = device_data.patient_identifier {
-                                                        println!("   Patient ID: {}", patient_id);
-                                                    }
-
                                                     // Emit device data to frontend
                                                     if let Some(ref app_handle) = app_handle_clone {
                                                         if let Err(e) = app_handle.emit_all("device-data-received", &device_data) {
-                                                            eprintln!("   ❌ Failed to emit event: {}", e);
-                                                        } else {
-                                                            println!("   📤 Device data emitted to frontend");
+                                                            eprintln!("Failed to emit event: {}", e);
                                                         }
                                                     }
                                                 }
                                                 Err(e) => {
-                                                    eprintln!("   ❌ Failed to parse file: {}", e);
+                                                    eprintln!("Failed to parse file: {}", e);
                                                 }
                                             }
                                         }
                                         Err(e) => {
-                                            eprintln!("   ❌ Failed to read file: {}", e);
+                                            eprintln!("Failed to read file: {}", e);
                                         }
                                     }
-
-                                    println!("   ---");
                                 }
                             }
                         }
                     }
                 }
-                Err(e) => eprintln!("❌ Watch error for '{}': {:?}", name_clone, e),
+                Err(e) => eprintln!("Watch error for '{}': {:?}", name_clone, e),
             }
         })
         .map_err(|e| format!("Failed to create watcher: {}", e))?;
@@ -208,15 +185,12 @@ impl FileWatcherService {
         // Store watcher
         self.watchers.insert(id, watcher);
 
-        println!("👁️  Watching: {} [{}] - Pattern: {}", directory, name, pattern);
-
         Ok(())
     }
 
     /// Reload watchers (useful when device integrations are updated)
+    #[allow(dead_code)]
     pub async fn reload(&mut self) -> Result<(), String> {
-        println!("🔄 Reloading file watchers...");
-
         // Clear existing watchers
         self.watchers.clear();
 
@@ -224,6 +198,7 @@ impl FileWatcherService {
         self.initialize().await
     }
 
+    #[allow(dead_code)]
     pub fn active_watcher_count(&self) -> usize {
         self.watchers.len()
     }

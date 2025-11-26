@@ -49,7 +49,7 @@ fn main() {
             let pool_for_file_watcher = pool.clone();
             let app_handle_for_watcher = app.handle();
             tauri::async_runtime::spawn(async move {
-                let mut file_watcher = {
+                let _file_watcher = {
                     let pool_guard = pool_for_file_watcher.lock().await;
                     let mut watcher = services::file_watcher::FileWatcherService::new(pool_guard.clone());
                     watcher.set_app_handle(app_handle_for_watcher);

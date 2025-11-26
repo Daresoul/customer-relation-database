@@ -19,6 +19,7 @@ impl PdfRenderService {
 
     /// Render a page of a PDF to a PNG file at the given width.
     /// Returns the output path on success.
+    #[allow(dead_code)]
     pub fn render_page_to_png(
         app_handle: &AppHandle,
         pdf_path: &str,

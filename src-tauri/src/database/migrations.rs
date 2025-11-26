@@ -1698,6 +1698,7 @@ fn add_test_result_record_type(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::
 }
 
 // Keep old functions for backward compatibility but mark as deprecated
+#[allow(dead_code)]
 #[deprecated(note = "Use run_migrations instead")]
 pub async fn create_tables(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migrations(pool).await

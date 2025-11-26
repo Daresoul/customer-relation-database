@@ -19,6 +19,7 @@ pub struct OAuthFlowState {
     pub redirect_port: u16,
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct OAuthState {
     pub pkce_verifier: PkceCodeVerifier,

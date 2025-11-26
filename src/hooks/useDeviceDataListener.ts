@@ -36,19 +36,8 @@ export const useDeviceDataListener = () => {
     let unlisten: (() => void) | undefined;
 
     const setupListener = async () => {
-      const listenerNumber = Math.floor(Math.random() * 10000);
-      console.log(`🎧 [LISTENER-${listenerNumber}] Setting up device-data-received listener`);
-
       unlisten = await listen<DeviceDataPayload>('device-data-received', async (event) => {
-        console.log(`📥 [LISTENER-${listenerNumber}] Received event:`, event.payload.testResults?.parameter_code);
         const data = event.payload;
-
-        console.log('📥 Device data received:', {
-          device: data.deviceName,
-          fileName: data.originalFileName,
-          patientId: data.patientIdentifier,
-          timestamp: new Date().toISOString(),
-        });
 
         // Try to resolve patient if identifier is provided
         let resolvedPatientId: number | undefined;
@@ -61,7 +50,6 @@ export const useDeviceDataListener = () => {
 
             if (result) {
               resolvedPatientId = result.id;
-              console.log('✅ Patient resolved:', result);
 
               notificationRef.current.success({
                 message: 'Device Data Received',
@@ -70,8 +58,6 @@ export const useDeviceDataListener = () => {
                 duration: 4,
               });
             } else {
-              console.log('⚠️  Patient not found for identifier:', data.patientIdentifier);
-
               notificationRef.current.info({
                 message: 'Device Data Received',
                 description: `File from ${data.deviceName} - Please select patient manually`,
@@ -79,8 +65,8 @@ export const useDeviceDataListener = () => {
                 duration: 4,
               });
             }
-          } catch (error) {
-            console.error('Failed to resolve patient:', error);
+          } catch (_error) {
+            // Silent fail - patient resolution is optional
           }
         } else {
           notificationRef.current.info({
@@ -114,15 +100,12 @@ export const useDeviceDataListener = () => {
           setSuggestedPatientRef.current(resolvedPatientId);
         }
       });
-
-      console.log(`✅ [LISTENER-${listenerNumber}] Device-data-received listener registered`);
     };
 
     setupListener();
 
     return () => {
       if (unlisten) {
-        console.log('🔌 Unregistering device-data-received listener');
         unlisten();
       }
     };

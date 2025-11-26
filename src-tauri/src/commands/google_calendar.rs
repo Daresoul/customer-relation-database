@@ -1,8 +1,10 @@
 // T027-T029: Google Calendar Tauri commands
 use crate::database::DatabasePool;
 use crate::models::google_calendar::{GoogleCalendarSettings, GoogleCalendarSettingsResponse};
+#[allow(unused_imports)]
 use crate::models::sync_log::{SyncLog, SyncDirection, SyncType, SyncStatus};
 use crate::services::oauth::{OAuthFlowState, OAuthService};
+#[allow(unused_imports)]
 use chrono::Utc;
 use tauri::State;
 
@@ -276,6 +278,7 @@ pub async fn revoke_google_access(
 pub async fn trigger_manual_sync(
     pool: State<'_, DatabasePool>,
 ) -> Result<SyncLog, String> {
+    #[allow(unused_imports)]
     use crate::models::appointments::AppointmentStatus;
     use crate::services::oauth::get_valid_access_token;
 

@@ -101,22 +101,10 @@ export const DeviceImportProvider: React.FC<{ children: ReactNode }> = ({ childr
 
   const addDeviceFile = useCallback((file: PendingDeviceFile) => {
     setState((prev) => {
-      console.log('📥 Adding device file to context:', {
-        deviceName: file.deviceName,
-        deviceType: file.deviceType,
-        fileName: file.fileName,
-        fileSize: file.fileData.length,
-        mimeType: file.mimeType,
-        currentPendingCount: prev.pendingFiles.length,
-        shouldGroup: shouldGroupBySession(file.deviceType),
-      });
-
       // Check if this device type should be grouped into sessions
       if (shouldGroupBySession(file.deviceType)) {
         const sessionKey = getSessionKey(file);
         const now = new Date().toISOString();
-
-        console.log(`🔗 Session-based device detected. Session key: ${sessionKey}`);
 
         // Get or create session
         const newSessions = new Map(prev.activeSessions);
@@ -124,7 +112,6 @@ export const DeviceImportProvider: React.FC<{ children: ReactNode }> = ({ childr
 
         if (!session) {
           // Create new session
-          console.log(`✨ Creating new session: ${sessionKey}`);
           session = {
             id: `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             deviceType: file.deviceType,
@@ -137,8 +124,6 @@ export const DeviceImportProvider: React.FC<{ children: ReactNode }> = ({ childr
             parameters: [],
             isComplete: false,
           };
-        } else {
-          console.log(`📝 Adding to existing session: ${sessionKey} (${session.parameters.length} parameters)`);
         }
 
         // Extract parameter from test results
@@ -158,8 +143,6 @@ export const DeviceImportProvider: React.FC<{ children: ReactNode }> = ({ childr
         session.lastActivity = now;
         newSessions.set(sessionKey, session);
 
-        console.log(`✅ Parameter added to session. Total parameters: ${session.parameters.length}`);
-
         // Clear existing timeout for this session
         const existingTimeout = sessionTimeoutRef.current.get(sessionKey);
         if (existingTimeout) {
@@ -168,7 +151,6 @@ export const DeviceImportProvider: React.FC<{ children: ReactNode }> = ({ childr
 
         // Set new timeout to auto-complete session
         const timeout = setTimeout(() => {
-          console.log(`⏰ Session timeout reached for ${sessionKey}. Marking complete.`);
           setState((s) => {
             const sessions = new Map(s.activeSessions);
             const timedOutSession = sessions.get(sessionKey);
@@ -209,12 +191,10 @@ export const DeviceImportProvider: React.FC<{ children: ReactNode }> = ({ childr
       });
 
       if (isDuplicate) {
-        console.log('⏭️ Skipping duplicate file in frontend:', file.fileName);
         return prev;
       }
 
       const updatedFiles = [...prev.pendingFiles, file];
-      console.log('✅ File added to pending list. Total files:', updatedFiles.length);
 
       const shouldOpenModal = prev.pendingFiles.length === 0 && prev.activeSessions.size === 0;
 

@@ -114,9 +114,6 @@ impl DeviceParserService {
     ) -> Result<DeviceData, String> {
         let data_str = String::from_utf8_lossy(serial_data).to_string();
 
-        println!("🔍 [DEBUG] Parsing Healvet accumulated data ({} bytes)", serial_data.len());
-        println!("🔍 [DEBUG] Raw data: {}", data_str);
-
         // Strip the trailing EE marker
         let data_str = data_str.strip_suffix("EE")
             .or_else(|| data_str.strip_suffix("&EE"))
@@ -127,8 +124,6 @@ impl DeviceParserService {
         let messages: Vec<&str> = data_str.split("#AFS1000")
             .filter(|s| !s.trim().is_empty())
             .collect();
-
-        println!("🔍 [DEBUG] Found {} parameter messages", messages.len());
 
         if messages.is_empty() {
             return Err("No valid Healvet messages found in data".to_string());
@@ -141,29 +136,23 @@ impl DeviceParserService {
         let mut sample_type: Option<String> = None;
         let mut datetime: Option<String> = None;
 
-        for (idx, message) in messages.iter().enumerate() {
-            println!("🔍 [DEBUG] Parsing message {}: {}", idx + 1, message);
-
+        for (_idx, message) in messages.iter().enumerate() {
             // Split by & to get fields
             let fields: Vec<&str> = message.split('&').collect();
 
             if fields.len() < 10 {
-                println!("⚠️  [WARN] Message {} has only {} fields, skipping", idx + 1, fields.len());
                 continue;
             }
 
             // Extract fields according to Healvet protocol
             // Fields: [0]="", [1]=SAMPLE_ID, [2]=RESULT, [3]=DATETIME, [4]="", [5]=PARAM_CODE, [6]=PATIENT_ID, [7]="", [8]=GENDER, [9]=SAMPLE_TYPE
-            let sample_id = fields.get(1).unwrap_or(&"").trim().to_string();
+            let _sample_id = fields.get(1).unwrap_or(&"").trim().to_string();
             let result = fields.get(2).unwrap_or(&"").trim().to_string();
             let msg_datetime = fields.get(3).unwrap_or(&"").trim().to_string();
             let param_code = fields.get(5).unwrap_or(&"").trim().to_string();
             let msg_patient_id = fields.get(6).unwrap_or(&"").trim().to_string();
             let msg_gender = fields.get(8).unwrap_or(&"").trim().to_string();
             let msg_sample_type = fields.get(9).unwrap_or(&"").trim().to_string();
-
-            println!("📋 [DEBUG] Param {}: {} = {} (Patient: {}, Sample: {})",
-                idx + 1, param_code, result, msg_patient_id, sample_id);
 
             // Store first patient_id, gender, sample_type as they should be same for all
             if patient_id.is_none() && !msg_patient_id.is_empty() {
@@ -183,8 +172,6 @@ impl DeviceParserService {
             // This is what the Java PDF generator expects
             test_results.insert(param_code.clone(), result.clone());
         }
-
-        println!("✅ [DEBUG] Successfully parsed {} parameters", test_results.len());
 
         // Generate filename for the chemistry panel
         let patient_label = patient_id.as_ref().map(|s| s.as_str()).unwrap_or("Unknown");
@@ -219,14 +206,11 @@ impl DeviceParserService {
     ///   \r\r (Two consecutive carriage returns signal end)
     pub fn parse_mnchip_data(
         device_name: &str,
-        file_name: &str,
+        _file_name: &str,
         file_data: &[u8],
         connection_method: &str,
     ) -> Result<DeviceData, String> {
         let data_str = String::from_utf8_lossy(file_data).to_string();
-
-        println!("🔍 [DEBUG] Parsing PointCare HL7 data ({} bytes)", file_data.len());
-        println!("🔍 [DEBUG] Raw data preview: {}", &data_str[..data_str.len().min(200)]);
 
         // Strip trailing end markers (two \r\r)
         let data_str = data_str.trim_end_matches('\r').trim_end();
@@ -234,8 +218,8 @@ impl DeviceParserService {
         // Parse HL7 message line by line
         let mut test_results: HashMap<String, String> = HashMap::new();
         let mut patient_id: Option<String> = None;
-        let mut sample_id: Option<String> = None;
-        let mut test_type: Option<String> = None;
+        let mut _sample_id: Option<String> = None;
+        let mut _test_type: Option<String> = None;
 
         for line in data_str.split('\r') {
             let line = line.trim();
@@ -254,26 +238,23 @@ impl DeviceParserService {
             match message_type {
                 "MSH" => {
                     // Message Header - signals start of new sample
-                    println!("📥 [DEBUG] New PointCare HL7 message detected");
                 }
                 "PID" => {
                     // Patient Identification
                     // Fields: [0]PID | [1]unused | [2]unused | [3]sampleId | ... | [6]patient | ... | [10]gender
                     if let Some(&sid) = fields.get(3) {
-                        sample_id = Some(sid.trim().to_string());
+                        _sample_id = Some(sid.trim().to_string());
                     }
                     if let Some(&pid) = fields.get(6) {
                         patient_id = Some(pid.trim().to_string());
                     }
-                    println!("👤 [DEBUG] Patient: {:?}, Sample: {:?}", patient_id, sample_id);
                 }
                 "OBR" => {
                     // Observation Request
                     // Fields: [0]OBR | ... | [7]dateTime | [15]sampleType | [45]testType
                     if let Some(&ttype) = fields.get(45) {
-                        test_type = Some(ttype.trim().to_string());
+                        _test_type = Some(ttype.trim().to_string());
                     }
-                    println!("📋 [DEBUG] Test type: {:?}", test_type);
                 }
                 "OBX" => {
                     // Observation Result
@@ -283,16 +264,11 @@ impl DeviceParserService {
 
                     if !param_code.is_empty() && !result.is_empty() {
                         test_results.insert(param_code.to_string(), result.to_string());
-                        println!("   📊 {} = {}", param_code, result);
                     }
                 }
-                _ => {
-                    println!("⚠️  [WARN] Unknown HL7 message type: {}", message_type);
-                }
+                _ => {}
             }
         }
-
-        println!("✅ [DEBUG] Parsed {} parameters", test_results.len());
 
         // Generate filename for the biochemistry panel
         let patient_label = patient_id.as_ref().map(|s| s.as_str()).unwrap_or("Unknown");
@@ -330,16 +306,12 @@ impl DeviceParserService {
         let json_str = String::from_utf8(file_data.to_vec())
             .map_err(|e| format!("Invalid UTF-8 in JSON file: {}", e))?;
 
-        println!("🔍 [DEBUG] Parsing stored JSON for {} ({} bytes)", device_type, file_data.len());
-        println!("🔍 [DEBUG] JSON content: {}", &json_str[..json_str.len().min(200)]);
-
         // Parse as JSON
         let json_value: serde_json::Value = serde_json::from_str(&json_str)
             .map_err(|e| format!("Failed to parse JSON: {}", e))?;
 
         // The stored JSON is a flat HashMap of param -> value
-        let test_results = if let Some(obj) = json_value.as_object() {
-            println!("✅ [DEBUG] Parsed {} parameters from stored JSON", obj.len());
+        let test_results = if json_value.as_object().is_some() {
             json_value.clone()
         } else {
             return Err("Stored JSON is not an object".to_string());

@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::fs;
 use uuid::Uuid;
 use sqlx::{SqlitePool, Row};
@@ -182,7 +182,7 @@ impl FileStorageService {
     /// Validate file before upload
     pub fn validate_file(
         file_data: &[u8],
-        file_name: &str,
+        _file_name: &str,
         max_size_mb: usize,
     ) -> Result<(), String> {
         // Check file size

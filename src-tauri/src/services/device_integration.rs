@@ -1,9 +1,9 @@
 use crate::database::DatabasePool;
 use crate::models::device_integration::{
     DeviceIntegration, DeviceIntegrationRow, CreateDeviceIntegrationInput,
-    UpdateDeviceIntegrationInput, DeviceType, ConnectionType
+    UpdateDeviceIntegrationInput
 };
-use sqlx::{SqlitePool, Row};
+use sqlx::Row;
 use chrono::Utc;
 
 pub struct DeviceIntegrationService;
@@ -187,6 +187,7 @@ impl DeviceIntegrationService {
     }
 
     /// Update last_connected_at timestamp
+    #[allow(dead_code)]
     pub async fn update_last_connected(pool: &DatabasePool, id: i64) -> Result<(), String> {
         let pool_guard = pool.lock().await;
 
