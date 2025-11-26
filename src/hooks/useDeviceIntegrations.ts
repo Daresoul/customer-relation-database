@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api';
 import { DeviceIntegrationService } from '../services/deviceIntegrationService';
-import { DeviceIntegration, CreateDeviceIntegrationInput, UpdateDeviceIntegrationInput, DeviceConnectionStatus } from '../types/deviceIntegration';
+import { DeviceIntegration, CreateDeviceIntegrationInput, UpdateDeviceIntegrationInput, DeviceConnectionStatus, FileWatcherStatus } from '../types/deviceIntegration';
 
 export const useDeviceIntegrations = () => {
   return useQuery({
@@ -188,6 +188,70 @@ export const useDeviceConnectionStatus = () => {
   // Get status for a specific integration
   const getStatus = useCallback(
     (integrationId: number): DeviceConnectionStatus | undefined => {
+      return statuses.get(integrationId);
+    },
+    [statuses]
+  );
+
+  return {
+    statuses,
+    getStatus,
+    refetch: fetchStatuses,
+  };
+};
+
+// Hook to track file watcher statuses with real-time updates
+export const useFileWatcherStatus = () => {
+  const [statuses, setStatuses] = useState<Map<number, FileWatcherStatus>>(new Map());
+
+  // Fetch initial statuses
+  const fetchStatuses = useCallback(async () => {
+    try {
+      const statusList = await invoke<FileWatcherStatus[]>('get_file_watcher_statuses');
+      const statusMap = new Map<number, FileWatcherStatus>();
+      statusList.forEach((status) => {
+        statusMap.set(status.integration_id, status);
+      });
+      setStatuses(statusMap);
+    } catch (_error) {
+      // Silently fail - statuses are not critical
+    }
+  }, []);
+
+  useEffect(() => {
+    // Fetch initial statuses
+    fetchStatuses();
+
+    // Listen for status updates
+    let unlisten: UnlistenFn | undefined;
+
+    const setupListener = async () => {
+      unlisten = await listen<FileWatcherStatus>('file-watcher-status', (event) => {
+        const status = event.payload;
+        setStatuses((prev) => {
+          const newMap = new Map(prev);
+          newMap.set(status.integration_id, status);
+          return newMap;
+        });
+      });
+    };
+
+    setupListener();
+
+    // Refresh statuses periodically (every 30 seconds for file watchers)
+    const interval = setInterval(fetchStatuses, 30000);
+
+    return () => {
+      if (unlisten) {
+        unlisten();
+      }
+      clearInterval(interval);
+    };
+  }, [fetchStatuses]);
+
+  // Get status for a specific integration
+  const getStatus = useCallback(
+    (integrationId: number): FileWatcherStatus | undefined => {
       return statuses.get(integrationId);
     },
     [statuses]

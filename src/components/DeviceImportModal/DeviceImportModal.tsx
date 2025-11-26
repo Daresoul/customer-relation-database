@@ -53,7 +53,7 @@ const DeviceImportModal: React.FC = () => {
   // Get grouped files (sessions + individual files)
   const pendingFiles = getGroupedFiles();
 
-  const { patients } = usePatients();
+  const { patients, refreshPatients, loading: patientsLoading } = usePatients();
   const { data: currencies } = useCurrencies();
   const { settings } = useAppSettings();
   const createMutation = useCreateMedicalRecord();
@@ -86,14 +86,24 @@ const DeviceImportModal: React.FC = () => {
     return defaults;
   };
 
-  // Reset form with defaults when modal opens
+  // Refresh patients list when modal opens
+  useEffect(() => {
+    if (modalOpen) {
+      // Refresh patients to get latest list (in case new patients were created)
+      refreshPatients();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modalOpen]);
+
+  // Reset form with defaults when modal opens or relevant data changes
   useEffect(() => {
     if (modalOpen) {
       const defaults = getDefaultFormValues();
       form.resetFields();
       form.setFieldsValue(defaults);
     }
-  }, [modalOpen, suggestedPatientId, settings?.currencyId, pendingFiles]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modalOpen, suggestedPatientId, settings?.currencyId, pendingFiles.length]);
 
   const handleRecordTypeChange = (value: 'procedure' | 'note' | 'test_result') => {
     setRecordType(value);
@@ -313,6 +323,8 @@ const DeviceImportModal: React.FC = () => {
             optionFilterProp="children"
             suffixIcon={<UserOutlined />}
             size="large"
+            loading={patientsLoading}
+            notFoundContent={patientsLoading ? 'Loading patients...' : 'No patients found'}
           >
             {patients?.map((patient: any) => (
               <Option key={patient.id} value={patient.id}>

@@ -4,10 +4,78 @@ use std::sync::mpsc::channel;
 use glob::Pattern;
 use sqlx::{SqlitePool, Row};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::Manager;
+use serde::{Serialize, Deserialize};
 use crate::services::device_parser::DeviceParserService;
+
+// Track connection status for file watchers
+static FILE_WATCHER_STATUS: OnceLock<Mutex<HashMap<i64, FileWatcherStatus>>> = OnceLock::new();
+
+fn get_file_watcher_status() -> &'static Mutex<HashMap<i64, FileWatcherStatus>> {
+    FILE_WATCHER_STATUS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct FileWatcherStatus {
+    pub integration_id: i64,
+    pub name: String,
+    pub watch_directory: String,
+    pub status: FileWatcherState,
+    pub last_error: Option<String>,
+    pub files_processed: u32,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
+pub enum FileWatcherState {
+    Watching,
+    Error,
+    Stopped,
+}
+
+/// Update file watcher status and emit event to frontend
+fn update_file_watcher_status(
+    app_handle: Option<&tauri::AppHandle>,
+    integration_id: i64,
+    name: &str,
+    watch_directory: &str,
+    status: FileWatcherState,
+    error: Option<String>,
+) {
+    let watcher_status = FileWatcherStatus {
+        integration_id,
+        name: name.to_string(),
+        watch_directory: watch_directory.to_string(),
+        status: status.clone(),
+        last_error: error,
+        files_processed: 0,
+    };
+
+    // Store in global state
+    {
+        let mut statuses = get_file_watcher_status().lock().unwrap();
+        statuses.insert(integration_id, watcher_status.clone());
+    }
+
+    // Emit to frontend
+    if let Some(handle) = app_handle {
+        let _ = handle.emit_all("file-watcher-status", &watcher_status);
+    }
+}
+
+/// Get all file watcher statuses
+pub fn get_all_file_watcher_statuses() -> Vec<FileWatcherStatus> {
+    let statuses = get_file_watcher_status().lock().unwrap();
+    statuses.values().cloned().collect()
+}
+
+/// Remove file watcher status when stopped
+#[allow(dead_code)]
+fn remove_file_watcher_status(integration_id: i64) {
+    let mut statuses = get_file_watcher_status().lock().unwrap();
+    statuses.remove(&integration_id);
+}
 
 pub struct FileWatcherService {
     pool: SqlitePool,
@@ -79,11 +147,15 @@ impl FileWatcherService {
 
         // Check if directory exists
         if !dir_path.exists() {
-            return Err(format!("Directory does not exist: {}", directory));
+            let error_msg = format!("Directory does not exist: {}", directory);
+            update_file_watcher_status(self.app_handle.as_ref(), id, name, directory, FileWatcherState::Error, Some(error_msg.clone()));
+            return Err(error_msg);
         }
 
         if !dir_path.is_dir() {
-            return Err(format!("Path is not a directory: {}", directory));
+            let error_msg = format!("Path is not a directory: {}", directory);
+            update_file_watcher_status(self.app_handle.as_ref(), id, name, directory, FileWatcherState::Error, Some(error_msg.clone()));
+            return Err(error_msg);
         }
 
         // Create channel for file events
@@ -91,7 +163,11 @@ impl FileWatcherService {
 
         // Compile glob pattern
         let glob_pattern = Pattern::new(pattern)
-            .map_err(|e| format!("Invalid glob pattern '{}': {}", pattern, e))?;
+            .map_err(|e| {
+                let error_msg = format!("Invalid glob pattern '{}': {}", pattern, e);
+                update_file_watcher_status(self.app_handle.as_ref(), id, name, directory, FileWatcherState::Error, Some(error_msg.clone()));
+                error_msg
+            })?;
 
         // Clone values for the watcher closure
         let name_clone = name.to_string();
@@ -180,10 +256,17 @@ impl FileWatcherService {
 
         // Start watching the directory
         watcher.watch(&dir_path, RecursiveMode::NonRecursive)
-            .map_err(|e| format!("Failed to watch directory: {}", e))?;
+            .map_err(|e| {
+                let error_msg = format!("Failed to watch directory: {}", e);
+                update_file_watcher_status(self.app_handle.as_ref(), id, name, directory, FileWatcherState::Error, Some(error_msg.clone()));
+                error_msg
+            })?;
 
         // Store watcher
         self.watchers.insert(id, watcher);
+
+        // Update status to watching
+        update_file_watcher_status(self.app_handle.as_ref(), id, name, directory, FileWatcherState::Watching, None);
 
         Ok(())
     }

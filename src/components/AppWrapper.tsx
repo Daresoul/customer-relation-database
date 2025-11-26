@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useUpdater } from '../hooks/useUpdater';
 import { updateService } from '../services/updateService';
+import { DeviceStatusBar } from './DeviceStatusBar';
 
 export const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { themeMode } = useTheme();
@@ -54,6 +55,7 @@ export const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }
         transition: 'background-color 0.3s ease'
       }}
     >
+      <DeviceStatusBar />
       {children}
     </div>
   );

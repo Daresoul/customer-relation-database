@@ -1,4 +1,5 @@
 use crate::services::device_input::{scan_ports, start_listen, stop_listen, get_all_connection_statuses, PortInfo, DeviceConnectionStatus};
+use crate::services::file_watcher::{get_all_file_watcher_statuses, FileWatcherStatus};
 use crate::services::device_integration::DeviceIntegrationService;
 use crate::database::connection::DatabasePool;
 use crate::models::Patient;
@@ -14,6 +15,12 @@ pub fn get_available_ports() -> Result<Vec<PortInfo>, String> {
 #[tauri::command]
 pub fn get_device_connection_statuses() -> Vec<DeviceConnectionStatus> {
     get_all_connection_statuses()
+}
+
+/// Get all file watcher statuses
+#[tauri::command]
+pub fn get_file_watcher_statuses() -> Vec<FileWatcherStatus> {
+    get_all_file_watcher_statuses()
 }
 
 /// Start listening to a device integration's serial port

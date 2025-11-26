@@ -18,6 +18,7 @@ import { HouseholdSection } from './HouseholdSection';
 import MedicalHistorySection from './MedicalHistory/MedicalHistorySection';
 import { Link } from 'react-router-dom';
 import { useThemeColors } from '../../utils/themeStyles';
+import { DeviceStatusInline } from '../../components/DeviceStatusBar';
 import styles from './PatientDetail.module.css';
 
 const { Content } = Layout;
@@ -191,16 +192,19 @@ export const PatientDetail: React.FC = () => {
       className={styles.container}
     >
       <div className={styles.section}>
-        <Breadcrumb
-          items={[
-            {
-              title: <Link to="/" className={styles.breadcrumbLink}><HomeOutlined /> {t('navigation:home')}</Link>,
-            },
-            {
-              title: <span className={styles.breadcrumbCurrent}>{patient.name}</span>,
-            },
-          ]}
-        />
+        <div className={styles.breadcrumbRow}>
+          <Breadcrumb
+            items={[
+              {
+                title: <Link to="/" className={styles.breadcrumbLink}><HomeOutlined /> {t('navigation:home')}</Link>,
+              },
+              {
+                title: <span className={styles.breadcrumbCurrent}>{patient.name}</span>,
+              },
+            ]}
+          />
+          <DeviceStatusInline />
+        </div>
       </div>
 
       <div className={styles.header}>

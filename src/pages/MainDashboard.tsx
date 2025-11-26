@@ -11,10 +11,8 @@ import {
   RiseOutlined,
   UserOutlined,
   HomeOutlined,
-  SettingOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 // Removed AppLayout - using simpler layout
 import { PatientTable } from '../components/tables/PatientTable';
 import { HouseholdTable } from '../components/tables/HouseholdTable';
@@ -41,7 +39,6 @@ import styles from './MainDashboard.module.css';
 export const MainDashboard: React.FC = () => {
   const { notification, modal } = App.useApp();
   const { t } = useTranslation(['patients', 'common', 'navigation']);
-  const navigate = useNavigate();
   const { currentView, setCurrentView } = useViewContext();
   const app = App.useApp();
   const themeColors = useThemeColors();
@@ -298,13 +295,6 @@ export const MainDashboard: React.FC = () => {
             }}
             tabBarExtraContent={
               <Space>
-                <Button
-                  variant="secondary"
-                  iconType="setting"
-                  onClick={() => navigate('/settings')}
-                >
-                  {t('navigation:settings')}
-                </Button>
                 {import.meta.env.DEV && (
                   <Button
                     variant="secondary"

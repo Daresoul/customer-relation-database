@@ -12,6 +12,7 @@ import type { MedicalAttachment } from '@/types/medical';
 import MedicalRecordForm from '@/components/MedicalRecordModal/MedicalRecordForm';
 // Inline PDF viewer handled by PdfInlineViewer with reliable fallbacks
 import type { MedicalRecord, MedicalRecordHistory, UpdateMedicalRecordInput } from '@/types/medical';
+import { DeviceStatusInline } from '@/components/DeviceStatusBar';
 import styles from './MedicalRecordDetailPage.module.css';
 
 const { Content } = Layout;
@@ -584,35 +585,38 @@ export const MedicalRecordDetailPage: React.FC = () => {
         return null;
       })()}
       <div className={styles.breadcrumbContainer}>
-        <Breadcrumb
-          items={[
-            {
-              title: <Link to="/" className={styles.breadcrumbLink}><HomeOutlined /> {t('navigation:home')}</Link>,
-            },
-            {
-              title: record?.patientId ? (
-                <Link
-                  to={`/patients/${record.patientId}`}
-                  className={styles.breadcrumbLink}
-                  onClick={(e) => {
-                    // Save the current tab state so we return to the Medical History tab
-                    sessionStorage.setItem(
-                      `patient-detail-active-tab-${record.patientId}`,
-                      'medical-history'
-                    );
-                  }}
-                >
-                  {t('navigation:patients')}
-                </Link>
-              ) : (
-                <span className={styles.breadcrumbText}>{t('navigation:patients')}</span>
-              ),
-            },
-            {
-              title: <span className={styles.breadcrumbText}>{t('medical:title')}</span>,
-            },
-          ]}
-        />
+        <div className={styles.breadcrumbRow}>
+          <Breadcrumb
+            items={[
+              {
+                title: <Link to="/" className={styles.breadcrumbLink}><HomeOutlined /> {t('navigation:home')}</Link>,
+              },
+              {
+                title: record?.patientId ? (
+                  <Link
+                    to={`/patients/${record.patientId}`}
+                    className={styles.breadcrumbLink}
+                    onClick={(e) => {
+                      // Save the current tab state so we return to the Medical History tab
+                      sessionStorage.setItem(
+                        `patient-detail-active-tab-${record.patientId}`,
+                        'medical-history'
+                      );
+                    }}
+                  >
+                    {t('navigation:patients')}
+                  </Link>
+                ) : (
+                  <span className={styles.breadcrumbText}>{t('navigation:patients')}</span>
+                ),
+              },
+              {
+                title: <span className={styles.breadcrumbText}>{t('medical:title')}</span>,
+              },
+            ]}
+          />
+          <DeviceStatusInline />
+        </div>
       </div>
       <div className={styles.breadcrumbContainer}>
         <Button
