@@ -10,12 +10,14 @@ import {
   useCreateDeviceIntegration,
   useUpdateDeviceIntegration,
   useDeleteDeviceIntegration,
-  useToggleDeviceIntegration
+  useToggleDeviceIntegration,
+  useDeviceConnectionStatus
 } from '../../../hooks/useDeviceIntegrations';
 import {
   DeviceIntegration,
   DeviceType,
   ConnectionType,
+  ConnectionState,
   getDeviceTypeDisplayName,
   getConnectionTypeDisplayName
 } from '../../../types/deviceIntegration';
@@ -58,6 +60,78 @@ const DeviceInputSettings: React.FC = () => {
   const updateIntegrationMutation = useUpdateDeviceIntegration();
   const deleteIntegrationMutation = useDeleteDeviceIntegration();
   const toggleIntegrationMutation = useToggleDeviceIntegration();
+  const { getStatus } = useDeviceConnectionStatus();
+
+  // Helper to render connection status indicator
+  const renderConnectionStatus = (integration: DeviceIntegration) => {
+    // Only show status for serial port connections
+    if (integration.connection_type !== 'serial_port') {
+      return null;
+    }
+
+    const status = getStatus(integration.id);
+
+    if (!status) {
+      // No status yet - show gray (unknown)
+      return (
+        <span
+          title="Status unknown"
+          style={{
+            display: 'inline-block',
+            width: 10,
+            height: 10,
+            borderRadius: '50%',
+            backgroundColor: '#d9d9d9',
+            marginRight: 8,
+          }}
+        />
+      );
+    }
+
+    const getStatusColor = (state: ConnectionState): string => {
+      switch (state) {
+        case 'Connected':
+          return '#52c41a'; // green
+        case 'Connecting':
+          return '#faad14'; // yellow
+        case 'Disconnected':
+        case 'Error':
+          return '#ff4d4f'; // red
+        default:
+          return '#d9d9d9'; // gray
+      }
+    };
+
+    const getStatusTitle = (): string => {
+      switch (status.status) {
+        case 'Connected':
+          return 'Connected';
+        case 'Connecting':
+          return `Connecting... (attempt ${status.retry_count + 1})`;
+        case 'Disconnected':
+          return `Disconnected - retrying in 5s`;
+        case 'Error':
+          return `Error: ${status.last_error || 'Unknown'} - retrying in 5s`;
+        default:
+          return 'Unknown status';
+      }
+    };
+
+    return (
+      <span
+        title={getStatusTitle()}
+        style={{
+          display: 'inline-block',
+          width: 10,
+          height: 10,
+          borderRadius: '50%',
+          backgroundColor: getStatusColor(status.status),
+          marginRight: 8,
+          animation: status.status === 'Connecting' ? 'pulse 1.5s infinite' : undefined,
+        }}
+      />
+    );
+  };
 
   const fetchPorts = async () => {
     setLoading(true);
@@ -143,7 +217,7 @@ const DeviceInputSettings: React.FC = () => {
     switch (deviceType) {
       case 'exigo_eos_vet':
         return ['file_watch']; // Only supports file export
-      case 'healvet_hv_fia_3000':
+      case 'healvet_hv_fia3000':
         return ['serial_port']; // Only supports serial communication
       case 'mnchip_pointcare_pcr_v1':
         return ['file_watch', 'serial_port']; // Supports both
@@ -228,6 +302,7 @@ const DeviceInputSettings: React.FC = () => {
       key: 'name',
       render: (text: string, record: DeviceIntegration) => (
         <Space>
+          {renderConnectionStatus(record)}
           <Text strong>{text}</Text>
           {!record.enabled && <Tag color="default">Disabled</Tag>}
         </Space>
@@ -433,7 +508,7 @@ const DeviceInputSettings: React.FC = () => {
               <Select.Option value="exigo_eos_vet">
                 Exigo Eos Vet <Tag color="blue" style={{ marginLeft: 8 }}>File Watch</Tag>
               </Select.Option>
-              <Select.Option value="healvet_hv_fia_3000">
+              <Select.Option value="healvet_hv_fia3000">
                 Healvet HV-FIA 3000 <Tag color="green" style={{ marginLeft: 8 }}>Serial Port</Tag>
               </Select.Option>
               <Select.Option value="mnchip_pointcare_pcr_v1">

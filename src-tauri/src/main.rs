@@ -99,6 +99,7 @@ fn main() {
                             app_handle_for_serial.clone(),
                             port_name,
                             integration.device_type,
+                            integration.id,
                         ) {
                             eprintln!("❌ Failed to start listener for {}: {}", integration.name, e);
                         }
@@ -229,6 +230,8 @@ fn main() {
             commands::get_available_ports,
             commands::resolve_patient_from_identifier,
             commands::start_device_integration_listener,
+            commands::stop_device_integration_listener,
+            commands::get_device_connection_statuses,
             // Device integration commands
             commands::get_device_integrations,
             commands::get_device_integration,
