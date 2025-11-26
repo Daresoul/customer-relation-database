@@ -183,8 +183,12 @@ impl FileWatcherService {
         let mut watcher = notify::recommended_watcher(move |res: NotifyResult<Event>| {
             match res {
                 Ok(event) => {
-                    // Only process file creation events
-                    if matches!(event.kind, EventKind::Create(_)) {
+                    // Process file creation AND modify events
+                    // Note: On Windows, the notify crate reports CreateKind::Any for all file creations
+                    // due to limitations in the ReadDirectoryChangesW API. Some editors also trigger
+                    // Modify events instead of Create events when saving new files.
+                    // See: https://github.com/notify-rs/notify/issues/261
+                    if matches!(event.kind, EventKind::Create(_) | EventKind::Modify(_)) {
                         for path in event.paths {
                             if let Some(file_name) = path.file_name() {
                                 let file_name_str = file_name.to_string_lossy().to_string();

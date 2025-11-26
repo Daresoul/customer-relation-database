@@ -36,9 +36,12 @@ interface UsbInfo {
 type PortType =
   | { SerialUSBPort: UsbInfo }
   | { HIDDevice: UsbInfo }
+  | { VirtualPort: string }        // Virtual/PTY port with description
+  | { DisconnectedPort: string }   // Registry entry for disconnected device with device path
   | 'SerialPciPort'
   | 'SerialBluetoothPort'
-  | 'SerialUnknown';
+  | 'SerialUnknown'
+  | 'BuiltInPort';
 
 interface PortInfo {
   port_name: string;
@@ -149,40 +152,199 @@ const DeviceInputSettings: React.FC = () => {
     fetchPorts();
   }, []);
 
-  const getPortTypeDisplay = (portType: PortType): { text: string; color: string } => {
+  const getPortTypeDisplay = (portType: PortType): { text: string; color: string; tooltip?: string } => {
     if (typeof portType === 'object' && 'SerialUSBPort' in portType) {
-      return { text: t('portTypes.serialUsb'), color: 'blue' };
+      return { text: t('portTypes.serialUsb'), color: 'blue', tooltip: 'Connected USB Serial Device' };
     }
     if (typeof portType === 'object' && 'HIDDevice' in portType) {
-      return { text: t('portTypes.hid'), color: 'purple' };
+      return { text: t('portTypes.hid'), color: 'purple', tooltip: 'Connected HID Device' };
+    }
+    if (typeof portType === 'object' && 'VirtualPort' in portType) {
+      return { text: 'Virtual', color: 'orange', tooltip: 'Virtual/Test Serial Port (socat, pty, etc.)' };
+    }
+    if (typeof portType === 'object' && 'DisconnectedPort' in portType) {
+      const devicePath = portType.DisconnectedPort;
+      return {
+        text: 'Disconnected',
+        color: 'red',
+        tooltip: `Device in registry but not connected: ${devicePath}`
+      };
+    }
+    if (portType === 'BuiltInPort') {
+      return { text: 'Built-in', color: 'green', tooltip: 'Motherboard Serial Port (COM1, /dev/ttyS0, etc.)' };
     }
     if (portType === 'SerialPciPort') {
-      return { text: t('portTypes.serialPci'), color: 'green' };
+      return { text: t('portTypes.serialPci'), color: 'green', tooltip: 'PCI Serial Port' };
     }
     if (portType === 'SerialBluetoothPort') {
-      return { text: t('portTypes.serialBluetooth'), color: 'cyan' };
+      return { text: t('portTypes.serialBluetooth'), color: 'cyan', tooltip: 'Bluetooth Serial Port' };
     }
-    return { text: t('portTypes.unknown'), color: 'default' };
+    // SerialUnknown = Could not determine port type
+    return {
+      text: t('portTypes.unknown'),
+      color: 'default',
+      tooltip: 'Unknown port type - may need driver or be unsupported device'
+    };
   };
 
-  const getPortDetails = (portType: PortType): string | null => {
+  // Get friendly chip/device name based on VID:PID
+  const getChipName = (vid: number, pid: number): string | null => {
+    const vidHex = vid.toString(16).toUpperCase().padStart(4, '0');
+
+    // Common USB-Serial chip vendors
+    // Source: https://devicehunt.com/ and https://www.usb.org/
+    if (vidHex === '0403') return 'FTDI'; // Future Technology Devices International
+    if (vidHex === '1A86') return 'CH340'; // QinHeng Electronics (WCH)
+    if (vidHex === '10C4') return 'Silicon Labs CP210x'; // Silicon Labs
+    if (vidHex === '067B') return 'Prolific PL2303'; // Prolific Technology
+    if (vidHex === '2341') return 'Arduino'; // Arduino SA
+    if (vidHex === '1B4F') return 'SparkFun'; // SparkFun Electronics
+    if (vidHex === '0483') return 'STMicroelectronics'; // ST
+    if (vidHex === '16C0') return 'VOTI'; // Van Ooijen Technische Informatica
+    if (vidHex === '03EB') return 'Atmel'; // Atmel Corp.
+    if (vidHex === '1366') return 'SEGGER'; // SEGGER J-Link
+    if (vidHex === '0451') return 'Texas Instruments'; // TI
+
+    return null;
+  };
+
+  // Extract friendly description from port name for virtual/unknown ports
+  const getPortNameDescription = (portName: string): string | null => {
+    // Virtual ports in /tmp (socat, testing, etc.)
+    if (portName.includes('ttyHealvet')) return 'Healvet HV-FIA 3000 Virtual Port';
+    if (portName.includes('ttyPointcare')) return 'MNCHIP PointCare PCR Virtual Port';
+    if (portName.includes('ttyExigo')) return 'Exigo Eos Vet Virtual Port';
+
+    // Generic virtual port detection
+    if (portName.startsWith('/tmp/tty') || portName.startsWith('/tmp/pty')) {
+      const name = portName.replace('/tmp/', '').replace('tty', '').replace('pty', '');
+      return `Virtual Serial Port (${name})`;
+    }
+
+    // macOS call-out devices
+    if (portName.startsWith('/dev/cu.')) {
+      return portName.replace('/dev/cu.', 'macOS: ');
+    }
+
+    // Linux standard serial
+    if (portName.startsWith('/dev/ttyUSB')) {
+      return `Linux USB Serial Adapter #${portName.replace('/dev/ttyUSB', '')}`;
+    }
+
+    return null;
+  };
+
+  const getPortDetails = (portType: PortType, portName: string): string | null => {
     if (typeof portType === 'object' && 'SerialUSBPort' in portType) {
       const usb = portType.SerialUSBPort;
       const parts = [];
-      if (usb.manufacturer) parts.push(usb.manufacturer);
+
+      // Show friendly chip name first if recognized
+      const chipName = getChipName(usb.vid, usb.pid);
+      if (chipName) {
+        parts.push(`[${chipName}]`);
+      }
+
+      // Always show VID:PID for USB devices (helps with Windows identification)
+      parts.push(`VID:${usb.vid.toString(16).toUpperCase().padStart(4, '0')}`);
+      parts.push(`PID:${usb.pid.toString(16).toUpperCase().padStart(4, '0')}`);
+
+      // Add manufacturer and product if available
+      if (usb.manufacturer && usb.manufacturer !== chipName) parts.push(usb.manufacturer);
       if (usb.product) parts.push(usb.product);
-      if (usb.serial_number) parts.push(`SN: ${usb.serial_number}`);
-      return parts.length > 0 ? parts.join(' - ') : null;
+      if (usb.serial_number) parts.push(`SN:${usb.serial_number}`);
+
+      return parts.join(' | ');
     }
     if (typeof portType === 'object' && 'HIDDevice' in portType) {
       const hid = portType.HIDDevice;
       const parts = [];
-      parts.push(`VID: ${hid.vid.toString(16).toUpperCase().padStart(4, '0')}`);
-      parts.push(`PID: ${hid.pid.toString(16).toUpperCase().padStart(4, '0')}`);
+
+      const chipName = getChipName(hid.vid, hid.pid);
+      if (chipName) {
+        parts.push(`[${chipName}]`);
+      }
+
+      parts.push(`VID:${hid.vid.toString(16).toUpperCase().padStart(4, '0')}`);
+      parts.push(`PID:${hid.pid.toString(16).toUpperCase().padStart(4, '0')}`);
       if (hid.manufacturer) parts.push(hid.manufacturer);
-      if (hid.serial_number) parts.push(`SN: ${hid.serial_number}`);
-      return parts.join(' - ');
+      if (hid.product) parts.push(hid.product);
+      if (hid.serial_number) parts.push(`SN:${hid.serial_number}`);
+      return parts.join(' | ');
     }
+
+    // VirtualPort contains its own description from Rust
+    if (typeof portType === 'object' && 'VirtualPort' in portType) {
+      return portType.VirtualPort;
+    }
+
+    // DisconnectedPort - show the device path for debugging
+    if (typeof portType === 'object' && 'DisconnectedPort' in portType) {
+      const devicePath = portType.DisconnectedPort;
+
+      // Extract VID/PID from device path
+      // Windows registry device path formats:
+      // - FTDI: \Device\FTDIBUS#VID_0403+PID_6001+...
+      // - Generic USB: USB#VID_xxxx&PID_xxxx#...
+      // - Standard USB: \Device\USBSER000 (no VID/PID visible)
+
+      // Try FTDI format: VID_xxxx+PID_xxxx
+      let vidMatch = devicePath.match(/VID_([0-9A-F]{4})\+PID_([0-9A-F]{4})/i);
+      if (vidMatch) {
+        const vid = parseInt(vidMatch[1], 16);
+        const pid = parseInt(vidMatch[2], 16);
+        const chipName = getChipName(vid, pid);
+        return chipName
+          ? `${chipName} (Disconnected) - VID:${vidMatch[1]} PID:${vidMatch[2]}`
+          : `Disconnected USB Device - VID:${vidMatch[1]} PID:${vidMatch[2]}`;
+      }
+
+      // Try generic USB format: VID_xxxx&PID_xxxx
+      vidMatch = devicePath.match(/VID_([0-9A-F]{4})&PID_([0-9A-F]{4})/i);
+      if (vidMatch) {
+        const vid = parseInt(vidMatch[1], 16);
+        const pid = parseInt(vidMatch[2], 16);
+        const chipName = getChipName(vid, pid);
+        return chipName
+          ? `${chipName} (Disconnected) - VID:${vidMatch[1]} PID:${vidMatch[2]}`
+          : `Disconnected USB Device - VID:${vidMatch[1]} PID:${vidMatch[2]}`;
+      }
+
+      // Check for known device patterns without VID/PID
+      if (devicePath.includes('FTDIBUS')) {
+        return 'FTDI USB Serial (Disconnected)';
+      }
+      if (devicePath.includes('USBSER')) {
+        return 'USB Serial Device (Disconnected)';
+      }
+      if (devicePath.includes('VCP')) {
+        return 'Virtual COM Port (Disconnected)';
+      }
+
+      // Fallback: show abbreviated device path
+      const shortPath = devicePath.length > 50
+        ? devicePath.substring(0, 47) + '...'
+        : devicePath;
+      return `Disconnected: ${shortPath}`;
+    }
+
+    // BuiltInPort - show helpful description
+    if (portType === 'BuiltInPort') {
+      if (portName.startsWith('COM') && portName.length <= 4) {
+        return 'Motherboard Serial Port';
+      }
+      if (portName.startsWith('/dev/ttyS')) {
+        return `Standard Serial Port (${portName})`;
+      }
+      return 'Built-in Serial Port';
+    }
+
+    // For remaining Unknown ports, try to extract description from port name
+    const nameDescription = getPortNameDescription(portName);
+    if (nameDescription) {
+      return nameDescription;
+    }
+
     return null;
   };
 
@@ -416,16 +578,16 @@ const DeviceInputSettings: React.FC = () => {
       dataIndex: 'port_type',
       key: 'type',
       render: (portType: PortType) => {
-        const { text, color } = getPortTypeDisplay(portType);
-        return <Tag color={color}>{text}</Tag>;
+        const { text, color, tooltip } = getPortTypeDisplay(portType);
+        return <Tag color={color} title={tooltip}>{text}</Tag>;
       },
     },
     {
       title: t('table.details'),
       dataIndex: 'port_type',
       key: 'details',
-      render: (portType: PortType) => {
-        const details = getPortDetails(portType);
+      render: (portType: PortType, record: PortInfo) => {
+        const details = getPortDetails(portType, record.port_name);
         return details ? <Text type="secondary">{details}</Text> : <Text type="secondary">-</Text>;
       },
     },

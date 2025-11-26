@@ -109,7 +109,11 @@ pub enum PortType {
     SerialPciPort,
     SerialBluetoothPort,
     SerialUnknown,
-    HIDDevice(UsbInfo)
+    HIDDevice(UsbInfo),
+    VirtualPort(String), // Virtual/PTY port with description
+    BuiltInPort,         // Built-in motherboard serial port (COM1, etc.)
+    #[allow(dead_code)] // Used on Windows only for registry entries
+    DisconnectedPort(String), // Registry entry for disconnected device with device path
 }
 
 impl PortType {
@@ -162,11 +166,93 @@ pub fn get_device_protocol(device_type: &str) -> DeviceProtocol {
     }
 }
 
+/// Extract friendly description from virtual port name
+fn get_virtual_port_description(port_name: &str) -> String {
+    if port_name.contains("ttyHealvet") {
+        "Healvet HV-FIA 3000 Virtual Port".to_string()
+    } else if port_name.contains("ttyPointcare") {
+        "MNCHIP PointCare PCR Virtual Port".to_string()
+    } else if port_name.contains("ttyExigo") {
+        "Exigo Eos Vet Virtual Port".to_string()
+    } else if port_name.starts_with("/tmp/tty") || port_name.starts_with("/tmp/pty") {
+        let name = port_name.replace("/tmp/", "").replace("tty", "").replace("pty", "");
+        format!("Virtual Serial Port ({})", name)
+    } else if port_name.starts_with("/dev/pts/") {
+        let num = port_name.replace("/dev/pts/", "");
+        format!("Pseudo-Terminal (pts/{})", num)
+    } else {
+        "Virtual/Test Port".to_string()
+    }
+}
+
+/// Scan Windows registry for ALL COM ports (including disconnected/hidden devices)
+/// Registry location: HKEY_LOCAL_MACHINE\HARDWARE\DEVICEMAP\SERIALCOMM
+///
+/// Note: This registry key may not exist on systems without any serial ports
+/// (e.g., modern laptops without RS232 ports). This is expected behavior.
+#[cfg(windows)]
+fn scan_windows_registry_ports() -> Result<Vec<PortInfo>, String> {
+    use winreg::enums::*;
+    use winreg::RegKey;
+
+    let mut ports = vec![];
+
+    // Open the SERIALCOMM registry key
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let serialcomm_key = match hklm.open_subkey("HARDWARE\\DEVICEMAP\\SERIALCOMM") {
+        Ok(key) => key,
+        Err(_) => {
+            // Registry key doesn't exist - this is normal on systems without serial ports
+            // (modern laptops, etc.). Return empty list instead of error.
+            return Ok(vec![]);
+        }
+    };
+
+    // Enumerate all values in the key
+    // Each value name is the device path, value data is the COM port name (e.g., "COM3")
+    // Device path formats:
+    // - Built-in: \Device\Serial0, \Device\Serial1, etc.
+    // - FTDI USB: \Device\VCP0, \Device\FTDIBUS#VID_0403+PID_6001+...
+    // - Standard USB: \Device\USBSER000, USB#VID_xxxx&PID_xxxx#...
+    for (device_path, com_port) in serialcomm_key.enum_values()
+        .filter_map(|x| x.ok())
+        .filter_map(|(name, value)| {
+            // value is a RegValue, extract String from it
+            if let Ok(port_name) = String::try_from(value) {
+                Some((name, port_name))
+            } else {
+                None
+            }
+        })
+    {
+        // Determine port type based on device path pattern
+        let port_type = if device_path.starts_with("\\Device\\Serial") {
+            // Built-in motherboard serial port (e.g., \Device\Serial0 -> COM1)
+            PortType::BuiltInPort
+        } else if device_path.contains("FTDIBUS") || device_path.contains("VCP")
+                || device_path.contains("USBSER") || device_path.contains("USB#VID_") {
+            // USB serial device (FTDI, generic USB-Serial, etc.)
+            // Probably disconnected since serialport crate didn't find it with full metadata
+            PortType::DisconnectedPort(device_path.clone())
+        } else {
+            // Unknown device path pattern - treat as disconnected/unknown
+            PortType::DisconnectedPort(device_path.clone())
+        };
+
+        ports.push(PortInfo {
+            port_name: com_port,
+            port_type,
+        });
+    }
+
+    Ok(ports)
+}
+
 pub fn scan_serial_ports() -> Result<Vec<PortInfo>, String> {
     let mut ports = vec![];
     let mut seen_ports = std::collections::HashSet::new();
 
-    // 1. Scan standard serial ports using serialport crate
+    // 1. Scan standard serial ports using serialport crate (CONNECTED devices only)
     let available_ports = available_ports().map_err(|_| "Failed to list available ports".to_string())?;
 
     for port in available_ports {
@@ -176,6 +262,20 @@ pub fn scan_serial_ports() -> Result<Vec<PortInfo>, String> {
             port_type: PortType::convert_serial_port(port.port_type),
         };
         ports.push(port_info);
+    }
+
+    // 2. On Windows, scan registry for ALL COM ports (including disconnected/hidden)
+    #[cfg(windows)]
+    {
+        if let Ok(registry_ports) = scan_windows_registry_ports() {
+            for registry_port in registry_ports {
+                // Only add if not already found by serialport crate
+                if !seen_ports.contains(&registry_port.port_name) {
+                    seen_ports.insert(registry_port.port_name.clone());
+                    ports.push(registry_port);
+                }
+            }
+        }
     }
 
     // 2. Scan for virtual/PTY ports on macOS and Linux
@@ -215,10 +315,23 @@ pub fn scan_serial_ports() -> Result<Vec<PortInfo>, String> {
                         let file_type = metadata.file_type();
 
                         if file_type.is_char_device() || file_type.is_fifo() {
+                            // Determine if it's a virtual port or built-in serial
+                            let port_type = if port_name.starts_with("/tmp/") || port_name.starts_with("/dev/pts/") {
+                                // Virtual/PTY port - extract description
+                                let description = get_virtual_port_description(&port_name);
+                                PortType::VirtualPort(description)
+                            } else if port_name.starts_with("/dev/ttyS") {
+                                // Built-in serial port (Linux standard serial)
+                                PortType::BuiltInPort
+                            } else {
+                                // Other character devices (could be USB that serialport missed)
+                                PortType::SerialUnknown
+                            };
+
                             seen_ports.insert(port_name.clone());
                             ports.push(PortInfo {
                                 port_name,
-                                port_type: PortType::SerialUnknown, // Virtual/PTY port
+                                port_type,
                             });
                         }
                     }
