@@ -1,0 +1,25 @@
+{
+  "devices": [
+    {
+      "name": "Healvet",
+      "type": "healvet_hv_fia_3000",
+      "connection": "serial_port",
+      "app_port": "/tmp/ttyHealvet_app",
+      "test_port": "/tmp/ttyHealvet_test"
+    },
+    {
+      "name": "Pointcare",
+      "type": "mnchip_pointcare_pcr_v1",
+      "connection": "serial_port",
+      "app_port": "/tmp/ttyPointcare_app",
+      "test_port": "/tmp/ttyPointcare_test"
+    },
+    {
+      "name": "Exigo",
+      "type": "exigo_eos_vet",
+      "connection": "file_watch",
+      "watch_directory": "/Users/tomato/Desktop/filewatch",
+      "file_pattern": "*.xml"
+    }
+  ]
+}

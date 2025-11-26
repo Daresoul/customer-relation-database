@@ -17,6 +17,212 @@ import styles from './MedicalRecordDetailPage.module.css';
 const { Content } = Layout;
 const { Title, Text, Paragraph } = Typography;
 
+// Inline JSON/XML preview component with prettification
+interface JsonXmlPreviewProps {
+  blob: Blob | null;
+  fileName: string;
+  mimeType: string;
+  isJson: boolean;
+  isXml: boolean;
+}
+
+const JsonXmlPreview: React.FC<JsonXmlPreviewProps> = ({ blob, fileName, mimeType, isJson, isXml }) => {
+  const [content, setContent] = useState<string>('');
+  const [highlightedContent, setHighlightedContent] = useState<React.ReactNode>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!blob) {
+      setLoading(false);
+      return;
+    }
+
+    const loadContent = async () => {
+      try {
+        setLoading(true);
+        const text = await blob.text();
+        const prettified = prettifyContent(text, isJson, isXml);
+        setContent(prettified);
+
+        // Apply syntax highlighting
+        if (isJson) {
+          setHighlightedContent(highlightJson(prettified));
+        } else if (isXml) {
+          setHighlightedContent(highlightXml(prettified));
+        } else {
+          setHighlightedContent(prettified);
+        }
+      } catch (error) {
+        console.error('Failed to load file content:', error);
+        setContent('Error loading file content');
+        setHighlightedContent('Error loading file content');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadContent();
+  }, [blob, isJson, isXml]);
+
+  const highlightJson = (json: string): React.ReactNode => {
+    const lines = json.split('\n');
+    return lines.map((line, idx) => {
+      let highlightedLine = line;
+
+      // Highlight strings (including keys and values)
+      highlightedLine = highlightedLine.replace(/"([^"]*)":/g, '<span style="color: #9CDCFE">"$1"</span>:');
+      highlightedLine = highlightedLine.replace(/:\s*"([^"]*)"/g, ': <span style="color: #CE9178">"$1"</span>');
+
+      // Highlight numbers
+      highlightedLine = highlightedLine.replace(/:\s*(\d+\.?\d*)/g, ': <span style="color: #B5CEA8">$1</span>');
+
+      // Highlight booleans
+      highlightedLine = highlightedLine.replace(/:\s*(true|false)/g, ': <span style="color: #569CD6">$1</span>');
+
+      // Highlight null
+      highlightedLine = highlightedLine.replace(/:\s*(null)/g, ': <span style="color: #569CD6">$1</span>');
+
+      // Highlight brackets and braces
+      highlightedLine = highlightedLine.replace(/([{}[\],])/g, '<span style="color: #FFD700">$1</span>');
+
+      return <div key={idx} dangerouslySetInnerHTML={{ __html: highlightedLine }} />;
+    });
+  };
+
+  const highlightXml = (xml: string): React.ReactNode => {
+    const lines = xml.split('\n');
+    return lines.map((lineText, lineIdx) => {
+      const parts: React.ReactNode[] = [];
+      let remaining = lineText;
+      let keyCounter = 0;
+
+      while (remaining.length > 0) {
+        // Match XML declaration: <?xml ... ?>
+        const xmlDeclMatch = remaining.match(/^(<\?)([\w-:]+)([^?]*?)(\?>)/);
+        if (xmlDeclMatch) {
+          const [full, openBracket, tagName, attributes, closeBracket] = xmlDeclMatch;
+
+          parts.push(<span key={`${lineIdx}-${keyCounter++}`} style={{ color: '#808080' }}>{openBracket}</span>);
+          parts.push(<span key={`${lineIdx}-${keyCounter++}`} style={{ color: '#569CD6' }}>{tagName}</span>);
+
+          // Process attributes in XML declaration
+          if (attributes) {
+            let attrRemaining = attributes;
+            while (attrRemaining.length > 0) {
+              const attrMatch = attrRemaining.match(/^(\s+)([\w-:]+)(=)("([^"]*)")?/);
+              if (attrMatch) {
+                const [fullAttr, space, attrName, equals, quotedValue] = attrMatch;
+                parts.push(<span key={`${lineIdx}-${keyCounter++}`}>{space}</span>);
+                parts.push(<span key={`${lineIdx}-${keyCounter++}`} style={{ color: '#9CDCFE' }}>{attrName}</span>);
+                parts.push(<span key={`${lineIdx}-${keyCounter++}`}>{equals}</span>);
+                if (quotedValue) {
+                  parts.push(<span key={`${lineIdx}-${keyCounter++}`} style={{ color: '#CE9178' }}>{quotedValue}</span>);
+                }
+                attrRemaining = attrRemaining.substring(fullAttr.length);
+              } else {
+                parts.push(<span key={`${lineIdx}-${keyCounter++}`}>{attrRemaining}</span>);
+                break;
+              }
+            }
+          }
+
+          parts.push(<span key={`${lineIdx}-${keyCounter++}`} style={{ color: '#808080' }}>{closeBracket}</span>);
+          remaining = remaining.substring(full.length);
+          continue;
+        }
+
+        // Match regular tags: <tagname attr="value">
+        const tagMatch = remaining.match(/^(<\/?)([\w-:]+)([^>]*?)(\/?>)/);
+        if (tagMatch) {
+          const [full, openBracket, tagName, attributes, closeBracket] = tagMatch;
+
+          parts.push(<span key={`${lineIdx}-${keyCounter++}`} style={{ color: '#808080' }}>{openBracket}</span>);
+          parts.push(<span key={`${lineIdx}-${keyCounter++}`} style={{ color: '#569CD6' }}>{tagName}</span>);
+
+          // Process attributes
+          if (attributes) {
+            let attrRemaining = attributes;
+            while (attrRemaining.length > 0) {
+              const attrMatch = attrRemaining.match(/^(\s+)([\w-:]+)(=)("([^"]*)")?/);
+              if (attrMatch) {
+                const [fullAttr, space, attrName, equals, quotedValue] = attrMatch;
+                parts.push(<span key={`${lineIdx}-${keyCounter++}`}>{space}</span>);
+                parts.push(<span key={`${lineIdx}-${keyCounter++}`} style={{ color: '#9CDCFE' }}>{attrName}</span>);
+                parts.push(<span key={`${lineIdx}-${keyCounter++}`}>{equals}</span>);
+                if (quotedValue) {
+                  parts.push(<span key={`${lineIdx}-${keyCounter++}`} style={{ color: '#CE9178' }}>{quotedValue}</span>);
+                }
+                attrRemaining = attrRemaining.substring(fullAttr.length);
+              } else {
+                parts.push(<span key={`${lineIdx}-${keyCounter++}`}>{attrRemaining}</span>);
+                break;
+              }
+            }
+          }
+
+          parts.push(<span key={`${lineIdx}-${keyCounter++}`} style={{ color: '#808080' }}>{closeBracket}</span>);
+          remaining = remaining.substring(full.length);
+        } else {
+          // No tag found - check if there's a tag later in the line
+          const nextTagIndex = remaining.search(/</);
+          if (nextTagIndex > 0) {
+            // Add text before the tag
+            parts.push(<span key={`${lineIdx}-${keyCounter++}`}>{remaining.substring(0, nextTagIndex)}</span>);
+            remaining = remaining.substring(nextTagIndex);
+          } else {
+            // No more tags, add rest as plain text
+            parts.push(<span key={`${lineIdx}-${keyCounter++}`}>{remaining}</span>);
+            break;
+          }
+        }
+      }
+
+      return <div key={lineIdx}>{parts.length > 0 ? parts : '\u00A0'}</div>;
+    });
+  };
+
+  const prettifyContent = (text: string, isJson: boolean, isXml: boolean): string => {
+    try {
+      if (isJson) {
+        const parsed = JSON.parse(text);
+        return JSON.stringify(parsed, null, 2);
+      }
+      if (isXml) {
+        return formatXml(text);
+      }
+      return text;
+    } catch (error) {
+      return text;
+    }
+  };
+
+  const formatXml = (xml: string): string => {
+    let formatted = '';
+    let indent = 0;
+    const tab = '  ';
+
+    xml.split(/>\s*</).forEach((node) => {
+      if (node.match(/^\/\w/)) indent--;
+      formatted += tab.repeat(indent) + '<' + node + '>\n';
+      if (node.match(/^<?\w[^>]*[^\/]$/)) indent++;
+    });
+
+    return formatted.substring(1, formatted.length - 2);
+  };
+
+  if (loading) {
+    return <Spin />;
+  }
+
+  return (
+    <div className={styles.codePreview}>
+      <pre className={styles.codeBlock}>
+        {highlightedContent}
+      </pre>
+    </div>
+  );
+};
+
 export const MedicalRecordDetailPage: React.FC = () => {
   const { t } = useTranslation(['medical', 'common', 'navigation']);
   const { id } = useParams<{ id: string }>();
@@ -182,36 +388,45 @@ export const MedicalRecordDetailPage: React.FC = () => {
       if (mime.startsWith('image/')) return true;
       if (mime === 'application/pdf') return true;
       if (mime.startsWith('text/')) return true;
+      if (mime === 'application/json') return true;
+      if (mime.includes('xml')) return true;
     }
     if (name) {
       const ext = String(name).split('.').pop()?.toLowerCase();
       if (!ext) return false;
       if (["png","jpg","jpeg","gif","bmp","svg"].includes(ext)) return true;
       if (ext === 'pdf') return true;
+      if (["json","xml","txt","csv","log"].includes(ext)) return true;
       if (["txt","csv","md","log"].includes(ext)) return true;
     }
     return false;
   };
 
-  const canRegeneratePdf = (attachment: MedicalAttachment): boolean => {
-    // Can regenerate if it's an XML file with device metadata
-    const isXml = attachment.mimeType?.includes('xml') || attachment.originalName?.toLowerCase().endsWith('.xml');
-    const hasDeviceMetadata = !!attachment.deviceType && !!attachment.deviceName;
-    return isXml && hasDeviceMetadata;
-  };
+  // Check if there are any device data attachments that can be used to regenerate PDF
+  // This includes test_result attachments and legacy files with device metadata (not PDFs)
+  const hasDeviceDataAttachments = useMemo(() => {
+    return attachments.some((att: MedicalAttachment) => {
+      const hasDeviceMetadata = !!att.deviceType && !!att.deviceName;
+      const isTestResult = att.attachmentType === 'test_result';
+      const isLegacyDeviceFile = hasDeviceMetadata &&
+        att.attachmentType !== 'generated_pdf' &&
+        att.mimeType !== 'application/pdf';
+      return isTestResult || isLegacyDeviceFile;
+    });
+  }, [attachments]);
 
-  const handleRegeneratePdf = async (attachment: MedicalAttachment) => {
+  const handleRegeneratePdf = async () => {
     try {
-      setRegeneratingId(attachment.id);
-      console.log('🔄 Regenerating PDF from attachment:', attachment.id);
+      setRegeneratingId(-1); // Use -1 to indicate overall regeneration
+      console.log('🔄 Regenerating PDF from all test_result attachments for medical record:', recordId);
 
-      await invoke<MedicalAttachment>('regenerate_pdf_from_attachment', {
-        attachmentId: attachment.id,
+      await invoke<MedicalAttachment>('regenerate_pdf_from_medical_record', {
+        medicalRecordId: recordId,
       });
 
       notification.success({
         message: 'PDF Regenerated',
-        description: `Successfully regenerated PDF report from ${attachment.originalName}`,
+        description: 'Successfully regenerated PDF report from all device test data',
         placement: 'bottomRight',
         duration: 5,
       });
@@ -513,7 +728,19 @@ export const MedicalRecordDetailPage: React.FC = () => {
       </Card>
 
       {/* Attachments Card */}
-      <Card title={t('medical:fields.attachments')} className={styles.marginTop16}>
+      <Card
+        title={t('medical:fields.attachments')}
+        className={styles.marginTop16}
+        extra={hasDeviceDataAttachments && (
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={handleRegeneratePdf}
+            loading={regeneratingId === -1}
+          >
+            {t('medical:actions.regeneratePdf')}
+          </Button>
+        )}
+      >
         <Table
           size="small"
           rowKey={(r: any) => String(r.id)}
@@ -554,14 +781,14 @@ export const MedicalRecordDetailPage: React.FC = () => {
                   }
                   // Otherwise fall back to pdf.js inline viewer using the Blob
                   if (pblob) {
-                    return <PdfInlineViewer blob={pblob} fileName={row.originalName} />;
+                    return <PdfInlineViewer blob={pblob} fileName={row.originalName} attachmentId={row.id} />;
                   }
                   return <Text type="secondary">{t('medical:detail.loadingPreview')}</Text>;
                 } else {
                   // In browsers, prefer native PDF viewer for reliability
                   if (url) return <iframe src={url} title={row.originalName} className={styles.iframe} />;
                   if (!pblob) return <Text type="secondary">{t('medical:detail.loadingPreview')}</Text>;
-                  return <PdfInlineViewer blob={pblob} fileName={row.originalName} />;
+                  return <PdfInlineViewer blob={pblob} fileName={row.originalName} attachmentId={row.id} />;
                 }
               }
               if (!url) {
@@ -569,6 +796,12 @@ export const MedicalRecordDetailPage: React.FC = () => {
               }
               if (mime.startsWith('image/')) {
                 return <img src={url} alt={row.originalName} className={styles.image} />;
+              }
+              // Handle JSON/XML files with prettification
+              const isJson = mime === 'application/json' || String(row.originalName).toLowerCase().endsWith('.json');
+              const isXml = mime.includes('xml') || String(row.originalName).toLowerCase().endsWith('.xml');
+              if (isJson || isXml) {
+                return <JsonXmlPreview blob={pblob} fileName={row.originalName} mimeType={mime} isJson={isJson} isXml={isXml} />;
               }
               if (mime.startsWith('text/')) {
                 return <iframe src={url} title={row.originalName} className={styles.iframe} />;
@@ -628,20 +861,6 @@ export const MedicalRecordDetailPage: React.FC = () => {
                   >
                     {t('common:download')}
                   </Button>
-                  {canRegeneratePdf(row) && (
-                    <Button
-                      size="small"
-                      icon={<ReloadOutlined />}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleRegeneratePdf(row);
-                      }}
-                      loading={regeneratingId === row.id}
-                      title="Regenerate PDF report from this device data"
-                    >
-                      Regenerate PDF
-                    </Button>
-                  )}
                 </Space>
               )
             }

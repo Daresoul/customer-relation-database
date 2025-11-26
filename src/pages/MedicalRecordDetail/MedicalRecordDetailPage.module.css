@@ -79,3 +79,24 @@
 .attachmentLink {
   color: #E6E6E6;
 }
+
+.codePreview {
+  padding: 16px;
+  background: #1f1f1f;
+  border-radius: 4px;
+  overflow: auto;
+  max-height: 500px;
+  border: 1px solid #303030;
+}
+
+.codeBlock {
+  margin: 0;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', 'Monaco', 'SF Mono', 'Menlo', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #E6E6E6;
+  font-feature-settings: 'liga' 0;
+  letter-spacing: 0.02em;
+}

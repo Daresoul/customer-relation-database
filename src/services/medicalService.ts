@@ -80,7 +80,8 @@ export class MedicalService {
     file: File,
     deviceType?: string,
     deviceName?: string,
-    connectionMethod?: string
+    connectionMethod?: string,
+    attachmentType?: 'file' | 'test_result' | 'generated_pdf'
   ): Promise<MedicalAttachment> {
     const arrayBuffer = await file.arrayBuffer();
     const fileData = new Uint8Array(arrayBuffer);
@@ -92,7 +93,8 @@ export class MedicalService {
       mimeType: file.type,
       deviceType: deviceType,
       deviceName: deviceName,
-      connectionMethod: connectionMethod
+      connectionMethod: connectionMethod,
+      attachmentType: attachmentType
     });
   }
 
@@ -233,6 +235,11 @@ export class MedicalService {
   // Desktop-friendly: materialize the file to temp and open with default app
   static async openAttachmentExternally(attachmentId: number): Promise<void> {
     await invoke('open_medical_attachment', { attachment_id: attachmentId, attachmentId: attachmentId as any });
+  }
+
+  // Desktop-friendly: print the PDF using the system's native print functionality
+  static async printAttachment(attachmentId: number): Promise<void> {
+    await invoke('print_medical_attachment', { attachment_id: attachmentId, attachmentId: attachmentId as any });
   }
 
   /**

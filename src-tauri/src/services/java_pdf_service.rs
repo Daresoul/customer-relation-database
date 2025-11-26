@@ -39,38 +39,57 @@ struct JavaSample {
 }
 
 impl JavaPdfService {
-    /// Generate a PDF using the Java JAR (iText 5)
-    pub fn generate_pdf(
+    /// Generate a PDF using the Java JAR (iText 5) with multiple device samples
+    pub fn generate_pdf_multi(
         output_path: &str,
         patient: &crate::services::device_pdf_service::PatientData,
-        device_data: &crate::services::device_pdf_service::DeviceTestData,
+        device_data_list: &[crate::services::device_pdf_service::DeviceTestData],
     ) -> Result<(), String> {
-        println!("☕ Generating PDF using Java JAR (iText 5)...");
+        println!("☕ Generating PDF using Java JAR (iText 5) with {} samples...", device_data_list.len());
 
-        // Convert test_results Value to HashMap<String, String>
-        let test_results = Self::value_to_hashmap(&device_data.test_results);
+        // Sort samples in the order Java expects: Exigo, Pointcare, Healvet
+        // This is critical for correct PDF layout (Java PDF code line 273)
+        let mut sorted_samples = device_data_list.to_vec();
+        sorted_samples.sort_by_key(|device| {
+            match device.device_type.as_str() {
+                "exigo_eos_vet" => 0,           // Exigo first
+                "mnchip_pointcare_pcr_v1" => 1, // Pointcare second
+                "healvet_hv_fia_3000" => 2,     // Healvet third
+                _ => 99,                         // Unknown devices last
+            }
+        });
 
-        // Create sample ID
-        let sample_id = device_data.test_results.get("SNO")
-            .or_else(|| device_data.test_results.get("ID1"))
-            .and_then(|v| v.as_str())
-            .unwrap_or("AUTO-GEN")
-            .to_string();
+        println!("   📋 Sorted samples order:");
+        for (i, device) in sorted_samples.iter().enumerate() {
+            println!("      {}. {} ({})", i + 1, device.device_name, device.device_type);
+        }
 
-        // Create patient ID
-        let patient_id = device_data.patient_identifier
-            .clone()
-            .unwrap_or_else(|| "N/A".to_string());
+        // Convert all device data to Java samples
+        let java_samples: Vec<JavaSample> = sorted_samples.iter().map(|device_data| {
+            let test_results = Self::value_to_hashmap(&device_data.test_results);
 
-        // Create Java sample
-        let java_sample = JavaSample {
-            device_type: device_data.device_type.clone(),
-            sample_id,
-            patient_id,
-            detected_at: device_data.detected_at.to_rfc3339(),
-            test_results,
-            test_type: None,
-        };
+            let sample_id = device_data.test_results.get("SNO")
+                .or_else(|| device_data.test_results.get("ID1"))
+                .or_else(|| device_data.test_results.get("sample_id"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("AUTO-GEN")
+                .to_string();
+
+            let patient_id = device_data.patient_identifier
+                .clone()
+                .unwrap_or_else(|| "N/A".to_string());
+
+            let java_device_type = Self::map_device_type(&device_data.device_type);
+
+            JavaSample {
+                device_type: java_device_type,
+                sample_id,
+                patient_id,
+                detected_at: device_data.detected_at.to_rfc3339(),
+                test_results,
+                test_type: None,
+            }
+        }).collect();
 
         // Create Java patient
         let java_patient = JavaPatient {
@@ -85,7 +104,7 @@ impl JavaPdfService {
         // Create Java PDF input
         let java_input = JavaPdfInput {
             patient: java_patient,
-            samples: vec![java_sample],
+            samples: java_samples,
             output_path: output_path.to_string(),
         };
 
@@ -97,8 +116,9 @@ impl JavaPdfService {
         let json_str = serde_json::to_string_pretty(&java_input)
             .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
 
-        println!("   🔍 DEBUG - Test results being sent to Java:");
-        if let Some(sample) = java_input.samples.first() {
+        println!("   🔍 DEBUG - Samples being sent to Java:");
+        for (idx, sample) in java_input.samples.iter().enumerate() {
+            println!("   Sample #{} ({}): {} test results", idx + 1, sample.device_type, sample.test_results.len());
             for (key, value) in &sample.test_results {
                 println!("      {} = {}", key, value);
             }
@@ -218,6 +238,28 @@ impl JavaPdfService {
                 .collect()
         } else {
             HashMap::new()
+        }
+    }
+
+    /// Generate a PDF using the Java JAR (iText 5) with a single device sample
+    /// Convenience wrapper for generate_pdf_multi
+    pub fn generate_pdf(
+        output_path: &str,
+        patient: &crate::services::device_pdf_service::PatientData,
+        device_data: &crate::services::device_pdf_service::DeviceTestData,
+    ) -> Result<(), String> {
+        Self::generate_pdf_multi(output_path, patient, &[device_data.clone()])
+    }
+
+    /// Map detailed device type names to Java-expected format
+    /// Java expects: "exigo_eos_vet", "healvet", or "pointcare"
+    /// We use: "exigo_eos_vet", "healvet_hv_fia_3000", "mnchip_pointcare_pcr_v1"
+    fn map_device_type(device_type: &str) -> String {
+        match device_type {
+            "healvet_hv_fia_3000" => "healvet".to_string(),
+            "mnchip_pointcare_pcr_v1" => "pointcare".to_string(),
+            "exigo_eos_vet" => "exigo_eos_vet".to_string(),
+            _ => device_type.to_string(), // Pass through unknown types
         }
     }
 }

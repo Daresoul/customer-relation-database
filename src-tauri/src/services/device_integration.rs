@@ -48,33 +48,36 @@ impl DeviceIntegrationService {
         pool: &DatabasePool,
         input: CreateDeviceIntegrationInput,
     ) -> Result<DeviceIntegration, String> {
-        let pool_guard = pool.lock().await;
+        let id = {
+            let pool_guard = pool.lock().await;
 
-        let result = sqlx::query(
-            r#"
-            INSERT INTO device_integrations (
-                name, device_type, connection_type,
-                watch_directory, file_pattern,
-                serial_port_name, serial_baud_rate,
-                tcp_host, tcp_port,
-                enabled
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-            "#
-        )
-        .bind(&input.name)
-        .bind(input.device_type.to_db_string())
-        .bind(input.connection_type.to_db_string())
-        .bind(&input.watch_directory)
-        .bind(&input.file_pattern)
-        .bind(&input.serial_port_name)
-        .bind(input.serial_baud_rate)
-        .bind(&input.tcp_host)
-        .bind(input.tcp_port)
-        .execute(&*pool_guard)
-        .await
-        .map_err(|e| format!("Failed to create device integration: {}", e))?;
+            let result = sqlx::query(
+                r#"
+                INSERT INTO device_integrations (
+                    name, device_type, connection_type,
+                    watch_directory, file_pattern,
+                    serial_port_name, serial_baud_rate,
+                    tcp_host, tcp_port,
+                    enabled
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                "#
+            )
+            .bind(&input.name)
+            .bind(input.device_type.to_db_string())
+            .bind(input.connection_type.to_db_string())
+            .bind(&input.watch_directory)
+            .bind(&input.file_pattern)
+            .bind(&input.serial_port_name)
+            .bind(input.serial_baud_rate)
+            .bind(&input.tcp_host)
+            .bind(input.tcp_port)
+            .execute(&*pool_guard)
+            .await
+            .map_err(|e| format!("Failed to create device integration: {}", e))?;
 
-        let id = result.last_insert_rowid();
+            result.last_insert_rowid()
+        }; // Release lock here
+
         Self::get_by_id(pool, id).await
     }
 

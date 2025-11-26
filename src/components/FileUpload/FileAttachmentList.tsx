@@ -18,6 +18,7 @@ import { MedicalService } from '@/services/medicalService';
 import type { MedicalAttachment } from '@/types/medical';
 import dayjs from 'dayjs';
 import { formatDate } from '@/utils/dateFormatter';
+import TextFileViewer from '../TextFileViewer/TextFileViewer';
 import styles from './FileUpload.module.css';
 
 const { Text } = Typography;
@@ -35,6 +36,8 @@ const FileAttachmentList: React.FC<FileAttachmentListProps> = ({
   const [savingId, setSavingId] = React.useState<number | null>(null);
   const [openingId, setOpeningId] = React.useState<number | null>(null);
   const [regeneratingId, setRegeneratingId] = React.useState<number | null>(null);
+  const [textViewerOpen, setTextViewerOpen] = React.useState(false);
+  const [selectedAttachment, setSelectedAttachment] = React.useState<MedicalAttachment | null>(null);
   const { notification } = App.useApp();
 
   const getFileIcon = (mimeType?: string, fileName?: string) => {
@@ -45,7 +48,7 @@ const FileAttachmentList: React.FC<FileAttachmentListProps> = ({
       if (['xls', 'xlsx'].includes(ext || '')) return <FileExcelOutlined className={styles.fileIcon} />;
       if (['jpg', 'jpeg', 'png', 'gif', 'bmp'].includes(ext || ''))
         return <FileImageOutlined className={styles.fileIcon} />;
-      if (['txt', 'csv'].includes(ext || '')) return <FileTextOutlined className={styles.fileIcon} />;
+      if (['txt', 'csv', 'json'].includes(ext || '')) return <FileTextOutlined className={styles.fileIcon} />;
     }
 
     if (mimeType) {
@@ -54,7 +57,7 @@ const FileAttachmentList: React.FC<FileAttachmentListProps> = ({
       if (mimeType.includes('excel') || mimeType.includes('spreadsheet'))
         return <FileExcelOutlined className={styles.fileIcon} />;
       if (mimeType.startsWith('image/')) return <FileImageOutlined className={styles.fileIcon} />;
-      if (mimeType.startsWith('text/')) return <FileTextOutlined className={styles.fileIcon} />;
+      if (mimeType.startsWith('text/') || mimeType === 'application/json') return <FileTextOutlined className={styles.fileIcon} />;
     }
 
     return <FileOutlined className={styles.fileIcon} />;
@@ -69,9 +72,36 @@ const FileAttachmentList: React.FC<FileAttachmentListProps> = ({
     }
   };
 
+  const isTextFile = (attachment: MedicalAttachment): boolean => {
+    const ext = attachment.originalName.split('.').pop()?.toLowerCase();
+    const textExtensions = ['txt', 'json', 'xml', 'csv', 'log'];
+    const isTextMime = attachment.mimeType?.startsWith('text/') ||
+                       attachment.mimeType === 'application/json' ||
+                       attachment.mimeType?.includes('xml');
+    return textExtensions.includes(ext || '') || !!isTextMime;
+  };
+
   const handleView = async (attachment: MedicalAttachment) => {
     try {
       setOpeningId(attachment.id);
+
+      console.log('📂 Viewing attachment:', {
+        name: attachment.originalName,
+        mimeType: attachment.mimeType,
+        isText: isTextFile(attachment),
+      });
+
+      // Open text files in inline viewer
+      if (isTextFile(attachment)) {
+        console.log('✅ Opening in text viewer');
+        setSelectedAttachment(attachment);
+        setTextViewerOpen(true);
+        setOpeningId(null);
+        return;
+      }
+
+      // Open other files externally
+      console.log('📤 Opening externally');
       await MedicalService.openAttachmentExternally(attachment.id);
     } finally {
       setOpeningId(null);
@@ -117,10 +147,11 @@ const FileAttachmentList: React.FC<FileAttachmentListProps> = ({
   };
 
   const canRegeneratePdf = (attachment: MedicalAttachment): boolean => {
-    // Can regenerate if it's an XML file with device metadata
+    // Can regenerate if it's an XML or JSON file with device metadata
     const isXml = attachment.mimeType?.includes('xml') || attachment.originalName.toLowerCase().endsWith('.xml');
+    const isJson = attachment.mimeType === 'application/json' || attachment.originalName.toLowerCase().endsWith('.json');
     const hasDeviceMetadata = !!attachment.deviceType && !!attachment.deviceName;
-    return isXml && hasDeviceMetadata;
+    return (isXml || isJson) && hasDeviceMetadata;
   };
 
   if (attachments.length === 0) {
@@ -128,73 +159,88 @@ const FileAttachmentList: React.FC<FileAttachmentListProps> = ({
   }
 
   return (
-    <List
-      itemLayout="horizontal"
-      dataSource={attachments}
-      size="small"
-      renderItem={(item) => (
-        <List.Item
-          actions={[
-            <Button type="link" icon={<EyeOutlined />} onClick={() => handleView(item)} loading={openingId === item.id}>
-              View
-            </Button>,
-            <Button type="link" icon={<DownloadOutlined />} onClick={() => handleSaveAs(item)} loading={savingId === item.id}>
-              Save As
-            </Button>,
-            ...(canRegeneratePdf(item) ? [
-              <Button
-                type="link"
-                icon={<ReloadOutlined />}
-                onClick={() => handleRegeneratePdf(item)}
-                loading={regeneratingId === item.id}
-                title="Regenerate PDF report from this device data"
+    <>
+      <List
+        itemLayout="horizontal"
+        dataSource={attachments}
+        size="small"
+        renderItem={(item) => (
+          <List.Item
+            actions={[
+              <Button type="link" icon={<EyeOutlined />} onClick={() => handleView(item)} loading={openingId === item.id}>
+                View
+              </Button>,
+              <Button type="link" icon={<DownloadOutlined />} onClick={() => handleSaveAs(item)} loading={savingId === item.id}>
+                Save As
+              </Button>,
+              ...(canRegeneratePdf(item) ? [
+                <Button
+                  type="link"
+                  icon={<ReloadOutlined />}
+                  onClick={() => handleRegeneratePdf(item)}
+                  loading={regeneratingId === item.id}
+                  title="Regenerate PDF report from this device data"
+                >
+                  Regenerate PDF
+                </Button>
+              ] : []),
+              <Popconfirm
+                title="Delete this attachment?"
+                description="This action cannot be undone."
+                onConfirm={() => handleDelete(item.id)}
+                okText="Delete"
+                cancelText="Cancel"
               >
-                Regenerate PDF
-              </Button>
-            ] : []),
-            <Popconfirm
-              title="Delete this attachment?"
-              description="This action cannot be undone."
-              onConfirm={() => handleDelete(item.id)}
-              okText="Delete"
-              cancelText="Cancel"
-            >
-              <Button
-                type="link"
-                danger
-                icon={<DeleteOutlined />}
-                loading={deleteMutation.isPending}
-              >
-                Delete
-              </Button>
-            </Popconfirm>,
-          ]}
-        >
-          <List.Item.Meta
-            avatar={
-              <Avatar
-                shape="square"
-                size="large"
-                icon={getFileIcon(item.mimeType, item.originalName)}
-                className={styles.avatarBackground}
-              />
-            }
-            title={item.originalName}
-            description={
-              <Space size="small">
-                <Text type="secondary">
-                  {MedicalService.formatFileSize(item.fileSize)}
-                </Text>
-                <Text type="secondary">•</Text>
-                <Text type="secondary">
-                  {formatDate(item.uploadedAt)}
-                </Text>
-              </Space>
-            }
-          />
-        </List.Item>
+                <Button
+                  type="link"
+                  danger
+                  icon={<DeleteOutlined />}
+                  loading={deleteMutation.isPending}
+                >
+                  Delete
+                </Button>
+              </Popconfirm>,
+            ]}
+          >
+            <List.Item.Meta
+              avatar={
+                <Avatar
+                  shape="square"
+                  size="large"
+                  icon={getFileIcon(item.mimeType, item.originalName)}
+                  className={styles.avatarBackground}
+                />
+              }
+              title={item.originalName}
+              description={
+                <Space size="small">
+                  <Text type="secondary">
+                    {MedicalService.formatFileSize(item.fileSize)}
+                  </Text>
+                  <Text type="secondary">•</Text>
+                  <Text type="secondary">
+                    {formatDate(item.uploadedAt)}
+                  </Text>
+                </Space>
+              }
+            />
+          </List.Item>
+        )}
+      />
+
+      {selectedAttachment && (
+        <TextFileViewer
+          open={textViewerOpen}
+          onClose={() => {
+            setTextViewerOpen(false);
+            setSelectedAttachment(null);
+          }}
+          attachmentId={selectedAttachment.id}
+          fileName={selectedAttachment.originalName}
+          mimeType={selectedAttachment.mimeType}
+        />
       )}
-    />
+    </>
   );
 };
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Table, Button, Typography, Space, Tag, Modal, Form, Input, Select, InputNumber, Switch, Popconfirm } from 'antd';
+import { Card, Table, Button, Typography, Space, Tag, Modal, Form, Input, Select, InputNumber, Switch, Popconfirm, AutoComplete } from 'antd';
 import { UsbOutlined, ReloadOutlined, ApiOutlined, PlusOutlined, EditOutlined, DeleteOutlined, PoweroffOutlined, FolderOpenOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@tauri-apps/api';
@@ -116,6 +116,7 @@ const DeviceInputSettings: React.FC = () => {
   const handleAddIntegration = () => {
     setEditingIntegration(null);
     integrationForm.resetFields();
+    fetchPorts(); // Refresh available ports when opening modal
     setIntegrationModalVisible(true);
   };
 
@@ -153,6 +154,7 @@ const DeviceInputSettings: React.FC = () => {
 
   const handleEditIntegration = (integration: DeviceIntegration) => {
     setEditingIntegration(integration);
+    fetchPorts(); // Refresh available ports when opening modal
     integrationForm.setFieldsValue({
       name: integration.name,
       device_type: integration.device_type,
@@ -160,7 +162,6 @@ const DeviceInputSettings: React.FC = () => {
       watch_directory: integration.watch_directory,
       file_pattern: integration.file_pattern,
       serial_port_name: integration.serial_port_name,
-      serial_baud_rate: integration.serial_baud_rate,
       tcp_host: integration.tcp_host,
       tcp_port: integration.tcp_port,
       enabled: integration.enabled,
@@ -527,27 +528,39 @@ const DeviceInputSettings: React.FC = () => {
                 );
               } else if (connectionType === 'serial_port') {
                 return (
-                  <>
-                    <Form.Item
-                      name="serial_port_name"
-                      label="Serial Port"
-                      rules={[{ required: true, message: 'Please enter serial port name' }]}
-                    >
-                      <Input placeholder="/dev/ttyUSB0 or COM1" />
-                    </Form.Item>
-                    <Form.Item
-                      name="serial_baud_rate"
-                      label="Baud Rate"
-                      initialValue={9600}
-                    >
-                      <InputNumber
-                        min={300}
-                        max={115200}
-                        placeholder="9600"
-                        style={{ width: '100%' }}
-                      />
-                    </Form.Item>
-                  </>
+                  <Form.Item
+                    name="serial_port_name"
+                    label="Serial Port"
+                    rules={[{ required: true, message: 'Please select or enter serial port name' }]}
+                  >
+                    <AutoComplete
+                      placeholder="Select or type a port name"
+                      options={ports.map(port => {
+                        const details = getPortDetails(port.port_type);
+                        const typeInfo = getPortTypeDisplay(port.port_type);
+                        return {
+                          value: port.port_name,
+                          label: (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span>
+                                <strong>{port.port_name}</strong>
+                                {details && <Text type="secondary" style={{ marginLeft: 8, fontSize: '0.85em' }}>{details}</Text>}
+                              </span>
+                              <Tag color={typeInfo.color} style={{ marginLeft: 8 }}>{typeInfo.text}</Tag>
+                            </div>
+                          ),
+                        };
+                      })}
+                      filterOption={(inputValue, option) =>
+                        option?.value.toLowerCase().includes(inputValue.toLowerCase()) ?? false
+                      }
+                      notFoundContent={
+                        <div style={{ padding: '8px', textAlign: 'center' }}>
+                          <Text type="secondary">No ports found. Type a custom path.</Text>
+                        </div>
+                      }
+                    />
+                  </Form.Item>
                 );
               } else if (connectionType === 'hl7_tcp') {
                 return (

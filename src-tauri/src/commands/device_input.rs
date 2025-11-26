@@ -1,12 +1,41 @@
-use crate::services::device_input::{scan_ports, PortInfo};
+use crate::services::device_input::{scan_ports, start_listen, PortInfo};
+use crate::services::device_integration::DeviceIntegrationService;
 use crate::database::connection::DatabasePool;
 use crate::models::Patient;
-use tauri::State;
+use tauri::{State, AppHandle};
 use sqlx::Row;
 
 #[tauri::command]
 pub fn get_available_ports() -> Result<Vec<PortInfo>, String> {
     scan_ports()
+}
+
+/// Start listening to a device integration's serial port
+#[tauri::command]
+pub async fn start_device_integration_listener(
+    app_handle: AppHandle,
+    pool: State<'_, DatabasePool>,
+    integration_id: i64,
+) -> Result<(), String> {
+    // Get the device integration from the database
+    let integration = DeviceIntegrationService::get_by_id(&pool, integration_id).await?;
+
+    // Verify it's enabled and uses serial port
+    if !integration.enabled {
+        return Err("Device integration is disabled".to_string());
+    }
+
+    let serial_port_name = integration.serial_port_name
+        .ok_or("Device integration does not have a serial port configured")?;
+
+    // Start listening with the device type (protocol will be determined automatically)
+    start_listen(
+        app_handle,
+        serial_port_name,
+        integration.device_type.to_db_string().to_string(),
+    )?;
+
+    Ok(())
 }
 
 /// Resolve a patient from an identifier (microchip ID, name, etc.)

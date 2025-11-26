@@ -447,6 +447,7 @@ pub async fn populate_database(
                     device_test_data: None,
                     device_type: None,
                     device_name: None,
+                    device_data_list: None,
                 };
 
                 match MedicalRecordService::create_medical_record(&*pool, input).await {
@@ -505,6 +506,7 @@ pub async fn populate_database(
                     device_test_data: None,
                     device_type: None,
                     device_name: None,
+                    device_data_list: None,
                 };
 
                 match MedicalRecordService::create_medical_record(&*pool, input).await {

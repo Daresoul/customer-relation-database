@@ -55,7 +55,7 @@ pub async fn create_medical_record(
     if input.description.is_empty() {
         return Err("Description is required".to_string());
     }
-    if input.record_type != "procedure" && input.record_type != "note" {
+    if input.record_type != "procedure" && input.record_type != "note" && input.record_type != "test_result" {
         return Err("Invalid record type".to_string());
     }
     // Note: We use the 'name' field for both procedures and notes
@@ -118,6 +118,8 @@ pub async fn upload_medical_attachment(
     deviceName: Option<String>,
     #[allow(non_snake_case)]
     connectionMethod: Option<String>,
+    #[allow(non_snake_case)]
+    attachmentType: Option<String>,
 ) -> Result<MedicalAttachment, String> {
     let pool_guard = pool.lock().await;
 
@@ -141,6 +143,7 @@ pub async fn upload_medical_attachment(
         deviceType,
         deviceName,
         connectionMethod,
+        attachmentType,
     ).await
 }
 
@@ -170,6 +173,18 @@ pub async fn delete_medical_attachment(
 ) -> Result<(), String> {
     let pool = pool.lock().await;
     FileStorageService::delete_attachment(&app_handle, &*pool, attachment_id).await
+}
+
+// Get attachment content for text file viewer
+#[tauri::command]
+pub async fn get_attachment_content(
+    app_handle: AppHandle,
+    pool: State<'_, DatabasePool>,
+    attachment_id: i64,
+) -> Result<Vec<u8>, String> {
+    let pool = pool.lock().await;
+    let attachment_data = FileStorageService::download_attachment(&app_handle, &*pool, attachment_id).await?;
+    Ok(attachment_data.file_data)
 }
 
 // T039: Implement search_medical_records command
@@ -253,6 +268,18 @@ pub async fn open_medical_attachment(
     let pool_guard = pool.lock().await;
     let path = FileStorageService::materialize_attachment(&app_handle, &*pool_guard, attachment_id).await?;
     FileStorageService::open_path_with_default_app(&path)
+}
+
+// Print a PDF attachment using the system's native print functionality
+#[tauri::command]
+pub async fn print_medical_attachment(
+    app_handle: AppHandle,
+    pool: State<'_, DatabasePool>,
+    attachment_id: i64,
+) -> Result<(), String> {
+    let pool_guard = pool.lock().await;
+    let path = FileStorageService::materialize_attachment(&app_handle, &*pool_guard, attachment_id).await?;
+    FileStorageService::print_file(&path)
 }
 
 // Render a PDF attachment page to a PNG thumbnail and return the temp file path
@@ -435,7 +462,7 @@ pub async fn regenerate_pdf_from_attachment(
     // 1. Fetch the attachment with device metadata
     let attachment_row = sqlx::query(
         "SELECT id, medical_record_id, file_id, original_name, mime_type, \
-         file_size, uploaded_at, device_type, device_name, connection_method \
+         file_size, uploaded_at, device_type, device_name, connection_method, attachment_type \
          FROM medical_attachments WHERE id = ?"
     )
     .bind(attachment_id)
@@ -560,6 +587,254 @@ pub async fn regenerate_pdf_from_attachment(
         Some(format!("{}_report", device_type)),
         Some(format!("{} Report", device_name)),
         Some("regenerated".to_string()),
+        Some("generated_pdf".to_string()), // Attachment type for regenerated PDFs
+    ).await?;
+
+    println!("Debug: PDF attachment uploaded with id={}", pdf_attachment.id);
+
+    // Clean up temp file
+    let _ = std::fs::remove_file(&pdf_path);
+
+    Ok(pdf_attachment)
+}
+
+// T030: Regenerate PDF from ALL test_result attachments in a medical record
+#[tauri::command]
+pub async fn regenerate_pdf_from_medical_record(
+    app_handle: AppHandle,
+    pool: State<'_, DatabasePool>,
+    medical_record_id: i64,
+) -> Result<MedicalAttachment, String> {
+    println!("Debug: regenerate_pdf_from_medical_record medical_record_id={}", medical_record_id);
+    let pool_guard = pool.lock().await;
+
+    // 1. Get all device data attachments for this medical record
+    // Check for attachment_type = 'test_result' OR files with device metadata that aren't PDFs
+    // This handles both new files (with proper attachment_type) and legacy files (with device_type set)
+    let attachment_rows = sqlx::query(
+        "SELECT id, medical_record_id, file_id, original_name, mime_type, \
+         file_size, uploaded_at, device_type, device_name, connection_method, attachment_type \
+         FROM medical_attachments \
+         WHERE medical_record_id = ? \
+         AND device_type IS NOT NULL \
+         AND device_name IS NOT NULL \
+         AND (attachment_type = 'test_result' \
+              OR (attachment_type != 'generated_pdf' AND mime_type != 'application/pdf'))"
+    )
+    .bind(medical_record_id)
+    .fetch_all(&*pool_guard)
+    .await
+    .map_err(|e| format!("Failed to fetch device data attachments: {}", e))?;
+
+    if attachment_rows.is_empty() {
+        return Err("No device data attachments found for this medical record.".to_string());
+    }
+
+    println!("Debug: Found {} test_result attachments", attachment_rows.len());
+
+    // 2. Get patient info from the medical record
+    let record_row = sqlx::query(
+        "SELECT patient_id FROM medical_records WHERE id = ?"
+    )
+    .bind(medical_record_id)
+    .fetch_optional(&*pool_guard)
+    .await
+    .map_err(|e| format!("Failed to fetch medical record: {}", e))?
+    .ok_or("Medical record not found".to_string())?;
+
+    let patient_id: i64 = record_row.try_get("patient_id")
+        .map_err(|e| format!("Failed to get patient_id: {}", e))?;
+
+    // 3. Fetch patient details using the same query pattern as MedicalRecordService
+    let patient_row = sqlx::query(
+        "SELECT p.name, p.gender, p.date_of_birth, p.microchip_id, \
+         s.name as species_name \
+         FROM patients p \
+         LEFT JOIN species s ON p.species_id = s.id \
+         WHERE p.id = ?"
+    )
+    .bind(patient_id)
+    .fetch_optional(&*pool_guard)
+    .await
+    .map_err(|e| format!("Failed to fetch patient: {}", e))?
+    .ok_or("Patient not found".to_string())?;
+
+    // Try to get owner information - prefer primary contact's full name, fall back to household name
+    let owner_name = sqlx::query_scalar::<_, String>(
+        "SELECT COALESCE( \
+            (SELECT p.first_name || ' ' || p.last_name \
+             FROM people p \
+             JOIN household_members hm ON hm.person_id = p.id \
+             JOIN patient_households ph ON ph.household_id = hm.household_id \
+             WHERE ph.patient_id = ? AND hm.is_primary_contact = 1 \
+             LIMIT 1), \
+            (SELECT h.name \
+             FROM households h \
+             JOIN patient_households ph ON ph.household_id = h.id \
+             WHERE ph.patient_id = ? \
+             LIMIT 1), \
+            'Unknown Owner' \
+         )"
+    )
+    .bind(patient_id)
+    .bind(patient_id)
+    .fetch_one(&*pool_guard)
+    .await
+    .unwrap_or_else(|_| "Unknown Owner".to_string());
+
+    let patient_data = PatientData {
+        name: patient_row.try_get("name").unwrap_or_else(|_| "Unknown Patient".to_string()),
+        owner: owner_name,
+        species: patient_row.try_get("species_name").unwrap_or_else(|_| "Unknown Species".to_string()),
+        microchip_id: patient_row.try_get("microchip_id").ok(),
+        gender: patient_row.try_get("gender").unwrap_or_else(|_| "Unknown".to_string()),
+        date_of_birth: patient_row.try_get("date_of_birth").ok(),
+    };
+
+    println!("Debug: Patient info: name={}, microchip={:?}", patient_data.name, patient_data.microchip_id);
+
+    // 4. Parse each attachment and collect device data
+    let mut all_device_data: Vec<DeviceTestData> = Vec::new();
+
+    for attachment_row in &attachment_rows {
+        let attachment_id: i64 = attachment_row.try_get("id")
+            .map_err(|e| format!("Failed to get attachment id: {}", e))?;
+        let device_type: Option<String> = attachment_row.try_get("device_type").ok();
+        let device_name: Option<String> = attachment_row.try_get("device_name").ok();
+        let connection_method: Option<String> = attachment_row.try_get("connection_method").ok();
+        let original_name: String = attachment_row.try_get("original_name")
+            .map_err(|e| format!("Failed to get original_name: {}", e))?;
+
+        // Skip if missing device metadata
+        let device_type = match device_type {
+            Some(dt) => dt,
+            None => {
+                println!("Debug: Skipping attachment {} - no device_type", attachment_id);
+                continue;
+            }
+        };
+        let device_name = match device_name {
+            Some(dn) => dn,
+            None => {
+                println!("Debug: Skipping attachment {} - no device_name", attachment_id);
+                continue;
+            }
+        };
+        let connection_method = connection_method.unwrap_or_else(|| "unknown".to_string());
+
+        println!("Debug: Processing attachment {} - device_type={}, device_name={}", attachment_id, device_type, device_name);
+
+        // Download the file data
+        let file_data = FileStorageService::download_attachment(&app_handle, &*pool_guard, attachment_id).await?;
+
+        // Parse the device data (works for XML, JSON, etc.)
+        match DeviceParserService::parse_device_data(
+            &device_type,
+            &device_name,
+            &file_data.file_name,
+            &file_data.file_data,
+            &connection_method,
+        ) {
+            Ok(parsed_data) => {
+                println!("Debug: Parsed device data from {}", original_name);
+                all_device_data.push(DeviceTestData {
+                    device_type: parsed_data.device_type.clone(),
+                    device_name: parsed_data.device_name.clone(),
+                    test_results: parsed_data.test_results.clone(),
+                    detected_at: parsed_data.detected_at,
+                    patient_identifier: patient_data.microchip_id.clone().or_else(|| Some(patient_data.name.clone())),
+                });
+            }
+            Err(e) => {
+                println!("Debug: Failed to parse attachment {}: {}", attachment_id, e);
+                // Continue with other attachments
+            }
+        }
+    }
+
+    if all_device_data.is_empty() {
+        return Err("Could not parse any device data from test_result attachments.".to_string());
+    }
+
+    println!("Debug: Parsed {} device data sets", all_device_data.len());
+
+    // 5. Generate combined PDF using Java service
+    use crate::services::java_pdf_service::JavaPdfService;
+
+    let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
+    let pdf_filename = if all_device_data.len() == 1 {
+        let device = &all_device_data[0];
+        let safe_device_name = device.device_name.replace(" ", "_").replace("/", "_");
+        let safe_device_type = device.device_type.replace("_", "-");
+        format!("{}_{}_report_{}.pdf", safe_device_type, safe_device_name, timestamp)
+    } else {
+        format!("combined_device_report_{}.pdf", timestamp)
+    };
+
+    let pdf_path = std::env::temp_dir().join(&pdf_filename);
+
+    // Convert PatientData to the format expected by Java PDF service
+    let java_patient_data = crate::services::device_pdf_service::PatientData {
+        name: patient_data.name.clone(),
+        owner: patient_data.owner.clone(),
+        species: patient_data.species.clone(),
+        microchip_id: patient_data.microchip_id.clone(),
+        gender: patient_data.gender.clone(),
+        date_of_birth: patient_data.date_of_birth.clone(),
+    };
+
+    // Convert DeviceTestData to the format expected by Java PDF service
+    let java_device_data: Vec<crate::services::device_pdf_service::DeviceTestData> = all_device_data
+        .iter()
+        .map(|d| crate::services::device_pdf_service::DeviceTestData {
+            device_type: d.device_type.clone(),
+            device_name: d.device_name.clone(),
+            test_results: d.test_results.clone(),
+            detected_at: d.detected_at,
+            patient_identifier: d.patient_identifier.clone(),
+        })
+        .collect();
+
+    // Generate PDF with all devices
+    println!("   ☕ Generating combined PDF report using Java...");
+    JavaPdfService::generate_pdf_multi(
+        pdf_path.to_str().ok_or("Invalid PDF path")?,
+        &java_patient_data,
+        &java_device_data,
+    )?;
+
+    println!("Debug: PDF generated at {:?}", pdf_path);
+
+    // 6. Read the generated PDF
+    let pdf_bytes = std::fs::read(&pdf_path)
+        .map_err(|e| format!("Failed to read generated PDF: {}", e))?;
+
+    println!("Debug: Read {} bytes from PDF", pdf_bytes.len());
+
+    // 7. Determine device metadata for the attachment
+    let device_type_str = if all_device_data.len() > 1 {
+        "combined".to_string()
+    } else {
+        all_device_data[0].device_type.clone()
+    };
+    let device_name_str = if all_device_data.len() > 1 {
+        "Multiple Devices".to_string()
+    } else {
+        all_device_data[0].device_name.clone()
+    };
+
+    // 8. Upload the PDF as a new attachment
+    let pdf_attachment = FileStorageService::upload_attachment(
+        &app_handle,
+        &*pool_guard,
+        medical_record_id,
+        pdf_filename.clone(),
+        pdf_bytes,
+        "application/pdf".to_string(),
+        Some(format!("{}_report", device_type_str)),
+        Some(format!("{} Report (Regenerated)", device_name_str)),
+        Some("regenerated".to_string()),
+        Some("generated_pdf".to_string()),
     ).await?;
 
     println!("Debug: PDF attachment uploaded with id={}", pdf_attachment.id);

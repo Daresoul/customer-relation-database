@@ -45,6 +45,8 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, "027_convert_patient_species_breed_to_fk", convert_patient_species_breed_to_fk).await?;
     run_migration(pool, "028_create_device_integrations_table", create_device_integrations_table).await?;
     run_migration(pool, "029_add_device_metadata_to_attachments", add_device_metadata_to_attachments).await?;
+    run_migration(pool, "030_add_attachment_type", add_attachment_type_column).await?;
+    run_migration(pool, "031_add_test_result_record_type", add_test_result_record_type).await?;
 
     Ok(())
 }
@@ -1551,6 +1553,146 @@ fn add_device_metadata_to_attachments(pool: &SqlitePool) -> std::pin::Pin<Box<dy
         ensure_column(pool, "medical_attachments", "connection_method", "TEXT").await?;
 
         println!("Added device metadata columns to medical_attachments table");
+        Ok(())
+    })
+}
+
+// Migration 030: Add attachment_type column to medical_attachments
+// Types: 'file' (default/manual uploads), 'test_result' (device test data like Exigo XML),
+//        'generated_pdf' (auto-generated PDF reports)
+fn add_attachment_type_column(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        // Helper to add column if it doesn't exist
+        async fn ensure_column(pool: &SqlitePool, table: &str, column: &str, ddl: &str) -> Result<(), sqlx::Error> {
+            let check_sql = format!(
+                "SELECT COUNT(*) as cnt FROM pragma_table_info('{}') WHERE name = '{}'",
+                table, column
+            );
+            let exists: (i32,) = sqlx::query_as(&check_sql).fetch_one(pool).await?;
+
+            if exists.0 == 0 {
+                let sql = format!("ALTER TABLE {} ADD COLUMN {} {}", table, column, ddl);
+                sqlx::query(&sql).execute(pool).await?;
+            }
+            Ok(())
+        }
+
+        // Add attachment_type column with default 'file' for existing records
+        ensure_column(pool, "medical_attachments", "attachment_type", "TEXT DEFAULT 'file'").await?;
+
+        println!("Added attachment_type column to medical_attachments table");
+        Ok(())
+    })
+}
+
+// Migration 031: Add 'test_result' as a valid record_type for medical_records
+// SQLite doesn't support ALTER CONSTRAINT, so we need to recreate the table
+// This adds 'test_result' type for device-generated test data records
+fn add_test_result_record_type(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        // Check if medical_records table exists
+        let table_exists: (i32,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='medical_records'"
+        ).fetch_one(pool).await?;
+
+        // Check if medical_records_new exists (from partial migration)
+        let new_table_exists: (i32,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='medical_records_new'"
+        ).fetch_one(pool).await?;
+
+        // If the new table exists but old doesn't, just rename it (recover from partial migration)
+        if new_table_exists.0 > 0 && table_exists.0 == 0 {
+            println!("Recovering from partial migration - renaming medical_records_new to medical_records");
+            sqlx::query("ALTER TABLE medical_records_new RENAME TO medical_records")
+                .execute(pool)
+                .await?;
+        } else if table_exists.0 == 0 {
+            // Neither table exists - create fresh with new constraint
+            println!("Creating medical_records table with test_result type");
+            sqlx::query(r#"
+                CREATE TABLE medical_records (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    patient_id INTEGER NOT NULL,
+                    record_type TEXT NOT NULL CHECK(record_type IN ('procedure', 'note', 'test_result')),
+                    name TEXT NOT NULL CHECK(length(name) <= 200),
+                    procedure_name TEXT CHECK(procedure_name IS NULL OR length(procedure_name) <= 200),
+                    description TEXT NOT NULL,
+                    price DECIMAL(10,2),
+                    currency_id INTEGER,
+                    is_archived BOOLEAN DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    created_by TEXT,
+                    updated_by TEXT,
+                    version INTEGER DEFAULT 1,
+                    FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+                    FOREIGN KEY (currency_id) REFERENCES currencies(id)
+                )
+            "#)
+            .execute(pool)
+            .await?;
+        } else {
+            // Normal case: old table exists, need to migrate
+            // Drop any leftover new table first
+            if new_table_exists.0 > 0 {
+                sqlx::query("DROP TABLE medical_records_new").execute(pool).await?;
+            }
+
+            // 1. Create new table with updated constraint
+            sqlx::query(r#"
+                CREATE TABLE medical_records_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    patient_id INTEGER NOT NULL,
+                    record_type TEXT NOT NULL CHECK(record_type IN ('procedure', 'note', 'test_result')),
+                    name TEXT NOT NULL CHECK(length(name) <= 200),
+                    procedure_name TEXT CHECK(procedure_name IS NULL OR length(procedure_name) <= 200),
+                    description TEXT NOT NULL,
+                    price DECIMAL(10,2),
+                    currency_id INTEGER,
+                    is_archived BOOLEAN DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    created_by TEXT,
+                    updated_by TEXT,
+                    version INTEGER DEFAULT 1,
+                    FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+                    FOREIGN KEY (currency_id) REFERENCES currencies(id)
+                )
+            "#)
+            .execute(pool)
+            .await?;
+
+            // 2. Copy data from old table
+            sqlx::query(r#"
+                INSERT INTO medical_records_new
+                SELECT * FROM medical_records
+            "#)
+            .execute(pool)
+            .await?;
+
+            // 3. Drop old table
+            sqlx::query("DROP TABLE medical_records")
+                .execute(pool)
+                .await?;
+
+            // 4. Rename new table
+            sqlx::query("ALTER TABLE medical_records_new RENAME TO medical_records")
+                .execute(pool)
+                .await?;
+        }
+
+        // 5. Recreate indexes (idempotent)
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_medical_records_patient_id ON medical_records(patient_id)")
+            .execute(pool)
+            .await?;
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_medical_records_created_at ON medical_records(created_at)")
+            .execute(pool)
+            .await?;
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_medical_records_archived ON medical_records(is_archived)")
+            .execute(pool)
+            .await?;
+
+        println!("Added 'test_result' as valid record_type for medical_records");
         Ok(())
     })
 }

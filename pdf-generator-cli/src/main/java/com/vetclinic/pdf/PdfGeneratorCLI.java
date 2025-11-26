@@ -2,7 +2,9 @@ package com.vetclinic.pdf;
 
 import com.google.gson.*;
 import com.vetclinic.pdf.constants.*;
+import com.vetclinic.pdf.constants.parameters.HealvetParameterEnum;
 import com.vetclinic.pdf.models.Patient;
+import com.vetclinic.pdf.models.parameters.HealvetParameter;
 import com.vetclinic.pdf.models.parameters.Parameter;
 import com.vetclinic.pdf.models.samples.*;
 import com.vetclinic.pdf.services.PDFReportService;
@@ -58,8 +60,8 @@ public class PdfGeneratorCLI {
             // Parse patient
             Patient patient = parsePatient(json.getAsJsonObject("patient"));
 
-            // Parse samples
-            List<Sample> samples = parseSamples(json.getAsJsonArray("samples"));
+            // Parse samples (pass patient type for Healvet reference ranges)
+            List<Sample> samples = parseSamples(json.getAsJsonArray("samples"), patient.getPatientType());
 
             // Get output path
             String outputPath = json.get("output_path").getAsString();
@@ -114,7 +116,7 @@ public class PdfGeneratorCLI {
         return patient;
     }
 
-    private static List<Sample> parseSamples(JsonArray samplesJson) {
+    private static List<Sample> parseSamples(JsonArray samplesJson, PatientType patientType) {
         List<Sample> samples = new ArrayList<>();
 
         for (JsonElement element : samplesJson) {
@@ -128,10 +130,12 @@ public class PdfGeneratorCLI {
                     sample = parseExigoSample(sampleJson);
                     break;
                 case "pointcare":
+                case "mnchip_pointcare_pcr_v1":
                     sample = parsePointcareSample(sampleJson);
                     break;
                 case "healvet":
-                    sample = parseHealvetSample(sampleJson);
+                case "healvet_hv_fia_3000":
+                    sample = parseHealvetSample(sampleJson, patientType);
                     break;
                 default:
                     System.err.println("Unknown device type: " + deviceType);
@@ -235,6 +239,15 @@ public class PdfGeneratorCLI {
         sample.setPatientId(json.get("patient_id").getAsString());
         sample.setAnalysisDateAndTime(json.get("detected_at").getAsString());
 
+        // Set sample type (default to SERUM for biochemistry)
+        if (json.has("sample_type")) {
+            String sampleTypeCode = json.get("sample_type").getAsString();
+            SampleType sampleType = SampleType.getPointcareSampleTypeForCode(sampleTypeCode);
+            sample.setSampleType(sampleType != null ? sampleType : SampleType.SERUM);
+        } else {
+            sample.setSampleType(SampleType.SERUM);
+        }
+
         // Set test type
         if (json.has("test_type")) {
             String testType = json.get("test_type").getAsString();
@@ -243,38 +256,128 @@ public class PdfGeneratorCLI {
             sample.setTestType(PointcareTestType.HEALTH_CHECKING_PROFILE);
         }
 
-        // Parse parameters
+        // Parse parameters with proper unit and reference value lookup
         JsonObject testResults = json.getAsJsonObject("test_results");
         List<Parameter> parameters = new ArrayList<>();
 
-        for (String key : testResults.keySet()) {
-            Parameter parameter = new Parameter();
-            parameter.setName(key);
-            parameter.setResult(testResults.get(key).getAsString());
-            parameter.setIndicator(Indicator.NORMAL);
-            parameters.add(parameter);
+        // Pointcare parameter definitions with units and reference ranges (dog defaults)
+        // Format: {code, translated_name, unit, ref_low, ref_high}
+        String[][] pointcareParams = {
+            {"GLU", "GLU - гликоза", "mg/dL", "70", "110"},
+            {"BUN", "BUN - уреа", "mg/dL", "7", "27"},
+            {"CRE", "CRE - креатинин", "mg/dL", "0.5", "1.8"},
+            {"ALB", "ALB - албумин", "g/dL", "2.3", "4.0"},
+            {"TP", "TP - вк.протеини", "g/dL", "5.2", "8.2"},
+            {"Ca", "Ca - калциум", "mg/dL", "9.0", "11.3"},
+            {"P", "P - фосфор", "mg/dL", "2.5", "6.8"},
+            {"ALT", "ALT", "U/L", "10", "100"},
+            {"ALP", "ALP", "U/L", "23", "212"},
+            {"TBIL", "TBIL - т.билирубин", "mg/dL", "0.0", "0.9"},
+            {"CHOL", "CHOL - холестерол", "mg/dL", "110", "320"},
+            {"AMY", "AMY - амилаза", "U/L", "500", "1500"},
+            {"K+", "K+ калиум", "mmol/L", "3.5", "5.8"},
+            {"Na+", "Na+ натриум", "mmol/L", "144", "160"},
+            {"Cl-", "Cl- хлор", "mmol/L", "109", "122"},
+            {"GLO", "GLO - глобулин", "g/dL", "2.5", "4.5"},
+            {"CK", "CK - креатин киназа", "U/L", "10", "200"},
+            {"BUN/CRE", "BUN/CRE", "", "", ""},
+            {"A/G", "A/G", "", "", ""},
+            {"AST", "AST", "U/L", "10", "50"},
+            {"GGT", "GGT", "U/L", "0", "14"},
+            {"DBIL", "DBIL - дир.билирубин", "mg/dL", "0.0", "0.3"},
+            {"IBIL", "IBIL - индир.билирубин", "mg/dL", "0.0", "0.6"},
+            {"Na+/K+", "Na+/K+", "", "", ""},
+            {"CO2", "CO2 - јаг.диоксид", "mmol/L", "17", "24"},
+            {"Mg", "Mg - магнезиум", "mg/dL", "1.6", "2.4"}
+        };
+
+        // Process parameters in order they appear in the definition
+        for (String[] paramDef : pointcareParams) {
+            String code = paramDef[0];
+            if (testResults.has(code)) {
+                Parameter parameter = new Parameter();
+                parameter.setName(paramDef[1]); // Translated name
+                parameter.setResult(testResults.get(code).getAsString());
+                parameter.setUnit(paramDef[2]); // Unit
+
+                // Set reference values
+                String refLow = paramDef[3];
+                String refHigh = paramDef[4];
+                if (!refLow.isEmpty() && !refHigh.isEmpty()) {
+                    parameter.setReferentValues(refLow + " - " + refHigh);
+
+                    // Determine indicator from reference ranges
+                    try {
+                        double resultVal = Double.parseDouble(parameter.getResult());
+                        double low = Double.parseDouble(refLow);
+                        double high = Double.parseDouble(refHigh);
+
+                        if (resultVal < low) {
+                            parameter.setIndicator(Indicator.LOW);
+                        } else if (resultVal > high) {
+                            parameter.setIndicator(Indicator.HIGH);
+                        } else {
+                            parameter.setIndicator(Indicator.NORMAL);
+                        }
+                    } catch (NumberFormatException e) {
+                        parameter.setIndicator(Indicator.NORMAL);
+                    }
+                } else {
+                    parameter.setReferentValues("");
+                    parameter.setIndicator(Indicator.NORMAL);
+                }
+
+                parameters.add(parameter);
+            }
         }
 
         sample.setParameters(parameters);
         return sample;
     }
 
-    private static HealvetSample parseHealvetSample(JsonObject json) {
+    private static HealvetSample parseHealvetSample(JsonObject json, PatientType patientType) {
         HealvetSample sample = new HealvetSample();
         sample.setSampleId(json.get("sample_id").getAsString());
         sample.setPatientId(json.get("patient_id").getAsString());
         sample.setAnalysisDateAndTime(json.get("detected_at").getAsString());
 
-        // Parse parameters
+        // Parse test results - Healvet stores each parameter as a key-value pair
+        // where key is the parameter code (e.g., "TSH-1", "T4-1", "cCRP") and value is result
         JsonObject testResults = json.getAsJsonObject("test_results");
         List<Parameter> parameters = new ArrayList<>();
 
-        for (String key : testResults.keySet()) {
-            Parameter parameter = new Parameter();
-            parameter.setName(key);
-            parameter.setResult(testResults.get(key).getAsString());
-            parameter.setIndicator(Indicator.NORMAL);
-            parameters.add(parameter);
+        // Process each parameter code in the test results
+        for (String paramCode : testResults.keySet()) {
+            // Skip metadata fields that may be present
+            if (paramCode.equals("sample_id") || paramCode.equals("patient_id") ||
+                paramCode.equals("datetime") || paramCode.equals("gender") ||
+                paramCode.equals("sample_type")) {
+                continue;
+            }
+
+            String resultValue = testResults.get(paramCode).getAsString();
+
+            // Try to look up the parameter in HealvetParameterEnum for proper name, unit, and ranges
+            // Note: forCortisolIsBeforeACTHTest is null since we don't have that info from CLI
+            HealvetParameterEnum healvetEnum = HealvetParameterEnum.getParameterByProperties(
+                paramCode, patientType, null);
+
+            if (healvetEnum != null) {
+                // Use HealvetParameter which auto-populates name, unit, and reference values
+                HealvetParameter parameter = new HealvetParameter();
+                parameter.setResult(resultValue); // Set result first
+                parameter.setHealvetParameterEnum(healvetEnum); // This sets name, unit, referentValues, and indicator
+                parameters.add(parameter);
+            } else {
+                // Fallback: create basic parameter if enum lookup fails
+                System.err.println("Warning: No HealvetParameterEnum found for code '" + paramCode +
+                    "' with patient type " + patientType.getCode());
+                Parameter parameter = new Parameter();
+                parameter.setName(paramCode);
+                parameter.setResult(resultValue);
+                parameter.setIndicator(Indicator.NORMAL);
+                parameters.add(parameter);
+            }
         }
 
         sample.setParameters(parameters);

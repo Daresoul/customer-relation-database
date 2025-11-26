@@ -39,6 +39,8 @@ pub struct MedicalAttachment {
     pub device_type: Option<String>,
     pub device_name: Option<String>,
     pub connection_method: Option<String>,
+    // T030: Attachment type - 'file' (default), 'test_result' (device data), 'generated_pdf'
+    pub attachment_type: Option<String>,
 }
 
 // T025: MedicalRecordHistory model
@@ -66,6 +68,16 @@ pub struct Currency {
 }
 
 // DTOs for creating and updating records
+
+/// Device data for PDF generation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceDataInput {
+    pub device_test_data: serde_json::Value,
+    pub device_type: String,
+    pub device_name: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateMedicalRecordInput {
@@ -76,10 +88,12 @@ pub struct CreateMedicalRecordInput {
     pub description: String,
     pub price: Option<f64>,
     pub currency_id: Option<i64>,
-    // Optional device test data for PDF generation
+    // Optional device test data for PDF generation (legacy single device)
     pub device_test_data: Option<serde_json::Value>,
     pub device_type: Option<String>,
     pub device_name: Option<String>,
+    // New: support for multiple devices
+    pub device_data_list: Option<Vec<DeviceDataInput>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

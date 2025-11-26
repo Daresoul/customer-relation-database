@@ -6,7 +6,8 @@
   "noRecords": "No medical records found",
   "recordTypes": {
     "procedure": "Procedure",
-    "note": "Note"
+    "note": "Note",
+    "testResult": "Test Result"
   },
   "types": {
     "procedure": "Procedure",
@@ -66,7 +67,8 @@
     "share": "Share",
     "viewHistory": "View History",
     "revert": "Revert to Version",
-    "retry": "Retry"
+    "retry": "Retry",
+    "regeneratePdf": "Regenerate PDF"
   },
   "messages": {
     "createSuccess": "Medical record created successfully",
