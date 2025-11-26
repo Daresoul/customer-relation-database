@@ -1,0 +1,119 @@
+.statusBar {
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 16px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.statusBarContent {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.icon {
+  color: var(--text-secondary);
+  font-size: 16px;
+}
+
+.label {
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.deviceList {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.deviceItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.deviceItem:hover {
+  background: var(--hover-bg);
+}
+
+.statusDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.pulsing {
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.deviceName {
+  font-size: 13px;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.typeIcon {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-right: 2px;
+}
+
+.settingsIcon {
+  color: var(--text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.settingsIcon:hover {
+  color: var(--primary);
+  background: var(--hover-bg);
+}
+
+@media (max-width: 768px) {
+  .statusBar {
+    padding: 8px 12px;
+  }
+
+  .statusBarContent {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .deviceList {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .label {
+    display: none;
+  }
+}

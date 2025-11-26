@@ -8,6 +8,7 @@ import { HouseholdInfo } from './HouseholdInfo';
 import { PeopleSection } from './PeopleSection';
 import { AnimalsSection } from './AnimalsSection';
 import { Link } from 'react-router-dom';
+import { DeviceStatusInline } from '../../components/DeviceStatusBar';
 import styles from './HouseholdDetail.module.css';
 
 const { Content } = Layout;
@@ -93,16 +94,19 @@ export const HouseholdDetail: React.FC = () => {
   return (
     <Content className={styles.contentPadding}>
       <div className={styles.marginBottom16}>
-        <Breadcrumb
-          items={[
-            {
-              title: <Link to="/"><HomeOutlined /> {t('detail.breadcrumb.home')}</Link>,
-            },
-            {
-              title: data.household.householdName || `Household ${householdId}`,
-            },
-          ]}
-        />
+        <div className={styles.breadcrumbRow}>
+          <Breadcrumb
+            items={[
+              {
+                title: <Link to="/"><HomeOutlined /> {t('detail.breadcrumb.home')}</Link>,
+              },
+              {
+                title: data.household.householdName || `Household ${householdId}`,
+              },
+            ]}
+          />
+          <DeviceStatusInline />
+        </div>
       </div>
 
       <div className={styles.marginBottom16}>

@@ -71,7 +71,7 @@ export interface UpdateDeviceIntegrationInput {
   enabled?: boolean;
 }
 
-// Connection status types
+// Connection status types for serial ports
 export type ConnectionState = 'Connected' | 'Disconnected' | 'Connecting' | 'Error';
 
 export interface DeviceConnectionStatus {
@@ -83,6 +83,18 @@ export interface DeviceConnectionStatus {
   last_error?: string;
   retry_count: number;
   next_retry?: string;
+}
+
+// File watcher status types
+export type FileWatcherState = 'Watching' | 'Error' | 'Stopped';
+
+export interface FileWatcherStatus {
+  integration_id: number;
+  name: string;
+  watch_directory: string;
+  status: FileWatcherState;
+  last_error?: string;
+  files_processed: number;
 }
 
 // Helper function to get display name for device type

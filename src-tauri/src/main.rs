@@ -232,6 +232,7 @@ fn main() {
             commands::start_device_integration_listener,
             commands::stop_device_integration_listener,
             commands::get_device_connection_statuses,
+            commands::get_file_watcher_statuses,
             // Device integration commands
             commands::get_device_integrations,
             commands::get_device_integration,

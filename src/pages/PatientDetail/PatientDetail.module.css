@@ -34,6 +34,13 @@
   margin-bottom: 24px;
 }
 
+.breadcrumbRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
 .sectionTitle {
   font-size: 18px;
   font-weight: 600;

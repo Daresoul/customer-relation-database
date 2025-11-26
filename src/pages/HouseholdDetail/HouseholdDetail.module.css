@@ -197,6 +197,13 @@
   margin-bottom: 16px;
 }
 
+.breadcrumbRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
 .marginBottom24 {
   margin-bottom: 24px;
 }

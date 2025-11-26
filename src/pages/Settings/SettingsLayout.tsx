@@ -17,6 +17,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useThemeColors } from '../../utils/themeStyles';
 import { useAppSettings } from '../../hooks/useAppSettings';
 import { useTheme } from '../../contexts/ThemeContext';
+import { DeviceStatusInline } from '../../components/DeviceStatusBar';
 import styles from './Settings.module.css';
 
 // Import category components
@@ -151,19 +152,22 @@ const SettingsLayout: React.FC = () => {
         <div className={styles.contentWrapper}>
           {/* Breadcrumb */}
           <div className={styles.section}>
-            <Breadcrumb
-              items={[
-                {
-                  title: <Link to="/" className={styles.breadcrumbLink}><HomeOutlined /> {t('navigation:home')}</Link>,
-                },
-                {
-                  title: <Link to="/" className={styles.breadcrumbLink}>{t('navigation:dashboard')}</Link>,
-                },
-                {
-                  title: <span className={styles.breadcrumbCurrent}>{t('navigation:settings')}</span>,
-                },
-              ]}
-            />
+            <div className={styles.breadcrumbRow}>
+              <Breadcrumb
+                items={[
+                  {
+                    title: <Link to="/" className={styles.breadcrumbLink}><HomeOutlined /> {t('navigation:home')}</Link>,
+                  },
+                  {
+                    title: <Link to="/" className={styles.breadcrumbLink}>{t('navigation:dashboard')}</Link>,
+                  },
+                  {
+                    title: <span className={styles.breadcrumbCurrent}>{t('navigation:settings')}</span>,
+                  },
+                ]}
+              />
+              <DeviceStatusInline />
+            </div>
           </div>
 
           {/* Back Button */}
