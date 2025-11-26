@@ -1,0 +1,114 @@
+{
+  "title": "Влезни Уреди",
+  "sections": {
+    "availableDevices": "Достапни Влезни Уреди",
+    "integrations": "Интеграции на Уреди"
+  },
+  "status": {
+    "connected": "Поврзан",
+    "connecting": "Се поврзува",
+    "connectingAttempt": "Се поврзува (обид {{count}})",
+    "disconnected": "Исклучен",
+    "disconnectedRetrying": "Исклучен - повторен обид...",
+    "error": "Грешка",
+    "errorWithMessage": "Грешка: {{message}}",
+    "errorRetrying": "Грешка: {{message}} - повторен обид...",
+    "unknown": "Непознато",
+    "watching": "Се следат датотеки",
+    "stopped": "Запрено",
+    "enabled": "Овозможено",
+    "disabled": "Оневозможено"
+  },
+  "connectionTypes": {
+    "serialPort": "Сериски Порт",
+    "fileWatch": "Следење Датотеки",
+    "hl7Tcp": "HL7 TCP"
+  },
+  "portTypes": {
+    "serialUsb": "Сериски USB",
+    "hid": "HID",
+    "serialPci": "Сериски PCI",
+    "serialBluetooth": "Сериски Bluetooth",
+    "unknown": "Непознат"
+  },
+  "deviceTypes": {
+    "exigoEosVet": "Exigo EOS Vet (Хематологија)",
+    "healvetHvFia3000": "Healvet HV-FIA 3000 (Имунофлуоресценција)",
+    "mnchipPointcarePcrV1": "MNChip Pointcare PCV V1 (Хемија)"
+  },
+  "form": {
+    "labels": {
+      "integrationName": "Име на Интеграција",
+      "deviceType": "Тип на Уред",
+      "connectionType": "Тип на Поврзување",
+      "watchDirectory": "Директориум за Следење",
+      "filePattern": "Шема на Датотеки (Опционално)",
+      "serialPort": "Сериски Порт",
+      "tcpHost": "TCP Хост",
+      "tcpPort": "TCP Порт",
+      "enabled": "Овозможено"
+    },
+    "placeholders": {
+      "integrationName": "пр., Лаб Анализатор 1",
+      "deviceType": "Изберете тип на уред",
+      "connectionType": "Изберете тип на поврзување",
+      "watchDirectory": "Изберете директориум за следење...",
+      "filePattern": "*.xml",
+      "serialPort": "Изберете или внесете име на порт",
+      "tcpHost": "localhost или 192.168.1.100",
+      "tcpPort": "2575"
+    },
+    "validation": {
+      "nameRequired": "Ве молиме внесете име на интеграција",
+      "deviceTypeRequired": "Ве молиме изберете тип на уред",
+      "connectionTypeRequired": "Ве молиме изберете тип на поврзување",
+      "directoryRequired": "Ве молиме изберете директориум",
+      "serialPortRequired": "Ве молиме изберете или внесете име на сериски порт",
+      "tcpHostRequired": "Ве молиме внесете TCP хост",
+      "tcpPortRequired": "Ве молиме внесете TCP порт"
+    }
+  },
+  "table": {
+    "name": "Име",
+    "device": "Уред",
+    "connection": "Поврзување",
+    "configuration": "Конфигурација",
+    "actions": "Акции",
+    "portName": "Име на Порт",
+    "type": "Тип",
+    "details": "Детали"
+  },
+  "tooltips": {
+    "deviceSettings": "Поставки за Уреди",
+    "port": "Порт: {{port}}",
+    "status": "Статус: {{status}}",
+    "directory": "Директориум: {{directory}}",
+    "pattern": "Шема: {{pattern}}"
+  },
+  "buttons": {
+    "refresh": "Освежи",
+    "addIntegration": "Додај Интеграција",
+    "enable": "Овозможи",
+    "disable": "Оневозможи",
+    "browse": "Пребарај"
+  },
+  "modal": {
+    "addTitle": "Додај Нова Интеграција на Уред",
+    "editTitle": "Уреди Интеграција на Уред",
+    "selectDirectory": "Изберете Директориум за Следење"
+  },
+  "messages": {
+    "detectedDevices": "Детектиран {{count}} уред (Сериски Портови и HID Уреди)",
+    "detectedDevices_plural": "Детектирани {{count}} уреди (Сериски Портови и HID Уреди)",
+    "noPortsFound": "Нема пронајдени портови. Внесете сопствена патека.",
+    "deleteConfirm": "Избриши ја оваа интеграција на уред?",
+    "statusUnknown": "Непознат статус",
+    "addSuccess": "Интеграцијата на уред е успешно додадена",
+    "updateSuccess": "Интеграцијата на уред е успешно ажурирана",
+    "deleteSuccess": "Интеграцијата на уред е успешно избришана",
+    "operationFailed": "Операцијата не успеа"
+  },
+  "labels": {
+    "devices": "Уреди:"
+  }
+}

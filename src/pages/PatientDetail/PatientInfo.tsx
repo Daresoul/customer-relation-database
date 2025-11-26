@@ -80,15 +80,15 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
   });
 
   // Update local values when patient data changes
-  // Only update if the value is not null/undefined (to preserve optimistic updates)
+  // Sync with server values (including null/cleared values) to reflect actual state
   useEffect(() => {
-    setLocalValues(prev => ({
-      name: patient.name || prev.name,
-      breed: patient.breed || prev.breed,
-      color: patient.color || prev.color,
-      microchipId: patient.microchipId || prev.microchipId,
-      dateOfBirth: patient.dateOfBirth || prev.dateOfBirth, // Keep existing date if backend returns null
-    }));
+    setLocalValues({
+      name: patient.name,
+      breed: patient.breed,
+      color: patient.color,
+      microchipId: patient.microchipId,
+      dateOfBirth: patient.dateOfBirth,
+    });
   }, [patient.name, patient.breed, patient.color, patient.microchipId, patient.dateOfBirth]);
 
   const handleFieldUpdate = async (field: string, value: any) => {

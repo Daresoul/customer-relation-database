@@ -55,11 +55,17 @@ pub struct UpdatePatientDto {
     pub species_id: MaybeNull<i64>,
     #[serde(default)]
     pub breed_id: MaybeNull<i64>,
-    pub gender: Option<String>,
-    pub date_of_birth: Option<NaiveDate>,
-    pub color: Option<String>,
-    pub weight: Option<f64>,
-    pub microchip_id: Option<String>,
-    pub medical_notes: Option<String>,
+    #[serde(default)]
+    pub gender: MaybeNull<String>,
+    #[serde(default)]
+    pub date_of_birth: MaybeNull<NaiveDate>,
+    #[serde(default)]
+    pub color: MaybeNull<String>,
+    #[serde(default)]
+    pub weight: MaybeNull<f64>,
+    #[serde(default)]
+    pub microchip_id: MaybeNull<String>,
+    #[serde(default)]
+    pub medical_notes: MaybeNull<String>,
     pub is_active: Option<bool>,
 }

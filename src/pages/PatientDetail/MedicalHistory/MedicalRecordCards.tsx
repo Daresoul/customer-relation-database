@@ -30,6 +30,7 @@ interface MedicalRecordCardsProps {
 const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
   records,
   onRefresh,
+  patientId,
   onNavigateToRecord,
 }) => {
   const { t } = useTranslation('medical');
@@ -53,6 +54,7 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
       await archiveMutation.mutateAsync({
         recordId: selectedRecord.id,
         archive: !selectedRecord.isArchived,
+        patientId,
       });
       setArchiveModalVisible(false);
       setSelectedRecord(null);

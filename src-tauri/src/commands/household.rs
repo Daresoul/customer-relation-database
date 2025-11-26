@@ -685,3 +685,151 @@ pub async fn get_household_patients(
     println!("Returning {} patients as JSON for household {}", patients_json.len(), household_id);
     Ok(patients_json)
 }
+
+#[tauri::command]
+pub async fn link_patient_to_household(
+    pool: State<'_, DatabasePool>,
+    patient_id: i64,
+    household_id: i32,
+    relationship_type: Option<String>,
+    is_primary: Option<bool>,
+) -> Result<(), String> {
+    let pool = pool.lock().await;
+
+    // Check if patient exists
+    let patient_exists = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM patients WHERE id = ?"
+    )
+    .bind(patient_id)
+    .fetch_one(&*pool)
+    .await
+    .map_err(|e| format!("Failed to check patient: {}", e))?;
+
+    if patient_exists == 0 {
+        return Err(format!("Patient {} not found", patient_id));
+    }
+
+    // Check if household exists
+    let household_exists = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM households WHERE id = ?"
+    )
+    .bind(household_id)
+    .fetch_one(&*pool)
+    .await
+    .map_err(|e| format!("Failed to check household: {}", e))?;
+
+    if household_exists == 0 {
+        return Err(format!("Household {} not found", household_id));
+    }
+
+    // Check if link already exists
+    let link_exists = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM patient_households WHERE patient_id = ? AND household_id = ?"
+    )
+    .bind(patient_id)
+    .bind(household_id)
+    .fetch_one(&*pool)
+    .await
+    .map_err(|e| format!("Failed to check existing link: {}", e))?;
+
+    if link_exists > 0 {
+        return Err("Patient is already linked to this household".to_string());
+    }
+
+    let rel_type = relationship_type.unwrap_or_else(|| "Pet".to_string());
+    let primary = is_primary.unwrap_or(true);
+
+    // If this is primary, unset other primary relationships for this patient
+    if primary {
+        sqlx::query(
+            "UPDATE patient_households SET is_primary = 0 WHERE patient_id = ?"
+        )
+        .bind(patient_id)
+        .execute(&*pool)
+        .await
+        .map_err(|e| format!("Failed to update existing relationships: {}", e))?;
+    }
+
+    // Create the link
+    sqlx::query(
+        "INSERT INTO patient_households (patient_id, household_id, relationship_type, is_primary) VALUES (?, ?, ?, ?)"
+    )
+    .bind(patient_id)
+    .bind(household_id)
+    .bind(&rel_type)
+    .bind(primary)
+    .execute(&*pool)
+    .await
+    .map_err(|e| format!("Failed to link patient to household: {}", e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn unlink_patient_from_household(
+    pool: State<'_, DatabasePool>,
+    patient_id: i64,
+    household_id: i32,
+) -> Result<(), String> {
+    let pool = pool.lock().await;
+
+    let result = sqlx::query(
+        "DELETE FROM patient_households WHERE patient_id = ? AND household_id = ?"
+    )
+    .bind(patient_id)
+    .bind(household_id)
+    .execute(&*pool)
+    .await
+    .map_err(|e| format!("Failed to unlink patient from household: {}", e))?;
+
+    if result.rows_affected() == 0 {
+        return Err("Patient is not linked to this household".to_string());
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn update_patient_household(
+    pool: State<'_, DatabasePool>,
+    patient_id: i64,
+    household_id: Option<i32>,
+) -> Result<(), String> {
+    let pool = pool.lock().await;
+
+    // First, remove all existing household links for this patient
+    sqlx::query(
+        "DELETE FROM patient_households WHERE patient_id = ?"
+    )
+    .bind(patient_id)
+    .execute(&*pool)
+    .await
+    .map_err(|e| format!("Failed to remove existing household links: {}", e))?;
+
+    // If a household_id is provided, create a new link
+    if let Some(hh_id) = household_id {
+        // Check if household exists
+        let household_exists = sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM households WHERE id = ?"
+        )
+        .bind(hh_id)
+        .fetch_one(&*pool)
+        .await
+        .map_err(|e| format!("Failed to check household: {}", e))?;
+
+        if household_exists == 0 {
+            return Err(format!("Household {} not found", hh_id));
+        }
+
+        sqlx::query(
+            "INSERT INTO patient_households (patient_id, household_id, relationship_type, is_primary) VALUES (?, ?, 'Pet', 1)"
+        )
+        .bind(patient_id)
+        .bind(hh_id)
+        .execute(&*pool)
+        .await
+        .map_err(|e| format!("Failed to link patient to household: {}", e))?;
+    }
+
+    Ok(())
+}

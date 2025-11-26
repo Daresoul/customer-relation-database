@@ -268,10 +268,10 @@ const DeviceImportModal: React.FC = () => {
                     {file.isSession && (
                       <>
                         <Tag color="purple">
-                          {file.parameterCount} {file.parameterCount === 1 ? 'parameter' : 'parameters'}
+                          {t('medical:deviceImport.parameter', { count: file.parameterCount })}
                         </Tag>
                         {file.sessionInProgress && (
-                          <Tag color="orange">In Progress...</Tag>
+                          <Tag color="orange">{t('medical:deviceImport.sessionInProgress')}</Tag>
                         )}
                       </>
                     )}
@@ -292,9 +292,9 @@ const DeviceImportModal: React.FC = () => {
                         {t('medical:deviceImport.identifier')}: {file.patientIdentifier}
                       </Text>
                     )}
-                    {file.isSession && file.testResults?.parameters && (
+                    {file.isSession && file.testResults && (
                       <Text type="secondary" style={{ fontSize: '0.85em' }}>
-                        {file.testResults.parameters.map((p: any) => p.code).join(', ')}
+                        {Object.keys(file.testResults).join(', ')}
                       </Text>
                     )}
                   </Space>
@@ -324,7 +324,7 @@ const DeviceImportModal: React.FC = () => {
             suffixIcon={<UserOutlined />}
             size="large"
             loading={patientsLoading}
-            notFoundContent={patientsLoading ? 'Loading patients...' : 'No patients found'}
+            notFoundContent={patientsLoading ? t('medical:deviceImport.loadingPatients') : t('medical:deviceImport.noPatientsFound')}
           >
             {patients?.map((patient: any) => (
               <Option key={patient.id} value={patient.id}>
@@ -357,7 +357,7 @@ const DeviceImportModal: React.FC = () => {
             { required: true, message: t('forms:validation.required') },
             { max: 200, message: t('forms:validation.maxLength', { max: 200 }) },
           ]}
-          tooltip="Auto-filled from device data - you can edit if needed"
+          tooltip={t('medical:deviceImport.autoFilledTooltip')}
         >
           <Input
             placeholder={
@@ -372,7 +372,7 @@ const DeviceImportModal: React.FC = () => {
           name="description"
           label={t('medical:fields.description')}
           rules={[{ required: true, message: t('forms:validation.required') }]}
-          tooltip="Auto-filled from device data - you can edit if needed"
+          tooltip={t('medical:deviceImport.autoFilledTooltip')}
         >
           <TextArea
             rows={6}

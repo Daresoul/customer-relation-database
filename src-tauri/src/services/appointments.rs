@@ -356,7 +356,7 @@ impl AppointmentService {
              JOIN patients p ON a.patient_id = p.id
              LEFT JOIN species s ON p.species_id = s.id
              LEFT JOIN breeds b ON p.breed_id = b.id
-             WHERE a.id = ?"
+             WHERE a.id = ? AND a.deleted_at IS NULL"
         )
         .bind(id)
         .fetch_optional(pool)

@@ -96,14 +96,18 @@ pub struct CreateMedicalRecordInput {
     pub device_data_list: Option<Vec<DeviceDataInput>>,
 }
 
+use crate::models::dto::MaybeNull;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateMedicalRecordInput {
     pub name: Option<String>,
     pub procedure_name: Option<String>,
     pub description: Option<String>,
-    pub price: Option<f64>,
-    pub currency_id: Option<i64>,
+    #[serde(default)]
+    pub price: MaybeNull<f64>,
+    #[serde(default)]
+    pub currency_id: MaybeNull<i64>,
     pub is_archived: Option<bool>,
 }
 

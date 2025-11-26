@@ -2,6 +2,7 @@ import React from 'react';
 import { Space, Tooltip, Typography } from 'antd';
 import { ApiOutlined, SettingOutlined, FolderOutlined, UsbOutlined } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useDeviceIntegrations, useDeviceConnectionStatus, useFileWatcherStatus } from '../../hooks/useDeviceIntegrations';
 import { ConnectionState, FileWatcherState, getDeviceTypeDisplayName } from '../../types/deviceIntegration';
 import styles from './DeviceStatusBar.module.css';
@@ -11,6 +12,7 @@ const { Text } = Typography;
 export const DeviceStatusBar: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useTranslation('devices');
 
   // Only show on main dashboard
   const isMainDashboard = location.pathname === '/';
@@ -62,28 +64,28 @@ export const DeviceStatusBar: React.FC = () => {
   const getSerialStatusText = (state?: ConnectionState, retryCount?: number, lastError?: string): string => {
     switch (state) {
       case 'Connected':
-        return 'Connected';
+        return t('status.connected');
       case 'Connecting':
-        return `Connecting${retryCount ? ` (attempt ${retryCount + 1})` : '...'}`;
+        return retryCount ? t('status.connectingAttempt', { count: retryCount + 1 }) : t('status.connecting');
       case 'Disconnected':
-        return 'Disconnected - retrying...';
+        return t('status.disconnectedRetrying');
       case 'Error':
-        return `Error: ${lastError || 'Unknown'} - retrying...`;
+        return t('status.errorRetrying', { message: lastError || t('status.unknown') });
       default:
-        return 'Unknown';
+        return t('status.unknown');
     }
   };
 
   const getFileWatcherStatusText = (state?: FileWatcherState, lastError?: string): string => {
     switch (state) {
       case 'Watching':
-        return 'Watching for files';
+        return t('status.watching');
       case 'Error':
-        return `Error: ${lastError || 'Unknown'}`;
+        return t('status.errorWithMessage', { message: lastError || t('status.unknown') });
       case 'Stopped':
-        return 'Stopped';
+        return t('status.stopped');
       default:
-        return 'Unknown';
+        return t('status.unknown');
     }
   };
 
@@ -91,7 +93,7 @@ export const DeviceStatusBar: React.FC = () => {
     <div className={styles.statusBar}>
       <div className={styles.statusBarContent}>
         <ApiOutlined className={styles.icon} />
-        <Text className={styles.label}>Devices:</Text>
+        <Text className={styles.label}>{t('labels.devices')}</Text>
         <Space size="middle" className={styles.deviceList}>
           {/* Serial Port Integrations */}
           {serialPortIntegrations.map((integration) => {
@@ -106,8 +108,8 @@ export const DeviceStatusBar: React.FC = () => {
                   <div>
                     <div><strong>{integration.name}</strong></div>
                     <div>{getDeviceTypeDisplayName(integration.device_type)}</div>
-                    <div>Port: {integration.serial_port_name}</div>
-                    <div>Status: {statusText}</div>
+                    <div>{t('tooltips.port', { port: integration.serial_port_name })}</div>
+                    <div>{t('tooltips.status', { status: statusText })}</div>
                   </div>
                 }
               >
@@ -136,9 +138,9 @@ export const DeviceStatusBar: React.FC = () => {
                   <div>
                     <div><strong>{integration.name}</strong></div>
                     <div>{getDeviceTypeDisplayName(integration.device_type)}</div>
-                    <div>Directory: {integration.watch_directory}</div>
-                    <div>Pattern: {integration.file_pattern}</div>
-                    <div>Status: {statusText}</div>
+                    <div>{t('tooltips.directory', { directory: integration.watch_directory })}</div>
+                    <div>{t('tooltips.pattern', { pattern: integration.file_pattern })}</div>
+                    <div>{t('tooltips.status', { status: statusText })}</div>
                   </div>
                 }
               >
@@ -154,7 +156,7 @@ export const DeviceStatusBar: React.FC = () => {
             );
           })}
         </Space>
-        <Tooltip title="Device Settings">
+        <Tooltip title={t('tooltips.deviceSettings')}>
           <SettingOutlined
             className={styles.settingsIcon}
             onClick={() => navigate('/settings')}

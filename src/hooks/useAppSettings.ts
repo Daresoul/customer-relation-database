@@ -41,8 +41,8 @@ export const useAppSettings = () => {
       // Update date format if changed
       if (newSettings.settings.dateFormat !== data?.settings.dateFormat) {
         updateDateFormatInStorage(newSettings.settings.dateFormat);
-        // Force re-render of components using dates
-        queryClient.invalidateQueries();
+        // Invalidate only settings query - components will re-render via React Query
+        queryClient.invalidateQueries({ queryKey: ['settings'] });
       }
 
       notification.success({

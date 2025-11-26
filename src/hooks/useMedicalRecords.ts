@@ -36,7 +36,7 @@ export function useCurrencies() {
   return useQuery({
     queryKey: ['currencies'],
     queryFn: () => MedicalService.getCurrencies(),
-    staleTime: 1000 * 60 * 60 // Cache for 1 hour
+    staleTime: 5 * 60 * 1000 // Cache for 5 minutes
   });
 }
 
@@ -67,9 +67,15 @@ export function useCreateMedicalRecord() {
         placement: 'bottomRight',
         duration: 3,
       });
-      // Invalidate the medical records list for this patient
+      // Invalidate ALL medical records queries for this patient (regardless of filters)
       queryClient.invalidateQueries({
-        queryKey: ['medical-records', variables.patientId]
+        queryKey: ['medical-records', variables.patientId],
+        exact: false, // Match any query starting with ['medical-records', patientId]
+      });
+      // Also invalidate search queries
+      queryClient.invalidateQueries({
+        queryKey: ['medical-records-search', variables.patientId],
+        exact: false,
       });
     },
     onError: (error: Error) => {
@@ -103,13 +109,19 @@ export function useUpdateMedicalRecord() {
         placement: 'bottomRight',
         duration: 3,
       });
-      // Invalidate all medical records queries
+      // Invalidate medical records list for this patient (with any filters)
       queryClient.invalidateQueries({
-        queryKey: ['medical-records']
+        queryKey: ['medical-records', data.patientId],
+        exact: false,
+      });
+      // Invalidate search queries for this patient
+      queryClient.invalidateQueries({
+        queryKey: ['medical-records-search', data.patientId],
+        exact: false,
       });
       // Invalidate specific record query
       queryClient.invalidateQueries({
-        queryKey: ['medical-record', data.id]
+        queryKey: ['medical-record', data.id],
       });
     },
     onError: (error: Error) => {
@@ -131,10 +143,12 @@ export function useArchiveMedicalRecord() {
   return useMutation({
     mutationFn: ({
       recordId,
-      archive
+      archive,
+      patientId
     }: {
       recordId: number;
       archive: boolean;
+      patientId: number;
     }) => MedicalService.archiveMedicalRecord(recordId, archive),
     onSuccess: (_, variables) => {
       notification.success({
@@ -145,9 +159,19 @@ export function useArchiveMedicalRecord() {
         placement: 'bottomRight',
         duration: 3,
       });
-      // Invalidate all medical records queries
+      // Invalidate medical records list for this patient (with any filters)
       queryClient.invalidateQueries({
-        queryKey: ['medical-records']
+        queryKey: ['medical-records', variables.patientId],
+        exact: false,
+      });
+      // Invalidate search queries
+      queryClient.invalidateQueries({
+        queryKey: ['medical-records-search', variables.patientId],
+        exact: false,
+      });
+      // Invalidate specific record
+      queryClient.invalidateQueries({
+        queryKey: ['medical-record', variables.recordId],
       });
     },
     onError: (error: Error) => {
@@ -189,7 +213,7 @@ export function useUploadAttachment() {
       }
       return MedicalService.uploadAttachment(medicalRecordId, file, deviceType, deviceName, connectionMethod, attachmentType);
     },
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       notification.success({
         message: 'File uploaded successfully',
         description: 'File uploaded successfully',
@@ -198,11 +222,15 @@ export function useUploadAttachment() {
       });
       // Invalidate the specific medical record to refresh attachments
       queryClient.invalidateQueries({
-        queryKey: ['medical-record', data.medicalRecordId]
+        queryKey: ['medical-record', variables.medicalRecordId],
       });
-      // Also invalidate the list in case we're showing attachment counts
+      // Invalidate all list queries for this record's patient
+      // Note: We don't have patientId here, so use partial match on medical-records
       queryClient.invalidateQueries({
-        queryKey: ['medical-records']
+        predicate: (query) => {
+          const key = query.queryKey;
+          return key[0] === 'medical-records';
+        },
       });
     },
     onError: (error: Error) => {
@@ -222,21 +250,30 @@ export function useDeleteAttachment() {
   const { notification } = App.useApp();
 
   return useMutation({
-    mutationFn: (attachmentId: number) =>
-      MedicalService.deleteAttachment(attachmentId),
-    onSuccess: () => {
+    mutationFn: ({
+      attachmentId,
+      medicalRecordId
+    }: {
+      attachmentId: number;
+      medicalRecordId: number;
+    }) => MedicalService.deleteAttachment(attachmentId),
+    onSuccess: (_, variables) => {
       notification.success({
         message: 'Attachment deleted successfully',
         description: 'Attachment deleted successfully',
         placement: 'bottomRight',
         duration: 3,
       });
-      // Invalidate medical record queries to refresh attachments
+      // Invalidate specific medical record query
       queryClient.invalidateQueries({
-        queryKey: ['medical-record']
+        queryKey: ['medical-record', variables.medicalRecordId],
       });
+      // Invalidate list queries (for attachment count updates)
       queryClient.invalidateQueries({
-        queryKey: ['medical-records']
+        predicate: (query) => {
+          const key = query.queryKey;
+          return key[0] === 'medical-records';
+        },
       });
     },
     onError: (error: Error) => {

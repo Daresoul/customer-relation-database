@@ -11,6 +11,7 @@ import {
   TeamOutlined,
   CalendarOutlined
 } from '@ant-design/icons';
+import { useQueryClient } from '@tanstack/react-query';
 import { usePatientDetail, useDeleteConfirmation } from '../../hooks/usePatient';
 import { PatientInfo } from './PatientInfo';
 import { MedicalSection } from './MedicalSection';
@@ -42,8 +43,14 @@ export const PatientDetail: React.FC = () => {
     }
   }, [savedActiveTab, patientId]);
 
+  const queryClient = useQueryClient();
   const { data: patient, isLoading, error } = usePatientDetail(patientId);
   const { showDeleteConfirm, isDeleting } = useDeleteConfirmation();
+
+  // Callback when household assignment changes
+  const handleHouseholdChanged = () => {
+    queryClient.invalidateQueries({ queryKey: ['patient', patientId] });
+  };
 
   // Restore scroll position when returning from medical record detail
   useEffect(() => {
@@ -165,7 +172,11 @@ export const PatientDetail: React.FC = () => {
       children: (
         <div className={styles.tabContent}>
           <PatientInfo patient={patient} />
-          <HouseholdSection household={patient.household} />
+          <HouseholdSection
+              household={patient.household}
+              patientId={patient.id}
+              onHouseholdChanged={handleHouseholdChanged}
+            />
         </div>
       ),
     },

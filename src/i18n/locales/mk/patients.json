@@ -148,7 +148,16 @@
       "contactInfo": "Контакт информации",
       "otherMembers": "Други членови",
       "viewDetails": "Види детали за домаќинството →",
-      "primary": "Примарен"
+      "primary": "Примарен",
+      "assignHousehold": "Додели домаќинство",
+      "selectHousehold": "Избери домаќинство...",
+      "assign": "Додели",
+      "changeHousehold": "Промени домаќинство",
+      "unlinkHousehold": "Откажи од домаќинство",
+      "assignSuccess": "Домаќинството е успешно доделено",
+      "assignFailed": "Неуспешно доделување на домаќинство",
+      "unlinkSuccess": "Успешно откачен од домаќинството",
+      "unlinkFailed": "Неуспешно откачување од домаќинство"
     },
     "medicalHistory": {
       "title": "Медицинска историја",
