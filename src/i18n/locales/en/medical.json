@@ -160,5 +160,12 @@
     "loadingPatients": "Loading patients...",
     "noPatientsFound": "No patients found",
     "autoFilledTooltip": "Auto-filled from device data - you can edit if needed"
+  },
+  "autocomplete": {
+    "typeToSearch": "Type at least 2 characters to search templates",
+    "noTemplatesFound": "No templates found"
+  },
+  "errors": {
+    "templateSearchFailed": "Failed to search templates"
   }
 }
