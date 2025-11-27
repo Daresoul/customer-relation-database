@@ -8,16 +8,35 @@ mod services;
 
 use database::{create_pool, get_database_url, run_migrations};
 use tauri::Manager;
+use tauri_plugin_log::{LogTarget, Builder};
+use log::LevelFilter;
 
 fn main() {
     // Load environment variables from .env file
     dotenv::dotenv().ok();
 
+    // Configure logging based on build type
+    #[cfg(debug_assertions)]
+    let log_targets = vec![
+        LogTarget::Stdout,   // Terminal console
+        LogTarget::Webview,  // Browser devtools
+        LogTarget::LogDir,   // Also log to file in dev (optional)
+    ];
+
+    #[cfg(not(debug_assertions))]
+    let log_targets = vec![
+        LogTarget::LogDir,   // Only log to file in production
+    ];
+
     tauri::Builder::default()
+        .plugin(Builder::default()
+            .targets(log_targets)
+            .level(LevelFilter::Info)
+            .build())
         .setup(|app| {
             // Get database URL
             let db_url = get_database_url(&app.handle())?;
-            println!("Database URL: {}", db_url);
+            log::info!("Database URL: {}", db_url);
 
             // Initialize database in async runtime
             let pool = tauri::async_runtime::block_on(async {
@@ -32,7 +51,7 @@ fn main() {
                         .map_err(|e| format!("Failed to run migrations: {}", e))?;
                 }
 
-                println!("Database initialized successfully");
+                log::info!("Database initialized successfully");
                 Ok::<_, String>(pool)
             })?;
 
@@ -54,7 +73,7 @@ fn main() {
                     let mut watcher = services::file_watcher::FileWatcherService::new(pool_guard.clone());
                     watcher.set_app_handle(app_handle_for_watcher);
                     if let Err(e) = watcher.initialize().await {
-                        eprintln!("Failed to initialize file watcher: {}", e);
+                        log::error!("Failed to initialize file watcher: {}", e);
                     }
                     watcher
                     // pool_guard is dropped here, releasing the lock
@@ -84,27 +103,27 @@ fn main() {
                     .fetch_all(&*pool_guard)
                     .await
                     .unwrap_or_else(|e| {
-                        eprintln!("Failed to query serial port integrations: {}", e);
+                        log::error!("Failed to query serial port integrations: {}", e);
                         vec![]
                     })
                 };
 
-                println!("📡 Found {} enabled serial port integrations", integrations.len());
+                log::info!("📡 Found {} enabled serial port integrations", integrations.len());
 
                 // Start listener for each
                 for integration in integrations {
                     if let Some(port_name) = integration.serial_port_name {
-                        println!("🎧 Auto-starting listener for: {} ({})", integration.name, port_name);
+                        log::info!("🎧 Auto-starting listener for: {} ({})", integration.name, port_name);
                         if let Err(e) = services::device_input::start_listen(
                             app_handle_for_serial.clone(),
                             port_name,
                             integration.device_type,
                             integration.id,
                         ) {
-                            eprintln!("❌ Failed to start listener for {}: {}", integration.name, e);
+                            log::error!("❌ Failed to start listener for {}: {}", integration.name, e);
                         }
                     } else {
-                        eprintln!("⚠️  Integration '{}' has no serial port configured", integration.name);
+                        log::warn!("⚠️  Integration '{}' has no serial port configured", integration.name);
                     }
                 }
             });

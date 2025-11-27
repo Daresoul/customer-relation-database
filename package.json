@@ -37,6 +37,7 @@
     "react-dom": "^18.2.0",
     "react-i18next": "^15.7.3",
     "react-router-dom": "^6.20.0",
+    "tauri-plugin-log-api": "github:tauri-apps/tauri-plugin-log#v1",
     "use-debounce": "^10.0.6"
   },
   "devDependencies": {
