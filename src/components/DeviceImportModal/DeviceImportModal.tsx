@@ -13,6 +13,7 @@ import {
   App,
   Tag,
   Card,
+  Drawer,
 } from 'antd';
 import {
   SaveOutlined,
@@ -21,6 +22,7 @@ import {
   DeleteOutlined,
   UserOutlined,
   CheckCircleOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useDeviceImport } from '@/contexts/DeviceImportContext';
@@ -28,6 +30,7 @@ import { usePatients } from '@/hooks/usePatients';
 import { useCurrencies, useCreateMedicalRecord, useUploadAttachment } from '@/hooks/useMedicalRecords';
 import { useAppSettings } from '@/hooks/useAppSettings';
 import { CreateMedicalRecordInput } from '@/types/medical';
+import RecentDeviceFiles from '../RecentDeviceFiles';
 import styles from './DeviceImportModal.module.css';
 
 const { TextArea } = Input;
@@ -40,6 +43,7 @@ const DeviceImportModal: React.FC = () => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [recordType, setRecordType] = useState<'procedure' | 'note' | 'test_result'>('test_result');
+  const [recentFilesDrawerOpen, setRecentFilesDrawerOpen] = useState(false);
 
   const {
     modalOpen,
@@ -140,6 +144,18 @@ const DeviceImportModal: React.FC = () => {
     });
   };
 
+  const handleAddRecentFile = (fileId: string, originalName: string) => {
+    notification.info({
+      message: 'Recent File Selected',
+      description: `Selected file: ${originalName}. This feature will be fully implemented to add the file to the pending list.`,
+      placement: 'bottomRight',
+      duration: 4,
+    });
+    setRecentFilesDrawerOpen(false);
+    // TODO: Implement adding the file to the pending files list
+    // This would require fetching the file from storage and adding it to the DeviceImportContext
+  };
+
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
@@ -234,12 +250,20 @@ const DeviceImportModal: React.FC = () => {
       onCancel={handleCancel}
       footer={null}
       width={900}
-      destroyOnClose
     >
       {/* Pending Files List */}
       <Card
         size="small"
         title={t('medical:deviceImport.pendingFiles')}
+        extra={
+          <Button
+            type="link"
+            icon={<HistoryOutlined />}
+            onClick={() => setRecentFilesDrawerOpen(true)}
+          >
+            Browse Recent Files
+          </Button>
+        }
         style={{ marginBottom: 16 }}
       >
         <List
@@ -422,6 +446,21 @@ const DeviceImportModal: React.FC = () => {
           </Space>
         </Form.Item>
       </Form>
+
+      {/* Recent Files Drawer */}
+      <Drawer
+        title="Recent Device Files (Last 14 Days)"
+        placement="right"
+        width={800}
+        onClose={() => setRecentFilesDrawerOpen(false)}
+        open={recentFilesDrawerOpen}
+        destroyOnClose
+      >
+        <RecentDeviceFiles
+          days={14}
+          onAddToRecord={handleAddRecentFile}
+        />
+      </Drawer>
     </Modal>
   );
 };

@@ -67,6 +67,36 @@ pub struct Currency {
     pub symbol: Option<String>,
 }
 
+// T032: FileAccessHistory model - tracks device-generated files for crash protection
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct FileAccessHistory {
+    pub id: i64,
+    pub file_id: String,
+    pub original_name: String,
+    pub file_path: String,
+    pub file_size: Option<i64>,
+    pub mime_type: Option<String>,
+    pub device_type: String,
+    pub device_name: String,
+    pub connection_method: Option<String>,
+    pub received_at: DateTime<Utc>,
+    pub first_attached_to_record_id: Option<i64>,
+    pub first_attached_at: Option<DateTime<Utc>>,
+    pub attachment_count: i32,
+    pub last_accessed_at: DateTime<Utc>,
+}
+
+// File access history with medical record details
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileAccessHistoryWithRecord {
+    #[serde(flatten)]
+    pub file_history: FileAccessHistory,
+    pub patient_name: Option<String>,
+    pub record_name: Option<String>,
+}
+
 // DTOs for creating and updating records
 
 /// Device data for PDF generation

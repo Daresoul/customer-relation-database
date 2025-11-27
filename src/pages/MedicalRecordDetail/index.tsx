@@ -1,12 +1,13 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Layout, Card, Typography, Space, Button, Alert, Spin, Table, Tag, Descriptions, App, Switch, Breadcrumb } from 'antd';
+import { Layout, Card, Typography, Space, Button, Alert, Spin, Table, Tag, Descriptions, App, Switch, Breadcrumb, Drawer } from 'antd';
 import { invoke, convertFileSrc } from '@tauri-apps/api/tauri';
 import { useTranslation } from 'react-i18next';
 import PdfInlineViewer from '@/components/PdfInlineViewer';
 import PdfMultiPagePreview from '@/components/PdfMultiPagePreview';
-import { HomeOutlined, ArrowLeftOutlined, EditOutlined, SaveOutlined, CloseOutlined, ReloadOutlined } from '@ant-design/icons';
-import { useMedicalRecord, useUpdateMedicalRecord, useCurrencies } from '@/hooks/useMedicalRecords';
+import RecentDeviceFiles from '@/components/RecentDeviceFiles';
+import { HomeOutlined, ArrowLeftOutlined, EditOutlined, SaveOutlined, CloseOutlined, ReloadOutlined, HistoryOutlined } from '@ant-design/icons';
+import { useMedicalRecord, useUpdateMedicalRecord, useCurrencies, useUploadAttachment } from '@/hooks/useMedicalRecords';
 import { MedicalService } from '@/services/medicalService';
 import type { MedicalAttachment } from '@/types/medical';
 import MedicalRecordForm from '@/components/MedicalRecordModal/MedicalRecordForm';
@@ -235,6 +236,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
 
   const { data, isLoading, isError, error, refetch } = useMedicalRecord(recordId, true);
   const updateMutation = useUpdateMedicalRecord();
+  const uploadMutation = useUploadAttachment();
   const { data: currencies } = useCurrencies();
   const [isEditing, setIsEditing] = useState(false);
   const [selectedVersion, setSelectedVersion] = useState<number | null>(null);
@@ -242,6 +244,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
   const [showDiffs, setShowDiffs] = useState(false);
   const [displayRecord, setDisplayRecord] = useState<MedicalRecord | null>(null);
   const [regeneratingId, setRegeneratingId] = useState<number | null>(null);
+  const [recentFilesDrawerOpen, setRecentFilesDrawerOpen] = useState(false);
 
   const record = data?.record;
   const history = (data?.history || []) as MedicalRecordHistory[];
@@ -444,6 +447,47 @@ export const MedicalRecordDetailPage: React.FC = () => {
       });
     } finally {
       setRegeneratingId(null);
+    }
+  };
+
+  const handleAddRecentFile = async (fileId: string, originalName: string) => {
+    try {
+      console.log('[MedicalRecordDetail] Adding recent file:', fileId, originalName);
+
+      // Fetch the file data from backend using the fileId
+      const fileData = await MedicalService.getDeviceFileById(fileId);
+
+      // Create a File object from the fetched data
+      const file = new File([new Uint8Array(fileData.fileData)], originalName, {
+        type: fileData.mimeType || 'application/octet-stream',
+      });
+
+      // Upload the file as an attachment to this medical record
+      await uploadMutation.mutateAsync({
+        medicalRecordId: recordId,
+        file,
+        attachmentType: 'file', // Mark as regular file, not test_result
+      });
+
+      notification.success({
+        message: t('common:success'),
+        description: `Added ${originalName} to medical record`,
+        placement: 'bottomRight',
+        duration: 3,
+      });
+
+      setRecentFilesDrawerOpen(false);
+
+      // Refresh to show the new attachment
+      await refetch();
+    } catch (error) {
+      console.error('[MedicalRecordDetail] Failed to add recent file:', error);
+      notification.error({
+        message: t('common:error'),
+        description: 'Failed to add file from history',
+        placement: 'bottomRight',
+        duration: 5,
+      });
     }
   };
 
@@ -735,15 +779,26 @@ export const MedicalRecordDetailPage: React.FC = () => {
       <Card
         title={t('medical:fields.attachments')}
         className={styles.marginTop16}
-        extra={hasDeviceDataAttachments && (
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={handleRegeneratePdf}
-            loading={regeneratingId === -1}
-          >
-            {t('medical:actions.regeneratePdf')}
-          </Button>
-        )}
+        extra={
+          <Space>
+            <Button
+              type="link"
+              icon={<HistoryOutlined />}
+              onClick={() => setRecentFilesDrawerOpen(true)}
+            >
+              Browse Recent Files
+            </Button>
+            {hasDeviceDataAttachments && (
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={handleRegeneratePdf}
+                loading={regeneratingId === -1}
+              >
+                {t('medical:actions.regeneratePdf')}
+              </Button>
+            )}
+          </Space>
+        }
       >
         <Table
           size="small"
@@ -885,6 +940,20 @@ export const MedicalRecordDetailPage: React.FC = () => {
           <Text type="secondary">{t('medical:detail.noHistory')}</Text>
         )}
       </Card>
+
+      {/* Recent Files Drawer */}
+      <Drawer
+        title="Recent Device Files (Last 14 Days)"
+        placement="right"
+        width={800}
+        onClose={() => setRecentFilesDrawerOpen(false)}
+        open={recentFilesDrawerOpen}
+      >
+        <RecentDeviceFiles
+          days={14}
+          onAddToRecord={handleAddRecentFile}
+        />
+      </Drawer>
     </Content>
   );
 };

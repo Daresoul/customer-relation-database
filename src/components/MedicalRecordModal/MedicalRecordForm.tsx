@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Form, Input, Select, Button, Space, Divider, InputNumber, List, Typography, Upload } from 'antd';
-import { SaveOutlined, CloseOutlined, UploadOutlined, DeleteOutlined, InboxOutlined } from '@ant-design/icons';
+import { Form, Input, Select, Button, Space, Divider, InputNumber, List, Typography, Upload, Drawer, App } from 'antd';
+import { SaveOutlined, CloseOutlined, UploadOutlined, DeleteOutlined, InboxOutlined, HistoryOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import FileUpload from '../FileUpload/FileUpload';
 import FileAttachmentList from '../FileUpload/FileAttachmentList';
+import RecentDeviceFiles from '../RecentDeviceFiles';
 import { useCurrencies, useMedicalRecord } from '@/hooks/useMedicalRecords';
 import { useAppSettings } from '@/hooks/useAppSettings';
 import { MedicalService } from '@/services/medicalService';
@@ -36,9 +37,11 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
   recordId,
 }) => {
   const { t } = useTranslation(['medical', 'common', 'forms']);
+  const { notification } = App.useApp();
   const [form] = Form.useForm();
   const [recordType, setRecordType] = useState<string>(initialValues?.recordType || 'procedure');
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [recentFilesDrawerOpen, setRecentFilesDrawerOpen] = useState(false);
   const { data: currencies } = useCurrencies();
   const { settings } = useAppSettings();
 
@@ -95,6 +98,38 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
     } else if (value === 'procedure' && settings?.currencyId) {
       // Set default currency when switching to procedure
       form.setFieldValue('currencyId', settings.currencyId);
+    }
+  };
+
+  const handleAddRecentFile = async (fileId: string, originalName: string) => {
+    try {
+      // Fetch the file data from backend using the fileId
+      const fileData = await MedicalService.getDeviceFileById(fileId);
+
+      // Create a File object from the fetched data
+      const file = new File([new Uint8Array(fileData.fileData)], originalName, {
+        type: fileData.mimeType || 'application/octet-stream',
+      });
+
+      // Add to pending files
+      setPendingFiles(prev => [...prev, file]);
+
+      notification.success({
+        message: t('common:success'),
+        description: `Added ${originalName} to pending files`,
+        placement: 'bottomRight',
+        duration: 3,
+      });
+
+      setRecentFilesDrawerOpen(false);
+    } catch (error) {
+      console.error('[MedicalRecordForm] Failed to add recent file:', error);
+      notification.error({
+        message: t('common:error'),
+        description: 'Failed to add file from history',
+        placement: 'bottomRight',
+        duration: 5,
+      });
     }
   };
 
@@ -202,6 +237,14 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
       {!isEdit && (
         <div className={styles.filesSection}>
           <h4>{t('medical:fileAttachments')}</h4>
+          <Button
+            type="link"
+            icon={<HistoryOutlined />}
+            onClick={() => setRecentFilesDrawerOpen(true)}
+            style={{ marginBottom: 8, paddingLeft: 0 }}
+          >
+            Browse Recent Device Files
+          </Button>
           <Dragger
             beforeUpload={(file) => {
               const error = MedicalService.validateFile(file);
@@ -276,6 +319,20 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
           </Button>
         </Space>
       </Form.Item>
+
+      {/* Recent Files Drawer */}
+      <Drawer
+        title="Recent Device Files (Last 14 Days)"
+        placement="right"
+        width={800}
+        onClose={() => setRecentFilesDrawerOpen(false)}
+        open={recentFilesDrawerOpen}
+      >
+        <RecentDeviceFiles
+          days={14}
+          onAddToRecord={handleAddRecentFile}
+        />
+      </Drawer>
     </Form>
   );
 };

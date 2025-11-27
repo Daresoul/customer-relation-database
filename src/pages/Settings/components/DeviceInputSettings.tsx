@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Table, Button, Typography, Space, Tag, Modal, Form, Input, Select, InputNumber, Switch, Popconfirm, AutoComplete } from 'antd';
-import { UsbOutlined, ReloadOutlined, ApiOutlined, PlusOutlined, EditOutlined, DeleteOutlined, PoweroffOutlined, FolderOpenOutlined } from '@ant-design/icons';
+import { UsbOutlined, ReloadOutlined, ApiOutlined, PlusOutlined, EditOutlined, DeleteOutlined, PoweroffOutlined, FolderOpenOutlined, FileTextOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@tauri-apps/api';
 import { open } from '@tauri-apps/api/dialog';
 import styles from '../Settings.module.css';
+import RecentDeviceFiles from '../../../components/RecentDeviceFiles';
 import {
   useDeviceIntegrations,
   useCreateDeviceIntegration,
@@ -622,7 +623,7 @@ const DeviceInputSettings: React.FC = () => {
             <Table
               columns={columns}
               dataSource={ports}
-              rowKey={(record, index) => `${record.port_name || 'unknown'}-${index}`}
+              rowKey={(record) => record.port_name || `unknown-${Math.random()}`}
               loading={loading}
               pagination={false}
               size="middle"
@@ -655,6 +656,20 @@ const DeviceInputSettings: React.FC = () => {
             pagination={false}
             size="middle"
           />
+        </Card>
+
+        <Card
+          title={
+            <span className={styles.cardTitle}>
+              <FileTextOutlined /> Recent Device Files (Last 14 Days)
+            </span>
+          }
+          className={styles.settingsCard}
+        >
+          <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
+            Files received from devices are tracked here for crash protection and recovery. You can view details and attach unprocessed files to medical records.
+          </Text>
+          <RecentDeviceFiles days={14} />
         </Card>
       </Space>
 

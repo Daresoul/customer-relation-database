@@ -291,4 +291,15 @@ export class MedicalService {
 
     return '📄';
   }
+
+  /**
+   * Download device file by file_id from file history
+   */
+  static async getDeviceFileById(fileId: string): Promise<DownloadAttachmentResponse> {
+    const response = await invoke<DownloadAttachmentResponse>('download_device_file', {
+      file_id: fileId,
+      fileId: fileId as any,
+    });
+    return response;
+  }
 }

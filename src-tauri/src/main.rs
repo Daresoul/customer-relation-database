@@ -243,6 +243,13 @@ fn main() {
             commands::update_device_integration,
             commands::delete_device_integration,
             commands::toggle_device_integration_enabled,
+            // File history commands
+            commands::get_recent_device_files,
+            commands::get_file_history,
+            commands::record_device_file_access,
+            commands::update_file_attachment,
+            commands::cleanup_old_file_history,
+            commands::download_device_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

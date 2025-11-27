@@ -9,6 +9,9 @@ use tauri::{AppHandle, Manager};
 use chrono::Utc;
 use crate::services::device_input::PortType::HIDDevice;
 use crate::services::device_parser::DeviceParserService;
+use crate::services::file_storage::FileStorageService;
+use crate::commands::file_history::record_device_file_access_internal;
+use crate::database::connection::DatabasePool;
 
 // Track active listeners to prevent duplicates
 static ACTIVE_LISTENERS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
@@ -476,6 +479,46 @@ fn handle_device_data(app_handle: &AppHandle, data: &[u8], device_name: &str, de
             if let Err(e) = app_handle.emit_all("device-data-received", &device_data) {
                 eprintln!("Failed to emit device data: {}", e);
             }
+
+            // Save file and track access (async)
+            let app_handle_track = app_handle.clone();
+            let file_name = device_data.original_file_name.clone();
+            let file_data_vec = device_data.file_data.clone();
+            let device_type_str = device_data.device_type.clone();
+            let device_name_str = device_data.device_name.clone();
+            let mime_type = device_data.mime_type.clone();
+
+            tauri::async_runtime::spawn(async move {
+                // Get database pool from Tauri state
+                if let Some(pool) = app_handle_track.try_state::<DatabasePool>() {
+                    // Save file to storage
+                    match FileStorageService::save_device_file(&app_handle_track, &file_name, &file_data_vec) {
+                        Ok((file_id, file_path)) => {
+                            // Track file access
+                            let pool_guard = pool.lock().await;
+                            let file_size = file_data_vec.len() as i64;
+                            if let Err(e) = record_device_file_access_internal(
+                                &*pool_guard,
+                                file_id,
+                                file_name,
+                                file_path,
+                                Some(file_size),
+                                Some(mime_type),
+                                device_type_str,
+                                device_name_str,
+                                Some("serial_port".to_string()),
+                            ).await {
+                                eprintln!("Failed to record file access: {}", e);
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to save device file: {}", e);
+                        }
+                    }
+                } else {
+                    eprintln!("Failed to get database pool from app state");
+                }
+            });
         }
         Err(e) => {
             eprintln!("Failed to parse device data: {}", e);

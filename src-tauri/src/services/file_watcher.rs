@@ -9,6 +9,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::Manager;
 use serde::{Serialize, Deserialize};
 use crate::services::device_parser::DeviceParserService;
+use crate::services::file_storage::FileStorageService;
+use crate::commands::file_history::record_device_file_access_internal;
 
 // Track connection status for file watchers
 static FILE_WATCHER_STATUS: OnceLock<Mutex<HashMap<i64, FileWatcherStatus>>> = OnceLock::new();
@@ -174,6 +176,7 @@ impl FileWatcherService {
         let device_type_clone = device_type.to_string();
         let _dir_clone = directory.to_string();
         let app_handle_clone = self.app_handle.clone();
+        let pool_clone = self.pool.clone();
 
         // Create a deduplication cache (file path -> last processed timestamp)
         let processed_files: Arc<Mutex<HashMap<String, u64>>> = Arc::new(Mutex::new(HashMap::new()));
@@ -237,6 +240,41 @@ impl FileWatcherService {
                                                         if let Err(e) = app_handle.emit_all("device-data-received", &device_data) {
                                                             eprintln!("Failed to emit event: {}", e);
                                                         }
+
+                                                        // Save file and track access (async)
+                                                        let app_handle_track = app_handle.clone();
+                                                        let pool_track = pool_clone.clone();
+                                                        let file_name_track = file_name_str.clone();
+                                                        let file_data_track = file_data.clone();
+                                                        let device_type_track = device_type_clone.clone();
+                                                        let device_name_track = name_clone.clone();
+                                                        let mime_type_track = device_data.mime_type.clone();
+
+                                                        tauri::async_runtime::spawn(async move {
+                                                            // Save file to storage
+                                                            match FileStorageService::save_device_file(&app_handle_track, &file_name_track, &file_data_track) {
+                                                                Ok((file_id, file_path)) => {
+                                                                    // Track file access
+                                                                    let file_size = file_data_track.len() as i64;
+                                                                    if let Err(e) = record_device_file_access_internal(
+                                                                        &pool_track,
+                                                                        file_id,
+                                                                        file_name_track,
+                                                                        file_path,
+                                                                        Some(file_size),
+                                                                        Some(mime_type_track),
+                                                                        device_type_track,
+                                                                        device_name_track,
+                                                                        Some("file_watch".to_string()),
+                                                                    ).await {
+                                                                        eprintln!("Failed to record file access: {}", e);
+                                                                    }
+                                                                }
+                                                                Err(e) => {
+                                                                    eprintln!("Failed to save device file: {}", e);
+                                                                }
+                                                            }
+                                                        });
                                                     }
                                                 }
                                                 Err(e) => {
