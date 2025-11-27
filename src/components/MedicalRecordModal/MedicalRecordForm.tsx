@@ -19,7 +19,7 @@ const { Dragger } = Upload;
 
 interface MedicalRecordFormProps {
   initialValues?: MedicalRecord;
-  onSubmit: (values: CreateMedicalRecordInput | UpdateMedicalRecordInput, files?: File[]) => void;
+  onSubmit: (values: CreateMedicalRecordInput | UpdateMedicalRecordInput, files?: File[], fileSourceIds?: Map<string, string>) => void;
   onCancel: () => void;
   loading: boolean;
   isEdit: boolean;
@@ -41,8 +41,10 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
   const [form] = Form.useForm();
   const [recordType, setRecordType] = useState<string>(initialValues?.recordType || 'procedure');
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [fileSourceIds, setFileSourceIds] = useState<Map<string, string>>(new Map()); // Maps file.name -> sourceFileId
   const [recentFilesDrawerOpen, setRecentFilesDrawerOpen] = useState(false);
-  const { data: currencies } = useCurrencies();
+  const [refreshRecentFiles, setRefreshRecentFiles] = useState<(() => void) | null>(null);
+  const { data: currencies} = useCurrencies();
   const { settings } = useAppSettings();
 
   // Removed debug log to avoid circular reference issues
@@ -86,7 +88,7 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
           currencyId: values.currencyId,
         } as CreateMedicalRecordInput;
 
-    onSubmit(formData, !isEdit ? pendingFiles : undefined);
+    onSubmit(formData, !isEdit ? pendingFiles : undefined, !isEdit ? fileSourceIds : undefined);
   };
 
   const handleRecordTypeChange = (value: string) => {
@@ -113,6 +115,9 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
 
       // Add to pending files
       setPendingFiles(prev => [...prev, file]);
+
+      // Track the source file ID for this file
+      setFileSourceIds(prev => new Map(prev).set(originalName, fileId));
 
       notification.success({
         message: t('common:success'),

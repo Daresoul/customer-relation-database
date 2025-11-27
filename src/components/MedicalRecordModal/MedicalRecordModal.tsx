@@ -53,7 +53,7 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
     }
   }, [isEdit, isLoadingRecord, isError, error, recordDetail]);
 
-  const handleSubmit = async (values: CreateMedicalRecordInput | UpdateMedicalRecordInput, files?: File[]) => {
+  const handleSubmit = async (values: CreateMedicalRecordInput | UpdateMedicalRecordInput, files?: File[], fileSourceIds?: Map<string, string>) => {
     setLoading(true);
     try {
       if (isEdit && recordId) {
@@ -74,6 +74,7 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
             uploadMutation.mutateAsync({
               medicalRecordId: result.id,
               file,
+              sourceFileId: fileSourceIds?.get(file.name), // Pass the source file ID if it exists
             })
           );
 

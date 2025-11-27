@@ -245,6 +245,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
   const [displayRecord, setDisplayRecord] = useState<MedicalRecord | null>(null);
   const [regeneratingId, setRegeneratingId] = useState<number | null>(null);
   const [recentFilesDrawerOpen, setRecentFilesDrawerOpen] = useState(false);
+  const [refreshRecentFiles, setRefreshRecentFiles] = useState<(() => void) | null>(null);
 
   const record = data?.record;
   const history = (data?.history || []) as MedicalRecordHistory[];
@@ -467,6 +468,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
         medicalRecordId: recordId,
         file,
         attachmentType: 'file', // Mark as regular file, not test_result
+        sourceFileId: fileId, // Link to the file_access_history entry
       });
 
       notification.success({
@@ -480,6 +482,11 @@ export const MedicalRecordDetailPage: React.FC = () => {
 
       // Refresh to show the new attachment
       await refetch();
+
+      // Refresh the recent files list to update the status
+      if (refreshRecentFiles) {
+        refreshRecentFiles();
+      }
     } catch (error) {
       console.error('[MedicalRecordDetail] Failed to add recent file:', error);
       notification.error({
@@ -952,6 +959,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
         <RecentDeviceFiles
           days={14}
           onAddToRecord={handleAddRecentFile}
+          onRefreshNeeded={(fn) => setRefreshRecentFiles(() => fn)}
         />
       </Drawer>
     </Content>
