@@ -856,3 +856,172 @@ pub async fn regenerate_pdf_from_medical_record(
 
     Ok(pdf_attachment)
 }
+
+// ============================================================================
+// Record Template Commands
+// ============================================================================
+
+#[tauri::command]
+pub async fn get_record_templates(
+    pool: State<'_, DatabasePool>,
+    recordType: Option<String>,
+) -> Result<Vec<RecordTemplate>, String> {
+    let pool = pool.lock().await;
+
+    let query = if let Some(ref rt) = recordType {
+        sqlx::query_as::<_, RecordTemplate>(
+            "SELECT * FROM record_templates WHERE record_type = ? ORDER BY title ASC"
+        )
+        .bind(rt)
+    } else {
+        sqlx::query_as::<_, RecordTemplate>(
+            "SELECT * FROM record_templates ORDER BY record_type, title ASC"
+        )
+    };
+
+    let templates = query
+        .fetch_all(&*pool)
+        .await
+        .map_err(|e| format!("Failed to fetch record templates: {}", e))?;
+
+    Ok(templates)
+}
+
+#[tauri::command]
+pub async fn search_record_templates(
+    pool: State<'_, DatabasePool>,
+    searchTerm: String,
+    recordType: Option<String>,
+) -> Result<Vec<RecordTemplate>, String> {
+    let pool = pool.lock().await;
+
+    let search_pattern = format!("%{}%", searchTerm);
+
+    let query = if let Some(ref rt) = recordType {
+        sqlx::query_as::<_, RecordTemplate>(
+            "SELECT * FROM record_templates WHERE record_type = ? AND (title LIKE ? OR description LIKE ?) ORDER BY title ASC"
+        )
+        .bind(rt)
+        .bind(&search_pattern)
+        .bind(&search_pattern)
+    } else {
+        sqlx::query_as::<_, RecordTemplate>(
+            "SELECT * FROM record_templates WHERE title LIKE ? OR description LIKE ? ORDER BY record_type, title ASC"
+        )
+        .bind(&search_pattern)
+        .bind(&search_pattern)
+    };
+
+    let templates = query
+        .fetch_all(&*pool)
+        .await
+        .map_err(|e| format!("Failed to search record templates: {}", e))?;
+
+    Ok(templates)
+}
+
+#[tauri::command]
+pub async fn create_record_template(
+    pool: State<'_, DatabasePool>,
+    input: CreateRecordTemplateInput,
+) -> Result<RecordTemplate, String> {
+    let pool = pool.lock().await;
+
+    // Validate record type
+    if input.record_type != "procedure" && input.record_type != "note" && input.record_type != "test_result" {
+        return Err(format!("Invalid record type: {}. Must be 'procedure', 'note', or 'test_result'", input.record_type));
+    }
+
+    let result = sqlx::query(
+        "INSERT INTO record_templates (record_type, title, description, price, currency_id) VALUES (?, ?, ?, ?, ?)"
+    )
+    .bind(&input.record_type)
+    .bind(&input.title)
+    .bind(&input.description)
+    .bind(input.price)
+    .bind(input.currency_id)
+    .execute(&*pool)
+    .await
+    .map_err(|e| format!("Failed to create record template: {}", e))?;
+
+    let template_id = result.last_insert_rowid();
+
+    let template = sqlx::query_as::<_, RecordTemplate>(
+        "SELECT * FROM record_templates WHERE id = ?"
+    )
+    .bind(template_id)
+    .fetch_one(&*pool)
+    .await
+    .map_err(|e| format!("Failed to fetch created template: {}", e))?;
+
+    Ok(template)
+}
+
+#[tauri::command]
+pub async fn update_record_template(
+    pool: State<'_, DatabasePool>,
+    templateId: i64,
+    input: UpdateRecordTemplateInput,
+) -> Result<RecordTemplate, String> {
+    let pool = pool.lock().await;
+
+    // Simplified update using individual fields
+    if let Some(title) = input.title {
+        sqlx::query("UPDATE record_templates SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+            .bind(&title)
+            .bind(templateId)
+            .execute(&*pool)
+            .await
+            .map_err(|e| format!("Failed to update template: {}", e))?;
+    }
+    if let Some(description) = input.description {
+        sqlx::query("UPDATE record_templates SET description = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+            .bind(&description)
+            .bind(templateId)
+            .execute(&*pool)
+            .await
+            .map_err(|e| format!("Failed to update template: {}", e))?;
+    }
+    if input.price.is_some() {
+        sqlx::query("UPDATE record_templates SET price = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+            .bind(input.price)
+            .bind(templateId)
+            .execute(&*pool)
+            .await
+            .map_err(|e| format!("Failed to update template: {}", e))?;
+    }
+    if input.currency_id.is_some() {
+        sqlx::query("UPDATE record_templates SET currency_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+            .bind(input.currency_id)
+            .bind(templateId)
+            .execute(&*pool)
+            .await
+            .map_err(|e| format!("Failed to update template: {}", e))?;
+    }
+
+    let template = sqlx::query_as::<_, RecordTemplate>(
+        "SELECT * FROM record_templates WHERE id = ?"
+    )
+    .bind(templateId)
+    .fetch_one(&*pool)
+    .await
+    .map_err(|e| format!("Failed to fetch updated template: {}", e))?;
+
+    Ok(template)
+}
+
+#[tauri::command]
+pub async fn delete_record_template(
+    pool: State<'_, DatabasePool>,
+    templateId: i64,
+) -> Result<(), String> {
+    let pool = pool.lock().await;
+
+    sqlx::query("DELETE FROM record_templates WHERE id = ?")
+        .bind(templateId)
+        .execute(&*pool)
+        .await
+        .map_err(|e| format!("Failed to delete template: {}", e))?;
+
+    Ok(())
+}

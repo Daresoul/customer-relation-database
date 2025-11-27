@@ -4,6 +4,7 @@
     "business": "Бизнис",
     "appointments": "Термини",
     "rooms": "Соби",
+    "templates": "Шаблони за записи",
     "updates": "Ажурирања"
   },
   "updates": {
@@ -69,5 +70,14 @@
   },
   "rooms": {
     "confirmDelete": "Дали сте сигурни дека сакате да ја избришете оваа соба?"
+  },
+  "templates": {
+    "title": "Шаблони за записи",
+    "createTemplate": "Создај шаблон",
+    "editTemplate": "Измени шаблон",
+    "confirmDelete": "Дали сте сигурни дека сакате да го избришете овој шаблон?",
+    "totalTemplates": "шаблони",
+    "titlePlaceholder": "Внесете наслов на шаблон",
+    "descriptionPlaceholder": "Внесете опис на шаблон"
   }
 }

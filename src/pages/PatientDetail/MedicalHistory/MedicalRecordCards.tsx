@@ -88,6 +88,7 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
 
   const renderRecordCard = (record: MedicalRecord) => {
     const isProcedure = record.recordType === 'procedure';
+    const isTestResult = record.recordType === 'test_result';
 
     const menuItems = [
       {
@@ -98,6 +99,23 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
       },
     ];
 
+    // Determine icon based on type
+    const recordIcon = isProcedure ? (
+      <MedicineBoxOutlined className={styles.procedureIcon} />
+    ) : isTestResult ? (
+      <FileTextOutlined className={styles.testResultIcon} />
+    ) : (
+      <FileTextOutlined className={styles.noteIcon} />
+    );
+
+    // Determine tag color and label
+    const getTypeTag = () => {
+      if (isProcedure) return { color: 'blue', label: t('recordTypes.procedure') };
+      if (isTestResult) return { color: 'purple', label: t('recordTypes.testResult') };
+      return { color: 'green', label: t('recordTypes.note') };
+    };
+    const typeTag = getTypeTag();
+
     return (
       <Card
         key={record.id}
@@ -105,11 +123,7 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
         title={
           <div className={styles.cardTitleRow}>
             <Space>
-              {isProcedure ? (
-                <MedicineBoxOutlined className={styles.procedureIcon} />
-              ) : (
-                <FileTextOutlined className={styles.noteIcon} />
-              )}
+              {recordIcon}
               <Title level={5} className={styles.cardTitleText}>
                 <Link
                   to={`/medical-records/${record.id}`}
@@ -126,8 +140,8 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
               </Title>
             </Space>
             <Space>
-              <Tag color={isProcedure ? 'blue' : 'green'}>
-                {isProcedure ? t('recordTypes.procedure') : t('recordTypes.note')}
+              <Tag color={typeTag.color}>
+                {typeTag.label}
               </Tag>
               {record.isArchived && <Tag color="orange">{t('status.archived')}</Tag>}
               <Dropdown

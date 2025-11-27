@@ -103,6 +103,7 @@ const MedicalHistorySection: React.FC<MedicalHistorySectionProps> = ({
             <Option value="all">{t('detail.medicalHistory.filters.allTypes')}</Option>
             <Option value="procedure">{t('detail.medicalHistory.filters.procedures')}</Option>
             <Option value="note">{t('detail.medicalHistory.filters.notes')}</Option>
+            <Option value="test_result">{t('detail.medicalHistory.filters.testResults')}</Option>
           </Select>
 
           <Select

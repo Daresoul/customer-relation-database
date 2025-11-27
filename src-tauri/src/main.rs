@@ -168,6 +168,12 @@ fn main() {
             commands::revert_medical_record,
             commands::regenerate_pdf_from_attachment,
             commands::regenerate_pdf_from_medical_record,
+            // Record template commands
+            commands::get_record_templates,
+            commands::search_record_templates,
+            commands::create_record_template,
+            commands::update_record_template,
+            commands::delete_record_template,
             // Settings commands
             commands::get_app_settings,
             commands::update_app_settings,

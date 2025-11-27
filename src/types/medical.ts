@@ -129,3 +129,30 @@ export interface PaginationParams {
   page?: number;
   pageSize?: number;
 }
+
+// Record Template Types
+export interface RecordTemplate {
+  id: number;
+  recordType: RecordType;
+  title: string;
+  description: string;
+  price?: number;
+  currencyId?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateRecordTemplateInput {
+  recordType: RecordType;
+  title: string;
+  description: string;
+  price?: number;
+  currencyId?: number;
+}
+
+export interface UpdateRecordTemplateInput {
+  title?: string;
+  description?: string;
+  price?: number;
+  currencyId?: number;
+}
