@@ -221,10 +221,16 @@ fn scan_windows_registry_ports() -> Result<Vec<PortInfo>, String> {
         .filter_map(|x| x.ok())
         .filter_map(|(name, value)| {
             // value is a RegValue, extract String from it
-            if let Ok(port_name) = String::try_from(value) {
-                Some((name, port_name))
-            } else {
-                None
+            match value {
+                winreg::RegValue { vtype: winreg::enums::RegType::REG_SZ, bytes } => {
+                    // Convert bytes to String (UTF-16 LE encoded)
+                    let wide: Vec<u16> = bytes.chunks_exact(2)
+                        .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+                        .take_while(|&c| c != 0) // Stop at null terminator
+                        .collect();
+                    String::from_utf16(&wide).ok().map(|s| (name, s))
+                },
+                _ => None,
             }
         })
     {
