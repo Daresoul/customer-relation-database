@@ -203,7 +203,7 @@ impl JavaPdfService {
         // so we reference them without the "resources/" prefix
         let resource_path = app_handle
             .path_resolver()
-            .resolve_resource("pdf-generator.jar")
+            .resolve_resource("resources/pdf-generator.jar")
             .ok_or_else(|| {
                 "Could not resolve pdf-generator.jar resource path. Ensure it's bundled in src-tauri/resources/".to_string()
             })?;
