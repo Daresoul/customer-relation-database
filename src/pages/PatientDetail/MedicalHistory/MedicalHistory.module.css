@@ -194,6 +194,11 @@
   color: #52c41a;
 }
 
+.testResultIcon {
+  font-size: 18px;
+  color: #722ed1;
+}
+
 .cardTitleText {
   margin: 0;
 }

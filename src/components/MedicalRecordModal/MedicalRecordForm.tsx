@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Form, Input, Select, Button, Space, Divider, InputNumber, List, Typography, Upload, Drawer, App, AutoComplete } from 'antd';
+import { Form, Input, Select, Button, Space, Divider, InputNumber, List, Typography, Upload, Drawer, App, AutoComplete, Spin, Alert } from 'antd';
 import { SaveOutlined, CloseOutlined, UploadOutlined, DeleteOutlined, InboxOutlined, HistoryOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import FileUpload from '../FileUpload/FileUpload';
@@ -8,8 +8,9 @@ import RecentDeviceFiles from '../RecentDeviceFiles';
 import { useCurrencies, useMedicalRecord } from '@/hooks/useMedicalRecords';
 import { useSearchRecordTemplates } from '@/hooks/useRecordTemplates';
 import { useAppSettings } from '@/hooks/useAppSettings';
+import { useDebounce } from '@/hooks/useDebounce';
 import { MedicalService } from '@/services/medicalService';
-import type { MedicalRecord, CreateMedicalRecordInput, UpdateMedicalRecordInput, RecordTemplate } from '@/types/medical';
+import type { MedicalRecord, CreateMedicalRecordInput, UpdateMedicalRecordInput, RecordTemplate, RecordType } from '@/types/medical';
 import type { UploadFile } from 'antd';
 import styles from './MedicalRecordForm.module.css';
 
@@ -40,15 +41,16 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
   const { t } = useTranslation(['medical', 'common', 'forms']);
   const { notification } = App.useApp();
   const [form] = Form.useForm();
-  const [recordType, setRecordType] = useState<string>(initialValues?.recordType || 'procedure');
+  const [recordType, setRecordType] = useState<RecordType>(initialValues?.recordType || 'procedure');
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [fileSourceIds, setFileSourceIds] = useState<Map<string, string>>(new Map()); // Maps file.name -> sourceFileId
   const [recentFilesDrawerOpen, setRecentFilesDrawerOpen] = useState(false);
   const [refreshRecentFiles, setRefreshRecentFiles] = useState<(() => void) | null>(null);
   const [titleSearchTerm, setTitleSearchTerm] = useState<string>('');
+  const debouncedSearchTerm = useDebounce(titleSearchTerm, 300);
   const { data: currencies} = useCurrencies();
   const { settings } = useAppSettings();
-  const { data: searchedTemplates } = useSearchRecordTemplates(titleSearchTerm, recordType as any);
+  const { data: searchedTemplates, isLoading: isSearching, isError: isSearchError, error: searchError } = useSearchRecordTemplates(debouncedSearchTerm, recordType);
 
   // Removed debug log to avoid circular reference issues
   const { data: recordDetail, refetch: refetchRecord } = useMedicalRecord(
@@ -190,26 +192,40 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
         <AutoComplete
           options={searchedTemplates?.map(template => ({
             value: template.title,
-            label: template.title,
-            desc: template.description,
+            label: (
+              <div>
+                <div style={{ fontWeight: 500 }}>{template.title}</div>
+                <div style={{ fontSize: '12px', color: '#888' }}>
+                  {template.description?.length > 60
+                    ? template.description.substring(0, 60) + '...'
+                    : template.description || ''}
+                </div>
+              </div>
+            ),
           }))}
           onSearch={setTitleSearchTerm}
           onSelect={handleTemplateSelect}
           placeholder={recordType === 'procedure' ? t('medical:placeholders.procedureName') : t('medical:placeholders.noteTitle')}
           filterOption={false}
-        >
-          {searchedTemplates?.map(template => (
-            <AutoComplete.Option key={template.id} value={template.title}>
-              <div>
-                <div style={{ fontWeight: 500 }}>{template.title}</div>
-                <div style={{ fontSize: '12px', color: '#888' }}>
-                  {template.description.length > 60 ? template.description.substring(0, 60) + '...' : template.description}
-                </div>
-              </div>
-            </AutoComplete.Option>
-          ))}
-        </AutoComplete>
+          notFoundContent={
+            isSearching ? <Spin size="small" /> :
+            debouncedSearchTerm.length < 2 ? t('medical:autocomplete.typeToSearch') || 'Type at least 2 characters to search' :
+            searchedTemplates?.length === 0 ? t('medical:autocomplete.noTemplatesFound') || 'No templates found' :
+            null
+          }
+          aria-label={recordType === 'procedure' ? t('medical:fields.procedureName') : t('medical:fields.title')}
+        />
       </Form.Item>
+
+      {isSearchError && (
+        <Alert
+          message={t('common:error')}
+          description={t('medical:errors.templateSearchFailed') || 'Failed to search templates'}
+          type="error"
+          style={{ marginBottom: 16 }}
+          closable
+        />
+      )}
 
       <Form.Item
         name="description"

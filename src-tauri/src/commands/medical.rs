@@ -864,6 +864,7 @@ pub async fn regenerate_pdf_from_medical_record(
 #[tauri::command]
 pub async fn get_record_templates(
     pool: State<'_, DatabasePool>,
+    #[allow(non_snake_case)]
     recordType: Option<String>,
 ) -> Result<Vec<RecordTemplate>, String> {
     let pool = pool.lock().await;
@@ -890,7 +891,9 @@ pub async fn get_record_templates(
 #[tauri::command]
 pub async fn search_record_templates(
     pool: State<'_, DatabasePool>,
+    #[allow(non_snake_case)]
     searchTerm: String,
+    #[allow(non_snake_case)]
     recordType: Option<String>,
 ) -> Result<Vec<RecordTemplate>, String> {
     let pool = pool.lock().await;
@@ -960,42 +963,34 @@ pub async fn create_record_template(
 #[tauri::command]
 pub async fn update_record_template(
     pool: State<'_, DatabasePool>,
+    #[allow(non_snake_case)]
     templateId: i64,
     input: UpdateRecordTemplateInput,
 ) -> Result<RecordTemplate, String> {
     let pool = pool.lock().await;
 
-    // Simplified update using individual fields
-    if let Some(title) = input.title {
-        sqlx::query("UPDATE record_templates SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
-            .bind(&title)
-            .bind(templateId)
-            .execute(&*pool)
-            .await
-            .map_err(|e| format!("Failed to update template: {}", e))?;
-    }
-    if let Some(description) = input.description {
-        sqlx::query("UPDATE record_templates SET description = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
-            .bind(&description)
-            .bind(templateId)
-            .execute(&*pool)
-            .await
-            .map_err(|e| format!("Failed to update template: {}", e))?;
-    }
-    if input.price.is_some() {
-        sqlx::query("UPDATE record_templates SET price = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
-            .bind(input.price)
-            .bind(templateId)
-            .execute(&*pool)
-            .await
-            .map_err(|e| format!("Failed to update template: {}", e))?;
-    }
-    if input.currency_id.is_some() {
-        sqlx::query("UPDATE record_templates SET currency_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
-            .bind(input.currency_id)
-            .bind(templateId)
-            .execute(&*pool)
-            .await
+    // Build dynamic UPDATE query for efficiency
+    let mut set_clauses = Vec::new();
+
+    if input.title.is_some() { set_clauses.push("title = ?"); }
+    if input.description.is_some() { set_clauses.push("description = ?"); }
+    if input.price.is_some() { set_clauses.push("price = ?"); }
+    if input.currency_id.is_some() { set_clauses.push("currency_id = ?"); }
+
+    if !set_clauses.is_empty() {
+        let mut query_str = "UPDATE record_templates SET ".to_string();
+        query_str.push_str(&set_clauses.join(", "));
+        query_str.push_str(" WHERE id = ?");
+
+        let mut query = sqlx::query(&query_str);
+
+        if let Some(title) = input.title { query = query.bind(title); }
+        if let Some(description) = input.description { query = query.bind(description); }
+        if let Some(price) = input.price { query = query.bind(price); }
+        if let Some(currency_id) = input.currency_id { query = query.bind(currency_id); }
+        query = query.bind(templateId);
+
+        query.execute(&*pool).await
             .map_err(|e| format!("Failed to update template: {}", e))?;
     }
 
@@ -1013,6 +1008,7 @@ pub async fn update_record_template(
 #[tauri::command]
 pub async fn delete_record_template(
     pool: State<'_, DatabasePool>,
+    #[allow(non_snake_case)]
     templateId: i64,
 ) -> Result<(), String> {
     let pool = pool.lock().await;
