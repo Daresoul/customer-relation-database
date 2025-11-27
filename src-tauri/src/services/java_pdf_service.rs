@@ -6,6 +6,7 @@ use serde::{Serialize, Deserialize};
 use serde_json::Value;
 use std::path::PathBuf;
 use std::fs;
+use tauri::Manager;
 
 /// Java PDF service - calls the iText 5 JAR for PDF generation
 /// This provides 100% identical output to the original print-app
@@ -208,19 +209,36 @@ impl JavaPdfService {
                     }
                 }
 
-                // On Linux/Windows, resources are next to executable
-                #[cfg(not(target_os = "macos"))]
+                // On Windows, try _up_/resources/ directory (Tauri v1 bundling)
+                #[cfg(target_os = "windows")]
+                {
+                    let jar_path = exe_dir.join("_up_").join("resources").join("pdf-generator.jar");
+                    if jar_path.exists() {
+                        println!("   📦 Using production JAR (Windows _up_): {:?}", jar_path);
+                        return Ok(jar_path);
+                    }
+
+                    // Also try next to executable (fallback/legacy)
+                    let jar_path_legacy = exe_dir.join("pdf-generator.jar");
+                    if jar_path_legacy.exists() {
+                        println!("   📦 Using production JAR (Windows legacy): {:?}", jar_path_legacy);
+                        return Ok(jar_path_legacy);
+                    }
+                }
+
+                // On Linux, resources are next to executable
+                #[cfg(target_os = "linux")]
                 {
                     let jar_path = exe_dir.join("pdf-generator.jar");
                     if jar_path.exists() {
-                        println!("   📦 Using production JAR: {:?}", jar_path);
+                        println!("   📦 Using production JAR (Linux): {:?}", jar_path);
                         return Ok(jar_path);
                     }
                 }
             }
         }
 
-        Err("Could not find pdf-generator.jar - ensure it's bundled in src-tauri/resources/".to_string())
+        Err("Could not find pdf-generator.jar - ensure it's bundled in src-tauri/resources/. Searched: exe_dir/pdf-generator.jar (Linux), exe_dir/_up_/resources/pdf-generator.jar (Windows), ../Resources/pdf-generator.jar (macOS)".to_string())
     }
 
     /// Convert JSON Value to HashMap<String, String>
