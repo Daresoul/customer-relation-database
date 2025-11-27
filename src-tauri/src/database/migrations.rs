@@ -48,6 +48,7 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, "030_add_attachment_type", add_attachment_type_column).await?;
     run_migration(pool, "031_add_test_result_record_type", add_test_result_record_type).await?;
     run_migration(pool, "032_create_file_access_history", create_file_access_history_table).await?;
+    run_migration(pool, "033_create_record_templates", create_record_templates_table).await?;
 
     Ok(())
 }
@@ -1814,6 +1815,38 @@ fn create_file_access_history_table(pool: &SqlitePool) -> std::pin::Pin<Box<dyn 
             .await?;
 
         println!("Created file_access_history table for tracking device-generated files");
+        Ok(())
+    })
+}
+
+// Migration 033: Create record_templates table for medical record templates
+fn create_record_templates_table(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS record_templates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                record_type TEXT NOT NULL CHECK(record_type IN ('procedure', 'note', 'test_result')),
+                title TEXT NOT NULL,
+                description TEXT NOT NULL,
+                price REAL,
+                currency_id INTEGER,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (currency_id) REFERENCES currencies(id)
+            )
+        "#)
+        .execute(pool)
+        .await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_record_templates_record_type ON record_templates(record_type)")
+            .execute(pool)
+            .await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_record_templates_title ON record_templates(title)")
+            .execute(pool)
+            .await?;
+
+        println!("Created record_templates table for medical record templates");
         Ok(())
     })
 }

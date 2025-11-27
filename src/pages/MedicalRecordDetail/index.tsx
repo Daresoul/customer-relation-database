@@ -730,8 +730,8 @@ export const MedicalRecordDetailPage: React.FC = () => {
                 <>
                   <Descriptions column={2} size="middle">
                     <Descriptions.Item label={t('medical:fields.recordType')}>
-                      <Tag color={typeVal === 'procedure' ? 'blue' : 'green'}>
-                        {typeVal === 'procedure' ? t('medical:recordTypes.procedure') : t('medical:recordTypes.note')}
+                      <Tag color={typeVal === 'procedure' ? 'blue' : typeVal === 'test_result' ? 'purple' : 'green'}>
+                        {typeVal === 'procedure' ? t('medical:recordTypes.procedure') : typeVal === 'test_result' ? t('medical:recordTypes.testResult') : t('medical:recordTypes.note')}
                       </Tag>
                     </Descriptions.Item>
                     {typeVal === 'procedure' && (

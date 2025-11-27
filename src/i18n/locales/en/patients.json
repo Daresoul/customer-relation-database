@@ -169,6 +169,7 @@
         "allTypes": "All Types",
         "procedures": "Procedures",
         "notes": "Notes",
+        "testResults": "Test Results",
         "active": "Active",
         "archived": "Archived"
       },

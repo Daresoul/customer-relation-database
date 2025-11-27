@@ -187,3 +187,36 @@ pub struct AttachmentData {
     pub file_data: Vec<u8>,
     pub mime_type: String,
 }
+
+// T033: RecordTemplate model for medical record templates
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct RecordTemplate {
+    pub id: i64,
+    pub record_type: String,
+    pub title: String,
+    pub description: String,
+    pub price: Option<f64>,
+    pub currency_id: Option<i64>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateRecordTemplateInput {
+    pub record_type: String,
+    pub title: String,
+    pub description: String,
+    pub price: Option<f64>,
+    pub currency_id: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateRecordTemplateInput {
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub price: Option<f64>,
+    pub currency_id: Option<i64>,
+}

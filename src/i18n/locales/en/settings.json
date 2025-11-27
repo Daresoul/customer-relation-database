@@ -4,6 +4,7 @@
     "business": "Business",
     "appointments": "Appointments",
     "rooms": "Rooms",
+    "templates": "Record Templates",
     "updates": "Updates"
   },
   "updates": {
@@ -69,5 +70,14 @@
   },
   "rooms": {
     "confirmDelete": "Are you sure you want to delete this room?"
+  },
+  "templates": {
+    "title": "Record Templates",
+    "createTemplate": "Create Template",
+    "editTemplate": "Edit Template",
+    "confirmDelete": "Are you sure you want to delete this template?",
+    "totalTemplates": "templates",
+    "titlePlaceholder": "Enter template title",
+    "descriptionPlaceholder": "Enter template description"
   }
 }

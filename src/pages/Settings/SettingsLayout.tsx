@@ -11,6 +11,7 @@ import {
   CloudDownloadOutlined,
   AppstoreOutlined,
   UsbOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, Link } from 'react-router-dom';
@@ -27,12 +28,13 @@ import AppointmentsSettings from './components/AppointmentsSettings';
 import RoomsSettings from './components/RoomsSettings';
 import SpeciesSettings from './components/SpeciesSettings';
 import DeviceInputSettings from './components/DeviceInputSettings';
+import RecordTemplatesSettings from './components/RecordTemplatesSettings';
 import { UpdateSettings } from './UpdateSettings';
 
 const { Content, Sider } = Layout;
 const { Title, Text } = Typography;
 
-type SettingsCategory = 'general' | 'business' | 'appointments' | 'rooms' | 'species' | 'devices' | 'updates';
+type SettingsCategory = 'general' | 'business' | 'appointments' | 'rooms' | 'species' | 'devices' | 'templates' | 'updates';
 
 interface MenuItem {
   key: SettingsCategory;
@@ -91,6 +93,12 @@ const SettingsLayout: React.FC = () => {
       icon: <UsbOutlined />,
       label: 'Device Inputs',
       component: DeviceInputSettings,
+    },
+    {
+      key: 'templates',
+      icon: <FileTextOutlined />,
+      label: t('settings:sections.templates'),
+      component: RecordTemplatesSettings,
     },
     {
       key: 'updates',

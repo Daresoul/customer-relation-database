@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Form, Input, Select, Button, Space, Divider, InputNumber, List, Typography, Upload, Drawer, App } from 'antd';
+import { Form, Input, Select, Button, Space, Divider, InputNumber, List, Typography, Upload, Drawer, App, AutoComplete } from 'antd';
 import { SaveOutlined, CloseOutlined, UploadOutlined, DeleteOutlined, InboxOutlined, HistoryOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import FileUpload from '../FileUpload/FileUpload';
 import FileAttachmentList from '../FileUpload/FileAttachmentList';
 import RecentDeviceFiles from '../RecentDeviceFiles';
 import { useCurrencies, useMedicalRecord } from '@/hooks/useMedicalRecords';
+import { useSearchRecordTemplates } from '@/hooks/useRecordTemplates';
 import { useAppSettings } from '@/hooks/useAppSettings';
 import { MedicalService } from '@/services/medicalService';
-import type { MedicalRecord, CreateMedicalRecordInput, UpdateMedicalRecordInput } from '@/types/medical';
+import type { MedicalRecord, CreateMedicalRecordInput, UpdateMedicalRecordInput, RecordTemplate } from '@/types/medical';
 import type { UploadFile } from 'antd';
 import styles from './MedicalRecordForm.module.css';
 
@@ -44,8 +45,10 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
   const [fileSourceIds, setFileSourceIds] = useState<Map<string, string>>(new Map()); // Maps file.name -> sourceFileId
   const [recentFilesDrawerOpen, setRecentFilesDrawerOpen] = useState(false);
   const [refreshRecentFiles, setRefreshRecentFiles] = useState<(() => void) | null>(null);
+  const [titleSearchTerm, setTitleSearchTerm] = useState<string>('');
   const { data: currencies} = useCurrencies();
   const { settings } = useAppSettings();
+  const { data: searchedTemplates } = useSearchRecordTemplates(titleSearchTerm, recordType as any);
 
   // Removed debug log to avoid circular reference issues
   const { data: recordDetail, refetch: refetchRecord } = useMedicalRecord(
@@ -93,7 +96,7 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
 
   const handleRecordTypeChange = (value: string) => {
     setRecordType(value);
-    if (value === 'note') {
+    if (value === 'note' || value === 'test_result') {
       form.setFieldValue('procedureName', undefined);
       form.setFieldValue('price', undefined);
       form.setFieldValue('currencyId', undefined);
@@ -138,6 +141,20 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
     }
   };
 
+  const handleTemplateSelect = (value: string, option: any) => {
+    // Find the selected template
+    const template = searchedTemplates?.find(t => t.title === value);
+    if (template) {
+      // Auto-fill form fields
+      form.setFieldsValue({
+        name: template.title,
+        description: template.description,
+        price: template.price,
+        currencyId: template.currencyId,
+      });
+    }
+  };
+
   return (
     <Form
       form={form}
@@ -157,6 +174,7 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
           <Select onChange={handleRecordTypeChange}>
             <Option value="note">{t('medical:recordTypes.note')}</Option>
             <Option value="procedure">{t('medical:recordTypes.procedure')}</Option>
+            <Option value="test_result">{t('medical:recordTypes.testResult')}</Option>
           </Select>
         </Form.Item>
       )}
@@ -169,7 +187,28 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
           { max: 200, message: t('forms:validation.maxLength', { max: 200 }) },
         ]}
       >
-        <Input placeholder={recordType === 'procedure' ? t('medical:placeholders.procedureName') : t('medical:placeholders.noteTitle')} />
+        <AutoComplete
+          options={searchedTemplates?.map(template => ({
+            value: template.title,
+            label: template.title,
+            desc: template.description,
+          }))}
+          onSearch={setTitleSearchTerm}
+          onSelect={handleTemplateSelect}
+          placeholder={recordType === 'procedure' ? t('medical:placeholders.procedureName') : t('medical:placeholders.noteTitle')}
+          filterOption={false}
+        >
+          {searchedTemplates?.map(template => (
+            <AutoComplete.Option key={template.id} value={template.title}>
+              <div>
+                <div style={{ fontWeight: 500 }}>{template.title}</div>
+                <div style={{ fontSize: '12px', color: '#888' }}>
+                  {template.description.length > 60 ? template.description.substring(0, 60) + '...' : template.description}
+                </div>
+              </div>
+            </AutoComplete.Option>
+          ))}
+        </AutoComplete>
       </Form.Item>
 
       <Form.Item
