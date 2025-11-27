@@ -197,7 +197,8 @@ export function useUploadAttachment() {
       deviceType,
       deviceName,
       connectionMethod,
-      attachmentType
+      attachmentType,
+      sourceFileId
     }: {
       medicalRecordId: number;
       file: File;
@@ -205,13 +206,14 @@ export function useUploadAttachment() {
       deviceName?: string;
       connectionMethod?: string;
       attachmentType?: 'file' | 'test_result' | 'generated_pdf';
+      sourceFileId?: string;
     }) => {
       // Validate file before uploading
       const validationError = MedicalService.validateFile(file);
       if (validationError) {
         return Promise.reject(new Error(validationError));
       }
-      return MedicalService.uploadAttachment(medicalRecordId, file, deviceType, deviceName, connectionMethod, attachmentType);
+      return MedicalService.uploadAttachment(medicalRecordId, file, deviceType, deviceName, connectionMethod, attachmentType, sourceFileId);
     },
     onSuccess: (data, variables) => {
       notification.success({

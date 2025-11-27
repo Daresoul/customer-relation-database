@@ -10,9 +10,10 @@ const { Text } = Typography;
 interface RecentDeviceFilesProps {
   onAddToRecord?: (fileId: string, originalName: string) => void;
   days?: number;
+  onRefreshNeeded?: (refreshFn: () => void) => void;
 }
 
-const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, days = 14 }) => {
+const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, days = 14, onRefreshNeeded }) => {
   const [files, setFiles] = useState<FileAccessHistoryWithRecord[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -36,6 +37,14 @@ const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, da
     loadRecentFiles();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [days]);
+
+  // Expose refresh function to parent
+  useEffect(() => {
+    if (onRefreshNeeded) {
+      onRefreshNeeded(loadRecentFiles);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onRefreshNeeded]);
 
   const handleAddToRecord = (file: FileAccessHistoryWithRecord) => {
     if (onAddToRecord) {
@@ -98,14 +107,25 @@ const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, da
       title: 'File Name',
       dataIndex: 'originalName',
       key: 'originalName',
-      width: '25%',
-      render: (name: string) => <Text ellipsis={{ tooltip: name }} strong>{name}</Text>,
+      ellipsis: {
+        showTitle: false,
+      },
+      render: (name: string, record: FileAccessHistoryWithRecord) => (
+        <Tooltip title={name}>
+          <div>
+            <Text strong style={{ display: 'block' }}>{name}</Text>
+            <Text type="secondary" style={{ fontSize: '12px' }}>
+              {formatDistanceToNow(new Date(record.receivedAt), { addSuffix: true })}
+            </Text>
+          </div>
+        </Tooltip>
+      ),
     },
     {
       title: 'Device',
       dataIndex: 'deviceType',
       key: 'deviceType',
-      width: '15%',
+      width: 180,
       render: (deviceType: string, record: FileAccessHistoryWithRecord) => (
         <Tooltip title={`${record.deviceName} via ${record.connectionMethod || 'Unknown'}`}>
           <Tag color={getDeviceTypeColor(deviceType)}>
@@ -115,43 +135,22 @@ const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, da
       ),
     },
     {
-      title: 'Received',
-      dataIndex: 'receivedAt',
-      key: 'receivedAt',
-      width: '15%',
-      render: (receivedAt: string) => (
-        <Tooltip title={new Date(receivedAt).toLocaleString()}>
-          <Space>
-            <ClockCircleOutlined />
-            <Text type="secondary">
-              {formatDistanceToNow(new Date(receivedAt), { addSuffix: true })}
-            </Text>
-          </Space>
-        </Tooltip>
-      ),
-    },
-    {
       title: 'Status',
       key: 'status',
-      width: '30%',
+      width: 100,
+      align: 'center' as const,
       render: (_: any, record: FileAccessHistoryWithRecord) => {
         if (record.firstAttachedToRecordId) {
           return (
-            <Tooltip title={`Attached ${record.attachmentCount} time(s)`}>
-              <Space>
-                <CheckCircleOutlined style={{ color: '#52c41a' }} />
-                <Text type="success">
-                  Attached to: {record.patientName} - {record.recordName}
-                </Text>
-              </Space>
+            <Tooltip title={`Attached to ${record.patientName} - ${record.recordName} (${record.attachmentCount}x)`}>
+              <CheckCircleOutlined style={{ color: '#52c41a', fontSize: '18px' }} />
             </Tooltip>
           );
         } else {
           return (
-            <Space>
-              <WarningOutlined style={{ color: '#faad14' }} />
-              <Text type="warning">NOT YET ATTACHED</Text>
-            </Space>
+            <Tooltip title="Not yet attached to any record">
+              <WarningOutlined style={{ color: '#faad14', fontSize: '18px' }} />
+            </Tooltip>
           );
         }
       },
@@ -159,17 +158,16 @@ const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, da
     {
       title: 'Actions',
       key: 'actions',
-      width: '15%',
+      width: 180,
+      fixed: 'right' as const,
       render: (_: any, record: FileAccessHistoryWithRecord) => (
-        <Space>
+        <Space size="small">
           <Button
             type="link"
             size="small"
             icon={<EyeOutlined />}
             onClick={() => handleViewFile(record)}
-          >
-            View
-          </Button>
+          />
           {onAddToRecord && (
             <Button
               type="primary"
@@ -177,7 +175,7 @@ const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, da
               icon={<PlusOutlined />}
               onClick={() => handleAddToRecord(record)}
             >
-              Add to Record
+              Add
             </Button>
           )}
         </Space>
@@ -197,7 +195,8 @@ const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, da
           showSizeChanger: true,
           showTotal: (total) => `Total ${total} files`,
         }}
-        size="middle"
+        size="small"
+        scroll={{ x: 700 }}
         locale={{
           emptyText: 'No device files received in the last 14 days. Files will appear here when devices send data.',
         }}

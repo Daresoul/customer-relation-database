@@ -196,20 +196,18 @@ pub async fn record_device_file_access(
     ).await
 }
 
-/// Update file history when attached to a medical record
-#[tauri::command]
-pub async fn update_file_attachment(
-    pool: State<'_, DatabasePool>,
+/// Internal function for updating file attachment (called from Rust code)
+pub async fn update_file_attachment_internal(
+    pool: &SqlitePool,
     file_id: String,
     medical_record_id: i64,
 ) -> Result<(), String> {
-    let pool = pool.lock().await;
     // Check if this is the first attachment
     let existing: Option<(Option<i64>, i32)> = sqlx::query_as(
         "SELECT first_attached_to_record_id, attachment_count FROM file_access_history WHERE file_id = ?"
     )
     .bind(&file_id)
-    .fetch_optional(&*pool)
+    .fetch_optional(pool)
     .await
     .map_err(|e| format!("Failed to fetch file history: {}", e))?;
 
@@ -231,7 +229,7 @@ pub async fn update_file_attachment(
             .bind(count + 1)
             .bind(Utc::now())
             .bind(&file_id)
-            .execute(&*pool)
+            .execute(pool)
             .await
             .map_err(|e| format!("Failed to update file attachment: {}", e))?;
         } else {
@@ -247,13 +245,24 @@ pub async fn update_file_attachment(
             .bind(count + 1)
             .bind(Utc::now())
             .bind(&file_id)
-            .execute(&*pool)
+            .execute(pool)
             .await
             .map_err(|e| format!("Failed to update attachment count: {}", e))?;
         }
     }
 
     Ok(())
+}
+
+/// Update file history when attached to a medical record (Tauri command wrapper)
+#[tauri::command]
+pub async fn update_file_attachment(
+    pool: State<'_, DatabasePool>,
+    file_id: String,
+    medical_record_id: i64,
+) -> Result<(), String> {
+    let pool = pool.lock().await;
+    update_file_attachment_internal(&*pool, file_id, medical_record_id).await
 }
 
 /// Clean up old file history entries (older than specified days)

@@ -119,6 +119,8 @@ pub async fn upload_medical_attachment(
     connectionMethod: Option<String>,
     #[allow(non_snake_case)]
     attachmentType: Option<String>,
+    #[allow(non_snake_case)]
+    sourceFileId: Option<String>,
 ) -> Result<MedicalAttachment, String> {
     let pool_guard = pool.lock().await;
 
@@ -132,7 +134,7 @@ pub async fn upload_medical_attachment(
         .await
         .map_err(|_| "Medical record not found".to_string())?;
 
-    FileStorageService::upload_attachment(
+    let attachment = FileStorageService::upload_attachment(
         &app_handle,
         &*pool_guard,
         medicalRecordId,
@@ -143,7 +145,18 @@ pub async fn upload_medical_attachment(
         deviceName,
         connectionMethod,
         attachmentType,
-    ).await
+    ).await?;
+
+    // If this file came from file_access_history, update the tracking
+    if let Some(source_file_id) = sourceFileId {
+        use crate::commands::file_history::update_file_attachment_internal;
+        if let Err(e) = update_file_attachment_internal(&*pool_guard, source_file_id, medicalRecordId).await {
+            eprintln!("Warning: Failed to update file attachment tracking: {}", e);
+            // Don't fail the upload, just log the warning
+        }
+    }
+
+    Ok(attachment)
 }
 
 // T037: Implement download_medical_attachment command

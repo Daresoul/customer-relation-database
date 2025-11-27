@@ -81,7 +81,8 @@ export class MedicalService {
     deviceType?: string,
     deviceName?: string,
     connectionMethod?: string,
-    attachmentType?: 'file' | 'test_result' | 'generated_pdf'
+    attachmentType?: 'file' | 'test_result' | 'generated_pdf',
+    sourceFileId?: string
   ): Promise<MedicalAttachment> {
     const arrayBuffer = await file.arrayBuffer();
     const fileData = new Uint8Array(arrayBuffer);
@@ -94,7 +95,8 @@ export class MedicalService {
       deviceType: deviceType,
       deviceName: deviceName,
       connectionMethod: connectionMethod,
-      attachmentType: attachmentType
+      attachmentType: attachmentType,
+      sourceFileId: sourceFileId
     });
   }
 
