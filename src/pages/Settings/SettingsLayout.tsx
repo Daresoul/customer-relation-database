@@ -85,13 +85,13 @@ const SettingsLayout: React.FC = () => {
     {
       key: 'species',
       icon: <AppstoreOutlined />,
-      label: 'Species & Breeds',
+      label: t('settings:sections.species'),
       component: SpeciesSettings,
     },
     {
       key: 'devices',
       icon: <UsbOutlined />,
-      label: 'Device Inputs',
+      label: t('settings:sections.devices'),
       component: DeviceInputSettings,
     },
     {
@@ -221,8 +221,8 @@ const SettingsLayout: React.FC = () => {
 
             {/* Content Area */}
             <Content className={styles.settingsContent}>
-              {/* Rooms, Species, Devices and Updates tabs don't need the parent form - they manage their own state */}
-              {selectedCategory === 'rooms' || selectedCategory === 'species' || selectedCategory === 'devices' || selectedCategory === 'updates' ? (
+              {/* Rooms, Species, Devices, Templates and Updates tabs don't need the parent form - they manage their own state */}
+              {selectedCategory === 'rooms' || selectedCategory === 'species' || selectedCategory === 'devices' || selectedCategory === 'templates' || selectedCategory === 'updates' ? (
                 <CurrentComponent isUpdating={isUpdating} />
               ) : (
                 <Form

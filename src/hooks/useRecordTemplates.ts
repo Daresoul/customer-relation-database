@@ -13,6 +13,8 @@ export function useRecordTemplates(recordType?: RecordType) {
   return useQuery({
     queryKey: ['record-templates', recordType],
     queryFn: () => TemplateService.getRecordTemplates(recordType),
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes - templates don't change frequently
+    retry: 1,
   });
 }
 
@@ -20,7 +22,9 @@ export function useSearchRecordTemplates(searchTerm: string, recordType?: Record
   return useQuery({
     queryKey: ['record-templates-search', searchTerm, recordType],
     queryFn: () => TemplateService.searchRecordTemplates(searchTerm, recordType),
-    enabled: searchTerm.length >= 2, // Minimum 2 characters for search
+    enabled: searchTerm.trim().length >= 2, // Minimum 2 characters for search
+    staleTime: 30 * 1000, // Cache search results for 30 seconds
+    retry: 1,
   });
 }
 
@@ -39,9 +43,15 @@ export function useCreateRecordTemplate() {
         placement: 'bottomRight',
         duration: 3,
       });
-      // Invalidate all template queries
+      // Invalidate all template list queries (with any record type filter)
       queryClient.invalidateQueries({
         queryKey: ['record-templates'],
+        exact: false,
+      });
+      // Also invalidate search queries
+      queryClient.invalidateQueries({
+        queryKey: ['record-templates-search'],
+        exact: false,
       });
     },
     onError: (error: Error) => {
@@ -75,15 +85,21 @@ export function useUpdateRecordTemplate() {
         placement: 'bottomRight',
         duration: 3,
       });
-      // Invalidate all template queries
+      // Invalidate all template list queries (with any record type filter)
       queryClient.invalidateQueries({
         queryKey: ['record-templates'],
+        exact: false,
+      });
+      // Also invalidate search queries
+      queryClient.invalidateQueries({
+        queryKey: ['record-templates-search'],
+        exact: false,
       });
     },
     onError: (error: Error) => {
       notification.error({
-        message: 'Error',
-        description: `Failed to update template: ${error.message}`,
+        message: 'Failed to Update Template',
+        description: `Error: ${error.message}`,
         placement: 'bottomRight',
         duration: 5,
       });
@@ -105,15 +121,21 @@ export function useDeleteRecordTemplate() {
         placement: 'bottomRight',
         duration: 3,
       });
-      // Invalidate all template queries
+      // Invalidate all template list queries (with any record type filter)
       queryClient.invalidateQueries({
         queryKey: ['record-templates'],
+        exact: false,
+      });
+      // Also invalidate search queries
+      queryClient.invalidateQueries({
+        queryKey: ['record-templates-search'],
+        exact: false,
       });
     },
     onError: (error: Error) => {
       notification.error({
-        message: 'Error',
-        description: `Failed to delete template: ${error.message}`,
+        message: 'Failed to Delete Template',
+        description: `Error: ${error.message}`,
         placement: 'bottomRight',
         duration: 5,
       });

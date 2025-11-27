@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Table, Button, Space, Modal, Form, Input, Select, InputNumber, Tag, App, Popconfirm } from 'antd';
+import { Card, Table, Button, Space, Modal, Form, Input, Select, InputNumber, Tag, Popconfirm } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, FileTextOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import {
@@ -17,7 +17,6 @@ const { Option } = Select;
 
 const RecordTemplatesSettings: React.FC = () => {
   const { t } = useTranslation(['settings', 'medical', 'common', 'forms']);
-  const { notification } = App.useApp();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<RecordTemplate | null>(null);
   const [form] = Form.useForm();

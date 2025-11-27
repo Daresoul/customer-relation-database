@@ -1846,6 +1846,18 @@ fn create_record_templates_table(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std
             .execute(pool)
             .await?;
 
+        // Create trigger to auto-update updated_at timestamp
+        sqlx::query(r#"
+            CREATE TRIGGER IF NOT EXISTS update_record_templates_timestamp
+            AFTER UPDATE ON record_templates
+            BEGIN
+                UPDATE record_templates SET updated_at = CURRENT_TIMESTAMP
+                WHERE id = NEW.id;
+            END
+        "#)
+        .execute(pool)
+        .await?;
+
         println!("Created record_templates table for medical record templates");
         Ok(())
     })

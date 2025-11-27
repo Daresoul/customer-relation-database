@@ -8,6 +8,7 @@ import {
   HistoryOutlined,
   InboxOutlined,
   UnorderedListOutlined,
+  ExperimentOutlined,
 } from '@ant-design/icons';
 import { useArchiveMedicalRecord } from '@/hooks/useMedicalRecords';
 import { MedicalService } from '@/services/medicalService';
@@ -88,17 +89,23 @@ const MedicalRecordTable: React.FC<MedicalRecordTableProps> = ({
       dataIndex: 'recordType',
       key: 'recordType',
       width: 100,
-      render: (type: string) => (
-        <Tag
-          color={type === 'procedure' ? 'blue' : 'green'}
-          icon={type === 'procedure' ? <FileTextOutlined /> : <UnorderedListOutlined />}
-        >
-          {type.charAt(0).toUpperCase() + type.slice(1)}
-        </Tag>
-      ),
+      render: (type: string) => {
+        const getTypeConfig = () => {
+          if (type === 'procedure') return { color: 'blue', icon: <FileTextOutlined />, label: 'Procedure' };
+          if (type === 'test_result') return { color: 'purple', icon: <ExperimentOutlined />, label: 'Test Result' };
+          return { color: 'green', icon: <UnorderedListOutlined />, label: 'Note' };
+        };
+        const config = getTypeConfig();
+        return (
+          <Tag color={config.color} icon={config.icon}>
+            {config.label}
+          </Tag>
+        );
+      },
       filters: [
         { text: 'Procedure', value: 'procedure' },
         { text: 'Note', value: 'note' },
+        { text: 'Test Result', value: 'test_result' },
       ],
       onFilter: (value, record) => record.recordType === value,
     },

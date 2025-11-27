@@ -8,7 +8,8 @@ import {
   FileTextOutlined,
   MedicineBoxOutlined,
   PaperClipOutlined,
-  DownloadOutlined
+  DownloadOutlined,
+  ExperimentOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import type { MedicalRecord } from '@/types/medical';
@@ -103,7 +104,7 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
     const recordIcon = isProcedure ? (
       <MedicineBoxOutlined className={styles.procedureIcon} />
     ) : isTestResult ? (
-      <FileTextOutlined className={styles.testResultIcon} />
+      <ExperimentOutlined className={styles.testResultIcon} />
     ) : (
       <FileTextOutlined className={styles.noteIcon} />
     );

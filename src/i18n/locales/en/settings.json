@@ -4,6 +4,8 @@
     "business": "Business",
     "appointments": "Appointments",
     "rooms": "Rooms",
+    "species": "Species & Breeds",
+    "devices": "Device Inputs",
     "templates": "Record Templates",
     "updates": "Updates"
   },
