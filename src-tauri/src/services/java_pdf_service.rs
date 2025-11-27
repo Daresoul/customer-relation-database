@@ -43,6 +43,7 @@ struct JavaSample {
 impl JavaPdfService {
     /// Generate a PDF using the Java JAR (iText 5) with multiple device samples
     pub fn generate_pdf_multi(
+        app_handle: &tauri::AppHandle,
         output_path: &str,
         patient: &crate::services::device_pdf_service::PatientData,
         device_data_list: &[crate::services::device_pdf_service::DeviceTestData],
@@ -132,7 +133,7 @@ impl JavaPdfService {
         println!("   📄 Input JSON created: {:?}", input_json_path);
 
         // Get JAR path (in pdf-generator-cli/build/libs/)
-        let jar_path = Self::get_jar_path()?;
+        let jar_path = Self::get_jar_path(app_handle)?;
 
         println!("   ☕ JAR path: {:?}", jar_path);
         println!("   📂 Output path: {}", output_path);
@@ -172,8 +173,8 @@ impl JavaPdfService {
 
     /// Get the path to the JAR file
     /// In development: uses relative path to pdf-generator-cli build output
-    /// In production: uses bundled resource from src-tauri/resources/
-    fn get_jar_path() -> Result<PathBuf, String> {
+    /// In production: uses Tauri's resource resolver to locate bundled resources
+    fn get_jar_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
         // In development mode: use relative path to project
         if cfg!(debug_assertions) {
             // Try relative path from src-tauri directory
@@ -193,52 +194,29 @@ impl JavaPdfService {
             return Err("Development JAR not found at pdf-generator-cli/build/libs/".to_string());
         }
 
-        // In production mode: look for bundled resource
-        if let Ok(exe_path) = std::env::current_exe() {
-            if let Some(exe_dir) = exe_path.parent() {
-                // On macOS, resources are in Contents/Resources/ relative to Contents/MacOS/
-                #[cfg(target_os = "macos")]
-                {
-                    let resources_jar = exe_dir.parent()
-                        .map(|p| p.join("Resources/pdf-generator.jar"));
-                    if let Some(jar_path) = resources_jar {
-                        if jar_path.exists() {
-                            println!("   📦 Using production JAR (macOS): {:?}", jar_path);
-                            return Ok(jar_path);
-                        }
-                    }
-                }
+        // In production mode: use Tauri's resource resolver
+        // This automatically handles platform-specific resource locations:
+        // - macOS: Contents/Resources/
+        // - Windows: resources/ (handled by Tauri internally)
+        // - Linux: resources/
+        // Note: "resources/**" in tauri.conf.json bundles src-tauri/resources/* files,
+        // so we reference them without the "resources/" prefix
+        let resource_path = app_handle
+            .path_resolver()
+            .resolve_resource("pdf-generator.jar")
+            .ok_or_else(|| {
+                "Could not resolve pdf-generator.jar resource path. Ensure it's bundled in src-tauri/resources/".to_string()
+            })?;
 
-                // On Windows, try _up_/resources/ directory (Tauri v1 bundling)
-                #[cfg(target_os = "windows")]
-                {
-                    let jar_path = exe_dir.join("_up_").join("resources").join("pdf-generator.jar");
-                    if jar_path.exists() {
-                        println!("   📦 Using production JAR (Windows _up_): {:?}", jar_path);
-                        return Ok(jar_path);
-                    }
-
-                    // Also try next to executable (fallback/legacy)
-                    let jar_path_legacy = exe_dir.join("pdf-generator.jar");
-                    if jar_path_legacy.exists() {
-                        println!("   📦 Using production JAR (Windows legacy): {:?}", jar_path_legacy);
-                        return Ok(jar_path_legacy);
-                    }
-                }
-
-                // On Linux, resources are next to executable
-                #[cfg(target_os = "linux")]
-                {
-                    let jar_path = exe_dir.join("pdf-generator.jar");
-                    if jar_path.exists() {
-                        println!("   📦 Using production JAR (Linux): {:?}", jar_path);
-                        return Ok(jar_path);
-                    }
-                }
-            }
+        if !resource_path.exists() {
+            return Err(format!(
+                "pdf-generator.jar not found at resolved path: {:?}. Ensure it's bundled in src-tauri/resources/",
+                resource_path
+            ));
         }
 
-        Err("Could not find pdf-generator.jar - ensure it's bundled in src-tauri/resources/. Searched: exe_dir/pdf-generator.jar (Linux), exe_dir/_up_/resources/pdf-generator.jar (Windows), ../Resources/pdf-generator.jar (macOS)".to_string())
+        println!("   📦 Using production JAR: {:?}", resource_path);
+        Ok(resource_path)
     }
 
     /// Convert JSON Value to HashMap<String, String>
@@ -263,11 +241,12 @@ impl JavaPdfService {
     /// Generate a PDF using the Java JAR (iText 5) with a single device sample
     /// Convenience wrapper for generate_pdf_multi
     pub fn generate_pdf(
+        app_handle: &tauri::AppHandle,
         output_path: &str,
         patient: &crate::services::device_pdf_service::PatientData,
         device_data: &crate::services::device_pdf_service::DeviceTestData,
     ) -> Result<(), String> {
-        Self::generate_pdf_multi(output_path, patient, &[device_data.clone()])
+        Self::generate_pdf_multi(app_handle, output_path, patient, &[device_data.clone()])
     }
 
     /// Map detailed device type names to Java-expected format

@@ -114,6 +114,7 @@ pub async fn wipe_database_data(
 
 #[tauri::command]
 pub async fn populate_database(
+    app: AppHandle,
     pool: State<'_, DatabasePool>,
     households: Option<i32>,
     seed: Option<u64>,
@@ -450,7 +451,7 @@ pub async fn populate_database(
                     device_data_list: None,
                 };
 
-                match MedicalRecordService::create_medical_record(&*pool, input).await {
+                match MedicalRecordService::create_medical_record(&app, &*pool, input).await {
                     Ok(_) => {
                         created_records += 1;
                         if proc_num == 0 {
@@ -509,7 +510,7 @@ pub async fn populate_database(
                     device_data_list: None,
                 };
 
-                match MedicalRecordService::create_medical_record(&*pool, input).await {
+                match MedicalRecordService::create_medical_record(&app, &*pool, input).await {
                     Ok(_) => {
                         created_records += 1;
                     }

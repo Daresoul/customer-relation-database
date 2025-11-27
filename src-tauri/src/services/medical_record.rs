@@ -284,6 +284,7 @@ impl MedicalRecordService {
     }
 
     pub async fn create_medical_record(
+        app_handle: &tauri::AppHandle,
         pool: &SqlitePool,
         input: CreateMedicalRecordInput,
     ) -> Result<MedicalRecord, String> {
@@ -419,7 +420,7 @@ impl MedicalRecordService {
             }
 
             // Generate PDF with all devices
-            if let Err(e) = Self::generate_and_save_pdfs_multi(pool, id, &patient_data, &all_device_data).await {
+            if let Err(e) = Self::generate_and_save_pdfs_multi(app_handle, pool, id, &patient_data, &all_device_data).await {
                 eprintln!("⚠️  Failed to generate PDFs: {}", e);
                 // Continue anyway - the record was created successfully
             }
@@ -496,6 +497,7 @@ impl MedicalRecordService {
 
     /// Generate Java PDF report with multiple device samples and save as attachment
     async fn generate_and_save_pdfs_multi(
+        app_handle: &tauri::AppHandle,
         pool: &SqlitePool,
         medical_record_id: i64,
         patient_data: &crate::services::device_pdf_service::PatientData,
@@ -527,6 +529,7 @@ impl MedicalRecordService {
         // Generate Java PDF with all devices
         println!("   ☕ Generating combined PDF report using Java...");
         JavaPdfService::generate_pdf_multi(
+            app_handle,
             pdf_path.to_str().ok_or("Invalid PDF path")?,
             patient_data,
             device_data_list,
@@ -563,12 +566,13 @@ impl MedicalRecordService {
     /// Generate Java PDF report and save as attachment (legacy single-device wrapper)
     #[allow(dead_code)]
     async fn generate_and_save_pdfs(
+        app_handle: &tauri::AppHandle,
         pool: &SqlitePool,
         medical_record_id: i64,
         patient_data: &crate::services::device_pdf_service::PatientData,
         device_data: &crate::services::device_pdf_service::DeviceTestData,
     ) -> Result<(), String> {
-        Self::generate_and_save_pdfs_multi(pool, medical_record_id, patient_data, &[device_data.clone()]).await
+        Self::generate_and_save_pdfs_multi(app_handle, pool, medical_record_id, patient_data, &[device_data.clone()]).await
     }
 
     /// Save a PDF file as an attachment to a medical record

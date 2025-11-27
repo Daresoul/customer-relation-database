@@ -31,6 +31,7 @@ impl DevicePdfService {
     /// Generate a PDF report from device data using Java iText 5
     /// This is the single source of truth for PDF generation
     pub fn generate_pdf(
+        app_handle: &tauri::AppHandle,
         output_path: &str,
         patient: PatientData,
         device_data: DeviceTestData,
@@ -44,6 +45,6 @@ impl DevicePdfService {
         // - Macedonian translations
         // - Logo and social icons
         // - Professional styling with colors
-        JavaPdfService::generate_pdf(output_path, &patient, &device_data)
+        JavaPdfService::generate_pdf(app_handle, output_path, &patient, &device_data)
     }
 }

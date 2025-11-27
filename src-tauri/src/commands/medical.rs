@@ -42,6 +42,7 @@ pub async fn get_medical_record(
 // T033: Implement create_medical_record command
 #[tauri::command]
 pub async fn create_medical_record(
+    app_handle: AppHandle,
     pool: State<'_, DatabasePool>,
     input: CreateMedicalRecordInput,
 ) -> Result<MedicalRecord, String> {
@@ -60,7 +61,7 @@ pub async fn create_medical_record(
     // Note: We use the 'name' field for both procedures and notes
     // No need to check procedure_name separately
 
-    MedicalRecordService::create_medical_record(&*pool_guard, input).await
+    MedicalRecordService::create_medical_record(&app_handle, &*pool_guard, input).await
 }
 
 // T034: Implement update_medical_record command
@@ -575,6 +576,7 @@ pub async fn regenerate_pdf_from_attachment(
 
     // Generate PDF using centralized service (single source of truth)
     DevicePdfService::generate_pdf(
+        &app_handle,
         pdf_path.to_str().ok_or("Invalid PDF path")?,
         patient_data,
         test_data,
@@ -810,6 +812,7 @@ pub async fn regenerate_pdf_from_medical_record(
     // Generate PDF with all devices
     println!("   ☕ Generating combined PDF report using Java...");
     JavaPdfService::generate_pdf_multi(
+        &app_handle,
         pdf_path.to_str().ok_or("Invalid PDF path")?,
         &java_patient_data,
         &java_device_data,
