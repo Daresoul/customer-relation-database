@@ -50,7 +50,8 @@
         "icons/icon.ico"
       ],
       "resources": [
-        "resources/**"
+        "resources/pdf-generator.jar",
+        "resources/pdfium/**"
       ]
     },
     "security": {
