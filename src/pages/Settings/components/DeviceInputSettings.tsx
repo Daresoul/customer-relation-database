@@ -210,7 +210,9 @@ const DeviceInputSettings: React.FC = () => {
   };
 
   // Extract friendly description from port name for virtual/unknown ports
-  const getPortNameDescription = (portName: string): string | null => {
+  const getPortNameDescription = (portName: string | undefined | null): string | null => {
+    if (!portName) return null;
+
     // Virtual ports in /tmp (socat, testing, etc.)
     if (portName.includes('ttyHealvet')) return 'Healvet HV-FIA 3000 Virtual Port';
     if (portName.includes('ttyPointcare')) return 'MNCHIP PointCare PCR Virtual Port';
@@ -622,8 +624,8 @@ const DeviceInputSettings: React.FC = () => {
 
             <Table
               columns={columns}
-              dataSource={ports}
-              rowKey={(record) => record.port_name || `unknown-${Math.random()}`}
+              dataSource={ports.map((port, idx) => ({ ...port, _key: `${port.port_name}-${idx}` }))}
+              rowKey="_key"
               loading={loading}
               pagination={false}
               size="middle"
@@ -802,7 +804,7 @@ const DeviceInputSettings: React.FC = () => {
                     <AutoComplete
                       placeholder={t('form.placeholders.serialPort')}
                       options={ports.map(port => {
-                        const details = getPortDetails(port.port_type);
+                        const details = getPortDetails(port.port_type, port.port_name);
                         const typeInfo = getPortTypeDisplay(port.port_type);
                         return {
                           value: port.port_name,
