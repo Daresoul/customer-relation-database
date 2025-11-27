@@ -47,6 +47,7 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, "029_add_device_metadata_to_attachments", add_device_metadata_to_attachments).await?;
     run_migration(pool, "030_add_attachment_type", add_attachment_type_column).await?;
     run_migration(pool, "031_add_test_result_record_type", add_test_result_record_type).await?;
+    run_migration(pool, "032_create_file_access_history", create_file_access_history_table).await?;
 
     Ok(())
 }
@@ -1770,6 +1771,49 @@ fn add_test_result_record_type(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::
             .await?;
 
         println!("Added 'test_result' as valid record_type for medical_records");
+        Ok(())
+    })
+}
+
+// Migration 032: Create file_access_history table for tracking device-generated files
+fn create_file_access_history_table(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS file_access_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                file_id TEXT NOT NULL UNIQUE,
+                original_name TEXT NOT NULL,
+                file_path TEXT NOT NULL,
+                file_size INTEGER,
+                mime_type TEXT,
+                device_type TEXT NOT NULL,
+                device_name TEXT NOT NULL,
+                connection_method TEXT,
+                received_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                first_attached_to_record_id INTEGER,
+                first_attached_at DATETIME,
+                attachment_count INTEGER NOT NULL DEFAULT 0,
+                last_accessed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (first_attached_to_record_id) REFERENCES medical_records(id) ON DELETE SET NULL
+            )
+        "#)
+        .execute(pool)
+        .await?;
+
+        // Create indexes for efficient queries
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_file_access_history_received_at ON file_access_history(received_at DESC)")
+            .execute(pool)
+            .await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_file_access_history_device_type ON file_access_history(device_type)")
+            .execute(pool)
+            .await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_file_access_history_file_id ON file_access_history(file_id)")
+            .execute(pool)
+            .await?;
+
+        println!("Created file_access_history table for tracking device-generated files");
         Ok(())
     })
 }
