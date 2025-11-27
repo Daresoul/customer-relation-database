@@ -2,7 +2,7 @@
  * T017: Patient form component with Ant Design
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Form,
@@ -60,9 +60,9 @@ export const PatientForm: React.FC<PatientFormProps> = ({
   const { data: speciesData = [], isLoading: isLoadingSpecies } = useSpecies(true);
 
   // Watch selected species to filter breeds
-  const selectedSpeciesName = Form.useWatch('species', form);
-  const selectedSpecies = speciesData.find(s => s.name === selectedSpeciesName);
-  const selectedSpeciesId = selectedSpecies?.id;
+  const selectedSpeciesId = Form.useWatch('speciesId', form);
+  const selectedSpecies = speciesData.find(s => s.id === selectedSpeciesId);
+  const selectedSpeciesName = selectedSpecies?.name;
 
   // Fetch breeds for selected species
   const { data: breedsData = [], isLoading: isLoadingBreeds } = useBreeds(selectedSpeciesId, true);
@@ -91,9 +91,14 @@ export const PatientForm: React.FC<PatientFormProps> = ({
   const handleSubmit = async (values: any) => {
     try {
       const formattedData = {
-        ...values,
+        name: values.name,
+        speciesId: values.speciesId,
+        breedId: values.breedId || null,
         dateOfBirth: values.dateOfBirth ? values.dateOfBirth.format('YYYY-MM-DD') : null,
+        gender: values.gender || null,
         weight: values.weight ? parseFloat(values.weight) : null,
+        microchipId: values.microchipId || null,
+        medicalNotes: values.medicalNotes || null,
         householdId: values.householdId || null,
       };
 
@@ -159,7 +164,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({
 
           <Col xs={24} sm={12}>
             <Form.Item
-              name="species"
+              name="speciesId"
               label="Species"
               rules={[{ required: true, message: 'Please select species' }]}
             >
@@ -167,10 +172,14 @@ export const PatientForm: React.FC<PatientFormProps> = ({
                 placeholder="Search species..."
                 loading={isLoadingSpecies}
                 options={speciesData.map(species => ({
-                  value: species.name,
+                  value: species.id,
                   label: species.name,
                 }))}
                 className={styles.fullWidth}
+                onChange={() => {
+                  // When species changes, clear breed selection
+                  form.setFieldValue('breedId', null);
+                }}
                 onCreateNew={(name) => {
                   setNewSpeciesName(name);
                   setShowCreateSpeciesModal(true);
@@ -183,15 +192,14 @@ export const PatientForm: React.FC<PatientFormProps> = ({
         <Row gutter={16}>
           <Col xs={24} sm={12}>
             <Form.Item
-              name="breed"
+              name="breedId"
               label="Breed"
-              rules={[{ max: 50, message: 'Breed cannot exceed 50 characters' }]}
             >
               <SearchableSelect
                 placeholder="Search breed..."
                 loading={isLoadingBreeds}
                 options={breedsData.map(breed => ({
-                  value: breed.name,
+                  value: breed.id,
                   label: breed.name,
                 }))}
                 className={styles.fullWidth}

@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Table, Typography, Tag, Empty, Button } from 'antd';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Patient } from '../../types/household';
 import { PlusOutlined } from '@ant-design/icons';
+import PatientFormWithOwner from '../../components/forms/PatientFormWithOwner';
 import styles from './HouseholdDetail.module.css';
 
 const { Title } = Typography;
@@ -15,6 +16,7 @@ interface AnimalsSectionProps {
 
 export const AnimalsSection: React.FC<AnimalsSectionProps> = ({ patients, householdId }) => {
   const { t } = useTranslation('households');
+  const [isPatientModalOpen, setIsPatientModalOpen] = useState(false);
 
   const columns = [
     {
@@ -91,11 +93,13 @@ export const AnimalsSection: React.FC<AnimalsSectionProps> = ({ patients, househ
     <div className={styles.sectionContainer}>
       <div className={styles.sectionHeaderRow}>
         <Title level={4}>{t('detail.animals.title')}</Title>
-        <Link to={`/patients/new?householdId=${householdId}`}>
-          <Button type="primary" icon={<PlusOutlined />}>
-            {t('detail.animals.registerNewPet')}
-          </Button>
-        </Link>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={() => setIsPatientModalOpen(true)}
+        >
+          {t('detail.animals.registerNewPet')}
+        </Button>
       </div>
 
       {patients.length > 0 ? (
@@ -110,11 +114,17 @@ export const AnimalsSection: React.FC<AnimalsSectionProps> = ({ patients, househ
           description={t('detail.animals.noAnimals')}
           className={styles.marginBottom24}
         >
-          <Link to={`/patients/new?householdId=${householdId}`}>
-            <Button type="primary">{t('detail.animals.registerFirstPet')}</Button>
-          </Link>
+          <Button type="primary" onClick={() => setIsPatientModalOpen(true)}>
+            {t('detail.animals.registerFirstPet')}
+          </Button>
         </Empty>
       )}
+
+      <PatientFormWithOwner
+        open={isPatientModalOpen}
+        onClose={() => setIsPatientModalOpen(false)}
+        defaultHouseholdId={householdId}
+      />
     </div>
   );
 };

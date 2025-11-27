@@ -3,19 +3,21 @@ use chrono::Utc;
 use sqlx::SqlitePool;
 
 pub async fn get_all(pool: &SqlitePool, species_id: Option<i64>, active_only: bool) -> Result<Vec<Breed>, String> {
-    let mut query = String::from("SELECT * FROM breeds WHERE 1=1");
+    let mut query_builder = sqlx::QueryBuilder::new("SELECT * FROM breeds WHERE 1=1");
 
     if let Some(sid) = species_id {
-        query.push_str(&format!(" AND species_id = {}", sid));
+        query_builder.push(" AND species_id = ");
+        query_builder.push_bind(sid);
     }
 
     if active_only {
-        query.push_str(" AND active = 1");
+        query_builder.push(" AND active = 1");
     }
 
-    query.push_str(" ORDER BY display_order ASC, name ASC");
+    query_builder.push(" ORDER BY display_order ASC, name ASC");
 
-    sqlx::query_as::<_, Breed>(&query)
+    query_builder
+        .build_query_as::<Breed>()
         .fetch_all(pool)
         .await
         .map_err(|e| format!("Failed to fetch breeds: {}", e))
