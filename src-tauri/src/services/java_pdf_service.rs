@@ -48,7 +48,7 @@ impl JavaPdfService {
         patient: &crate::services::device_pdf_service::PatientData,
         device_data_list: &[crate::services::device_pdf_service::DeviceTestData],
     ) -> Result<(), String> {
-        println!("☕ Generating PDF using Java JAR (iText 5) with {} samples...", device_data_list.len());
+        log::info!("☕ Generating PDF using Java JAR (iText 5) with {} samples...", device_data_list.len());
 
         // Sort samples in the order Java expects: Exigo, Pointcare, Healvet
         // This is critical for correct PDF layout (Java PDF code line 273)
@@ -62,9 +62,9 @@ impl JavaPdfService {
             }
         });
 
-        println!("   📋 Sorted samples order:");
+        log::debug!("   📋 Sorted samples order:");
         for (i, device) in sorted_samples.iter().enumerate() {
-            println!("      {}. {} ({})", i + 1, device.device_name, device.device_type);
+            log::debug!("      {}. {} ({})", i + 1, device.device_name, device.device_type);
         }
 
         // Convert all device data to Java samples
@@ -119,24 +119,24 @@ impl JavaPdfService {
         let json_str = serde_json::to_string_pretty(&java_input)
             .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
 
-        println!("   🔍 DEBUG - Samples being sent to Java:");
+        log::debug!("   🔍 DEBUG - Samples being sent to Java:");
         for (idx, sample) in java_input.samples.iter().enumerate() {
-            println!("   Sample #{} ({}): {} test results", idx + 1, sample.device_type, sample.test_results.len());
+            log::debug!("   Sample #{} ({}): {} test results", idx + 1, sample.device_type, sample.test_results.len());
             for (key, value) in &sample.test_results {
-                println!("      {} = {}", key, value);
+                log::debug!("      {} = {}", key, value);
             }
         }
 
         fs::write(&input_json_path, json_str)
             .map_err(|e| format!("Failed to write temp JSON file: {}", e))?;
 
-        println!("   📄 Input JSON created: {:?}", input_json_path);
+        log::debug!("   📄 Input JSON created: {:?}", input_json_path);
 
         // Get JAR path (in pdf-generator-cli/build/libs/)
         let jar_path = Self::get_jar_path(app_handle)?;
 
-        println!("   ☕ JAR path: {:?}", jar_path);
-        println!("   📂 Output path: {}", output_path);
+        log::info!("   ☕ JAR path: {:?}", jar_path);
+        log::info!("   📂 Output path: {}", output_path);
 
         // Call Java JAR
         let output = Command::new("java")
@@ -160,14 +160,14 @@ impl JavaPdfService {
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
-        println!("   ✅ Java output: {}", stdout);
+        log::info!("   ✅ Java output: {}", stdout);
 
         // Verify PDF was created
         if !PathBuf::from(output_path).exists() {
             return Err(format!("PDF was not created at: {}", output_path));
         }
 
-        println!("✅ Java PDF generated successfully");
+        log::info!("✅ Java PDF generated successfully");
         Ok(())
     }
 
@@ -180,14 +180,14 @@ impl JavaPdfService {
             // Try relative path from src-tauri directory
             let dev_jar = PathBuf::from("../pdf-generator-cli/build/libs/pdf-generator-cli-1.0.0.jar");
             if dev_jar.exists() {
-                println!("   🔧 Using development JAR: {:?}", dev_jar);
+                log::debug!("   🔧 Using development JAR: {:?}", dev_jar);
                 return Ok(dev_jar);
             }
 
             // Hardcoded fallback for development
             let fallback = PathBuf::from("/Users/tomato/git/customer-relation-database/pdf-generator-cli/build/libs/pdf-generator-cli-1.0.0.jar");
             if fallback.exists() {
-                println!("   🔧 Using fallback JAR: {:?}", fallback);
+                log::debug!("   🔧 Using fallback JAR: {:?}", fallback);
                 return Ok(fallback);
             }
 
@@ -215,7 +215,7 @@ impl JavaPdfService {
             ));
         }
 
-        println!("   📦 Using production JAR: {:?}", resource_path);
+        log::info!("   📦 Using production JAR: {:?}", resource_path);
         Ok(resource_path)
     }
 
