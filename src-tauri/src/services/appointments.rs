@@ -16,7 +16,8 @@ impl AppointmentService {
         limit: i64,
         offset: i64,
     ) -> Result<AppointmentListResponse, String> {
-        let mut query = String::from(
+        // Build safe parameterized query
+        let mut query_builder = sqlx::QueryBuilder::new(
             "SELECT a.*, p.name as patient_name, s.name as species, b.name as breed, p.microchip_id
              FROM appointments a
              JOIN patients p ON a.patient_id = p.id
@@ -25,51 +26,90 @@ impl AppointmentService {
              WHERE 1=1"
         );
 
-        // Apply filters
+        // Apply filters with safe parameter binding
         if !filter.include_deleted {
-            query.push_str(" AND a.deleted_at IS NULL");
+            query_builder.push(" AND a.deleted_at IS NULL");
         }
 
         if let Some(start_date) = filter.start_date {
-            query.push_str(&format!(" AND a.start_time >= '{}'", start_date.to_rfc3339()));
+            query_builder.push(" AND a.start_time >= ");
+            query_builder.push_bind(start_date.to_rfc3339());
         }
 
         if let Some(end_date) = filter.end_date {
-            query.push_str(&format!(" AND a.end_time <= '{}'", end_date.to_rfc3339()));
+            query_builder.push(" AND a.end_time <= ");
+            query_builder.push_bind(end_date.to_rfc3339());
         }
 
         if let Some(patient_id) = filter.patient_id {
-            query.push_str(&format!(" AND a.patient_id = {}", patient_id));
+            query_builder.push(" AND a.patient_id = ");
+            query_builder.push_bind(patient_id);
         }
 
         if let Some(room_id) = filter.room_id {
-            query.push_str(&format!(" AND a.room_id = {}", room_id));
+            query_builder.push(" AND a.room_id = ");
+            query_builder.push_bind(room_id);
         }
 
         if let Some(ref status) = filter.status {
-            query.push_str(&format!(" AND a.status = '{}'", status));
+            query_builder.push(" AND a.status = ");
+            query_builder.push_bind(status.to_string());
         }
 
         // Exclude cancelled appointments by default unless explicitly included
         // or when filtering by cancelled status specifically
         if filter.include_cancelled != Some(true) && filter.status != Some(crate::models::AppointmentStatus::Cancelled) {
-            query.push_str(" AND a.status != 'cancelled'");
+            query_builder.push(" AND a.status != 'cancelled'");
         }
 
-        // Count total
-        let count_query = format!("SELECT COUNT(*) as count FROM ({}) as t", query);
-        let total: i64 = sqlx::query(&count_query)
+        // Build count query - need to rebuild with same filters
+        let mut count_builder = sqlx::QueryBuilder::new(
+            "SELECT COUNT(*) FROM appointments a WHERE 1=1"
+        );
+
+        if !filter.include_deleted {
+            count_builder.push(" AND a.deleted_at IS NULL");
+        }
+        if let Some(start_date) = filter.start_date {
+            count_builder.push(" AND a.start_time >= ");
+            count_builder.push_bind(start_date.to_rfc3339());
+        }
+        if let Some(end_date) = filter.end_date {
+            count_builder.push(" AND a.end_time <= ");
+            count_builder.push_bind(end_date.to_rfc3339());
+        }
+        if let Some(patient_id) = filter.patient_id {
+            count_builder.push(" AND a.patient_id = ");
+            count_builder.push_bind(patient_id);
+        }
+        if let Some(room_id) = filter.room_id {
+            count_builder.push(" AND a.room_id = ");
+            count_builder.push_bind(room_id);
+        }
+        if let Some(ref status) = filter.status {
+            count_builder.push(" AND a.status = ");
+            count_builder.push_bind(status.to_string());
+        }
+        if filter.include_cancelled != Some(true) && filter.status != Some(crate::models::AppointmentStatus::Cancelled) {
+            count_builder.push(" AND a.status != 'cancelled'");
+        }
+
+        // Execute count query
+        let total: i64 = count_builder
+            .build_query_scalar()
             .fetch_one(pool)
             .await
-            .map_err(|e| format!("Failed to count appointments: {}", e))?
-            .get("count");
+            .map_err(|e| format!("Failed to count appointments: {}", e))?;
 
         // Add ordering and pagination
-        query.push_str(" ORDER BY a.start_time ASC");
-        query.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
+        query_builder.push(" ORDER BY a.start_time ASC LIMIT ");
+        query_builder.push_bind(limit);
+        query_builder.push(" OFFSET ");
+        query_builder.push_bind(offset);
 
         // Fetch appointments
-        let appointments = sqlx::query_as::<_, Appointment>(&query)
+        let appointments = query_builder
+            .build_query_as::<Appointment>()
             .fetch_all(pool)
             .await
             .map_err(|e| format!("Failed to fetch appointments: {}", e))?;

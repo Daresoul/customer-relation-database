@@ -22,6 +22,7 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
   recordId,
 }) => {
   const { t } = useTranslation('medical');
+  const { notification } = App.useApp();
   const [loading, setLoading] = useState(false);
   const { data: recordDetail, isLoading: isLoadingRecord, isError, error, refetch } = useMedicalRecord(
     recordId || 0,

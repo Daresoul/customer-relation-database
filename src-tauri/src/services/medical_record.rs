@@ -18,34 +18,45 @@ impl MedicalRecordService {
         let page_size = pagination.as_ref().and_then(|p| p.page_size).unwrap_or(50);
         let offset = ((page - 1) * page_size) as i64;
 
-        // Build the query based on filters
-        let mut query = "SELECT id, patient_id, record_type, name, procedure_name, description, \
-                         price, currency_id, is_archived, version, created_at, updated_at, \
-                         created_by, updated_by \
-                         FROM medical_records WHERE patient_id = ?".to_string();
+        // Build the query based on filters using safe parameterized queries
+        let mut query = sqlx::QueryBuilder::new(
+            "SELECT id, patient_id, record_type, name, procedure_name, description, \
+             price, currency_id, is_archived, version, created_at, updated_at, \
+             created_by, updated_by \
+             FROM medical_records WHERE patient_id = "
+        );
+        query.push_bind(patient_id);
 
         if let Some(ref f) = filter {
             if let Some(ref record_type) = f.record_type {
-                query.push_str(&format!(" AND record_type = '{}'", record_type));
+                query.push(" AND record_type = ");
+                query.push_bind(record_type);
             }
             if let Some(is_archived) = f.is_archived {
-                query.push_str(&format!(" AND is_archived = {}", if is_archived { 1 } else { 0 }));
+                query.push(" AND is_archived = ");
+                query.push_bind(if is_archived { 1 } else { 0 });
             }
             if let Some(ref search_term) = f.search_term {
-                query.push_str(&format!(" AND (name LIKE '%{}%' OR description LIKE '%{}%')", search_term, search_term));
+                query.push(" AND (name LIKE ");
+                query.push_bind(format!("%{}%", search_term));
+                query.push(" OR description LIKE ");
+                query.push_bind(format!("%{}%", search_term));
+                query.push(")");
             }
         } else {
             // Default to not showing archived records
-            query.push_str(" AND is_archived = 0");
+            query.push(" AND is_archived = 0");
         }
 
-        query.push_str(" ORDER BY created_at DESC");
-        query.push_str(&format!(" LIMIT {} OFFSET {}", page_size, offset));
+        query.push(" ORDER BY created_at DESC LIMIT ");
+        query.push_bind(page_size);
+        query.push(" OFFSET ");
+        query.push_bind(offset);
 
-        println!("Executing query: {} with patient_id: {}", query, patient_id);
+        println!("Executing safe parameterized query for patient_id: {}", patient_id);
 
-        let rows = sqlx::query(&query)
-            .bind(patient_id)
+        let rows = query
+            .build()
             .fetch_all(pool)
             .await
             .map_err(|e| {
