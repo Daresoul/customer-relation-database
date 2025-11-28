@@ -30,6 +30,7 @@ warp = "0.3"
 lazy_static = "1.4"
 dotenv = "0.15"
 serialport = "4.7" # Upgraded from 4.3 - critical Windows fixes in 4.4-4.7
+regex = "1.11" # For parsing USB device paths in Windows registry
 hidapi = { version = "2.6", default-features = false, features = ["linux-static-hidraw"] }
 notify = "8.2"
 glob = "0.3"

@@ -139,15 +139,35 @@ pub struct UsbInfo {
 
 impl UsbInfo {
     fn convert_usb_port_info(usb_port_info: UsbPortInfo) -> UsbInfo {
+        // Extract path before moving other fields
+        let path = extract_usb_path(&usb_port_info);
+
         UsbInfo {
             vid: usb_port_info.vid,
             pid: usb_port_info.pid,
             serial_number: usb_port_info.serial_number,
             manufacturer: usb_port_info.manufacturer,
             product: usb_port_info.product,
-            path: None
+            // USB path for physical port identification
+            // This helps differentiate identical devices on USB hubs
+            path
         }
     }
+}
+
+/// Extract USB physical location path from port info
+/// Returns something like "1-2.3" meaning "Port 2 on Hub on Root Port 1, Sub-port 3"
+#[cfg(windows)]
+fn extract_usb_path(usb_port_info: &UsbPortInfo) -> Option<String> {
+    // serialport-rs doesn't expose the full device instance path on Windows
+    // We'll need to enhance the registry scanning to get this
+    // For now, return None but we'll populate this in scan_windows_registry_ports
+    None
+}
+
+#[cfg(not(windows))]
+fn extract_usb_path(_usb_port_info: &UsbPortInfo) -> Option<String> {
+    None
 }
 
 #[derive(Serialize)]
@@ -278,15 +298,24 @@ fn scan_windows_registry_ports() -> Result<Vec<PortInfo>, String> {
             }
         })
     {
+        // Try to get USB location path from the device path
+        let usb_location = extract_usb_location_from_device_path(&device_path);
+
         // Determine port type based on device path pattern
         let port_type = if device_path.starts_with("\\Device\\Serial") {
             // Built-in motherboard serial port (e.g., \Device\Serial0 -> COM1)
             PortType::BuiltInPort
         } else if device_path.contains("FTDIBUS") || device_path.contains("VCP")
                 || device_path.contains("USBSER") || device_path.contains("USB#VID_") {
-            // USB serial device (FTDI, generic USB-Serial, etc.)
-            // Probably disconnected since serialport crate didn't find it with full metadata
-            PortType::DisconnectedPort(device_path.clone())
+            // Try to extract USB info from device path for disconnected devices
+            let usb_info = extract_usb_info_from_device_path(&device_path, usb_location);
+            if let Some(info) = usb_info {
+                PortType::SerialUSBPort(info)
+            } else {
+                // USB serial device but couldn't parse details
+                // Probably disconnected since serialport crate didn't find it with full metadata
+                PortType::DisconnectedPort(device_path.clone())
+            }
         } else {
             // Unknown device path pattern - treat as disconnected/unknown
             PortType::DisconnectedPort(device_path.clone())
@@ -299,6 +328,61 @@ fn scan_windows_registry_ports() -> Result<Vec<PortInfo>, String> {
     }
 
     Ok(ports)
+}
+
+/// Extract USB location path from Windows device path
+/// Example: USB#VID_0403&PID_6001#5&2E06D5E7&0&3 -> "Port 3"
+#[cfg(windows)]
+fn extract_usb_location_from_device_path(device_path: &str) -> Option<String> {
+    // Windows device instance IDs contain physical location info in the last segment
+    // Format: USB#VID_xxxx&PID_xxxx#SerialOrLocation
+    // Location format: 5&2E06D5E7&0&3 where last number (3) is the port number
+
+    // Try to extract the location segment (after last #)
+    if let Some(location_part) = device_path.split('#').last() {
+        // Check if it contains & separators (indicates location info, not serial number)
+        if location_part.contains('&') {
+            // Extract the last number after the last &
+            if let Some(port_num) = location_part.split('&').last() {
+                // Try to parse as number
+                if let Ok(_num) = port_num.parse::<u32>() {
+                    return Some(format!("USB Port {}", port_num));
+                }
+            }
+        }
+    }
+
+    None
+}
+
+/// Extract USB info (VID/PID/etc) from Windows device path in registry
+/// This helps identify disconnected devices that aren't in serialport::available_ports()
+#[cfg(windows)]
+fn extract_usb_info_from_device_path(device_path: &str, usb_location: Option<String>) -> Option<UsbInfo> {
+    // Try FTDI format: VID_xxxx+PID_xxxx
+    let vid_pid_regex = regex::Regex::new(r"VID_([0-9A-F]{4})[+&]PID_([0-9A-F]{4})").ok()?;
+
+    if let Some(captures) = vid_pid_regex.captures(device_path) {
+        let vid = u16::from_str_radix(&captures[1], 16).ok()?;
+        let pid = u16::from_str_radix(&captures[2], 16).ok()?;
+
+        // Try to extract serial number (it's after the second # if present and doesn't contain &)
+        let serial_number = device_path.split('#')
+            .nth(2)
+            .filter(|s| !s.contains('&'))
+            .map(|s| s.to_string());
+
+        return Some(UsbInfo {
+            vid,
+            pid,
+            serial_number,
+            manufacturer: None, // Not available from device path
+            product: None,      // Not available from device path
+            path: usb_location,
+        });
+    }
+
+    None
 }
 
 pub fn scan_serial_ports() -> Result<Vec<PortInfo>, String> {
