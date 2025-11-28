@@ -1941,10 +1941,18 @@ fn verify_breed_id_nullable(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::fut
                         .execute(pool)
                         .await?;
 
-                        // Step 2: Copy data
+                        // Step 2: Copy data (explicit columns to ignore old species/breed TEXT columns)
                         sqlx::query(r#"
-                            INSERT INTO patients_temp
-                            SELECT * FROM patients
+                            INSERT INTO patients_temp (
+                                id, name, species_id, breed_id, date_of_birth, color,
+                                gender, weight, microchip_id, medical_notes, is_active,
+                                household_id, created_at, updated_at
+                            )
+                            SELECT
+                                id, name, species_id, breed_id, date_of_birth, color,
+                                gender, weight, microchip_id, medical_notes, is_active,
+                                household_id, created_at, updated_at
+                            FROM patients
                         "#)
                         .execute(pool)
                         .await?;
