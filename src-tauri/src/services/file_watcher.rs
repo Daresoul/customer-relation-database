@@ -258,23 +258,23 @@ impl FileWatcherService {
                                     let path_str = path.display().to_string();
 
                                     // Check if we recently processed this file (within 5 seconds)
-                                    {
-                                        let mut cache = processed_files_clone.lock().unwrap();
-
+                                    let should_skip = {
+                                        let cache = processed_files_clone.lock().unwrap();
                                         if let Some(&last_processed) = cache.get(&path_str) {
                                             if now - last_processed < 5 {
                                                 log::info!("   ⏭️  Skipping {} - processed {} seconds ago (deduplication)",
                                                     file_name_str, now - last_processed);
-                                                continue;
+                                                true
+                                            } else {
+                                                false
                                             }
+                                        } else {
+                                            false
                                         }
+                                    };
 
-                                        // Update cache with current timestamp
-                                        cache.insert(path_str.clone(), now);
-                                        log::info!("   📝 Updated deduplication cache for {}", file_name_str);
-
-                                        // Clean up old entries (older than 30 seconds)
-                                        cache.retain(|_, &mut timestamp| now - timestamp < 30);
+                                    if should_skip {
+                                        continue;
                                     }
 
                                     log::info!("   📖 Reading file: {}", path.display());
@@ -301,7 +301,16 @@ impl FileWatcherService {
                                                     // Emit device data to frontend
                                                     if let Some(ref app_handle) = app_handle_clone {
                                                         match app_handle.emit_all("device-data-received", &device_data) {
-                                                            Ok(_) => log::info!("   📡 Emitted device-data-received event for '{}'", name_clone),
+                                                            Ok(_) => {
+                                                                log::info!("   📡 Emitted device-data-received event for '{}'", name_clone);
+
+                                                                // Update cache AFTER successful emission to prevent duplicate processing
+                                                                let mut cache = processed_files_clone.lock().unwrap();
+                                                                cache.insert(path_str.clone(), now);
+                                                                log::info!("   📝 Updated deduplication cache for {}", file_name_str);
+                                                                // Clean up old entries (older than 30 seconds)
+                                                                cache.retain(|_, &mut timestamp| now - timestamp < 30);
+                                                            }
                                                             Err(e) => log::error!("   ❌ Failed to emit event for '{}': {}", name_clone, e),
                                                         }
 
