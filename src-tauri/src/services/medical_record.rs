@@ -550,6 +550,7 @@ impl MedicalRecordService {
 
         // Save PDF as attachment
         Self::save_pdf_attachment(
+            app_handle,
             pool,
             medical_record_id,
             &pdf_path,
@@ -577,6 +578,7 @@ impl MedicalRecordService {
 
     /// Save a PDF file as an attachment to a medical record
     async fn save_pdf_attachment(
+        app_handle: &tauri::AppHandle,
         pool: &SqlitePool,
         medical_record_id: i64,
         pdf_path: &std::path::Path,
@@ -594,12 +596,10 @@ impl MedicalRecordService {
         // Generate unique file ID
         let file_id = Uuid::new_v4().to_string();
 
-        // Get storage directory - construct from home directory
-        let home_dir = dirs::home_dir().ok_or("Failed to get home directory")?;
-        let storage_dir = home_dir
-            .join("Library")
-            .join("Application Support")
-            .join("com.vetclinic.app")
+        // Get storage directory - use Tauri's platform-specific app data directory
+        let app_data_dir = app_handle.path_resolver().app_data_dir()
+            .ok_or("Failed to get app data directory")?;
+        let storage_dir = app_data_dir
             .join("files")
             .join("medical");
 
