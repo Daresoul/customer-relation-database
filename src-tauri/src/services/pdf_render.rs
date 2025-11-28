@@ -120,36 +120,81 @@ impl PdfRenderService {
             if cfg!(target_arch = "aarch64") { "linux-aarch64" } else { "linux-x86_64" }
         };
 
+        log::info!("📄 Loading PDFium library for platform: {}", subdir);
+
         // 1) Look in packaged resources (works in production bundles)
         if let Some(base) = app_handle.path_resolver().resolve_resource(format!("pdfium/{}", subdir)) {
             let lib_path = Pdfium::pdfium_platform_library_name_at_path(&base);
+            log::info!("   Trying packaged resource: {:?}", lib_path);
             if lib_path.exists() {
-                if let Ok(bindings) = Pdfium::bind_to_library(&lib_path) {
-                    return Ok(Pdfium::new(bindings));
+                log::info!("   ✓ Library file exists");
+                match Pdfium::bind_to_library(&lib_path) {
+                    Ok(bindings) => {
+                        log::info!("   ✅ Successfully loaded PDFium from packaged resources");
+                        return Ok(Pdfium::new(bindings));
+                    }
+                    Err(e) => {
+                        log::warn!("   ⚠️  Failed to bind to library: {}", e);
+                    }
                 }
+            } else {
+                log::warn!("   ⚠️  Library file not found");
             }
+        } else {
+            log::warn!("   ⚠️  Could not resolve packaged resource path");
         }
+
         // 2) Look in dev resources folder (resources/pdfium/<subdir>) relative to CWD
         if let Ok(cwd) = std::env::current_dir() {
             let dev_base = cwd.join("resources").join("pdfium").join(subdir);
             let lib_path = Pdfium::pdfium_platform_library_name_at_path(&dev_base);
+            log::info!("   Trying dev resources: {:?}", lib_path);
             if lib_path.exists() {
-                if let Ok(bindings) = Pdfium::bind_to_library(&lib_path) {
-                    return Ok(Pdfium::new(bindings));
+                log::info!("   ✓ Library file exists");
+                match Pdfium::bind_to_library(&lib_path) {
+                    Ok(bindings) => {
+                        log::info!("   ✅ Successfully loaded PDFium from dev resources");
+                        return Ok(Pdfium::new(bindings));
+                    }
+                    Err(e) => {
+                        log::warn!("   ⚠️  Failed to bind to library: {}", e);
+                    }
                 }
+            } else {
+                log::warn!("   ⚠️  Library file not found");
             }
+
             // 3) Look in workspace layout (src-tauri/resources/pdfium/<subdir>)
             let dev_base2 = cwd.join("src-tauri").join("resources").join("pdfium").join(subdir);
             let lib_path2 = Pdfium::pdfium_platform_library_name_at_path(&dev_base2);
+            log::info!("   Trying workspace layout: {:?}", lib_path2);
             if lib_path2.exists() {
-                if let Ok(bindings) = Pdfium::bind_to_library(&lib_path2) {
-                    return Ok(Pdfium::new(bindings));
+                log::info!("   ✓ Library file exists");
+                match Pdfium::bind_to_library(&lib_path2) {
+                    Ok(bindings) => {
+                        log::info!("   ✅ Successfully loaded PDFium from workspace");
+                        return Ok(Pdfium::new(bindings));
+                    }
+                    Err(e) => {
+                        log::warn!("   ⚠️  Failed to bind to library: {}", e);
+                    }
                 }
+            } else {
+                log::warn!("   ⚠️  Library file not found");
             }
         }
+
         // Fallback to system install
-        Ok(Pdfium::new(
-            Pdfium::bind_to_system_library().map_err(|e| format!("PDFium bind failed: {}", e))?,
-        ))
+        log::info!("   Trying system library...");
+        match Pdfium::bind_to_system_library() {
+            Ok(bindings) => {
+                log::info!("   ✅ Successfully loaded PDFium from system");
+                Ok(Pdfium::new(bindings))
+            }
+            Err(e) => {
+                log::error!("   ❌ Failed to load PDFium from system: {}", e);
+                Err(format!("PDFium not found. Tried bundled and system libraries. Last error: {}", e))
+            }
+        }
     }
 }
