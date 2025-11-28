@@ -25,10 +25,10 @@ public class Constants {
     public static final String BUNDLE_NAME = "config";
     public static final String HIDDEN_WORK_DIR = ".btrx-prnt";
     public static final String DATABASE_FILENAME = "beatrix-print.db";
-    public static final String GOTHIC_FONT = "assets/fonts/gothic/GOTHIC.ttf";
-    public static final String FREE_SANS_FONT = "assets/fonts/freeSans/FreeSans.ttf";
-    public static final String CANDARA_FONT = "assets/fonts/candara/Candara.ttf";
-    public static final String PROBA_PRO_FONT = "assets/fonts/probaPro/Mint Type - Proba Pro Regular.otf";
+    public static final String GOTHIC_FONT = "/assets/fonts/gothic/GOTHIC.ttf";
+    public static final String FREE_SANS_FONT = "/assets/fonts/freeSans/FreeSans.ttf";
+    public static final String CANDARA_FONT = "/assets/fonts/candara/Candara.ttf";
+    public static final String PROBA_PRO_FONT = "/assets/fonts/probaPro/Mint Type - Proba Pro Regular.otf";
     public static final String LOGO = "assets/images/logo.png";
     public static final String PRELOADER_MEDIA = "assets/media/preloader.mp4";
     public static final String ICON = "assets/images/icon.png";
