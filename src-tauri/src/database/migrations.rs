@@ -49,6 +49,7 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, "031_add_test_result_record_type", add_test_result_record_type).await?;
     run_migration(pool, "032_create_file_access_history", create_file_access_history_table).await?;
     run_migration(pool, "033_create_record_templates", create_record_templates_table).await?;
+    run_migration(pool, "034_verify_breed_id_nullable", verify_breed_id_nullable).await?;
 
     Ok(())
 }
@@ -1859,6 +1860,118 @@ fn create_record_templates_table(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std
         .await?;
 
         println!("Created record_templates table for medical record templates");
+        Ok(())
+    })
+}
+
+fn verify_breed_id_nullable(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        // Check current schema of patients table
+        let schema_check: Result<Vec<(String, String, i64, String, String)>, _> = sqlx::query_as(
+            "SELECT name, type, \"notnull\", dflt_value, pk FROM pragma_table_info('patients') WHERE name IN ('breed_id', 'species_id')"
+        )
+        .fetch_all(pool)
+        .await;
+
+        match schema_check {
+            Ok(columns) => {
+                log::info!("📋 Verifying patient table schema...");
+                for (name, col_type, notnull, dflt, pk) in &columns {
+                    log::info!("   Column: {} | Type: {} | NOT NULL: {} | Default: {} | PK: {}",
+                        name, col_type, notnull, dflt, pk);
+                }
+
+                // Check if breed_id has NOT NULL constraint (notnull=1 means NOT NULL)
+                let breed_col = columns.iter().find(|(name, _, _, _, _)| name == "breed_id");
+                if let Some((_, _, notnull, _, _)) = breed_col {
+                    if *notnull == 1 {
+                        log::warn!("⚠️  breed_id has NOT NULL constraint, this will be fixed by recreating the table");
+
+                        // Need to recreate the table to remove NOT NULL from breed_id
+                        // This is the same approach as the species/breed FK conversion migration
+
+                        // Step 1: Create new table with correct schema
+                        sqlx::query(r#"
+                            CREATE TABLE patients_temp (
+                                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                name TEXT NOT NULL CHECK(length(name) <= 100),
+                                species_id INTEGER NOT NULL,
+                                breed_id INTEGER,
+                                date_of_birth DATE,
+                                color TEXT,
+                                gender TEXT CHECK(gender IN ('Male', 'Female', 'Unknown')),
+                                weight DECIMAL(6,2) CHECK(weight IS NULL OR weight > 0),
+                                microchip_id TEXT CHECK(microchip_id IS NULL OR length(microchip_id) <= 50),
+                                medical_notes TEXT CHECK(medical_notes IS NULL OR length(medical_notes) <= 10000),
+                                is_active BOOLEAN NOT NULL DEFAULT 1,
+                                household_id INTEGER,
+                                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                                FOREIGN KEY (species_id) REFERENCES species(id),
+                                FOREIGN KEY (breed_id) REFERENCES breeds(id),
+                                FOREIGN KEY (household_id) REFERENCES households(id)
+                            )
+                        "#)
+                        .execute(pool)
+                        .await?;
+
+                        // Step 2: Copy data
+                        sqlx::query(r#"
+                            INSERT INTO patients_temp
+                            SELECT * FROM patients
+                        "#)
+                        .execute(pool)
+                        .await?;
+
+                        // Step 3: Drop old table
+                        sqlx::query("DROP TABLE patients")
+                            .execute(pool)
+                            .await?;
+
+                        // Step 4: Rename new table
+                        sqlx::query("ALTER TABLE patients_temp RENAME TO patients")
+                            .execute(pool)
+                            .await?;
+
+                        // Step 5: Recreate indexes
+                        sqlx::query("CREATE INDEX IF NOT EXISTS idx_patients_species_id ON patients(species_id)")
+                            .execute(pool)
+                            .await?;
+
+                        sqlx::query("CREATE INDEX IF NOT EXISTS idx_patients_breed_id ON patients(breed_id)")
+                            .execute(pool)
+                            .await?;
+
+                        sqlx::query("CREATE INDEX IF NOT EXISTS idx_patients_household_id ON patients(household_id)")
+                            .execute(pool)
+                            .await?;
+
+                        // Step 6: Recreate triggers
+                        sqlx::query(r#"
+                            CREATE TRIGGER IF NOT EXISTS update_patients_timestamp
+                            AFTER UPDATE ON patients
+                            BEGIN
+                                UPDATE patients SET updated_at = CURRENT_TIMESTAMP
+                                WHERE id = NEW.id;
+                            END;
+                        "#)
+                        .execute(pool)
+                        .await?;
+
+                        log::info!("✅ Fixed breed_id to be nullable");
+                    } else {
+                        log::info!("✅ breed_id is already nullable, no fix needed");
+                    }
+                } else {
+                    log::warn!("⚠️  breed_id column not found in patients table");
+                }
+            }
+            Err(e) => {
+                log::error!("❌ Failed to check patient table schema: {}", e);
+                return Err(e);
+            }
+        }
+
         Ok(())
     })
 }

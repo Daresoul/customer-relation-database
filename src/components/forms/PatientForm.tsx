@@ -102,6 +102,11 @@ export const PatientForm: React.FC<PatientFormProps> = ({
         householdId: values.householdId || null,
       };
 
+      // Debug logging for Windows breed issue
+      console.log('[PatientForm] Form values:', values);
+      console.log('[PatientForm] Formatted data being submitted:', formattedData);
+      console.log('[PatientForm] breedId type:', typeof formattedData.breedId, 'value:', formattedData.breedId);
+
       await onSubmit(formattedData);
       notification.success({
         message: 'Success',

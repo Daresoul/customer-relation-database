@@ -62,6 +62,10 @@ pub async fn get_patient_by_id(pool: &SqlitePool, id: i64) -> Result<Option<Pati
 }
 
 pub async fn create_patient(pool: &SqlitePool, dto: CreatePatientDto) -> Result<Patient, sqlx::Error> {
+    // Debug logging for Windows breed issue
+    log::info!("🐾 Creating patient: name={}, species_id={}, breed_id={:?}, gender={:?}",
+        dto.name, dto.species_id, dto.breed_id, dto.gender);
+
     // Start a transaction
     let mut tx = pool.begin().await?;
 
@@ -79,7 +83,28 @@ pub async fn create_patient(pool: &SqlitePool, dto: CreatePatientDto) -> Result<
     .bind(&dto.medical_notes)
     .bind(true)
     .execute(&mut *tx)
-    .await?;
+    .await
+    .map_err(|e| {
+        log::error!("❌ Failed to insert patient: {}", e);
+        log::error!("   Data: name={}, species_id={}, breed_id={:?}", dto.name, dto.species_id, dto.breed_id);
+
+        // Provide user-friendly error messages for common constraint violations
+        let error_msg = e.to_string();
+        if error_msg.contains("FOREIGN KEY constraint failed") {
+            if dto.breed_id.is_some() {
+                log::error!("   Likely cause: breed_id {} doesn't exist in breeds table", dto.breed_id.unwrap());
+            } else {
+                log::error!("   Likely cause: species_id {} doesn't exist in species table", dto.species_id);
+            }
+        } else if error_msg.contains("NOT NULL constraint failed") {
+            if error_msg.contains("breed_id") {
+                log::error!("   Likely cause: Database has incorrect schema with breed_id NOT NULL");
+                log::error!("   Solution: Restart app to run schema fix migration");
+            }
+        }
+
+        e
+    })?;
 
     let patient_id = result.last_insert_rowid();
 

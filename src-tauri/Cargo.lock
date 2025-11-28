@@ -5380,6 +5380,7 @@ dependencies = [
  "chrono",
  "dirs",
  "dotenv",
+ "dunce",
  "fake",
  "glob",
  "hidapi",

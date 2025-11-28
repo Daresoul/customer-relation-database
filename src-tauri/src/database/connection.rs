@@ -7,6 +7,20 @@ pub type DatabasePool = Arc<Mutex<SqlitePool>>;
 pub async fn create_pool(database_url: &str) -> Result<DatabasePool, sqlx::Error> {
     let pool = SqlitePoolOptions::new()
         .max_connections(5)
+        .after_connect(|conn, _meta| Box::pin(async move {
+            // Enable foreign key constraints
+            // This must be done for each connection as it's not persisted
+            sqlx::query("PRAGMA foreign_keys = ON")
+                .execute(&mut *conn)
+                .await?;
+
+            // Enable write-ahead logging for better concurrency
+            sqlx::query("PRAGMA journal_mode = WAL")
+                .execute(&mut *conn)
+                .await?;
+
+            Ok(())
+        }))
         .connect(database_url)
         .await?;
 
