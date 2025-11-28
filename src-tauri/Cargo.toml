@@ -37,6 +37,7 @@ quick-xml = "0.31"
 dirs = "5.0"
 log = "0.4"
 tauri-plugin-log = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "v1" }
+dunce = "1.0" # Convert Windows UNC paths to normal paths for Java compatibility
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"

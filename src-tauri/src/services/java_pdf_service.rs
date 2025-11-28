@@ -208,15 +208,20 @@ impl JavaPdfService {
                 "Could not resolve pdf-generator.jar resource path. Ensure it's bundled in src-tauri/resources/".to_string()
             })?;
 
-        if !resource_path.exists() {
+        // On Windows, resolve_resource returns UNC paths (\\?\C:\...) which Java doesn't support
+        // Use dunce to convert UNC paths to normal Windows paths (C:\...)
+        // On other platforms, dunce::simplified() is a no-op
+        let normalized_path = dunce::simplified(&resource_path).to_path_buf();
+
+        if !normalized_path.exists() {
             return Err(format!(
                 "pdf-generator.jar not found at resolved path: {:?}. Ensure it's bundled in src-tauri/resources/",
-                resource_path
+                normalized_path
             ));
         }
 
-        log::info!("   📦 Using production JAR: {:?}", resource_path);
-        Ok(resource_path)
+        log::info!("   📦 Using production JAR: {:?}", normalized_path);
+        Ok(normalized_path)
     }
 
     /// Convert JSON Value to HashMap<String, String>
