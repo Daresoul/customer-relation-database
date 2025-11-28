@@ -51,7 +51,9 @@
       ],
       "resources": [
         "resources/pdf-generator.jar",
-        "resources/pdfium/**"
+        "resources/pdfium/macos-aarch64/libpdfium.dylib",
+        "resources/pdfium/macos-x86_64/libpdfium.dylib",
+        "resources/pdfium/windows-x86_64/pdfium.dll"
       ]
     },
     "security": {
