@@ -1867,7 +1867,8 @@ fn create_record_templates_table(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std
 fn verify_breed_id_nullable(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
     Box::pin(async move {
         // Check current schema of patients table
-        let schema_check: Result<Vec<(String, String, i64, String, String)>, _> = sqlx::query_as(
+        // Schema: name (String), type (String), notnull (i64), dflt_value (Option<String>), pk (i64)
+        let schema_check: Result<Vec<(String, String, i64, Option<String>, i64)>, _> = sqlx::query_as(
             "SELECT name, type, \"notnull\", dflt_value, pk FROM pragma_table_info('patients') WHERE name IN ('breed_id', 'species_id')"
         )
         .fetch_all(pool)
@@ -1878,7 +1879,7 @@ fn verify_breed_id_nullable(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::fut
                 log::info!("📋 Verifying patient table schema...");
                 for (name, col_type, notnull, dflt, pk) in &columns {
                     log::info!("   Column: {} | Type: {} | NOT NULL: {} | Default: {} | PK: {}",
-                        name, col_type, notnull, dflt, pk);
+                        name, col_type, notnull, dflt.as_ref().unwrap_or(&"NULL".to_string()), pk);
                 }
 
                 // Check if breed_id has NOT NULL constraint (notnull=1 means NOT NULL)
