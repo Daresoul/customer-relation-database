@@ -1866,10 +1866,10 @@ fn create_record_templates_table(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std
 
 fn verify_breed_id_nullable(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
     Box::pin(async move {
-        // Check current schema of patients table
+        // Check ALL columns in patients table to detect old TEXT columns
         // Schema: name (String), type (String), notnull (i64), dflt_value (Option<String>), pk (i64)
         let schema_check: Result<Vec<(String, String, i64, Option<String>, i64)>, _> = sqlx::query_as(
-            "SELECT name, type, \"notnull\", dflt_value, pk FROM pragma_table_info('patients') WHERE name IN ('breed_id', 'species_id')"
+            "SELECT name, type, \"notnull\", dflt_value, pk FROM pragma_table_info('patients')"
         )
         .fetch_all(pool)
         .await;
@@ -1882,11 +1882,36 @@ fn verify_breed_id_nullable(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::fut
                         name, col_type, notnull, dflt.as_ref().unwrap_or(&"NULL".to_string()), pk);
                 }
 
+                // Check for old TEXT species/breed columns (from pre-migration 027 schema)
+                let old_species_col = columns.iter().find(|(name, col_type, _, _, _)|
+                    name == "species" && col_type == "TEXT"
+                );
+                let old_breed_col = columns.iter().find(|(name, col_type, _, _, _)|
+                    name == "breed" && col_type == "TEXT"
+                );
+
                 // Check if breed_id has NOT NULL constraint (notnull=1 means NOT NULL)
                 let breed_col = columns.iter().find(|(name, _, _, _, _)| name == "breed_id");
-                if let Some((_, _, notnull, _, _)) = breed_col {
-                    if *notnull == 1 {
-                        log::warn!("⚠️  breed_id has NOT NULL constraint, this will be fixed by recreating the table");
+                let breed_id_not_null = breed_col.map_or(false, |(_, _, notnull, _, _)| *notnull == 1);
+
+                // Need to recreate table if ANY of these issues exist:
+                // 1. Old species TEXT column still exists
+                // 2. Old breed TEXT column still exists
+                // 3. breed_id has NOT NULL constraint
+                let needs_fix = old_species_col.is_some() || old_breed_col.is_some() || breed_id_not_null;
+
+                if needs_fix {
+                    if old_species_col.is_some() {
+                        log::warn!("⚠️  Old 'species' TEXT column still exists - will be removed");
+                    }
+                    if old_breed_col.is_some() {
+                        log::warn!("⚠️  Old 'breed' TEXT column still exists - will be removed");
+                    }
+                    if breed_id_not_null {
+                        log::warn!("⚠️  breed_id has NOT NULL constraint - will be fixed");
+                    }
+
+                    log::info!("🔧 Recreating patients table with correct schema...");
 
                         // Need to recreate the table to remove NOT NULL from breed_id
                         // This is the same approach as the species/breed FK conversion migration
@@ -1959,12 +1984,9 @@ fn verify_breed_id_nullable(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::fut
                         .execute(pool)
                         .await?;
 
-                        log::info!("✅ Fixed breed_id to be nullable");
-                    } else {
-                        log::info!("✅ breed_id is already nullable, no fix needed");
-                    }
+                        log::info!("✅ Fixed patients table schema");
                 } else {
-                    log::warn!("⚠️  breed_id column not found in patients table");
+                    log::info!("✅ patients table schema is correct, no fix needed");
                 }
             }
             Err(e) => {
