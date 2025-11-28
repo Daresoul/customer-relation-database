@@ -229,20 +229,27 @@ impl FileStorageService {
         attachment_id: i64,
         target_path: String,
     ) -> Result<(), String> {
+        log::info!("💾 Saving attachment {} to: {}", attachment_id, target_path);
+
         let data = Self::download_attachment(app_handle, pool, attachment_id).await?;
+        log::info!("   Downloaded {} bytes", data.file_data.len());
 
         let path = std::path::Path::new(&target_path);
         if let Some(parent) = path.parent() {
             if !parent.exists() {
+                log::info!("   Creating parent directory: {}", parent.display());
                 fs::create_dir_all(parent)
                     .map_err(|e| format!("Failed to create directory '{}': {}", parent.display(), e))?;
             }
         }
 
+        log::info!("   Writing file...");
         let mut f = File::create(path)
             .map_err(|e| format!("Failed to create file '{}': {}", target_path, e))?;
         f.write_all(&data.file_data)
             .map_err(|e| format!("Failed to write file '{}': {}", target_path, e))?;
+
+        log::info!("   ✅ File saved successfully to: {}", target_path);
         Ok(())
     }
 
