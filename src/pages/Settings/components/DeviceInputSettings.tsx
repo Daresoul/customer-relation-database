@@ -258,6 +258,9 @@ const DeviceInputSettings: React.FC = () => {
       if (usb.product) parts.push(usb.product);
       if (usb.serial_number) parts.push(`SN:${usb.serial_number}`);
 
+      // Add USB physical location (helps differentiate identical devices on hubs)
+      if (usb.path) parts.push(`📍 ${usb.path}`);
+
       return parts.join(' | ');
     }
     if (typeof portType === 'object' && 'HIDDevice' in portType) {
