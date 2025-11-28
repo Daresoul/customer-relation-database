@@ -577,9 +577,13 @@ pub fn start_listen(
                 }
                 Err(e) => {
                     // Categorize errors: fail fast on permanent errors, retry transient ones
+                    // Covers both Unix and Windows error messages:
+                    // - Unix: "Permission denied", "No such file or directory", "not found"
+                    // - Windows: "Access is denied", "The system cannot find the file specified"
                     let is_permanent_error = e.contains("not found") || e.contains("Not found") ||
                                             e.contains("permission denied") || e.contains("Permission denied") ||
-                                            e.contains("access denied") || e.contains("Access denied");
+                                            e.contains("access denied") || e.contains("Access denied") ||
+                                            e.contains("cannot find the file") || e.contains("Cannot find the file");
 
                     if is_permanent_error {
                         log::error!("💥 PERMANENT error on {} ({}): {} - giving up immediately",
