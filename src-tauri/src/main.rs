@@ -33,6 +33,14 @@ fn main() {
             .targets(log_targets)
             .level(LevelFilter::Info)
             .build())
+        .on_window_event(|event| match event.event() {
+            tauri::WindowEvent::CloseRequested { .. } => {
+                log::info!("🛑 App shutdown requested, stopping all device listeners");
+                let count = services::device_input::stop_all_listeners();
+                log::info!("✅ Stopped {} listeners for graceful shutdown", count);
+            }
+            _ => {}
+        })
         .setup(|app| {
             // Get database URL
             let db_url = get_database_url(&app.handle())?;

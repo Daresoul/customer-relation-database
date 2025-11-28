@@ -149,9 +149,10 @@ const DeviceInputSettings: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    fetchPorts();
-  }, []);
+  // Removed automatic port scanning on mount to prevent locking ports
+  // Ports are now fetched only when:
+  // 1. User clicks "Refresh" button
+  // 2. User opens add/edit integration modal
 
   const getPortTypeDisplay = (portType: PortType): { text: string; color: string; tooltip?: string } => {
     if (typeof portType === 'object' && 'SerialUSBPort' in portType) {

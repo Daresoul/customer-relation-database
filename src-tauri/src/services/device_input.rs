@@ -1,31 +1,54 @@
 use std::thread;
-use std::time::Duration;
-use std::collections::{HashSet, HashMap};
-use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock, mpsc};
 use serialport::{available_ports, SerialPortType, UsbPortInfo};
 use serde::{Serialize, Deserialize};
 use hidapi::HidApi;
 use tauri::{AppHandle, Manager};
 use chrono::Utc;
+use rand::Rng;
 use crate::services::device_input::PortType::HIDDevice;
 use crate::services::device_parser::DeviceParserService;
 use crate::services::file_storage::FileStorageService;
 use crate::commands::file_history::record_device_file_access_internal;
 use crate::database::connection::DatabasePool;
 
-// Track active listeners to prevent duplicates
-static ACTIVE_LISTENERS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+// Thread handle for managing listener lifecycle
+// Stores JoinHandle, shutdown channel, and cleanup data for graceful thread termination
+// integration_id and port_name are stored to enable proper cleanup even if thread panics
+struct ListenerThread {
+    handle: thread::JoinHandle<()>,
+    shutdown_sender: mpsc::Sender<()>,
+    integration_id: i64,
+    port_name: String,
+}
+
+// Track active listeners to prevent duplicates (listener_key -> thread info)
+static ACTIVE_LISTENERS: OnceLock<Mutex<HashMap<String, ListenerThread>>> = OnceLock::new();
+
+// Track active ports to prevent multiple integrations on same port (port_name -> listener_key)
+static ACTIVE_PORTS: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
 
 // Track connection status for each device
 static CONNECTION_STATUS: OnceLock<Mutex<HashMap<String, DeviceConnectionStatus>>> = OnceLock::new();
 
-fn get_active_listeners() -> &'static Mutex<HashSet<String>> {
-    ACTIVE_LISTENERS.get_or_init(|| Mutex::new(HashSet::new()))
+fn get_active_listeners() -> &'static Mutex<HashMap<String, ListenerThread>> {
+    ACTIVE_LISTENERS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn get_active_ports() -> &'static Mutex<HashMap<String, String>> {
+    ACTIVE_PORTS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
 fn get_connection_status() -> &'static Mutex<HashMap<String, DeviceConnectionStatus>> {
     CONNECTION_STATUS.get_or_init(|| Mutex::new(HashMap::new()))
 }
+
+// Configuration for retry behavior
+const MAX_RETRY_ATTEMPTS: u32 = 10;  // Maximum number of retry attempts before giving up
+const BASE_RETRY_DELAY_SECS: u64 = 1;  // Base delay for exponential backoff (1 second)
+const MAX_RETRY_DELAY_SECS: u64 = 60;  // Maximum delay cap (60 seconds)
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct DeviceConnectionStatus {
@@ -84,7 +107,8 @@ fn update_connection_status(app_handle: &AppHandle, integration_id: i64, port_na
 
     // Store in global state
     {
-        let mut statuses = get_connection_status().lock().unwrap();
+        let mut statuses = get_connection_status().lock()
+            .expect("CONNECTION_STATUS mutex poisoned - a thread panicked while holding the lock");
         statuses.insert(format!("{}:{}", integration_id, port_name), connection_status.clone());
         log::info!("💾 Stored connection status in global state. Total tracked devices: {}", statuses.len());
     }
@@ -98,7 +122,8 @@ fn update_connection_status(app_handle: &AppHandle, integration_id: i64, port_na
 
 /// Get all connection statuses
 pub fn get_all_connection_statuses() -> Vec<DeviceConnectionStatus> {
-    let statuses = get_connection_status().lock().unwrap();
+    let statuses = get_connection_status().lock()
+        .expect("CONNECTION_STATUS mutex poisoned - a thread panicked while holding the lock");
     statuses.values().cloned().collect()
 }
 
@@ -407,8 +432,63 @@ pub fn scan_ports() -> Result<Vec<PortInfo>, String> {
     Ok(ports)
 }
 
+/// Calculate exponential backoff delay with jitter
+/// Formula: min((2^attempt * base_delay) + random_jitter, max_delay)
+/// Based on AWS best practices: https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/
+fn calculate_backoff_delay(attempt: u32) -> Duration {
+    if attempt == 0 {
+        return Duration::from_secs(0);
+    }
+
+    // Calculate base exponential delay: 2^attempt * base_delay
+    let exp_delay = BASE_RETRY_DELAY_SECS.saturating_mul(2u64.saturating_pow(attempt));
+
+    // Cap at maximum delay
+    let capped_delay = std::cmp::min(exp_delay, MAX_RETRY_DELAY_SECS);
+
+    // Add jitter: random value between 0 and min(capped_delay, 5 seconds)
+    // Jitter prevents synchronized retries from multiple clients
+    let jitter_max = std::cmp::min(capped_delay, 5);
+    let jitter = if jitter_max > 0 {
+        rand::thread_rng().gen_range(0..=jitter_max)
+    } else {
+        0
+    };
+
+    Duration::from_secs(capped_delay + jitter)
+}
+
+/// Stop all active listeners - used for graceful shutdown
+/// Returns number of threads that were stopped
+pub fn stop_all_listeners() -> usize {
+    log::info!("🛑 Stopping all active device listeners for graceful shutdown");
+
+    let listener_keys: Vec<String> = {
+        let listeners = get_active_listeners().lock()
+            .expect("ACTIVE_LISTENERS mutex poisoned - a thread panicked while holding the lock");
+        listeners.keys().cloned().collect()
+    };
+
+    let count = listener_keys.len();
+    log::info!("📋 Found {} active listeners to stop", count);
+
+    for key in listener_keys {
+        // Use split_once() instead of split() to handle port names containing ':'
+        // split_once() only splits on first ':', making it robust against edge cases
+        // Example: "/dev/tty:special:device:healvet" -> ("/dev/tty:special:device", "healvet")
+        if let Some((port_name, device_type)) = key.split_once(':') {
+            stop_listen(port_name, device_type);
+        } else {
+            log::warn!("⚠️  Malformed listener key (no ':' separator): {}", key);
+        }
+    }
+
+    count
+}
+
 /// Start listening to a serial port with the given device protocol
-/// With auto-reconnect on failure (5-second intervals)
+/// With exponential backoff retry (max 10 attempts, up to 60s delay)
+/// Uses mpsc channel for graceful shutdown signal
 pub fn start_listen(
     app_handle: AppHandle,
     port_name: String,
@@ -418,101 +498,237 @@ pub fn start_listen(
     log::info!("🎧 Starting device listener - Integration ID: {}, Port: {}, Device Type: {}",
         integration_id, port_name, device_type);
 
-    // Check if listener already exists for this port
     let listener_key = format!("{}:{}", port_name, device_type);
 
-    {
-        let mut listeners = get_active_listeners().lock().unwrap();
-        if listeners.contains(&listener_key) {
-            log::warn!("⚠️  Listener already active for {} ({}), skipping duplicate start",
-                device_type, port_name);
-            return Ok(());
-        }
-        listeners.insert(listener_key.clone());
-        log::info!("📝 Registered new listener: {}. Total active listeners: {}",
-            listener_key, listeners.len());
-    }
+    // Create shutdown channel first (before acquiring locks)
+    let (shutdown_tx, shutdown_rx) = mpsc::channel();
 
     let device_type_clone = device_type.clone();
     let port_name_clone = port_name.clone();
 
-    log::info!("🧵 Spawning listener thread for {} ({})", device_type, port_name);
+    // Atomically check for duplicates, reserve port, spawn thread, and register
+    // This prevents TOCTOU race conditions by holding locks until thread is registered
+    {
+        let mut listeners = get_active_listeners().lock()
+            .expect("ACTIVE_LISTENERS mutex poisoned - a thread panicked while holding the lock");
 
-    thread::spawn(move || {
+        // Check for duplicate listener
+        if listeners.contains_key(&listener_key) {
+            log::warn!("⚠️  Listener already active for {} ({}), skipping duplicate start",
+                device_type, port_name);
+            return Ok(());
+        }
+
+        // Check if port is already in use by another integration
+        let mut ports = get_active_ports().lock()
+            .expect("ACTIVE_PORTS mutex poisoned - a thread panicked while holding the lock");
+        if let Some(existing_key) = ports.get(&port_name) {
+            log::error!("❌ Port {} is already in use by listener: {}", port_name, existing_key);
+            return Err(format!("Port {} is already in use by another device integration", port_name));
+        }
+
+        // Reserve the port
+        ports.insert(port_name.clone(), listener_key.clone());
+        log::info!("📌 Reserved port {} for listener {}", port_name, listener_key);
+
+        // Spawn thread while still holding locks to prevent race
+        log::info!("🧵 Spawning listener thread for {} ({})", device_type, port_name);
+
+        let handle = thread::spawn(move || {
         let mut retry_count: u32 = 0;
 
         log::info!("🔄 Listener thread started for {} ({})", device_type_clone, port_name_clone);
 
         loop {
-            log::info!("🔌 Attempting connection to {} ({}) - Retry #{}",
-                device_type_clone, port_name_clone, retry_count);
+            // Check for shutdown signal before attempting connection
+            if shutdown_rx.try_recv().is_ok() {
+                log::info!("🛑 Shutdown signal received for {} ({}), exiting thread",
+                    device_type_clone, port_name_clone);
+                break;
+            }
+
+            // Check if we've exceeded max retry attempts
+            if retry_count > 0 && retry_count >= MAX_RETRY_ATTEMPTS {
+                log::error!("❌ Max retry attempts ({}) reached for {} ({}), giving up",
+                    MAX_RETRY_ATTEMPTS, device_type_clone, port_name_clone);
+                update_connection_status(&app_handle, integration_id, &port_name_clone, &device_type_clone,
+                    ConnectionState::Error, Some(format!("Max retries ({}) exceeded", MAX_RETRY_ATTEMPTS)), retry_count);
+                break;
+            }
+
+            log::info!("🔌 Attempting connection to {} ({}) - Attempt {}/{}",
+                device_type_clone, port_name_clone, retry_count + 1, MAX_RETRY_ATTEMPTS);
 
             // Update status to connecting
-            update_connection_status(&app_handle, integration_id, &port_name_clone, &device_type_clone, ConnectionState::Connecting, None, retry_count);
+            update_connection_status(&app_handle, integration_id, &port_name_clone, &device_type_clone,
+                ConnectionState::Connecting, None, retry_count);
 
             // Get protocol configuration for the device type
             let protocol = get_device_protocol(&device_type_clone);
             log::info!("📋 Using protocol for {} - Baud: {}, Start: {:?}, End: {:?}",
                 device_type_clone, protocol.baud_rate, protocol.start_symbol, protocol.end_symbol);
 
-            match handle_listening_serial(&port_name_clone, &app_handle, protocol, &device_type_clone, integration_id) {
+            match handle_listening_serial(&port_name_clone, &app_handle, protocol, &device_type_clone,
+                                        integration_id, &shutdown_rx) {
                 Ok(_) => {
-                    log::warn!("🔌 Listener for {} ({}) exited normally (unexpected)",
+                    log::info!("✅ Listener for {} ({}) exited cleanly (shutdown or connection closed)",
                         device_type_clone, port_name_clone);
-                    // Normal exit (shouldn't happen in normal operation)
-                    update_connection_status(&app_handle, integration_id, &port_name_clone, &device_type_clone, ConnectionState::Disconnected, Some("Connection closed".to_string()), retry_count);
+                    break; // Clean exit
                 }
                 Err(e) => {
+                    // Categorize errors: fail fast on permanent errors, retry transient ones
+                    let is_permanent_error = e.contains("not found") || e.contains("Not found") ||
+                                            e.contains("permission denied") || e.contains("Permission denied") ||
+                                            e.contains("access denied") || e.contains("Access denied");
+
+                    if is_permanent_error {
+                        log::error!("💥 PERMANENT error on {} ({}): {} - giving up immediately",
+                            device_type_clone, port_name_clone, e);
+                        update_connection_status(&app_handle, integration_id, &port_name_clone, &device_type_clone,
+                            ConnectionState::Error, Some(format!("Permanent error: {}", e)), retry_count);
+                        break; // Don't retry permanent errors
+                    }
+
                     retry_count += 1;
-                    log::error!("❌ Listener error on {} ({}): {} (retry #{})",
-                        device_type_clone, port_name_clone, e, retry_count);
-                    update_connection_status(&app_handle, integration_id, &port_name_clone, &device_type_clone, ConnectionState::Error, Some(e.clone()), retry_count);
+                    log::error!("❌ Transient error on {} ({}): {} (attempt {}/{})",
+                        device_type_clone, port_name_clone, e, retry_count, MAX_RETRY_ATTEMPTS);
+                    update_connection_status(&app_handle, integration_id, &port_name_clone, &device_type_clone,
+                        ConnectionState::Error, Some(e.clone()), retry_count);
                 }
             }
 
-            // Check if we should stop retrying (listener was removed)
-            {
-                let listeners = get_active_listeners().lock().unwrap();
-                if !listeners.contains(&listener_key) {
-                    log::info!("🛑 Listener for {} ({}) was stopped externally, exiting thread",
+            // Calculate backoff delay with exponential backoff + jitter
+            let delay = calculate_backoff_delay(retry_count);
+            log::info!("⏳ Waiting {:?} before next connection attempt for {} ({})",
+                delay, device_type_clone, port_name_clone);
+
+            // Efficient backoff sleep using recv_timeout() - blocks until signal or timeout
+            // This is more efficient than spinning with try_recv() + sleep()
+            match shutdown_rx.recv_timeout(delay) {
+                Ok(_) => {
+                    // Shutdown signal received during backoff
+                    log::info!("🛑 Shutdown signal received during backoff for {} ({}), exiting",
                         device_type_clone, port_name_clone);
-                    break;
+                    return; // Exit thread immediately
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                    // Backoff period complete, continue to next retry
+                    log::debug!("   Backoff period elapsed for {} ({}), retrying connection",
+                        device_type_clone, port_name_clone);
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                    // Sender dropped (stop_listen called), exit gracefully
+                    log::info!("🛑 Shutdown sender disconnected during backoff for {} ({}), exiting",
+                        device_type_clone, port_name_clone);
+                    return;
                 }
             }
-
-            // Wait 5 seconds before retrying
-            log::info!("⏳ Waiting 5 seconds before reconnection attempt for {} ({})",
-                device_type_clone, port_name_clone);
-            thread::sleep(Duration::from_secs(5));
         }
 
         log::info!("🧹 Cleaning up listener thread for {} ({})", device_type_clone, port_name_clone);
 
-        // Remove from active listeners when thread exits
-        let mut listeners = get_active_listeners().lock().unwrap();
-        listeners.remove(&listener_key);
-        log::info!("📝 Removed listener: {}. Remaining active listeners: {}",
-            listener_key, listeners.len());
+        // Remove from active ports
+        let mut ports = get_active_ports().lock()
+            .expect("ACTIVE_PORTS mutex poisoned - a thread panicked while holding the lock");
+        ports.remove(&port_name_clone);
+        log::info!("📍 Released port: {}", port_name_clone);
 
         // Clear connection status
-        let mut statuses = get_connection_status().lock().unwrap();
+        let mut statuses = get_connection_status().lock()
+            .expect("CONNECTION_STATUS mutex poisoned - a thread panicked while holding the lock");
         statuses.remove(&format!("{}:{}", integration_id, port_name_clone));
         log::info!("🗑️  Cleared connection status for Integration ID: {}, Port: {}",
             integration_id, port_name_clone);
     });
 
+        // Register thread handle while still holding locks (atomic with spawn)
+        // This prevents race where another call could check and pass before we register
+        listeners.insert(listener_key.clone(), ListenerThread {
+            handle,
+            shutdown_sender: shutdown_tx,
+            integration_id,
+            port_name: port_name.clone(),
+        });
+        log::info!("📝 Registered listener: {}. Total active listeners: {}", listener_key, listeners.len());
+    }  // Locks released here - now safe for other calls to start_listen()
+
     Ok(())
 }
 
-/// Stop listening to a serial port
+/// Stop listening to a serial port with graceful shutdown
+/// Sends shutdown signal and waits for thread to exit
+/// Note: This will block until the thread exits. With proper shutdown signal checking,
+/// threads should exit within ~100ms (the serial port read timeout).
 pub fn stop_listen(port_name: &str, device_type: &str) {
     log::info!("🛑 Stopping device listener - Port: {}, Device Type: {}", port_name, device_type);
     let listener_key = format!("{}:{}", port_name, device_type);
-    let mut listeners = get_active_listeners().lock().unwrap();
-    let was_removed = listeners.remove(&listener_key);
-    if was_removed {
-        log::info!("✅ Successfully stopped listener: {}. Remaining active listeners: {}",
-            listener_key, listeners.len());
+
+    // Remove listener and get thread handle
+    let listener_thread = {
+        let mut listeners = get_active_listeners().lock()
+            .expect("ACTIVE_LISTENERS mutex poisoned - a thread panicked while holding the lock");
+        listeners.remove(&listener_key)
+    };
+
+    if let Some(listener) = listener_thread {
+        log::info!("📨 Sending shutdown signal to listener: {}", listener_key);
+
+        // Send shutdown signal (non-blocking)
+        // Note: send() only fails if receiver is dropped, meaning thread already exited
+        if let Err(_) = listener.shutdown_sender.send(()) {
+            log::info!("ℹ️  Thread {} already exited (receiver dropped), proceeding with join", listener_key);
+        }
+
+        // Wait for thread to exit
+        // Note: JoinHandle::join() blocks indefinitely, but our threads check shutdown
+        // signals frequently (every 100ms in port.read() timeout), so exit should be fast
+        log::info!("⏳ Waiting for thread {} to exit...", listener_key);
+        let join_start = Instant::now();
+
+        let thread_panicked = match listener.handle.join() {
+            Ok(_) => {
+                let elapsed = join_start.elapsed();
+                log::info!("✅ Thread {} exited cleanly after {:?}", listener_key, elapsed);
+                false
+            }
+            Err(e) => {
+                log::error!("❌ Thread {} panicked: {:?}", listener_key, e);
+                log::warn!("🧹 Thread panicked before cleanup - forcing cleanup now");
+                true
+            }
+        };
+
+        // CRITICAL: Always cleanup after join, even if thread exited cleanly
+        // Rationale: If thread panicked before reaching cleanup code, resources leak
+        // This cleanup is idempotent - if thread already cleaned up, remove() is a no-op
+        {
+            let mut ports = get_active_ports().lock()
+                .expect("ACTIVE_PORTS mutex poisoned - a thread panicked while holding the lock");
+            if ports.remove(&listener.port_name).is_some() {
+                if thread_panicked {
+                    log::info!("🔧 Force-released leaked port: {}", listener.port_name);
+                } else {
+                    log::debug!("   Port {} already cleaned up by thread", listener.port_name);
+                }
+            }
+        }
+
+        // Remove connection status (uses integration_id + port_name as key)
+        {
+            let mut statuses = get_connection_status().lock()
+                .expect("CONNECTION_STATUS mutex poisoned - a thread panicked while holding the lock");
+            let status_key = format!("{}:{}", listener.integration_id, listener.port_name);
+            if statuses.remove(&status_key).is_some() {
+                if thread_panicked {
+                    log::info!("🔧 Force-cleared leaked connection status for Integration ID: {}, Port: {}",
+                        listener.integration_id, listener.port_name);
+                } else {
+                    log::debug!("   Connection status {} already cleaned up by thread", status_key);
+                }
+            }
+        }
+
+        log::info!("📝 Stopped listener: {}", listener_key);
     } else {
         log::warn!("⚠️  Listener {} was not active, nothing to stop", listener_key);
     }
@@ -617,7 +833,14 @@ fn handle_device_data(app_handle: &AppHandle, data: &[u8], device_name: &str, de
     }
 }
 
-fn handle_listening_serial(port_name: &str, app_handle: &AppHandle, protocol: DeviceProtocol, device_type: &str, integration_id: i64) -> Result<(), String> {
+fn handle_listening_serial(
+    port_name: &str,
+    app_handle: &AppHandle,
+    protocol: DeviceProtocol,
+    device_type: &str,
+    integration_id: i64,
+    shutdown_rx: &mpsc::Receiver<()>,
+) -> Result<(), String> {
     log::info!("🔌 Opening serial port - Port: {}, Device: {}, Integration ID: {}",
         port_name, device_type, integration_id);
 
@@ -666,6 +889,14 @@ fn handle_listening_serial(port_name: &str, app_handle: &AppHandle, protocol: De
         protocol.start_symbol, protocol.end_symbol);
 
     loop {
+        // Check for shutdown signal using try_recv (non-blocking)
+        // Using try_recv instead of recv_timeout for better responsiveness
+        if shutdown_rx.try_recv().is_ok() {
+            log::info!("🛑 Shutdown signal received in read loop for {} ({}), closing port", device_type, port_name);
+            drop(port); // Explicitly close the port
+            return Ok(()); // Clean shutdown
+        }
+
         match port.read(&mut buffer) {
             Ok(bytes_read) if bytes_read > 0 => {
                 read_count += 1;
@@ -768,6 +999,5 @@ fn handle_listening_serial(port_name: &str, app_handle: &AppHandle, protocol: De
             }
         }
     }
-    log::info!("🔌 Serial port read loop ended for {} ({})", device_type, port_name);
-    Ok(())
+    // Note: Loop never exits normally - all exits are via return statements above
 }
