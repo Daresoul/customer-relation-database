@@ -122,10 +122,10 @@ impl PdfRenderService {
 
         log::info!("📄 Loading PDFium library for platform: {}", subdir);
 
-        // 1) Look in packaged resources (works in production bundles)
+        // 1) Look in packaged resources with subdirectory structure (macOS/Linux)
         if let Some(base) = app_handle.path_resolver().resolve_resource(format!("pdfium/{}", subdir)) {
             let lib_path = Pdfium::pdfium_platform_library_name_at_path(&base);
-            log::info!("   Trying packaged resource: {:?}", lib_path);
+            log::info!("   Trying packaged resource (nested): {:?}", lib_path);
             if lib_path.exists() {
                 log::info!("   ✓ Library file exists");
                 match Pdfium::bind_to_library(&lib_path) {
@@ -141,7 +141,33 @@ impl PdfRenderService {
                 log::warn!("   ⚠️  Library file not found");
             }
         } else {
-            log::warn!("   ⚠️  Could not resolve packaged resource path");
+            log::warn!("   ⚠️  Could not resolve nested packaged resource path");
+        }
+
+        // 1b) Windows WiX bundler flattens directory structure - try flattened path
+        // On Windows, "resources/pdfium/**" becomes just "resources/pdfium.dll" (flattened)
+        #[cfg(windows)]
+        {
+            let lib_name = "pdfium.dll";
+            if let Some(lib_path) = app_handle.path_resolver().resolve_resource(lib_name) {
+                log::info!("   Trying packaged resource (flattened for Windows): {:?}", lib_path);
+                if lib_path.exists() {
+                    log::info!("   ✓ Library file exists");
+                    match Pdfium::bind_to_library(&lib_path) {
+                        Ok(bindings) => {
+                            log::info!("   ✅ Successfully loaded PDFium from flattened Windows bundle");
+                            return Ok(Pdfium::new(bindings));
+                        }
+                        Err(e) => {
+                            log::warn!("   ⚠️  Failed to bind to library: {}", e);
+                        }
+                    }
+                } else {
+                    log::warn!("   ⚠️  Library file not found at flattened path");
+                }
+            } else {
+                log::warn!("   ⚠️  Could not resolve flattened resource path");
+            }
         }
 
         // 2) Look in dev resources folder (resources/pdfium/<subdir>) relative to CWD
