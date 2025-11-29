@@ -477,11 +477,11 @@ impl MedicalRecordService {
             }
             Ok(None) => {
                 println!("   ⚠️  No household link found for patient");
-                "Unknown Owner".to_string()
+                "Непознат Сопственик".to_string()
             }
             Err(e) => {
                 println!("   ❌ Owner query failed: {}", e);
-                "Unknown Owner".to_string()
+                "Непознат Сопственик".to_string()
             }
         };
 

@@ -549,14 +549,14 @@ pub async fn regenerate_pdf_from_attachment(
     .fetch_optional(&*pool_guard)
     .await
     .unwrap_or(None)
-    .unwrap_or_else(|| "Unknown Owner".to_string());
+    .unwrap_or_else(|| "Непознат Сопственик".to_string());
 
     let patient_data = PatientData {
-        name: patient_row.try_get("name").unwrap_or_else(|_| "Unknown Patient".to_string()),
+        name: patient_row.try_get("name").unwrap_or_else(|_| "Непознат Пациент".to_string()),
         owner: owner_name,
-        species: patient_row.try_get("species").unwrap_or_else(|_| "Unknown Species".to_string()),
+        species: patient_row.try_get("species").unwrap_or_else(|_| "Непознат Вид".to_string()),
         microchip_id: patient_row.try_get("microchip_id").ok(),
-        gender: patient_row.try_get("gender").unwrap_or_else(|_| "Unknown".to_string()),
+        gender: patient_row.try_get("gender").unwrap_or_else(|_| "Непознат".to_string()),
         date_of_birth: patient_row.try_get("date_of_birth").ok(),
     };
 
@@ -687,21 +687,21 @@ pub async fn regenerate_pdf_from_medical_record(
              JOIN patient_households ph ON ph.household_id = h.id \
              WHERE ph.patient_id = ? \
              LIMIT 1), \
-            'Unknown Owner' \
+            'Непознат Сопственик' \
          )"
     )
     .bind(patient_id)
     .bind(patient_id)
     .fetch_one(&*pool_guard)
     .await
-    .unwrap_or_else(|_| "Unknown Owner".to_string());
+    .unwrap_or_else(|_| "Непознат Сопственик".to_string());
 
     let patient_data = PatientData {
-        name: patient_row.try_get("name").unwrap_or_else(|_| "Unknown Patient".to_string()),
+        name: patient_row.try_get("name").unwrap_or_else(|_| "Непознат Пациент".to_string()),
         owner: owner_name,
-        species: patient_row.try_get("species_name").unwrap_or_else(|_| "Unknown Species".to_string()),
+        species: patient_row.try_get("species_name").unwrap_or_else(|_| "Непознат Вид".to_string()),
         microchip_id: patient_row.try_get("microchip_id").ok(),
-        gender: patient_row.try_get("gender").unwrap_or_else(|_| "Unknown".to_string()),
+        gender: patient_row.try_get("gender").unwrap_or_else(|_| "Непознат".to_string()),
         date_of_birth: patient_row.try_get("date_of_birth").ok(),
     };
 
