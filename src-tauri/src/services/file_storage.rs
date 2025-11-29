@@ -326,30 +326,39 @@ impl FileStorageService {
                 .chain(Some(0))
                 .collect();
 
-            let operation: Vec<u16> = OsStr::new("print")
-                .encode_wide()
-                .chain(Some(0))
-                .collect();
+            // Try "print" verb first, fallback to "open" if not supported
+            let operations = ["print", "open"];
+            let mut last_error = 0;
 
-            unsafe {
-                let result = ShellExecuteW(
-                    HWND(0),                          // No parent window
-                    PCWSTR(operation.as_ptr()),       // "print" verb
-                    PCWSTR(wide_path.as_ptr()),       // File path
-                    PCWSTR::null(),                   // No parameters
-                    PCWSTR::null(),                   // No directory
-                    windows::Win32::UI::WindowsAndMessaging::SW_HIDE  // Hidden window
-                );
+            for operation_str in &operations {
+                let operation: Vec<u16> = OsStr::new(operation_str)
+                    .encode_wide()
+                    .chain(Some(0))
+                    .collect();
 
-                // ShellExecuteW returns > 32 on success
-                if result.0 as i32 <= 32 {
-                    log::error!("   ❌ ShellExecuteW failed with code: {}", result.0);
-                    return Err(format!("Print command failed with error code: {}", result.0));
+                unsafe {
+                    let result = ShellExecuteW(
+                        HWND(0),                          // No parent window
+                        PCWSTR(operation.as_ptr()),       // "print" or "open" verb
+                        PCWSTR(wide_path.as_ptr()),       // File path
+                        PCWSTR::null(),                   // No parameters
+                        PCWSTR::null(),                   // No directory
+                        windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL  // Show window
+                    );
+
+                    let code = result.0 as i32;
+                    if code > 32 {
+                        log::info!("   ✅ File opened with '{}' verb - user can print from viewer", operation_str);
+                        return Ok(());
+                    }
+
+                    last_error = code;
+                    log::warn!("   ⚠️  '{}' verb failed with code {}, trying next...", operation_str, code);
                 }
             }
 
-            log::info!("   ✅ Print command sent successfully");
-            return Ok(());
+            log::error!("   ❌ All print methods failed. Last error: {}", last_error);
+            Err(format!("Could not open file for printing. Error code: {}", last_error))
         }
 
         #[cfg(target_os = "linux")]
