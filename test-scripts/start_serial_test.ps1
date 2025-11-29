@@ -12,8 +12,8 @@ Get-Process python -ErrorAction SilentlyContinue | Where-Object {
 Write-Host ""
 Write-Host "[*] Starting Python serial bridge..." -ForegroundColor Yellow
 
-# Start the Python bridge in background
-$bridge = Start-Process python -ArgumentList "test-scripts/serial_bridge.py" -PassThru -NoNewWindow
+# Start the Python bridge in background with Windows config
+$bridge = Start-Process python -ArgumentList @("test-scripts/serial_bridge.py", "--config", "test-scripts/device_ports_windows.json") -PassThru -NoNewWindow
 
 # Wait for bridge to initialize
 Start-Sleep -Seconds 2
@@ -42,8 +42,12 @@ if ($ports.Count -eq 0) {
 
 Write-Host ""
 Write-Host "To test devices, run in another terminal:" -ForegroundColor Yellow
-Write-Host "  python test-scripts/test_healvet_full_panel.py COM3 DOG-12345" -ForegroundColor White
-Write-Host "  python test-scripts/test_pointcare.py COM4 DOG-12345" -ForegroundColor White
+Write-Host "  python test-scripts/test_healvet_full_panel.py COM4 DOG-12345" -ForegroundColor White
+Write-Host "  python test-scripts/test_pointcare.py COM6 DOG-12345" -ForegroundColor White
+Write-Host "" -ForegroundColor Cyan
+Write-Host "Virtual COM Port Pairs (com0com):" -ForegroundColor Cyan
+Write-Host "  Healvet: COM3 (app listens) <-> COM4 (test script sends)" -ForegroundColor White
+Write-Host "  Pointcare: COM5 (app listens) <-> COM6 (test script sends)" -ForegroundColor White
 
 Write-Host ""
 Write-Host "To stop the bridge later, run:" -ForegroundColor Yellow
