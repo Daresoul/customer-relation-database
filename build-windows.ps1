@@ -24,6 +24,16 @@ foreach ($tool in $tools) {
     }
 }
 
+# Update version in tauri.conf.json and Cargo.toml
+Write-Host "`nUpdating version..." -NoNewline
+$env:GITHUB_REF_NAME = $Version
+node .github/scripts/update-version.cjs
+if ($LASTEXITCODE -ne 0) {
+    Write-Host " [FAILED]" -ForegroundColor Red
+    exit 1
+}
+Write-Host " [OK]" -ForegroundColor Green
+
 # npm install
 Write-Host "`nnpm install..." -NoNewline
 $time = Measure-Command {
