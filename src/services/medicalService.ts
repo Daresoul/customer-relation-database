@@ -218,11 +218,28 @@ export class MedicalService {
   static async saveAttachmentAs(attachmentId: number, defaultFileName: string): Promise<void> {
     try {
       const { save } = await import('@tauri-apps/api/dialog');
-      const targetPath = await save({
+
+      // Extract extension from original filename
+      const extension = defaultFileName.includes('.')
+        ? defaultFileName.substring(defaultFileName.lastIndexOf('.'))
+        : '';
+
+      let targetPath = await save({
         defaultPath: defaultFileName,
-        title: 'Save Attachment As'
+        title: 'Save Attachment As',
+        filters: extension ? [{
+          name: `${extension.substring(1).toUpperCase()} Files`,
+          extensions: [extension.substring(1)]
+        }] : undefined
       });
+
       if (!targetPath) return; // user cancelled
+
+      // Ensure the extension is present
+      if (extension && !targetPath.toLowerCase().endsWith(extension.toLowerCase())) {
+        targetPath = targetPath + extension;
+      }
+
       await invoke('write_medical_attachment_to_path', {
         attachmentId: attachmentId,
         targetPath: targetPath
