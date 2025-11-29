@@ -358,7 +358,7 @@ impl FileStorageService {
             }
 
             log::error!("   ❌ All print methods failed. Last error: {}", last_error);
-            Err(format!("Could not open file for printing. Error code: {}", last_error))
+            return Err(format!("Could not open file for printing. Error code: {}", last_error));
         }
 
         #[cfg(target_os = "linux")]
