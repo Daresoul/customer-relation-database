@@ -338,7 +338,7 @@ impl FileStorageService {
                     PCWSTR(wide_path.as_ptr()),       // File path
                     PCWSTR::null(),                   // No parameters
                     PCWSTR::null(),                   // No directory
-                    windows::Win32::UI::WindowsAndMessaging::SW_HIDE.0  // Hidden window
+                    windows::Win32::UI::WindowsAndMessaging::SW_HIDE  // Hidden window
                 );
 
                 // ShellExecuteW returns > 32 on success
