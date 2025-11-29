@@ -210,8 +210,12 @@ impl JavaPdfService {
 
         // On Windows, resolve_resource returns UNC paths (\\?\C:\...) which Java doesn't support
         // Use dunce to convert UNC paths to normal Windows paths (C:\...)
-        // On other platforms, dunce::simplified() is a no-op
+        #[cfg(windows)]
         let normalized_path = dunce::simplified(&resource_path).to_path_buf();
+
+        // On other platforms, use the path as-is
+        #[cfg(not(windows))]
+        let normalized_path = resource_path;
 
         if !normalized_path.exists() {
             return Err(format!(

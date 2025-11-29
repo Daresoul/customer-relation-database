@@ -120,3 +120,53 @@ export function getConnectionTypeDisplayName(connectionType: ConnectionType): st
       return 'HL7 TCP';
   }
 }
+
+// Serial Port and USB Device Types
+export interface UsbInfo {
+  vid: number;
+  pid: number;
+  serial_number?: string;
+  manufacturer?: string;
+  product?: string;
+  path?: string;
+  device_name?: string; // Friendly name from USB ID database (e.g., "FTDI FT232 USB-Serial")
+}
+
+export type PortType =
+  | { USB: UsbInfo }
+  | { PCI: null }
+  | { BluetoothPort: null }
+  | { BuiltInPort: null }
+  | { HIDDevice: UsbInfo }
+  | { Unknown: null };
+
+export interface PortInfo {
+  port_name: string;
+  port_type: PortType;
+}
+
+// Helper to format USB device display name (for dropdown/list)
+export function formatUsbDeviceDisplayName(port: PortInfo): string {
+  if ('USB' in port.port_type || 'HIDDevice' in port.port_type) {
+    const usb = 'USB' in port.port_type ? port.port_type.USB : port.port_type.HIDDevice;
+    if (usb.device_name) {
+      return `${port.port_name} - ${usb.device_name}`;
+    }
+  }
+  return port.port_name;
+}
+
+// Helper to format USB device tooltip (detailed info on hover)
+export function formatUsbDeviceTooltip(port: PortInfo): string | undefined {
+  if ('USB' in port.port_type || 'HIDDevice' in port.port_type) {
+    const usb = 'USB' in port.port_type ? port.port_type.USB : port.port_type.HIDDevice;
+    const parts: string[] = [];
+    parts.push(`VID: 0x${usb.vid.toString(16).padStart(4, '0')}`);
+    parts.push(`PID: 0x${usb.pid.toString(16).padStart(4, '0')}`);
+    if (usb.serial_number) parts.push(`Serial: ${usb.serial_number}`);
+    if (usb.manufacturer) parts.push(`Manufacturer: ${usb.manufacturer}`);
+    if (usb.product) parts.push(`Product: ${usb.product}`);
+    return parts.join('\n');
+  }
+  return undefined;
+}

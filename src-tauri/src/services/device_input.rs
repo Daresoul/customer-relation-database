@@ -135,6 +135,7 @@ pub struct UsbInfo {
     pub manufacturer: Option<String>,
     pub product: Option<String>,
     pub path: Option<String>,
+    pub device_name: Option<String>, // Friendly device name from USB ID database
 }
 
 impl UsbInfo {
@@ -150,7 +151,8 @@ impl UsbInfo {
             product: usb_port_info.product,
             // USB path for physical port identification
             // This helps differentiate identical devices on USB hubs
-            path
+            path,
+            device_name: None, // Populated asynchronously later
         }
     }
 }
@@ -379,10 +381,79 @@ fn extract_usb_info_from_device_path(device_path: &str, usb_location: Option<Str
             manufacturer: None, // Not available from device path
             product: None,      // Not available from device path
             path: usb_location,
+            device_name: None,  // Populated asynchronously later
         });
     }
 
     None
+}
+
+/// Enrich PortInfo with USB device names (call this from commands/frontend)
+/// This is async so it can do web lookups if needed
+pub async fn enrich_port_info_with_device_names(mut ports: Vec<PortInfo>) -> Vec<PortInfo> {
+    for port in &mut ports {
+        match &mut port.port_type {
+            PortType::SerialUSBPort(ref mut usb_info) | PortType::HIDDevice(ref mut usb_info) => {
+                // Lookup friendly device name
+                if let Some(name) = lookup_usb_device_name(usb_info.vid, usb_info.pid).await {
+                    usb_info.device_name = Some(name);
+                }
+            }
+            _ => {}
+        }
+    }
+    ports
+}
+
+/// Hybrid USB device name lookup - tries embedded database first, then web API fallback
+/// Returns a friendly device name like "FTDI FT232 USB-Serial Converter"
+async fn lookup_usb_device_name(vid: u16, pid: u16) -> Option<String> {
+    // 1. Try embedded database first (fast, offline, covers 99% of devices)
+    if let Some(device) = usb_ids::Device::from_vid_pid(vid, pid) {
+        let vendor_name = device.vendor().name();
+        let product_name = device.name();
+        return Some(format!("{} {}", vendor_name, product_name));
+    }
+
+    // 2. Fall back to web lookup for new/rare devices (requires internet)
+    if let Ok(name) = lookup_usb_device_web(vid, pid).await {
+        return Some(name);
+    }
+
+    // 3. Final fallback - just show VID/PID
+    None
+}
+
+/// Web-based USB device lookup using devicehunt.com API
+async fn lookup_usb_device_web(vid: u16, pid: u16) -> Result<String, String> {
+    let url = format!(
+        "https://devicehunt.com/api/search?vendor_id={:04x}&device_id={:04x}",
+        vid, pid
+    );
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(3))
+        .build()
+        .map_err(|e| format!("HTTP client error: {}", e))?;
+
+    let response = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Web lookup failed: {}", e))?;
+
+    if response.status().is_success() {
+        let json: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| format!("JSON parse error: {}", e))?;
+
+        if let Some(name) = json.get("device_name").and_then(|v| v.as_str()) {
+            return Ok(name.to_string());
+        }
+    }
+
+    Err("Device not found in web database".to_string())
 }
 
 pub fn scan_serial_ports() -> Result<Vec<PortInfo>, String> {
@@ -490,7 +561,8 @@ pub fn scan_hid_ports() -> Result<Vec<PortInfo>, String> {
         manufacturer: device.manufacturer_string().map(|s| s.to_string()),
         product: device.product_string().map(|s| s.to_string()),
         serial_number: device.serial_number().map(|s| s.to_string()),
-        path: Some(device.path().to_string_lossy().to_string())
+        path: Some(device.path().to_string_lossy().to_string()),
+        device_name: None, // Populated asynchronously later
     }).collect();
     for device in devices {
         let vid = device.vid;
