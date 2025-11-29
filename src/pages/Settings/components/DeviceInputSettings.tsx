@@ -32,6 +32,7 @@ interface UsbInfo {
   manufacturer?: string;
   product?: string;
   path?: string;
+  device_name?: string; // Friendly name from USB ID database
 }
 
 type PortType =
@@ -243,10 +244,11 @@ const DeviceInputSettings: React.FC = () => {
       const usb = portType.SerialUSBPort;
       const parts = [];
 
-      // Show friendly chip name first if recognized
-      const chipName = getChipName(usb.vid, usb.pid);
-      if (chipName) {
-        parts.push(`[${chipName}]`);
+      // Prefer device_name from backend (usb-ids database + web fallback)
+      // Falls back to local getChipName() for compatibility
+      const deviceName = usb.device_name || getChipName(usb.vid, usb.pid);
+      if (deviceName) {
+        parts.push(`[${deviceName}]`);
       }
 
       // Always show VID:PID for USB devices (helps with Windows identification)
@@ -254,7 +256,7 @@ const DeviceInputSettings: React.FC = () => {
       parts.push(`PID:${usb.pid.toString(16).toUpperCase().padStart(4, '0')}`);
 
       // Add manufacturer and product if available
-      if (usb.manufacturer && usb.manufacturer !== chipName) parts.push(usb.manufacturer);
+      if (usb.manufacturer && usb.manufacturer !== deviceName) parts.push(usb.manufacturer);
       if (usb.product) parts.push(usb.product);
       if (usb.serial_number) parts.push(`SN:${usb.serial_number}`);
 
@@ -267,9 +269,10 @@ const DeviceInputSettings: React.FC = () => {
       const hid = portType.HIDDevice;
       const parts = [];
 
-      const chipName = getChipName(hid.vid, hid.pid);
-      if (chipName) {
-        parts.push(`[${chipName}]`);
+      // Prefer device_name from backend (usb-ids database + web fallback)
+      const deviceName = hid.device_name || getChipName(hid.vid, hid.pid);
+      if (deviceName) {
+        parts.push(`[${deviceName}]`);
       }
 
       parts.push(`VID:${hid.vid.toString(16).toUpperCase().padStart(4, '0')}`);
