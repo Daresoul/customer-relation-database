@@ -224,9 +224,8 @@ export class MedicalService {
       });
       if (!targetPath) return; // user cancelled
       await invoke('write_medical_attachment_to_path', {
-        attachment_id: attachmentId,
-        attachmentId: attachmentId as any,
-        target_path: targetPath
+        attachmentId: attachmentId,
+        targetPath: targetPath
       });
     } catch (e: any) {
       console.error('Save As failed:', e);
