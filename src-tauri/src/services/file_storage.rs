@@ -312,43 +312,43 @@ impl FileStorageService {
 
         #[cfg(target_os = "windows")]
         {
-            // On Windows, use PowerShell to open the PDF in the default viewer
-            // and trigger the print dialog via shell verb
-            // This works with Adobe Reader, Edge, and other PDF viewers
+            use std::ffi::OsStr;
+            use std::os::windows::ffi::OsStrExt;
+            use windows::Win32::UI::Shell::ShellExecuteW;
+            use windows::Win32::Foundation::HWND;
+            use windows::core::PCWSTR;
+
             log::info!("🖨️  Printing file: {}", path);
 
-            let script = format!(
-                r#"
-                $shell = New-Object -ComObject Shell.Application
-                $folder = $shell.Namespace((Split-Path -Parent '{}'))
-                $file = $folder.ParseName((Split-Path -Leaf '{}'))
-                if ($file) {{
-                    Write-Output "Invoking Print verb..."
-                    $file.InvokeVerb('Print')
-                    Write-Output "Print command sent successfully"
-                }} else {{
-                    Write-Error "File not found in folder"
-                    exit 1
-                }}
-                "#,
-                path.replace("'", "''"),
-                path.replace("'", "''")
-            );
+            // Convert path to wide string (UTF-16) for Windows API
+            let wide_path: Vec<u16> = OsStr::new(path)
+                .encode_wide()
+                .chain(Some(0))
+                .collect();
 
-            log::info!("   Executing PowerShell script...");
-            let output = Command::new("powershell")
-                .args(["-NoProfile", "-Command", &script])
-                .output()
-                .map_err(|e| format!("Failed to execute PowerShell: {}", e))?;
+            let operation: Vec<u16> = OsStr::new("print")
+                .encode_wide()
+                .chain(Some(0))
+                .collect();
 
-            if !output.status.success() {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                log::error!("   ❌ PowerShell error: {}", stderr);
-                return Err(format!("Print command failed: {}", stderr));
+            unsafe {
+                let result = ShellExecuteW(
+                    HWND(0),                          // No parent window
+                    PCWSTR(operation.as_ptr()),       // "print" verb
+                    PCWSTR(wide_path.as_ptr()),       // File path
+                    PCWSTR::null(),                   // No parameters
+                    PCWSTR::null(),                   // No directory
+                    windows::Win32::UI::WindowsAndMessaging::SW_HIDE.0  // Hidden window
+                );
+
+                // ShellExecuteW returns > 32 on success
+                if result.0 as i32 <= 32 {
+                    log::error!("   ❌ ShellExecuteW failed with code: {}", result.0);
+                    return Err(format!("Print command failed with error code: {}", result.0));
+                }
             }
 
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            log::info!("   ✅ Print command output: {}", stdout);
+            log::info!("   ✅ Print command sent successfully");
             return Ok(());
         }
 
