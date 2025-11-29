@@ -1,0 +1,25 @@
+{
+  "devices": [
+    {
+      "name": "Healvet",
+      "type": "healvet_hv_fia_3000",
+      "connection": "serial_port",
+      "app_port": "COM3",
+      "test_port": "COM4"
+    },
+    {
+      "name": "Pointcare",
+      "type": "mnchip_pointcare_pcr_v1",
+      "connection": "serial_port",
+      "app_port": "COM5",
+      "test_port": "COM6"
+    },
+    {
+      "name": "Exigo",
+      "type": "exigo_eos_vet",
+      "connection": "file_watch",
+      "watch_directory": "C:\\Users\\your-username\\Desktop\\filewatch",
+      "file_pattern": "*.xml"
+    }
+  ]
+}
