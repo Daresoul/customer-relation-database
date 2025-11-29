@@ -72,4 +72,4 @@ Write-Host "`n✅ Windows build complete!" -ForegroundColor Green
 Write-Host "📍 Build outputs:" -ForegroundColor Cyan
 Write-Host "   - MSI: src-tauri\target\release\bundle\msi\" -ForegroundColor Gray
 Write-Host "   - NSIS: src-tauri\target\release\bundle\nsis\" -ForegroundColor Gray
-Write-Host "`nℹ️  The build artifacts are now ready to be uploaded from your Mac." -ForegroundColor Cyan
+Write-Host "`nThe build artifacts are now ready to be uploaded from your Mac." -ForegroundColor Cyan

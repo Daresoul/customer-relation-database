@@ -9,6 +9,10 @@
 #   - macOS build runs natively
 #   - Windows build must be run in Windows VM (see build-windows.ps1)
 #   - GitHub CLI (gh) must be authenticated: gh auth login
+#
+# Optional (for auto-updater signing):
+#   export TAURI_PRIVATE_KEY=$(cat ~/.tauri/vet-clinic.key)
+#   export TAURI_KEY_PASSWORD='your-password-here'
 
 set -e
 
@@ -30,6 +34,21 @@ if ! gh auth status &>/dev/null; then
     exit 1
 fi
 
+# Check for Tauri signing keys (for auto-updater)
+if [ -z "$TAURI_PRIVATE_KEY" ]; then
+    echo "⚠️  Warning: TAURI_PRIVATE_KEY not set - auto-updater signing will be skipped"
+    echo "   To enable signing, export the key from ~/.tauri/vet-clinic.key:"
+    echo "   export TAURI_PRIVATE_KEY=\$(cat ~/.tauri/vet-clinic.key)"
+    echo "   export TAURI_KEY_PASSWORD='your-password-here'"
+    echo ""
+    read -p "Continue without signing? (y/N): " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "❌ Aborted"
+        exit 1
+    fi
+fi
+
 # Check if tag already exists
 if git rev-parse "$VERSION_TAG" >/dev/null 2>&1; then
     echo "⚠️  Tag $VERSION_TAG already exists locally"
@@ -46,8 +65,8 @@ fi
 
 # Update version in tauri.conf.json
 echo "📝 Updating version to $VERSION_NUMBER..."
-node .github/scripts/update-version.cjs
 export GITHUB_REF_NAME="$VERSION_TAG"
+node .github/scripts/update-version.cjs
 
 # Build Java PDF Generator
 echo ""
