@@ -96,34 +96,33 @@ fi
 
 echo "✅ macOS build complete: $MACOS_DMG"
 
-# Copy project to shared folder for Windows VM
-echo ""
-echo "📁 Syncing project to Windows VM shared folder..."
-SHARED_FOLDER="$HOME/Documents/Windows/shared/customer-relation-database"
-rsync -av --exclude 'node_modules' --exclude 'target' --exclude '.git' --exclude 'dist' . "$SHARED_FOLDER/"
-echo "✅ Project synced to $SHARED_FOLDER"
-
 # Wait for Windows builds
 echo ""
 echo "⏳ Now build Windows installers in your Windows VM:"
 echo "   1. Open PowerShell in Windows VM"
-echo "   2. Navigate to the shared folder (usually Z:\\customer-relation-database or similar)"
-echo "   3. Run: .\\build-windows.ps1"
+echo "   2. Navigate to your git folder: cd C:\\Users\\Build Server\\git_builds\\customer-relation-database"
+echo "   3. Pull latest changes: git pull origin main"
+echo "   4. Set signing keys:"
+echo "      \$env:TAURI_PRIVATE_KEY = Get-Content -Raw Z:\\customer-relation-database\\.tauri-vet-clinic.key"
+echo "      \$env:TAURI_KEY_PASSWORD = 'xx1234567'"
+echo "   5. Run: .\\build-windows.ps1 $VERSION_TAG"
 echo ""
 read -p "Press Enter when Windows builds are complete..."
 
-# Copy Windows builds back from shared folder
+# Copy Windows builds from versioned shared folder
 echo ""
-echo "📥 Copying Windows builds back from shared folder..."
+echo "📥 Copying Windows builds for $VERSION_TAG..."
+WINDOWS_BUILDS_FOLDER="$HOME/Documents/Windows/shared/customer-relation-database/builds/$VERSION_TAG"
 mkdir -p src-tauri/target/release/bundle/msi
 mkdir -p src-tauri/target/release/bundle/nsis
-if [ -d "$SHARED_FOLDER/src-tauri/target/release/bundle/msi" ]; then
-    cp -v "$SHARED_FOLDER"/src-tauri/target/release/bundle/msi/*.msi src-tauri/target/release/bundle/msi/ 2>/dev/null || true
+
+if [ -d "$WINDOWS_BUILDS_FOLDER/msi" ]; then
+    cp -v "$WINDOWS_BUILDS_FOLDER"/msi/*.msi src-tauri/target/release/bundle/msi/ 2>/dev/null || true
 fi
-if [ -d "$SHARED_FOLDER/src-tauri/target/release/bundle/nsis" ]; then
-    cp -v "$SHARED_FOLDER"/src-tauri/target/release/bundle/nsis/*-setup.exe src-tauri/target/release/bundle/nsis/ 2>/dev/null || true
-    cp -v "$SHARED_FOLDER"/src-tauri/target/release/bundle/nsis/*.nsis.zip src-tauri/target/release/bundle/nsis/ 2>/dev/null || true
-    cp -v "$SHARED_FOLDER"/src-tauri/target/release/bundle/nsis/*.sig src-tauri/target/release/bundle/nsis/ 2>/dev/null || true
+if [ -d "$WINDOWS_BUILDS_FOLDER/nsis" ]; then
+    cp -v "$WINDOWS_BUILDS_FOLDER"/nsis/*-setup.exe src-tauri/target/release/bundle/nsis/ 2>/dev/null || true
+    cp -v "$WINDOWS_BUILDS_FOLDER"/nsis/*.nsis.zip src-tauri/target/release/bundle/nsis/ 2>/dev/null || true
+    cp -v "$WINDOWS_BUILDS_FOLDER"/nsis/*.sig src-tauri/target/release/bundle/nsis/ 2>/dev/null || true
 fi
 
 # Find Windows installers
