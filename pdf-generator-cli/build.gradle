@@ -13,6 +13,11 @@ java {
     targetCompatibility = JavaVersion.VERSION_1_8
 }
 
+// Force UTF-8 encoding for source files (needed for Cyrillic/Macedonian text)
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
 repositories {
     mavenCentral()
 }
