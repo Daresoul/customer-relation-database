@@ -1,4 +1,4 @@
-use crate::services::device_input::{scan_ports, start_listen, stop_listen, get_all_connection_statuses, PortInfo, DeviceConnectionStatus};
+use crate::services::device_input::{scan_ports, start_listen, stop_listen, get_all_connection_statuses, enrich_port_info_with_device_names, PortInfo, DeviceConnectionStatus};
 use crate::services::file_watcher::{get_all_file_watcher_statuses, FileWatcherStatus};
 use crate::services::device_integration::DeviceIntegrationService;
 use crate::database::connection::DatabasePool;
@@ -7,8 +7,11 @@ use tauri::{State, AppHandle};
 use sqlx::Row;
 
 #[tauri::command]
-pub fn get_available_ports() -> Result<Vec<PortInfo>, String> {
-    scan_ports()
+pub async fn get_available_ports() -> Result<Vec<PortInfo>, String> {
+    let ports = scan_ports()?;
+    // Enrich with USB device names (hybrid: embedded DB + web fallback)
+    let enriched_ports = enrich_port_info_with_device_names(ports).await;
+    Ok(enriched_ports)
 }
 
 /// Get all device connection statuses

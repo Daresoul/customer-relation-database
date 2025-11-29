@@ -391,36 +391,95 @@ fn extract_usb_info_from_device_path(device_path: &str, usb_location: Option<Str
 /// Enrich PortInfo with USB device names (call this from commands/frontend)
 /// This is async so it can do web lookups if needed
 pub async fn enrich_port_info_with_device_names(mut ports: Vec<PortInfo>) -> Vec<PortInfo> {
+    log::info!("🔍 Enriching {} ports with USB device names...", ports.len());
+
+    let mut enriched_count = 0;
+    let mut skipped_count = 0;
     for port in &mut ports {
         match &mut port.port_type {
             PortType::SerialUSBPort(ref mut usb_info) | PortType::HIDDevice(ref mut usb_info) => {
+                log::info!("   📝 Enriching {} - VID:{:04X} PID:{:04X}", port.port_name, usb_info.vid, usb_info.pid);
                 // Lookup friendly device name
                 if let Some(name) = lookup_usb_device_name(usb_info.vid, usb_info.pid).await {
+                    log::info!("   ✅ Found device name for {} - {}", port.port_name, name);
                     usb_info.device_name = Some(name);
+                    enriched_count += 1;
+                } else {
+                    log::info!("   ⚠️  No device name found for {} (VID:{:04X} PID:{:04X})", port.port_name, usb_info.vid, usb_info.pid);
                 }
             }
-            _ => {}
+            PortType::SerialPciPort => {
+                log::info!("   ⏭️  Skipping {} - SerialPciPort", port.port_name);
+                skipped_count += 1;
+            }
+            PortType::VirtualPort(desc) => {
+                log::info!("   ⏭️  Skipping {} - VirtualPort ({})", port.port_name, desc);
+                skipped_count += 1;
+            }
+            PortType::SerialBluetoothPort => {
+                log::info!("   ⏭️  Skipping {} - SerialBluetoothPort", port.port_name);
+                skipped_count += 1;
+            }
+            _ => {
+                log::info!("   ⏭️  Skipping {} - Unknown type", port.port_name);
+                skipped_count += 1;
+            }
         }
     }
+
+    log::info!("✅ Enriched {}/{} devices with USB names (skipped: {})", enriched_count, ports.len(), skipped_count);
     ports
 }
 
 /// Hybrid USB device name lookup - tries embedded database first, then web API fallback
 /// Returns a friendly device name like "FTDI FT232 USB-Serial Converter"
 async fn lookup_usb_device_name(vid: u16, pid: u16) -> Option<String> {
+    use usb_ids::FromId;
+
+    log::info!("      🔎 Looking up VID:{:04X} PID:{:04X}", vid, pid);
+
     // 1. Try embedded database first (fast, offline, covers 99% of devices)
-    if let Some(device) = usb_ids::Device::from_vid_pid(vid, pid) {
-        let vendor_name = device.vendor().name();
-        let product_name = device.name();
-        return Some(format!("{} {}", vendor_name, product_name));
+    // First check if the vendor exists
+    match usb_ids::Vendor::from_id(vid) {
+        Some(vendor) => {
+            log::info!("      📋 Found vendor: {}", vendor.name());
+            // Now try to find the specific device
+            match usb_ids::Device::from_vid_pid(vid, pid) {
+                Some(device) => {
+                    let vendor_name = device.vendor().name();
+                    let product_name = device.name();
+                    let full_name = format!("{} {}", vendor_name, product_name);
+                    log::info!("      ✅ Found device in embedded DB: {}", full_name);
+                    return Some(full_name);
+                }
+                None => {
+                    log::info!("      ⚠️  Vendor found but device PID:{:04X} not in DB, will use vendor name as fallback", pid);
+                    // Fallback: return vendor name for internal/proprietary devices
+                    // This handles cases like Apple internal keyboard controllers that aren't in the public database
+                    let vendor_name = vendor.name().to_string();
+                    log::info!("      ✅ Using vendor name as fallback: {}", vendor_name);
+                    return Some(vendor_name);
+                }
+            }
+        }
+        None => {
+            log::info!("      ❌ Vendor VID:{:04X} not found in embedded DB", vid);
+        }
     }
 
     // 2. Fall back to web lookup for new/rare devices (requires internet)
-    if let Ok(name) = lookup_usb_device_web(vid, pid).await {
-        return Some(name);
+    match lookup_usb_device_web(vid, pid).await {
+        Ok(name) => {
+            log::info!("      ✅ Found via web lookup: {}", name);
+            return Some(name);
+        }
+        Err(e) => {
+            log::info!("      ❌ Web lookup failed: {}", e);
+        }
     }
 
     // 3. Final fallback - just show VID/PID
+    log::info!("      ⚠️  No lookup method succeeded for VID:{:04X} PID:{:04X}", vid, pid);
     None
 }
 
