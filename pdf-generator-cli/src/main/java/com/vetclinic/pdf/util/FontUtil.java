@@ -38,8 +38,8 @@ public class FontUtil {
 
         BaseFont font = null;
         try {
-//            font = getEmbeddedFont(Util.getAbsolutePath(Constants.PROBA_PRO_FONT), "Cp1251");
-            font = getEmbeddedFont(Util.getAbsolutePath(Constants.CANDARA_FONT), "Cp1251");
+//            font = getEmbeddedFont(Constants.PROBA_PRO_FONT, "Cp1251");
+            font = getEmbeddedFont(Constants.CANDARA_FONT, "Cp1251");
         } catch (IOException | DocumentException e) {
             e.printStackTrace();
         }
