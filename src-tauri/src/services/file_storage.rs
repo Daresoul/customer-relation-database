@@ -315,20 +315,40 @@ impl FileStorageService {
             // On Windows, use PowerShell to open the PDF in the default viewer
             // and trigger the print dialog via shell verb
             // This works with Adobe Reader, Edge, and other PDF viewers
+            log::info!("🖨️  Printing file: {}", path);
+
             let script = format!(
                 r#"
                 $shell = New-Object -ComObject Shell.Application
                 $folder = $shell.Namespace((Split-Path -Parent '{}'))
                 $file = $folder.ParseName((Split-Path -Leaf '{}'))
-                $file.InvokeVerb('Print')
+                if ($file) {{
+                    Write-Output "Invoking Print verb..."
+                    $file.InvokeVerb('Print')
+                    Write-Output "Print command sent successfully"
+                }} else {{
+                    Write-Error "File not found in folder"
+                    exit 1
+                }}
                 "#,
                 path.replace("'", "''"),
                 path.replace("'", "''")
             );
-            Command::new("powershell")
+
+            log::info!("   Executing PowerShell script...");
+            let output = Command::new("powershell")
                 .args(["-NoProfile", "-Command", &script])
-                .spawn()
-                .map_err(|e| format!("Failed to open print dialog: {}", e))?;
+                .output()
+                .map_err(|e| format!("Failed to execute PowerShell: {}", e))?;
+
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                log::error!("   ❌ PowerShell error: {}", stderr);
+                return Err(format!("Print command failed: {}", stderr));
+            }
+
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            log::info!("   ✅ Print command output: {}", stdout);
             return Ok(());
         }
 
