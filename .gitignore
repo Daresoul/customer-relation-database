@@ -52,3 +52,5 @@ CLAUDE.md
 **.md
 # Java PDF Generator - built by CI
 src-tauri/resources/pdf-generator.jar
+.tauri-password-backup.txt
+*.db

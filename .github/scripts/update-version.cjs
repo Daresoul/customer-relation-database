@@ -1,6 +1,12 @@
 const fs = require('fs');
 
-const version = process.env.GITHUB_REF_NAME.replace('v', '');
+const refName = process.env.GITHUB_REF_NAME;
+if (!refName) {
+    console.error('Error: GITHUB_REF_NAME environment variable is not set');
+    console.error('This script should be run from build-and-release.sh');
+    process.exit(1);
+}
+const version = refName.replace('v', '');
 
 // Update tauri.conf.json
 const tauriConf = JSON.parse(fs.readFileSync('src-tauri/tauri.conf.json', 'utf8'));
