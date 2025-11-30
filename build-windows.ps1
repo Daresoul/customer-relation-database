@@ -90,6 +90,12 @@ $nsis = Get-ChildItem -Path src-tauri/target/x86_64-pc-windows-msvc/release/bund
 
 # Copy to shared folder
 $sharedFolder = "Z:\customer-relation-database\builds\$Version"
+
+# Clean shared folder for this version to avoid old files
+if (Test-Path $sharedFolder) {
+    Remove-Item -Path $sharedFolder -Recurse -Force
+}
+
 New-Item -ItemType Directory -Force -Path "$sharedFolder\msi" *>$null
 New-Item -ItemType Directory -Force -Path "$sharedFolder\nsis" *>$null
 
