@@ -96,23 +96,26 @@ fi
 
 echo "✅ macOS build complete: $MACOS_DMG"
 
-# Wait for Windows builds
-echo ""
-echo "⏳ Now build Windows installers in your Windows VM:"
-echo "   1. Open PowerShell in Windows VM"
-echo "   2. Navigate to your git folder: cd C:\\Users\\Build Server\\git_builds\\customer-relation-database"
-echo "   3. Pull latest changes: git pull origin main"
-echo "   4. Set signing keys:"
-echo "      \$env:TAURI_PRIVATE_KEY = Get-Content -Raw Z:\\customer-relation-database\\.tauri-vet-clinic.key"
-echo "      \$env:TAURI_KEY_PASSWORD = 'xx1234567'"
-echo "   5. Run: .\\build-windows.ps1 $VERSION_TAG"
-echo ""
-read -p "Press Enter when Windows builds are complete..."
-
 # Copy Windows builds from versioned shared folder
 echo ""
-echo "📥 Copying Windows builds for $VERSION_TAG..."
+echo "📥 Looking for Windows builds for $VERSION_TAG..."
 WINDOWS_BUILDS_FOLDER="$HOME/Documents/Windows/shared/customer-relation-database/builds/$VERSION_TAG"
+
+if [ ! -d "$WINDOWS_BUILDS_FOLDER" ]; then
+    echo "❌ Windows builds not found at: $WINDOWS_BUILDS_FOLDER"
+    echo ""
+    echo "Please build Windows installers first in your Windows VM:"
+    echo "   1. Open PowerShell in Windows VM"
+    echo "   2. Navigate to: cd C:\\Users\\Build Server\\git_builds\\customer-relation-database"
+    echo "   3. Pull latest changes: git pull origin main"
+    echo "   4. Set signing keys:"
+    echo "      \$env:TAURI_PRIVATE_KEY = Get-Content -Raw Z:\\customer-relation-database\\.tauri-vet-clinic.key"
+    echo "      \$env:TAURI_KEY_PASSWORD = 'xx1234567'"
+    echo "   5. Run: .\\build-windows.ps1 $VERSION_TAG"
+    exit 1
+fi
+
+echo "✅ Found Windows builds, copying..."
 mkdir -p src-tauri/target/release/bundle/msi
 mkdir -p src-tauri/target/release/bundle/nsis
 
