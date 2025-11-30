@@ -34,6 +34,13 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Host " [OK]" -ForegroundColor Green
 
+# Clean old bundle artifacts
+Write-Host "Cleaning old bundles..." -NoNewline
+if (Test-Path src-tauri/target/release/bundle) {
+    Remove-Item -Path src-tauri/target/release/bundle -Recurse -Force
+}
+Write-Host " [OK]" -ForegroundColor Green
+
 # npm install
 Write-Host "`nnpm install..." -NoNewline
 $time = Measure-Command {
@@ -91,3 +98,9 @@ $totalTimer.Stop()
 Write-Host "`n=== Build Complete ===" -ForegroundColor Green
 Write-Host "Total time: $($totalTimer.Elapsed.ToString('mm\:ss'))" -ForegroundColor Cyan
 Write-Host "Artifacts: $sharedFolder" -ForegroundColor Gray
+
+# Reset version back to 0.0.0
+Write-Host "`nResetting version to 0.0.0..." -NoNewline
+$env:GITHUB_REF_NAME = "v0.0.0"
+node .github/scripts/update-version.cjs *>$null
+Write-Host " [OK]" -ForegroundColor Green
