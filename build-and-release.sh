@@ -187,3 +187,10 @@ find src-tauri/target/release/bundle -name "*.sig" -exec gh release upload "$VER
 echo ""
 echo "✅ Release $VERSION_TAG complete!"
 echo "🔗 https://github.com/Daresoul/customer-relation-database/releases/tag/$VERSION_TAG"
+
+# Reset version back to 0.0.0
+echo ""
+echo "📝 Resetting version to 0.0.0..."
+export GITHUB_REF_NAME="v0.0.0"
+node .github/scripts/update-version.cjs
+echo "✅ Version reset complete"
