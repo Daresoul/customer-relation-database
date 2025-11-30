@@ -81,6 +81,16 @@ echo "📦 Copying JAR to resources..."
 mkdir -p src-tauri/resources
 cp pdf-generator-cli/build/libs/pdf-generator-cli-1.0.0.jar src-tauri/resources/pdf-generator.jar
 
+# Clean old bundle artifacts
+echo ""
+echo "🧹 Cleaning old bundle artifacts..."
+if [ -d "src-tauri/target/release/bundle" ]; then
+    rm -rf src-tauri/target/release/bundle
+    echo "✅ Cleaned src-tauri/target/release/bundle"
+else
+    echo "✅ No old bundles to clean"
+fi
+
 # Build macOS version
 echo ""
 echo "🍎 Building macOS version..."
