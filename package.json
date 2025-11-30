@@ -29,16 +29,13 @@
     "dayjs": "^1.11.18",
     "i18next": "^25.5.2",
     "i18next-browser-languagedetector": "^8.2.0",
-    "i18next-http-backend": "^3.0.2",
     "lodash": "^4.17.21",
-    "lucide-react": "^0.544.0",
     "pdfjs-dist": "3.11.174",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-i18next": "^15.7.3",
     "react-router-dom": "^6.20.0",
-    "tauri-plugin-log-api": "github:tauri-apps/tauri-plugin-log#v1",
-    "use-debounce": "^10.0.6"
+    "tauri-plugin-log-api": "github:tauri-apps/tauri-plugin-log#v1"
   },
   "devDependencies": {
     "@playwright/test": "^1.40.0",
