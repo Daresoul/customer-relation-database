@@ -39,6 +39,9 @@ Write-Host "Cleaning old bundles..." -NoNewline
 if (Test-Path src-tauri/target/release/bundle) {
     Remove-Item -Path src-tauri/target/release/bundle -Recurse -Force
 }
+if (Test-Path src-tauri/target/x86_64-pc-windows-msvc/release/bundle) {
+    Remove-Item -Path src-tauri/target/x86_64-pc-windows-msvc/release/bundle -Recurse -Force
+}
 Write-Host " [OK]" -ForegroundColor Green
 
 # npm install
@@ -68,17 +71,22 @@ Write-Host " [$($time.TotalSeconds.ToString('0.0'))s]" -ForegroundColor Green
 New-Item -ItemType Directory -Force -Path src-tauri/resources *>$null
 Copy-Item pdf-generator-cli/build/libs/pdf-generator-cli-1.0.0.jar src-tauri/resources/pdf-generator.jar
 
-# Tauri build (includes Vite + Rust)
-Write-Host "Tauri build (Vite + Rust)..." -NoNewline
+# Ensure x86_64 target is installed
+Write-Host "Ensuring x86_64 target..." -NoNewline
+rustup target add x86_64-pc-windows-msvc *>$null
+Write-Host " [OK]" -ForegroundColor Green
+
+# Tauri build (includes Vite + Rust) - explicitly target x86_64
+Write-Host "Tauri build (Vite + Rust) for x86_64..." -NoNewline
 $time = Measure-Command {
-    npm run tauri build 2>&1 | Out-Null
+    npm run tauri build -- --target x86_64-pc-windows-msvc 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Tauri build failed" }
 }
 Write-Host " [$($time.TotalMinutes.ToString('0.0'))m]" -ForegroundColor Green
 
-# Find installers
-$msi = Get-ChildItem -Path src-tauri/target/release/bundle/msi -Filter "*.msi" -ErrorAction SilentlyContinue | Select-Object -First 1
-$nsis = Get-ChildItem -Path src-tauri/target/release/bundle/nsis -Filter "*-setup.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+# Find installers (in target-specific directory)
+$msi = Get-ChildItem -Path src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi -Filter "*.msi" -ErrorAction SilentlyContinue | Select-Object -First 1
+$nsis = Get-ChildItem -Path src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis -Filter "*-setup.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
 
 # Copy to shared folder
 $sharedFolder = "Z:\customer-relation-database\builds\$Version"
