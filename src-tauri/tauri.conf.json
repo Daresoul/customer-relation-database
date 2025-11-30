@@ -7,7 +7,7 @@
   },
   "package": {
     "productName": "Veterinary Clinic Manager",
-    "version": "0.0.0"
+    "version": "0.2.27"
   },
   "tauri": {
     "allowlist": {

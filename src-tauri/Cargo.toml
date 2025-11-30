@@ -1,6 +1,6 @@
 [package]
 name = "vet-clinic"
-version = "0.0.0"
+version = "0.2.27"
 description = "Veterinary Clinic Patient Management System"
 authors = ["Veterinary Clinic Dev Team"]
 edition = "2021"
