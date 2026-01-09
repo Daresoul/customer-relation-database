@@ -3,7 +3,10 @@ import { Table, Button, Tag, Space, Typography, Tooltip, message, Modal } from '
 import { ClockCircleOutlined, CheckCircleOutlined, WarningOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { fileHistoryService } from '../services/fileHistoryService';
 import type { FileAccessHistoryWithRecord } from '../types/fileHistory';
-import { formatDistanceToNow } from 'date-fns';
+import dayjs from 'dayjs';
+import relativeTime from 'dayjs/plugin/relativeTime';
+
+dayjs.extend(relativeTime);
 
 const { Text } = Typography;
 
@@ -115,7 +118,7 @@ const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, da
           <div>
             <Text strong style={{ display: 'block' }}>{name}</Text>
             <Text type="secondary" style={{ fontSize: '12px' }}>
-              {formatDistanceToNow(new Date(record.receivedAt), { addSuffix: true })}
+              {dayjs(record.receivedAt).fromNow()}
             </Text>
           </div>
         </Tooltip>

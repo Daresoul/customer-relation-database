@@ -4,6 +4,17 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      clean_build:
+        description: 'Force clean build (delete caches)'
+        required: false
+        default: false
+        type: boolean
+      version:
+        description: 'Version tag (e.g., v0.2.37)'
+        required: true
+        type: string
 
 jobs:
   release:
@@ -25,6 +36,15 @@ jobs:
         uses: actions/checkout@v4
         with:
           clean: false
+          ref: ${{ inputs.version || github.ref }}
+
+      - name: Clean caches (if requested)
+        if: inputs.clean_build == true
+        run: |
+          echo "Cleaning node_modules and target directories..."
+          rm -rf node_modules
+          rm -rf src-tauri/target
+          echo "Clean complete"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -97,7 +117,7 @@ jobs:
       - name: Update version from tag
         run: node .github/scripts/update-version.cjs
         env:
-          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_REF_NAME: ${{ inputs.version || github.ref_name }}
 
       - name: Build and Release
         uses: tauri-apps/tauri-action@v0
@@ -106,8 +126,8 @@ jobs:
           TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'Veterinary Clinic Manager ${{ github.ref_name }}'
+          tagName: ${{ inputs.version || github.ref_name }}
+          releaseName: 'Veterinary Clinic Manager ${{ inputs.version || github.ref_name }}'
           releaseBody: 'See the assets to download and install this version.'
           releaseDraft: false
           prerelease: false
