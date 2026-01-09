@@ -14,7 +14,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [macos-latest, windows-latest]
+        # platform: [macos-latest, windows-latest]  # Uncomment to restore macOS builds
+        platform: [[self-hosted, Windows]]
 
     steps:
       - name: Checkout repository
