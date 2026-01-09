@@ -12,7 +12,7 @@ jobs:
     runs-on: ${{ matrix.platform }}
     defaults:
       run:
-        shell: pwsh
+        shell: bash
 
     strategy:
       fail-fast: false
@@ -58,7 +58,7 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           cd pdf-generator-cli
-          .\gradlew.bat clean build
+          ./gradlew.bat clean build
           cd ..
 
       - name: Copy JAR to Tauri resources (Unix)
@@ -71,9 +71,9 @@ jobs:
       - name: Copy JAR to Tauri resources (Windows)
         if: runner.os == 'Windows'
         run: |
-          New-Item -ItemType Directory -Force -Path src-tauri/resources
-          Copy-Item pdf-generator-cli/build/libs/pdf-generator-cli-1.0.0.jar src-tauri/resources/pdf-generator.jar
-          Get-ChildItem src-tauri/resources/
+          mkdir -p src-tauri/resources
+          cp pdf-generator-cli/build/libs/pdf-generator-cli-1.0.0.jar src-tauri/resources/pdf-generator.jar
+          ls -lh src-tauri/resources/
 
       - name: Update version from tag
         run: node .github/scripts/update-version.cjs
