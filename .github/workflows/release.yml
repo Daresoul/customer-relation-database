@@ -10,6 +10,9 @@ jobs:
     permissions:
       contents: write
     runs-on: ${{ matrix.platform }}
+    defaults:
+      run:
+        shell: pwsh
 
     strategy:
       fail-fast: false
