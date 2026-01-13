@@ -2,6 +2,8 @@ use std::thread;
 use std::time::{Duration, Instant};
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock, mpsc};
+use std::io::Write;
+use std::fs::{OpenOptions, create_dir_all};
 use serialport::{available_ports, SerialPortType, UsbPortInfo};
 use serde::{Serialize, Deserialize};
 use hidapi::HidApi;
@@ -49,6 +51,80 @@ fn get_connection_status() -> &'static Mutex<HashMap<String, DeviceConnectionSta
 const MAX_RETRY_ATTEMPTS: u32 = 10;  // Maximum number of retry attempts before giving up
 const BASE_RETRY_DELAY_SECS: u64 = 1;  // Base delay for exponential backoff (1 second)
 const MAX_RETRY_DELAY_SECS: u64 = 60;  // Maximum delay cap (60 seconds)
+
+/// Get the path to the raw data log file for a specific port
+/// Creates the log directory if it doesn't exist
+fn get_raw_log_path(app_handle: &AppHandle, port_name: &str) -> Option<std::path::PathBuf> {
+    // Get the app data directory
+    let app_data_dir = app_handle.path_resolver().app_data_dir()?;
+    let log_dir = app_data_dir.join("raw_serial_logs");
+
+    // Create directory if it doesn't exist
+    if let Err(e) = create_dir_all(&log_dir) {
+        log::error!("❌ Failed to create raw log directory {:?}: {}", log_dir, e);
+        return None;
+    }
+
+    // Sanitize port name for filename (replace special chars)
+    let safe_port_name = port_name
+        .replace('/', "_")
+        .replace('\\', "_")
+        .replace(':', "_");
+
+    Some(log_dir.join(format!("raw_{}.log", safe_port_name)))
+}
+
+/// Write raw bytes to the per-port log file with timestamp
+/// Logs both hex and ASCII representation for debugging
+fn write_raw_log(app_handle: &AppHandle, port_name: &str, data: &[u8]) {
+    if data.is_empty() {
+        return;
+    }
+
+    let log_path = match get_raw_log_path(app_handle, port_name) {
+        Some(path) => path,
+        None => {
+            log::warn!("⚠️ Could not get raw log path for port {}", port_name);
+            return;
+        }
+    };
+
+    // Open file in append mode (create if doesn't exist)
+    let mut file = match OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+    {
+        Ok(f) => f,
+        Err(e) => {
+            log::error!("❌ Failed to open raw log file {:?}: {}", log_path, e);
+            return;
+        }
+    };
+
+    // Format: [timestamp] [bytes_count] HEX: ... | ASCII: ...
+    let timestamp = Utc::now().format("%Y-%m-%d %H:%M:%S%.3f");
+
+    // Convert to hex string
+    let hex_str: String = data.iter()
+        .map(|b| format!("{:02X}", b))
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    // Convert to ASCII (replace non-printable with .)
+    let ascii_str: String = data.iter()
+        .map(|&b| if b >= 0x20 && b <= 0x7E { b as char } else { '.' })
+        .collect();
+
+    let log_line = format!(
+        "[{}] [{} bytes] HEX: {} | ASCII: {}\n",
+        timestamp, data.len(), hex_str, ascii_str
+    );
+
+    if let Err(e) = file.write_all(log_line.as_bytes()) {
+        log::error!("❌ Failed to write to raw log file {:?}: {}", log_path, e);
+    }
+}
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct DeviceConnectionStatus {
@@ -1096,6 +1172,19 @@ fn handle_listening_serial(
     // Successfully connected - update status
     update_connection_status(app_handle, integration_id, port_name, device_type, ConnectionState::Connected, None, 0);
 
+    // Write session start marker to raw log
+    if let Some(log_path) = get_raw_log_path(app_handle, port_name) {
+        if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&log_path) {
+            let timestamp = Utc::now().format("%Y-%m-%d %H:%M:%S%.3f");
+            let marker = format!(
+                "\n========== SESSION START: {} ==========\n[{}] Port: {} | Device: {} | Baud: {} | Integration ID: {}\n",
+                timestamp, timestamp, port_name, device_type, protocol.baud_rate, integration_id
+            );
+            let _ = file.write_all(marker.as_bytes());
+            log::info!("📝 Raw log file: {:?}", log_path);
+        }
+    }
+
     let mut data: Vec<u8> = Vec::new();
     let mut buffer = vec![0; 1024];
     let mut started: bool = protocol.start_symbol.is_none(); // If no start symbol, always "started"
@@ -1120,6 +1209,9 @@ fn handle_listening_serial(
             Ok(bytes_read) if bytes_read > 0 => {
                 read_count += 1;
                 total_bytes_read += bytes_read as u64;
+
+                // Write raw bytes to per-port log file for debugging
+                write_raw_log(app_handle, port_name, &buffer[..bytes_read]);
 
                 if read_count % 100 == 0 {
                     log::info!("📊 Read statistics for {} ({}): {} reads, {} total bytes",
