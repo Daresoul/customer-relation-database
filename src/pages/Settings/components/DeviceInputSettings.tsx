@@ -392,7 +392,9 @@ const DeviceInputSettings: React.FC = () => {
       case 'healvet_hv_fia3000':
         return ['serial_port']; // Only supports serial communication
       case 'mnchip_pointcare_pcr_v1':
-        return ['file_watch', 'serial_port']; // Supports both
+        return ['file_watch', 'serial_port']; // Supports both (chemistry analyzer)
+      case 'mnchip_pcr_analyzer':
+        return ['file_watch', 'serial_port']; // Supports both (PCR/pathogen analyzer)
       default:
         return ['file_watch', 'serial_port', 'hl7_tcp'];
     }
@@ -722,7 +724,10 @@ const DeviceInputSettings: React.FC = () => {
                 {t('deviceTypes.healvetHvFia3000')} <Tag color="green" style={{ marginLeft: 8 }}>{t('connectionTypes.serialPort')}</Tag>
               </Select.Option>
               <Select.Option value="mnchip_pointcare_pcr_v1">
-                {t('deviceTypes.mnchipPointcarePcrV1')} <Tag color="blue" style={{ marginLeft: 8 }}>{t('connectionTypes.fileWatch')}</Tag> <Tag color="green" style={{ marginLeft: 4 }}>{t('connectionTypes.serialPort')}</Tag>
+                {t('deviceTypes.mnchipPointcareChemistry')} <Tag color="blue" style={{ marginLeft: 8 }}>{t('connectionTypes.fileWatch')}</Tag> <Tag color="green" style={{ marginLeft: 4 }}>{t('connectionTypes.serialPort')}</Tag>
+              </Select.Option>
+              <Select.Option value="mnchip_pcr_analyzer">
+                {t('deviceTypes.mnchipPcrAnalyzer')} <Tag color="blue" style={{ marginLeft: 8 }}>{t('connectionTypes.fileWatch')}</Tag> <Tag color="green" style={{ marginLeft: 4 }}>{t('connectionTypes.serialPort')}</Tag>
               </Select.Option>
             </Select>
           </Form.Item>

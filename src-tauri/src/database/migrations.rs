@@ -50,6 +50,7 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, "032_create_file_access_history", create_file_access_history_table).await?;
     run_migration(pool, "033_create_record_templates", create_record_templates_table).await?;
     run_migration(pool, "034_verify_breed_id_nullable", verify_breed_id_nullable).await?;
+    run_migration(pool, "035_add_mnchip_pcr_analyzer_device", add_mnchip_pcr_analyzer_device).await?;
 
     Ok(())
 }
@@ -2003,6 +2004,94 @@ fn verify_breed_id_nullable(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::fut
             }
         }
 
+        Ok(())
+    })
+}
+
+// Migration 035: Add MNCHIP PCR Analyzer device type to device_integrations
+// This migration adds support for the MNCHIP PCR Analyzer which uses the same HL7 MLLP protocol
+// as the chemistry analyzer but sends viral/pathogen test results (CDV, CPIV, CCV, etc.)
+fn add_mnchip_pcr_analyzer_device(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        // Check if the table already has the new device type in the CHECK constraint
+        let table_sql: Result<(String,), _> = sqlx::query_as(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='device_integrations'"
+        ).fetch_one(pool).await;
+
+        if let Ok((sql,)) = table_sql {
+            if sql.contains("mnchip_pcr_analyzer") {
+                println!("Migration 035: mnchip_pcr_analyzer already in device_type constraint, skipping");
+                return Ok(());
+            }
+        }
+
+        // SQLite doesn't support ALTER TABLE to modify CHECK constraints
+        // We need to recreate the table with the new constraint
+
+        // Step 1: Create new table with updated CHECK constraint
+        sqlx::query(r#"
+            CREATE TABLE device_integrations_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                device_type TEXT NOT NULL CHECK(device_type IN ('exigo_eos_vet', 'healvet_hv_fia_3000', 'mnchip_pointcare_pcr_v1', 'mnchip_pcr_analyzer')),
+                connection_type TEXT NOT NULL CHECK(connection_type IN ('file_watch', 'serial_port', 'hl7_tcp')),
+                watch_directory TEXT,
+                file_pattern TEXT,
+                serial_port_name TEXT,
+                serial_baud_rate INTEGER DEFAULT 9600,
+                tcp_host TEXT,
+                tcp_port INTEGER,
+                enabled INTEGER DEFAULT 1 CHECK(enabled IN (0, 1)),
+                last_connected_at TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                deleted_at TEXT
+            )
+        "#)
+        .execute(pool)
+        .await?;
+
+        // Step 2: Copy existing data
+        sqlx::query("INSERT INTO device_integrations_new SELECT * FROM device_integrations")
+            .execute(pool)
+            .await?;
+
+        // Step 3: Drop old table
+        sqlx::query("DROP TABLE device_integrations")
+            .execute(pool)
+            .await?;
+
+        // Step 4: Rename new table
+        sqlx::query("ALTER TABLE device_integrations_new RENAME TO device_integrations")
+            .execute(pool)
+            .await?;
+
+        // Step 5: Recreate indexes
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_device_integrations_device_type ON device_integrations(device_type)")
+            .execute(pool)
+            .await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_device_integrations_connection_type ON device_integrations(connection_type)")
+            .execute(pool)
+            .await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_device_integrations_enabled ON device_integrations(enabled)")
+            .execute(pool)
+            .await?;
+
+        // Step 6: Recreate trigger for updated_at
+        sqlx::query(r#"
+            CREATE TRIGGER IF NOT EXISTS update_device_integrations_timestamp
+            AFTER UPDATE ON device_integrations
+            BEGIN
+                UPDATE device_integrations SET updated_at = CURRENT_TIMESTAMP
+                WHERE id = NEW.id;
+            END
+        "#)
+        .execute(pool)
+        .await?;
+
+        println!("Added mnchip_pcr_analyzer to device_integrations device_type constraint");
         Ok(())
     })
 }

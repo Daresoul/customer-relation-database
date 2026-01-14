@@ -1,7 +1,8 @@
 export type DeviceType =
   | 'exigo_eos_vet'
   | 'healvet_hv_fia3000'
-  | 'mnchip_pointcare_pcr_v1';
+  | 'mnchip_pointcare_pcr_v1'
+  | 'mnchip_pcr_analyzer';
 
 export type ConnectionType =
   | 'file_watch'
@@ -105,7 +106,9 @@ export function getDeviceTypeDisplayName(deviceType: DeviceType): string {
     case 'healvet_hv_fia3000':
       return 'Healvet HV-FIA 3000';
     case 'mnchip_pointcare_pcr_v1':
-      return 'MNCHIP PointCare PCR V1';
+      return 'MNCHIP PointCare Chemistry';
+    case 'mnchip_pcr_analyzer':
+      return 'MNCHIP PCR Analyzer';
   }
 }
 

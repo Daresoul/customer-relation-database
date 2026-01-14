@@ -34,7 +34,8 @@
   "deviceTypes": {
     "exigoEosVet": "Exigo EOS Vet (Хематологија)",
     "healvetHvFia3000": "Healvet HV-FIA 3000 (Имунофлуоресценција)",
-    "mnchipPointcarePcrV1": "MNChip Pointcare PCV V1 (Хемија)"
+    "mnchipPointcareChemistry": "MNChip PointCare (Хемија)",
+    "mnchipPcrAnalyzer": "MNChip PCR Анализатор (Патоген)"
   },
   "form": {
     "labels": {

@@ -293,9 +293,18 @@ pub fn get_device_protocol(device_type: &str) -> DeviceProtocol {
             end_symbol: b'E',          // 'E' - looks for "EE" sequence (two E's)
             baud_rate: 9600,
         },
+        // MNCHIP PointCare Chemistry Analyzer (PCV) - sends biochemistry tests
+        // MSH header contains "PointcareV", OBX includes: GLU, BUN, CRE, ALB, TP, Ca, P, ALT, etc.
         "mnchip_pointcare_pcr_v1" => DeviceProtocol {
-            start_symbol: None,        // No start symbol
-            end_symbol: 0x0D,          // Carriage return (\r) - HL7 uses \r\r as end marker
+            start_symbol: Some(0x0B),  // VT (Vertical Tab) - HL7 MLLP start block
+            end_symbol: 0x1C,          // FS (File Separator) - HL7 MLLP end block (followed by CR)
+            baud_rate: 115200,
+        },
+        // MNCHIP PointCare PCR Analyzer - sends viral/pathogen tests
+        // MSH header contains "PointcarePCRV", OBX includes: CDV, CPIV, CCV, CAV-2, etc.
+        "mnchip_pcr_analyzer" => DeviceProtocol {
+            start_symbol: Some(0x0B),  // VT (Vertical Tab) - HL7 MLLP start block
+            end_symbol: 0x1C,          // FS (File Separator) - HL7 MLLP end block (followed by CR)
             baud_rate: 115200,
         },
         "exigo_eos_vet" => DeviceProtocol {
@@ -316,7 +325,9 @@ fn get_virtual_port_description(port_name: &str) -> String {
     if port_name.contains("ttyHealvet") {
         "Healvet HV-FIA 3000 Virtual Port".to_string()
     } else if port_name.contains("ttyPointcare") {
-        "MNCHIP PointCare PCR Virtual Port".to_string()
+        "MNCHIP PointCare Chemistry Virtual Port".to_string()
+    } else if port_name.contains("ttyMnchipPcr") {
+        "MNCHIP PCR Analyzer Virtual Port".to_string()
     } else if port_name.contains("ttyExigo") {
         "Exigo Eos Vet Virtual Port".to_string()
     } else if port_name.starts_with("/tmp/tty") || port_name.starts_with("/tmp/pty") {
