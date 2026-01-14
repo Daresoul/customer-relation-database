@@ -8,11 +8,18 @@
       "test_port": "/tmp/ttyHealvet_test"
     },
     {
-      "name": "Pointcare",
-      "type": "mnchip_pointcare_pcr_v1",
+      "name": "Pointcare Chemistry",
+      "type": "mnchip_pointcare_chemistry",
       "connection": "serial_port",
       "app_port": "/tmp/ttyPointcare_app",
       "test_port": "/tmp/ttyPointcare_test"
+    },
+    {
+      "name": "MNCHIP PCR",
+      "type": "mnchip_pcr_analyzer",
+      "connection": "serial_port",
+      "app_port": "/tmp/ttyMnchipPcr_app",
+      "test_port": "/tmp/ttyMnchipPcr_test"
     },
     {
       "name": "Exigo",

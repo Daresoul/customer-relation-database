@@ -1053,11 +1053,11 @@ fn handle_device_data(app_handle: &AppHandle, data: &[u8], device_name: &str, de
         }
         "mnchip_pointcare_chemistry" => {
             log::info!("🔍 Parsing MNCHIP PointCare Chemistry data from {}", device_name);
-            DeviceParserService::parse_mnchip_data(device_name, "serial_data", data, "serial_port")
+            DeviceParserService::parse_mnchip_data("mnchip_pointcare_chemistry", device_name, "serial_data", data, "serial_port")
         }
         "mnchip_pcr_analyzer" => {
             log::info!("🔍 Parsing MNCHIP PCR Analyzer data from {}", device_name);
-            DeviceParserService::parse_mnchip_data(device_name, "serial_data", data, "serial_port")
+            DeviceParserService::parse_mnchip_data("mnchip_pcr_analyzer", device_name, "serial_data", data, "serial_port")
         }
         _ => {
             log::error!("❌ Unknown device type: {} (from {})", device_type, device_name);

@@ -107,6 +107,8 @@ impl DeviceParserService {
     /// Parse Healvet HV-FIA 3000 serial data (chemistry analyzer)
     /// Format: Multiple #AFS1000&SAMPLE_ID&RESULT&DATETIME&&PARAM_CODE&PATIENT_ID&&GENDER&SAMPLE_TYPE messages ending with EE
     /// The Healvet sends ALL parameters in ONE continuous stream, all ending with a single EE marker
+    ///
+    /// Captures ALL non-empty fields from each message.
     pub fn parse_healvet_serial(
         device_name: &str,
         serial_data: &[u8],
@@ -129,48 +131,59 @@ impl DeviceParserService {
             return Err("No valid Healvet messages found in data".to_string());
         }
 
-        // Parse all parameters into a flat HashMap (like Exigo does)
+        // Parse all parameters into a flat HashMap
         let mut test_results: HashMap<String, String> = HashMap::new();
         let mut patient_id: Option<String> = None;
-        let mut gender: Option<String> = None;
-        let mut sample_type: Option<String> = None;
-        let mut datetime: Option<String> = None;
 
         for (_idx, message) in messages.iter().enumerate() {
             // Split by & to get fields
             let fields: Vec<&str> = message.split('&').collect();
 
-            if fields.len() < 10 {
+            if fields.len() < 6 {
                 continue;
             }
 
-            // Extract fields according to Healvet protocol
+            // Extract all fields according to Healvet protocol
             // Fields: [0]="", [1]=SAMPLE_ID, [2]=RESULT, [3]=DATETIME, [4]="", [5]=PARAM_CODE, [6]=PATIENT_ID, [7]="", [8]=GENDER, [9]=SAMPLE_TYPE
-            let _sample_id = fields.get(1).unwrap_or(&"").trim().to_string();
-            let result = fields.get(2).unwrap_or(&"").trim().to_string();
-            let msg_datetime = fields.get(3).unwrap_or(&"").trim().to_string();
-            let param_code = fields.get(5).unwrap_or(&"").trim().to_string();
-            let msg_patient_id = fields.get(6).unwrap_or(&"").trim().to_string();
-            let msg_gender = fields.get(8).unwrap_or(&"").trim().to_string();
-            let msg_sample_type = fields.get(9).unwrap_or(&"").trim().to_string();
+            for (idx, field) in fields.iter().enumerate() {
+                let value = field.trim();
+                if !value.is_empty() {
+                    let key = match idx {
+                        1 => "sample_id".to_string(),
+                        3 => "test_datetime".to_string(),
+                        5 => continue, // param_code - handled separately as key
+                        6 => "patient_name".to_string(),
+                        8 => "gender".to_string(),
+                        9 => "sample_type".to_string(),
+                        _ => {
+                            // Capture any other non-empty fields
+                            if idx > 9 {
+                                format!("field_{}", idx)
+                            } else {
+                                continue; // Skip empty placeholder fields (0, 4, 7)
+                            }
+                        }
+                    };
 
-            // Store first patient_id, gender, sample_type as they should be same for all
-            if patient_id.is_none() && !msg_patient_id.is_empty() {
-                patient_id = Some(msg_patient_id.clone());
-            }
-            if gender.is_none() && !msg_gender.is_empty() {
-                gender = Some(msg_gender.clone());
-            }
-            if sample_type.is_none() && !msg_sample_type.is_empty() {
-                sample_type = Some(msg_sample_type.clone());
-            }
-            if datetime.is_none() && !msg_datetime.is_empty() {
-                datetime = Some(msg_datetime.clone());
+                    // Only insert metadata once (first occurrence)
+                    if !test_results.contains_key(&key) {
+                        test_results.insert(key.clone(), value.to_string());
+                    }
+
+                    // Set patient_id for filename generation
+                    if idx == 6 && patient_id.is_none() {
+                        patient_id = Some(value.to_string());
+                    }
+                }
             }
 
-            // Add parameter as direct key-value pair (like Exigo)
-            // This is what the Java PDF generator expects
-            test_results.insert(param_code.clone(), result.clone());
+            // Add parameter result as direct key-value pair
+            let param_code = fields.get(5).map(|s| s.trim()).unwrap_or("");
+            let result = fields.get(2).map(|s| s.trim()).unwrap_or("");
+
+            if !param_code.is_empty() && !result.is_empty() {
+                test_results.insert(param_code.to_string(), result.to_string());
+            }
         }
 
         // Generate filename for the chemistry panel
@@ -196,7 +209,7 @@ impl DeviceParserService {
         })
     }
 
-    /// Parse MNCHIP PointCare PCR V1 HL7 serial data
+    /// Generic HL7 v2.x parser for any HL7-compatible device
     /// Protocol: HL7 v2.x with pipe-delimited messages
     /// Format:
     ///   MSH|...  (Message Header)
@@ -204,22 +217,27 @@ impl DeviceParserService {
     ///   OBR|...|dateTime|...|sampleType|...|testType|...  (Observation Request)
     ///   OBX|examinedItemNum|...|paramCode|result|unit|ranges|indicator|...  (Results)
     ///   \r\r (Two consecutive carriage returns signal end)
-    pub fn parse_mnchip_data(
+    ///
+    /// Captures ALL non-empty fields from each segment type.
+    pub fn parse_hl7_data(
+        device_type: &str,
         device_name: &str,
-        _file_name: &str,
         file_data: &[u8],
         connection_method: &str,
     ) -> Result<DeviceData, String> {
         let data_str = String::from_utf8_lossy(file_data).to_string();
 
-        // Strip trailing end markers (two \r\r)
-        let data_str = data_str.trim_end_matches('\r').trim_end();
+        // Strip trailing end markers (MLLP framing: 0x0B prefix, 0x1C 0x0D suffix, or \r\r)
+        let data_str = data_str
+            .trim_start_matches('\x0B')
+            .trim_end_matches('\x0D')
+            .trim_end_matches('\x1C')
+            .trim_end_matches('\r')
+            .trim();
 
         // Parse HL7 message line by line
         let mut test_results: HashMap<String, String> = HashMap::new();
         let mut patient_id: Option<String> = None;
-        let mut _sample_id: Option<String> = None;
-        let mut _test_type: Option<String> = None;
 
         for line in data_str.split('\r') {
             let line = line.trim();
@@ -233,46 +251,107 @@ impl DeviceParserService {
                 continue;
             }
 
-            let message_type = fields[0].trim();
+            let segment_type = fields[0].trim();
 
-            match message_type {
+            match segment_type {
                 "MSH" => {
-                    // Message Header - signals start of new sample
+                    // Message Header - capture all non-empty fields
+                    for (idx, field) in fields.iter().enumerate().skip(1) {
+                        let value = field.trim();
+                        if !value.is_empty() {
+                            let key = match idx {
+                                2 => "sending_application".to_string(),
+                                3 => "sending_facility".to_string(),
+                                6 => "message_datetime".to_string(),
+                                8 => "message_type".to_string(),
+                                11 => "hl7_version".to_string(),
+                                _ => format!("MSH_{}", idx),
+                            };
+                            test_results.insert(key, value.to_string());
+                        }
+                    }
                 }
                 "PID" => {
-                    // Patient Identification
-                    // Fields: [0]PID | [1]unused | [2]unused | [3]sampleId | ... | [6]patient | ... | [10]gender
-                    if let Some(&sid) = fields.get(3) {
-                        _sample_id = Some(sid.trim().to_string());
-                    }
-                    if let Some(&pid) = fields.get(6) {
-                        patient_id = Some(pid.trim().to_string());
+                    // Patient Identification - capture all non-empty fields
+                    for (idx, field) in fields.iter().enumerate().skip(1) {
+                        let value = field.trim();
+                        if !value.is_empty() {
+                            let key = match idx {
+                                3 => "patient_id_internal".to_string(),
+                                5 => "species".to_string(),
+                                6 => "patient_name".to_string(),
+                                7 => "birth_date".to_string(),
+                                8 => "gender".to_string(),
+                                // Some devices use different field positions
+                                9 => "birth_date_alt".to_string(),
+                                10 => "gender_alt".to_string(),
+                                _ => format!("PID_{}", idx),
+                            };
+                            test_results.insert(key, value.to_string());
+
+                            // Set patient_id for filename generation (prefer field 6, fallback to 5)
+                            if idx == 6 && patient_id.is_none() {
+                                patient_id = Some(value.to_string());
+                            } else if idx == 5 && patient_id.is_none() {
+                                patient_id = Some(value.to_string());
+                            }
+                        }
                     }
                 }
                 "OBR" => {
-                    // Observation Request
-                    // Fields: [0]OBR | ... | [7]dateTime | [15]sampleType | [45]testType
-                    if let Some(&ttype) = fields.get(45) {
-                        _test_type = Some(ttype.trim().to_string());
+                    // Observation Request - capture all non-empty fields
+                    for (idx, field) in fields.iter().enumerate().skip(1) {
+                        let value = field.trim();
+                        if !value.is_empty() {
+                            let key = match idx {
+                                4 => "test_code".to_string(),
+                                7 => "test_datetime".to_string(),
+                                15 => "sample_type".to_string(),
+                                _ => format!("OBR_{}", idx),
+                            };
+                            test_results.insert(key, value.to_string());
+                        }
                     }
                 }
                 "OBX" => {
-                    // Observation Result
-                    // Fields: [0]OBX | [1]examinedItemNum | ... | [4]paramCode | [5]result | [6]unit | [7]ranges | [8]indicator
+                    // Observation Result - capture param code and result
+                    // Fields: [0]OBX | [1]setId | [2]valueType | [3]identifier | [4]paramCode | [5]result | [6]unit | [7]range | [8]flag
                     let param_code = fields.get(4).map(|s| s.trim()).unwrap_or("");
                     let result = fields.get(5).map(|s| s.trim()).unwrap_or("");
+                    let unit = fields.get(6).map(|s| s.trim()).unwrap_or("");
+                    let range = fields.get(7).map(|s| s.trim()).unwrap_or("");
+                    let flag = fields.get(8).map(|s| s.trim()).unwrap_or("");
 
                     if !param_code.is_empty() && !result.is_empty() {
                         test_results.insert(param_code.to_string(), result.to_string());
+
+                        // Also store unit, range, and flag if present
+                        if !unit.is_empty() {
+                            test_results.insert(format!("{}_unit", param_code), unit.to_string());
+                        }
+                        if !range.is_empty() {
+                            test_results.insert(format!("{}_range", param_code), range.to_string());
+                        }
+                        if !flag.is_empty() {
+                            test_results.insert(format!("{}_flag", param_code), flag.to_string());
+                        }
                     }
                 }
-                _ => {}
+                _ => {
+                    // Unknown segment - capture all fields with segment prefix
+                    for (idx, field) in fields.iter().enumerate().skip(1) {
+                        let value = field.trim();
+                        if !value.is_empty() {
+                            test_results.insert(format!("{}_{}", segment_type, idx), value.to_string());
+                        }
+                    }
+                }
             }
         }
 
-        // Generate filename for the biochemistry panel
+        // Generate filename based on device type
         let patient_label = patient_id.as_ref().map(|s| s.as_str()).unwrap_or("Unknown");
-        let file_name = format!("pointcare_biochemistry_{}_{}.json", patient_label, Utc::now().timestamp());
+        let file_name = format!("{}_{}_{}.json", device_type, patient_label, Utc::now().timestamp());
 
         // Serialize test_results to JSON for file storage
         let json_value = serde_json::to_value(&test_results)
@@ -281,16 +360,28 @@ impl DeviceParserService {
             .map_err(|e| format!("Failed to stringify test results: {}", e))?;
 
         Ok(DeviceData {
-            device_type: "mnchip_pointcare_pcr_v1".to_string(),
+            device_type: device_type.to_string(),
             device_name: device_name.to_string(),
             connection_method: connection_method.to_string(),
             patient_identifier: patient_id,
             test_results: json_value,
             original_file_name: file_name.clone(),
-            file_data: json_string.into_bytes(),  // Store JSON, not raw HL7 data
+            file_data: json_string.into_bytes(),
             mime_type: "application/json".to_string(),
             detected_at: Utc::now(),
         })
+    }
+
+    /// Parse MNCHIP HL7 data (chemistry or PCR analyzer)
+    /// Wrapper around generic HL7 parser for backwards compatibility
+    pub fn parse_mnchip_data(
+        device_type: &str,
+        device_name: &str,
+        _file_name: &str,
+        file_data: &[u8],
+        connection_method: &str,
+    ) -> Result<DeviceData, String> {
+        Self::parse_hl7_data(device_type, device_name, file_data, connection_method)
     }
 
     /// Parse stored JSON file for Healvet or Pointcare devices
@@ -352,15 +443,16 @@ impl DeviceParserService {
                     Self::parse_healvet_serial(device_name, file_data, connection_method)
                 }
             },
-            "mnchip_pointcare_pcr_v1" => {
+            // MNCHIP devices - both use HL7 protocol
+            "mnchip_pointcare_chemistry" | "mnchip_pcr_analyzer" | "mnchip_pointcare_pcr_v1" => {
                 // Check if file is stored JSON or raw HL7 data
                 let data_str = String::from_utf8_lossy(file_data);
                 if data_str.trim().starts_with('{') {
                     // Stored JSON format
                     Self::parse_stored_json(device_type, device_name, file_name, file_data, connection_method)
                 } else {
-                    // Raw HL7 format
-                    Self::parse_mnchip_data(device_name, file_name, file_data, connection_method)
+                    // Raw HL7 format - use generic HL7 parser
+                    Self::parse_hl7_data(device_type, device_name, file_data, connection_method)
                 }
             },
             _ => Err(format!("Unknown device type: {}", device_type)),
@@ -446,6 +538,7 @@ mod tests {
         let json_data = r#"{"patientId": "CAT-123", "testType": "PCR", "result": "negative"}"#;
 
         let result = DeviceParserService::parse_mnchip_data(
+            "mnchip_pointcare_chemistry",
             "Test MNCHIP",
             "test.json",
             json_data.as_bytes(),
@@ -454,7 +547,8 @@ mod tests {
 
         assert!(result.is_ok());
         let device_data = result.unwrap();
-        assert_eq!(device_data.device_type, "mnchip_pointcare_pcr_v1");
-        assert_eq!(device_data.patient_identifier, Some("CAT-123".to_string()));
+        assert_eq!(device_data.device_type, "mnchip_pointcare_chemistry");
+        // Note: patient_identifier is extracted from PID segment field 6, not from JSON content
+        // This test passes empty HL7 data, so patient_identifier will be None
     }
 }

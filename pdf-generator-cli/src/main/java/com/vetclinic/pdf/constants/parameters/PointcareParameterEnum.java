@@ -34,8 +34,14 @@ public enum PointcareParameterEnum {
     NA_PLUS("Na+","Na+ натриум"),
     NA_K("Na+/K+","Na+/K+"),
     CL_MINUS("Cl-","Cl- хлор"),
-    CO2("CO2","CO2 - јаг.диоксид"),
-    MG("Mg","Mg - магнезиум");
+    CO2("tCO2","tCO2 - јаг.диоксид"),
+    MG("Mg","Mg - магнезиум"),
+
+    // Additional parameters from chemistry panel
+    TBA("TBA","TBA - вк.жолчни киселини"),
+    TG("TG","TG - триглицериди"),
+    AST_ALT("AST/ALT","AST/ALT"),
+    CA_P("Ca*P","Ca*P");
 
 
     private String code;
@@ -75,6 +81,10 @@ public enum PointcareParameterEnum {
         types.add(CL_MINUS);
         types.add(CO2);
         types.add(MG);
+        types.add(TBA);
+        types.add(TG);
+        types.add(AST_ALT);
+        types.add(CA_P);
         return types;
     }
 
