@@ -295,7 +295,7 @@ pub fn get_device_protocol(device_type: &str) -> DeviceProtocol {
         },
         // MNCHIP PointCare Chemistry Analyzer (PCV) - sends biochemistry tests
         // MSH header contains "PointcareV", OBX includes: GLU, BUN, CRE, ALB, TP, Ca, P, ALT, etc.
-        "mnchip_pointcare_pcr_v1" => DeviceProtocol {
+        "mnchip_pointcare_chemistry" => DeviceProtocol {
             start_symbol: Some(0x0B),  // VT (Vertical Tab) - HL7 MLLP start block
             end_symbol: 0x1C,          // FS (File Separator) - HL7 MLLP end block (followed by CR)
             baud_rate: 115200,
@@ -1051,8 +1051,12 @@ fn handle_device_data(app_handle: &AppHandle, data: &[u8], device_name: &str, de
             log::info!("🔍 Parsing Healvet HV-FIA-3000 data from {}", device_name);
             DeviceParserService::parse_healvet_serial(device_name, data, "serial_port")
         }
-        "mnchip_pointcare_pcr_v1" => {
-            log::info!("🔍 Parsing MNCHIP Pointcare PCR V1 data from {}", device_name);
+        "mnchip_pointcare_chemistry" => {
+            log::info!("🔍 Parsing MNCHIP PointCare Chemistry data from {}", device_name);
+            DeviceParserService::parse_mnchip_data(device_name, "serial_data", data, "serial_port")
+        }
+        "mnchip_pcr_analyzer" => {
+            log::info!("🔍 Parsing MNCHIP PCR Analyzer data from {}", device_name);
             DeviceParserService::parse_mnchip_data(device_name, "serial_data", data, "serial_port")
         }
         _ => {

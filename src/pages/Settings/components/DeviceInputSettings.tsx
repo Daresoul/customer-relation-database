@@ -391,7 +391,7 @@ const DeviceInputSettings: React.FC = () => {
         return ['file_watch']; // Only supports file export
       case 'healvet_hv_fia3000':
         return ['serial_port']; // Only supports serial communication
-      case 'mnchip_pointcare_pcr_v1':
+      case 'mnchip_pointcare_chemistry':
         return ['file_watch', 'serial_port']; // Supports both (chemistry analyzer)
       case 'mnchip_pcr_analyzer':
         return ['file_watch', 'serial_port']; // Supports both (PCR/pathogen analyzer)
@@ -723,7 +723,7 @@ const DeviceInputSettings: React.FC = () => {
               <Select.Option value="healvet_hv_fia3000">
                 {t('deviceTypes.healvetHvFia3000')} <Tag color="green" style={{ marginLeft: 8 }}>{t('connectionTypes.serialPort')}</Tag>
               </Select.Option>
-              <Select.Option value="mnchip_pointcare_pcr_v1">
+              <Select.Option value="mnchip_pointcare_chemistry">
                 {t('deviceTypes.mnchipPointcareChemistry')} <Tag color="blue" style={{ marginLeft: 8 }}>{t('connectionTypes.fileWatch')}</Tag> <Tag color="green" style={{ marginLeft: 4 }}>{t('connectionTypes.serialPort')}</Tag>
               </Select.Option>
               <Select.Option value="mnchip_pcr_analyzer">

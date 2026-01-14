@@ -8,7 +8,8 @@ use crate::models::dto::MaybeNull;
 pub enum DeviceType {
     ExigoEosVet,
     HealvetHvFia3000,
-    MnchipPointcarePcrV1,
+    MnchipPointcareChemistry,
+    MnchipPcrAnalyzer,
 }
 
 impl DeviceType {
@@ -16,7 +17,8 @@ impl DeviceType {
         match self {
             DeviceType::ExigoEosVet => "exigo_eos_vet",
             DeviceType::HealvetHvFia3000 => "healvet_hv_fia_3000",
-            DeviceType::MnchipPointcarePcrV1 => "mnchip_pointcare_pcr_v1",
+            DeviceType::MnchipPointcareChemistry => "mnchip_pointcare_chemistry",
+            DeviceType::MnchipPcrAnalyzer => "mnchip_pcr_analyzer",
         }
     }
 
@@ -24,7 +26,8 @@ impl DeviceType {
         match s {
             "exigo_eos_vet" => Ok(DeviceType::ExigoEosVet),
             "healvet_hv_fia_3000" => Ok(DeviceType::HealvetHvFia3000),
-            "mnchip_pointcare_pcr_v1" => Ok(DeviceType::MnchipPointcarePcrV1),
+            "mnchip_pointcare_chemistry" => Ok(DeviceType::MnchipPointcareChemistry),
+            "mnchip_pcr_analyzer" => Ok(DeviceType::MnchipPcrAnalyzer),
             _ => Err(format!("Unknown device type: {}", s)),
         }
     }
@@ -34,7 +37,8 @@ impl DeviceType {
         match self {
             DeviceType::ExigoEosVet => "Exigo Eos Vet",
             DeviceType::HealvetHvFia3000 => "Healvet HV-FIA 3000",
-            DeviceType::MnchipPointcarePcrV1 => "MNCHIP PointCare PCR V1",
+            DeviceType::MnchipPointcareChemistry => "MNCHIP PointCare Chemistry",
+            DeviceType::MnchipPcrAnalyzer => "MNCHIP PCR Analyzer",
         }
     }
 }

@@ -51,6 +51,7 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, "033_create_record_templates", create_record_templates_table).await?;
     run_migration(pool, "034_verify_breed_id_nullable", verify_breed_id_nullable).await?;
     run_migration(pool, "035_add_mnchip_pcr_analyzer_device", add_mnchip_pcr_analyzer_device).await?;
+    run_migration(pool, "036_rename_mnchip_chemistry_device", rename_mnchip_chemistry_device).await?;
 
     Ok(())
 }
@@ -2039,7 +2040,7 @@ fn add_mnchip_pcr_analyzer_device(pool: &SqlitePool) -> std::pin::Pin<Box<dyn st
                 CREATE TABLE device_integrations (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL,
-                    device_type TEXT NOT NULL CHECK(device_type IN ('exigo_eos_vet', 'healvet_hv_fia_3000', 'mnchip_pointcare_pcr_v1', 'mnchip_pcr_analyzer')),
+                    device_type TEXT NOT NULL CHECK(device_type IN ('exigo_eos_vet', 'healvet_hv_fia_3000', 'mnchip_pointcare_chemistry', 'mnchip_pcr_analyzer')),
                     connection_type TEXT NOT NULL CHECK(connection_type IN ('file_watch', 'serial_port', 'hl7_tcp')),
                     watch_directory TEXT,
                     file_pattern TEXT,
@@ -2084,14 +2085,15 @@ fn add_mnchip_pcr_analyzer_device(pool: &SqlitePool) -> std::pin::Pin<Box<dyn st
             return Ok(());
         }
 
-        // Check if the table already has the new device type in the CHECK constraint
+        // Check if the table already has both new device types in the CHECK constraint
         let table_sql: Result<(String,), _> = sqlx::query_as(
             "SELECT sql FROM sqlite_master WHERE type='table' AND name='device_integrations'"
         ).fetch_one(pool).await;
 
         if let Ok((sql,)) = table_sql {
-            if sql.contains("mnchip_pcr_analyzer") {
-                println!("Migration 035: mnchip_pcr_analyzer already in device_type constraint, skipping");
+            // Check if both new types are present (full migration complete)
+            if sql.contains("mnchip_pcr_analyzer") && sql.contains("mnchip_pointcare_chemistry") {
+                println!("Migration 035: mnchip_pcr_analyzer and mnchip_pointcare_chemistry already in device_type constraint, skipping");
                 return Ok(());
             }
         }
@@ -2105,11 +2107,12 @@ fn add_mnchip_pcr_analyzer_device(pool: &SqlitePool) -> std::pin::Pin<Box<dyn st
             .await?;
 
         // Step 1: Create new table with updated CHECK constraint
+        // Note: Renamed mnchip_pointcare_pcr_v1 -> mnchip_pointcare_chemistry for clarity
         sqlx::query(r#"
             CREATE TABLE device_integrations_new (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
-                device_type TEXT NOT NULL CHECK(device_type IN ('exigo_eos_vet', 'healvet_hv_fia_3000', 'mnchip_pointcare_pcr_v1', 'mnchip_pcr_analyzer')),
+                device_type TEXT NOT NULL CHECK(device_type IN ('exigo_eos_vet', 'healvet_hv_fia_3000', 'mnchip_pointcare_chemistry', 'mnchip_pcr_analyzer')),
                 connection_type TEXT NOT NULL CHECK(connection_type IN ('file_watch', 'serial_port', 'hl7_tcp')),
                 watch_directory TEXT,
                 file_pattern TEXT,
@@ -2127,10 +2130,21 @@ fn add_mnchip_pcr_analyzer_device(pool: &SqlitePool) -> std::pin::Pin<Box<dyn st
         .execute(pool)
         .await?;
 
-        // Step 2: Copy existing data
-        sqlx::query("INSERT INTO device_integrations_new SELECT * FROM device_integrations")
-            .execute(pool)
-            .await?;
+        // Step 2: Copy existing data, renaming old device type to new name
+        sqlx::query(r#"
+            INSERT INTO device_integrations_new
+            SELECT id, name,
+                   CASE device_type
+                       WHEN 'mnchip_pointcare_pcr_v1' THEN 'mnchip_pointcare_chemistry'
+                       ELSE device_type
+                   END,
+                   connection_type, watch_directory, file_pattern, serial_port_name,
+                   serial_baud_rate, tcp_host, tcp_port, enabled, last_connected_at,
+                   created_at, updated_at, deleted_at
+            FROM device_integrations
+        "#)
+        .execute(pool)
+        .await?;
 
         // Step 3: Drop old table
         sqlx::query("DROP TABLE device_integrations")
@@ -2168,6 +2182,114 @@ fn add_mnchip_pcr_analyzer_device(pool: &SqlitePool) -> std::pin::Pin<Box<dyn st
         .await?;
 
         println!("Added mnchip_pcr_analyzer to device_integrations device_type constraint");
+        Ok(())
+    })
+}
+
+// Migration 036: Rename mnchip_pointcare_pcr_v1 to mnchip_pointcare_chemistry
+// This migration fixes the naming to make the chemistry analyzer distinct from PCR analyzer
+fn rename_mnchip_chemistry_device(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        // Check if already migrated (mnchip_pointcare_chemistry exists in constraint)
+        let table_sql: Result<(String,), _> = sqlx::query_as(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='device_integrations'"
+        ).fetch_one(pool).await;
+
+        if let Ok((sql,)) = table_sql {
+            if sql.contains("mnchip_pointcare_chemistry") {
+                println!("Migration 036: mnchip_pointcare_chemistry already in constraint, skipping");
+                return Ok(());
+            }
+        }
+
+        // Check if table exists
+        let table_exists: (i32,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='device_integrations'"
+        ).fetch_one(pool).await?;
+
+        if table_exists.0 == 0 {
+            println!("Migration 036: device_integrations table doesn't exist, skipping");
+            return Ok(());
+        }
+
+        // Cleanup any leftover temp table
+        sqlx::query("DROP TABLE IF EXISTS device_integrations_new")
+            .execute(pool)
+            .await?;
+
+        // Create new table with renamed constraint
+        sqlx::query(r#"
+            CREATE TABLE device_integrations_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                device_type TEXT NOT NULL CHECK(device_type IN ('exigo_eos_vet', 'healvet_hv_fia_3000', 'mnchip_pointcare_chemistry', 'mnchip_pcr_analyzer')),
+                connection_type TEXT NOT NULL CHECK(connection_type IN ('file_watch', 'serial_port', 'hl7_tcp')),
+                watch_directory TEXT,
+                file_pattern TEXT,
+                serial_port_name TEXT,
+                serial_baud_rate INTEGER DEFAULT 9600,
+                tcp_host TEXT,
+                tcp_port INTEGER,
+                enabled INTEGER DEFAULT 1 CHECK(enabled IN (0, 1)),
+                last_connected_at TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                deleted_at TEXT
+            )
+        "#)
+        .execute(pool)
+        .await?;
+
+        // Copy data, renaming old device type
+        sqlx::query(r#"
+            INSERT INTO device_integrations_new
+            SELECT id, name,
+                   CASE device_type
+                       WHEN 'mnchip_pointcare_pcr_v1' THEN 'mnchip_pointcare_chemistry'
+                       ELSE device_type
+                   END,
+                   connection_type, watch_directory, file_pattern, serial_port_name,
+                   serial_baud_rate, tcp_host, tcp_port, enabled, last_connected_at,
+                   created_at, updated_at, deleted_at
+            FROM device_integrations
+        "#)
+        .execute(pool)
+        .await?;
+
+        // Drop old table
+        sqlx::query("DROP TABLE device_integrations")
+            .execute(pool)
+            .await?;
+
+        // Rename new table
+        sqlx::query("ALTER TABLE device_integrations_new RENAME TO device_integrations")
+            .execute(pool)
+            .await?;
+
+        // Recreate indexes
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_device_integrations_device_type ON device_integrations(device_type)")
+            .execute(pool)
+            .await?;
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_device_integrations_connection_type ON device_integrations(connection_type)")
+            .execute(pool)
+            .await?;
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_device_integrations_enabled ON device_integrations(enabled)")
+            .execute(pool)
+            .await?;
+
+        // Recreate trigger
+        sqlx::query(r#"
+            CREATE TRIGGER IF NOT EXISTS update_device_integrations_timestamp
+            AFTER UPDATE ON device_integrations
+            BEGIN
+                UPDATE device_integrations SET updated_at = CURRENT_TIMESTAMP
+                WHERE id = NEW.id;
+            END
+        "#)
+        .execute(pool)
+        .await?;
+
+        println!("Renamed mnchip_pointcare_pcr_v1 to mnchip_pointcare_chemistry in device_integrations");
         Ok(())
     })
 }
