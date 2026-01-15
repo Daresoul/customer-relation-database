@@ -30,7 +30,9 @@ import { usePatients } from '@/hooks/usePatients';
 import { useCurrencies, useCreateMedicalRecord, useUploadAttachment } from '@/hooks/useMedicalRecords';
 import { useAppSettings } from '@/hooks/useAppSettings';
 import { CreateMedicalRecordInput } from '@/types/medical';
+import { Patient } from '@/types';
 import RecentDeviceFiles from '../RecentDeviceFiles';
+import CreatePatientSection from './CreatePatientSection';
 import styles from './DeviceImportModal.module.css';
 
 const { TextArea } = Input;
@@ -44,6 +46,7 @@ const DeviceImportModal: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [recordType, setRecordType] = useState<'procedure' | 'note' | 'test_result'>('test_result');
   const [recentFilesDrawerOpen, setRecentFilesDrawerOpen] = useState(false);
+  const [createPatientExpanded, setCreatePatientExpanded] = useState(false);
 
   const {
     modalOpen,
@@ -52,6 +55,8 @@ const DeviceImportModal: React.FC = () => {
     clearAllFiles,
     closeModal,
     getGroupedFiles,
+    getAggregatedPatientData,
+    getPatientDataConflicts,
   } = useDeviceImport();
 
   // Get grouped files (sessions + individual files)
@@ -138,6 +143,7 @@ const DeviceImportModal: React.FC = () => {
       content: t('medical:deviceImport.confirmCancel'),
       onOk: () => {
         form.resetFields();
+        setCreatePatientExpanded(false);
         clearAllFiles();
         closeModal();
       },
@@ -154,6 +160,15 @@ const DeviceImportModal: React.FC = () => {
     setRecentFilesDrawerOpen(false);
     // TODO: Implement adding the file to the pending files list
     // This would require fetching the file from storage and adding it to the DeviceImportContext
+  };
+
+  const handlePatientCreated = (patient: Patient) => {
+    // Refresh patients list to include the new patient
+    refreshPatients();
+    // Auto-select the newly created patient
+    form.setFieldValue('patientId', patient.id);
+    // Collapse the create patient section
+    setCreatePatientExpanded(false);
   };
 
   const handleSubmit = async () => {
@@ -219,6 +234,7 @@ const DeviceImportModal: React.FC = () => {
 
       // Clear and close
       form.resetFields();
+      setCreatePatientExpanded(false);
       clearAllFiles();
       closeModal();
     } catch (_error) {
@@ -357,6 +373,16 @@ const DeviceImportModal: React.FC = () => {
             ))}
           </Select>
         </Form.Item>
+
+        {/* Inline Patient Creation Section */}
+        <CreatePatientSection
+          extractedData={getAggregatedPatientData()}
+          conflicts={getPatientDataConflicts()}
+          onPatientCreated={handlePatientCreated}
+          onCancel={() => setCreatePatientExpanded(false)}
+          isExpanded={createPatientExpanded}
+          onToggleExpand={setCreatePatientExpanded}
+        />
 
         <Form.Item
           name="recordType"

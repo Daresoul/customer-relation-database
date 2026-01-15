@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect, useRef, useMemo } from 'react';
+import type { ExtractedPatientData, PatientDataConflict } from '../types/deviceImport';
+import { aggregatePatientData, detectPatientDataConflicts } from '../utils/deviceDataExtraction';
 
 export interface PendingDeviceFile {
   id: string;
@@ -68,6 +70,9 @@ interface DeviceImportContextType extends DeviceImportState {
   closeModal: () => void;
   setSuggestedPatient: (patientId?: number) => void;
   getGroupedFiles: () => GroupedDeviceFile[];
+  // Patient data extraction from device files
+  getAggregatedPatientData: () => ExtractedPatientData;
+  getPatientDataConflicts: () => PatientDataConflict[];
 }
 
 // Session timeout: 30 seconds of inactivity
@@ -293,6 +298,18 @@ export const DeviceImportProvider: React.FC<{ children: ReactNode }> = ({ childr
     return grouped;
   }, [state.pendingFiles, state.activeSessions]);
 
+  // Get aggregated patient data from all pending files
+  const getAggregatedPatientData = useCallback((): ExtractedPatientData => {
+    const groupedFiles = getGroupedFiles();
+    return aggregatePatientData(groupedFiles);
+  }, [getGroupedFiles]);
+
+  // Get conflicts in patient data across files
+  const getPatientDataConflicts = useCallback((): PatientDataConflict[] => {
+    const groupedFiles = getGroupedFiles();
+    return detectPatientDataConflicts(groupedFiles);
+  }, [getGroupedFiles]);
+
   const openModal = useCallback(() => {
     setState((prev) => ({ ...prev, modalOpen: true }));
   }, []);
@@ -327,6 +344,8 @@ export const DeviceImportProvider: React.FC<{ children: ReactNode }> = ({ childr
         closeModal,
         setSuggestedPatient,
         getGroupedFiles,
+        getAggregatedPatientData,
+        getPatientDataConflicts,
       }}
     >
       {children}
