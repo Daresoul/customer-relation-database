@@ -355,10 +355,28 @@ public class PdfGeneratorCLI {
 
         // Process each parameter code in the test results
         for (String paramCode : testResults.keySet()) {
-            // Skip metadata fields that may be present
+            // Skip metadata fields that may be present from HL7 parsing
+            // These include PID segment fields and other non-test-result data
             if (paramCode.equals("sample_id") || paramCode.equals("patient_id") ||
                 paramCode.equals("datetime") || paramCode.equals("gender") ||
-                paramCode.equals("sample_type")) {
+                paramCode.equals("sample_type") ||
+                // PID segment fields from HL7 parser
+                paramCode.equals("set_id") || paramCode.equals("external_id") ||
+                paramCode.equals("alternate_id") || paramCode.equals("patient_name") ||
+                paramCode.equals("patientName") || paramCode.equals("species") ||
+                paramCode.equals("birth_date_alt") || paramCode.equals("gender_alt") ||
+                paramCode.equals("birth_date") || paramCode.equals("patient_address") ||
+                paramCode.equals("phone") || paramCode.equals("patientIdentifier") ||
+                // MSH segment fields
+                paramCode.equals("sending_application") || paramCode.equals("sending_facility") ||
+                paramCode.equals("receiving_application") || paramCode.equals("receiving_facility") ||
+                paramCode.equals("message_datetime") || paramCode.equals("message_type") ||
+                paramCode.equals("message_control_id") || paramCode.equals("processing_id") ||
+                paramCode.equals("version_id") ||
+                // OBR segment fields
+                paramCode.equals("observation_datetime") || paramCode.equals("specimen_received_datetime") ||
+                // Other common metadata
+                paramCode.equals("name") || paramCode.equals("ID2") || paramCode.equals("APNA")) {
                 continue;
             }
 
