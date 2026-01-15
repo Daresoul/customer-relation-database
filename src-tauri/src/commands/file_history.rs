@@ -286,19 +286,20 @@ pub async fn cleanup_old_file_history(
     Ok(result.rows_affected() as i64)
 }
 
-/// Download device file by file_id from storage
+/// Download device file by file_id from storage (includes device metadata for PDF generation)
 #[tauri::command]
 pub async fn download_device_file(
     pool: State<'_, DatabasePool>,
     file_id: String,
-) -> Result<crate::models::medical::AttachmentData, String> {
+) -> Result<DeviceFileDownloadResponse, String> {
     use sqlx::Row;
 
     let pool = pool.lock().await;
 
-    // Get file metadata from file_access_history
+    // Get file metadata from file_access_history (including device metadata)
     let row = sqlx::query(
-        "SELECT original_name, file_path, mime_type FROM file_access_history WHERE file_id = ?"
+        "SELECT original_name, file_path, mime_type, device_type, device_name, connection_method \
+         FROM file_access_history WHERE file_id = ?"
     )
     .bind(&file_id)
     .fetch_optional(&*pool)
@@ -309,14 +310,44 @@ pub async fn download_device_file(
     let original_name: String = row.get("original_name");
     let file_path: String = row.get("file_path");
     let mime_type: Option<String> = row.get("mime_type");
+    let device_type: String = row.get("device_type");
+    let device_name: String = row.get("device_name");
+    let connection_method: Option<String> = row.get("connection_method");
 
     // Read file from disk
     let file_data = std::fs::read(&file_path)
         .map_err(|e| format!("Failed to read device file: {}", e))?;
 
-    Ok(crate::models::medical::AttachmentData {
+    // Parse test results from file if it's JSON
+    let test_results = if original_name.ends_with(".json") {
+        match serde_json::from_slice::<serde_json::Value>(&file_data) {
+            Ok(json) => Some(json),
+            Err(_) => None,
+        }
+    } else {
+        None
+    };
+
+    Ok(DeviceFileDownloadResponse {
         file_name: original_name,
         file_data,
         mime_type: mime_type.unwrap_or_else(|| "application/octet-stream".to_string()),
+        device_type,
+        device_name,
+        connection_method,
+        test_results,
     })
+}
+
+/// Response for download_device_file with device metadata
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceFileDownloadResponse {
+    pub file_name: String,
+    pub file_data: Vec<u8>,
+    pub mime_type: String,
+    pub device_type: String,
+    pub device_name: String,
+    pub connection_method: Option<String>,
+    pub test_results: Option<serde_json::Value>,
 }

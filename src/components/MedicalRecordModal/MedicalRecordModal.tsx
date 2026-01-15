@@ -3,7 +3,7 @@ import { App, Spin, Alert, Button, Divider, List, Typography, Space, Modal } fro
 import { useTranslation } from 'react-i18next';
 import MedicalRecordForm from './MedicalRecordForm';
 import { useMedicalRecord, useCreateMedicalRecord, useUpdateMedicalRecord, useUploadAttachment } from '@/hooks/useMedicalRecords';
-import type { CreateMedicalRecordInput, UpdateMedicalRecordInput, MedicalRecordHistory } from '@/types/medical';
+import type { CreateMedicalRecordInput, UpdateMedicalRecordInput, MedicalRecordHistory, DeviceDataInput } from '@/types/medical';
 import styles from './MedicalRecordModal.module.css';
 
 interface MedicalRecordModalProps {
@@ -54,7 +54,7 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
     }
   }, [isEdit, isLoadingRecord, isError, error, recordDetail]);
 
-  const handleSubmit = async (values: CreateMedicalRecordInput | UpdateMedicalRecordInput, files?: File[], fileSourceIds?: Map<string, string>) => {
+  const handleSubmit = async (values: CreateMedicalRecordInput | UpdateMedicalRecordInput, files?: File[], fileSourceIds?: Map<string, string>, deviceDataList?: DeviceDataInput[]) => {
     setLoading(true);
     try {
       if (isEdit && recordId) {
@@ -63,10 +63,11 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
           updates: values as UpdateMedicalRecordInput,
         });
       } else {
-        // Create the medical record first
+        // Create the medical record first (include deviceDataList for PDF generation)
         const result = await createMutation.mutateAsync({
           ...values as CreateMedicalRecordInput,
           patientId,
+          deviceDataList: deviceDataList,
         });
 
         // Upload files if any were selected

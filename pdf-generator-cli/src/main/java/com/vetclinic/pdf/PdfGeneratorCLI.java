@@ -82,7 +82,14 @@ public class PdfGeneratorCLI {
     private static Patient parsePatient(JsonObject json) {
         Patient patient = new Patient();
         patient.setName(json.get("name").getAsString());
-        patient.setOwner(json.get("owner").getAsString());
+
+        // Handle owner - may be null or empty
+        if (json.has("owner") && !json.get("owner").isJsonNull()) {
+            String owner = json.get("owner").getAsString();
+            patient.setOwner(owner != null ? owner : "");
+        } else {
+            patient.setOwner("");
+        }
 
         // Map species string to PatientType
         String species = json.get("species").getAsString().toLowerCase();

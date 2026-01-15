@@ -118,6 +118,11 @@ export interface DownloadAttachmentResponse {
   fileName: string;
   fileData: number[]; // Array of bytes from Tauri
   mimeType: string;
+  // Device metadata for PDF generation (from file_access_history)
+  deviceType?: string;
+  deviceName?: string;
+  connectionMethod?: string;
+  testResults?: any;
 }
 
 export interface SearchMedicalRecordsResponse {

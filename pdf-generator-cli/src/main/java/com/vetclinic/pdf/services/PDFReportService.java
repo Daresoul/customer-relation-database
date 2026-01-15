@@ -888,7 +888,7 @@ public class PDFReportService {
 
         PdfPCell owner = Util.createDefaultCellWithLeftRightAlignment(
                 "Сопственик: ",
-                patient.getOwner(),
+                patient.getOwner() != null ? patient.getOwner() : "",
                 CELL_FONT_SIZE,
                 FontUtil.MACEDONIAN);
         owner.setColspan(2);

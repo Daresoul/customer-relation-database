@@ -549,7 +549,7 @@ pub async fn regenerate_pdf_from_attachment(
     .fetch_optional(&*pool_guard)
     .await
     .unwrap_or(None)
-    .unwrap_or_else(|| "Непознат Сопственик".to_string());
+    .unwrap_or_default(); // Empty string - PDF will skip owner row
 
     let patient_data = PatientData {
         name: patient_row.try_get("name").unwrap_or_else(|_| "Непознат Пациент".to_string()),
@@ -687,14 +687,14 @@ pub async fn regenerate_pdf_from_medical_record(
              JOIN patient_households ph ON ph.household_id = h.id \
              WHERE ph.patient_id = ? \
              LIMIT 1), \
-            'Непознат Сопственик' \
+            '' \
          )"
     )
     .bind(patient_id)
     .bind(patient_id)
     .fetch_one(&*pool_guard)
     .await
-    .unwrap_or_else(|_| "Непознат Сопственик".to_string());
+    .unwrap_or_default(); // Empty string - PDF will skip owner row
 
     let patient_data = PatientData {
         name: patient_row.try_get("name").unwrap_or_else(|_| "Непознат Пациент".to_string()),

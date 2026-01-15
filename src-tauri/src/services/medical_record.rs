@@ -477,11 +477,11 @@ impl MedicalRecordService {
             }
             Ok(None) => {
                 println!("   ⚠️  No household link found for patient");
-                "Непознат Сопственик".to_string()
+                String::new() // Empty string - PDF will skip owner row
             }
             Err(e) => {
                 println!("   ❌ Owner query failed: {}", e);
-                "Непознат Сопственик".to_string()
+                String::new() // Empty string - PDF will skip owner row
             }
         };
 

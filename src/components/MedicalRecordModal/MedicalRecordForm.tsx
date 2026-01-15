@@ -10,7 +10,7 @@ import { useSearchRecordTemplates } from '@/hooks/useRecordTemplates';
 import { useAppSettings } from '@/hooks/useAppSettings';
 import { useDebounce } from '@/hooks/useDebounce';
 import { MedicalService } from '@/services/medicalService';
-import type { MedicalRecord, CreateMedicalRecordInput, UpdateMedicalRecordInput, RecordTemplate, RecordType } from '@/types/medical';
+import type { MedicalRecord, CreateMedicalRecordInput, UpdateMedicalRecordInput, RecordTemplate, RecordType, DeviceDataInput } from '@/types/medical';
 import type { UploadFile } from 'antd';
 import styles from './MedicalRecordForm.module.css';
 
@@ -21,7 +21,7 @@ const { Dragger } = Upload;
 
 interface MedicalRecordFormProps {
   initialValues?: MedicalRecord;
-  onSubmit: (values: CreateMedicalRecordInput | UpdateMedicalRecordInput, files?: File[], fileSourceIds?: Map<string, string>) => void;
+  onSubmit: (values: CreateMedicalRecordInput | UpdateMedicalRecordInput, files?: File[], fileSourceIds?: Map<string, string>, deviceDataList?: DeviceDataInput[]) => void;
   onCancel: () => void;
   loading: boolean;
   isEdit: boolean;
@@ -44,6 +44,7 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
   const [recordType, setRecordType] = useState<RecordType>(initialValues?.recordType || 'procedure');
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [fileSourceIds, setFileSourceIds] = useState<Map<string, string>>(new Map()); // Maps file.name -> sourceFileId
+  const [fileDeviceData, setFileDeviceData] = useState<Map<string, DeviceDataInput>>(new Map()); // Maps file.name -> device data for PDF generation
   const [recentFilesDrawerOpen, setRecentFilesDrawerOpen] = useState(false);
   const [refreshRecentFiles, setRefreshRecentFiles] = useState<(() => void) | null>(null);
   const [titleSearchTerm, setTitleSearchTerm] = useState<string>('');
@@ -93,7 +94,18 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
           currencyId: values.currencyId,
         } as CreateMedicalRecordInput;
 
-    onSubmit(formData, !isEdit ? pendingFiles : undefined, !isEdit ? fileSourceIds : undefined);
+    // Collect device data from files that have it (for PDF generation)
+    const deviceDataList: DeviceDataInput[] = [];
+    if (!isEdit) {
+      pendingFiles.forEach(file => {
+        const deviceData = fileDeviceData.get(file.name);
+        if (deviceData) {
+          deviceDataList.push(deviceData);
+        }
+      });
+    }
+
+    onSubmit(formData, !isEdit ? pendingFiles : undefined, !isEdit ? fileSourceIds : undefined, deviceDataList.length > 0 ? deviceDataList : undefined);
   };
 
   const handleRecordTypeChange = (value: string) => {
@@ -110,7 +122,7 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
 
   const handleAddRecentFile = async (fileId: string, originalName: string) => {
     try {
-      // Fetch the file data from backend using the fileId
+      // Fetch the file data from backend using the fileId (includes device metadata)
       const fileData = await MedicalService.getDeviceFileById(fileId);
 
       // Create a File object from the fetched data
@@ -123,6 +135,16 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
 
       // Track the source file ID for this file
       setFileSourceIds(prev => new Map(prev).set(originalName, fileId));
+
+      // Store device metadata for PDF generation if available
+      if (fileData.deviceType && fileData.deviceName) {
+        const deviceData: DeviceDataInput = {
+          deviceTestData: fileData.testResults || null,
+          deviceType: fileData.deviceType,
+          deviceName: fileData.deviceName,
+        };
+        setFileDeviceData(prev => new Map(prev).set(originalName, deviceData));
+      }
 
       notification.success({
         message: t('common:success'),
