@@ -1,4 +1,4 @@
-use sqlx::{SqlitePool, Row};
+use sea_orm::{DatabaseConnection, ConnectionTrait, Statement, DbBackend};
 use crate::models::household::*;
 
 // Sanitize query for FTS5 to prevent syntax errors
@@ -25,12 +25,13 @@ fn sanitize_fts5_query(query: &str) -> String {
 
 // Helper function to get all households without search
 async fn get_all_households_internal(
-    pool: &SqlitePool,
+    db: &DatabaseConnection,
     limit: i32,
     offset: i32,
-) -> Result<SearchHouseholdsResponse, sqlx::Error> {
+) -> Result<SearchHouseholdsResponse, String> {
     // Get households directly without FTS5
-    let household_rows = sqlx::query(
+    let household_rows = db.query_all(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
         r#"
         SELECT
             id,
@@ -39,32 +40,37 @@ async fn get_all_households_internal(
         FROM households
         ORDER BY household_name, id
         LIMIT ? OFFSET ?
-        "#
-    )
-    .bind(limit)
-    .bind(offset)
-    .fetch_all(pool)
-    .await?;
+        "#,
+        [limit.into(), offset.into()]
+    ))
+    .await
+    .map_err(|e| format!("Failed to fetch households: {}", e))?;
 
     // Get total count
-    let total_row = sqlx::query(
+    let total_row = db.query_one(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
         r#"
         SELECT COUNT(*) as count
         FROM households
-        "#
-    )
-    .fetch_one(pool)
-    .await?;
+        "#,
+        []
+    ))
+    .await
+    .map_err(|e| format!("Failed to count households: {}", e))?
+    .ok_or("Failed to count households")?;
 
-    let total: i32 = total_row.get("count");
+    let total: i32 = total_row.try_get("", "count")
+        .map_err(|e| format!("Failed to get count: {}", e))?;
 
     let mut results = Vec::new();
 
     for row in household_rows {
-        let household_id: i64 = row.get("id");
+        let household_id: i64 = row.try_get("", "id")
+            .map_err(|e| format!("Failed to get id: {}", e))?;
 
         // Get people for this household
-        let people_rows = sqlx::query(
+        let people_rows = db.query_all(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
             r#"
             SELECT
                 p.id,
@@ -74,19 +80,21 @@ async fn get_all_households_internal(
             FROM people p
             WHERE p.household_id = ?
             ORDER BY p.is_primary DESC, p.last_name, p.first_name
-            "#
-        )
-        .bind(household_id)
-        .fetch_all(pool)
-        .await?;
+            "#,
+            [household_id.into()]
+        ))
+        .await
+        .map_err(|e| format!("Failed to fetch people: {}", e))?;
 
         let mut people_with_contacts = Vec::new();
 
         for person_row in people_rows {
-            let person_id: i64 = person_row.get("id");
+            let person_id: i64 = person_row.try_get("", "id")
+                .map_err(|e| format!("Failed to get person id: {}", e))?;
 
             // Get contacts for this person
-            let contact_rows = sqlx::query(
+            let contact_rows = db.query_all(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
                 r#"
                 SELECT
                     id,
@@ -98,50 +106,53 @@ async fn get_all_households_internal(
                 FROM person_contacts
                 WHERE person_id = ?
                 ORDER BY is_primary DESC, contact_type
-                "#
-            )
-            .bind(person_id)
-            .fetch_all(pool)
-            .await?;
+                "#,
+                [person_id.into()]
+            ))
+            .await
+            .map_err(|e| format!("Failed to fetch contacts: {}", e))?;
 
-            let contacts: Vec<PersonContact> = contact_rows.into_iter().map(|contact_row| {
+            let contacts: Vec<PersonContact> = contact_rows.iter().map(|contact_row| {
                 PersonContact {
-                    id: contact_row.get::<i32, _>("id"),
-                    person_id: contact_row.get::<i32, _>("person_id"),
-                    contact_type: contact_row.get("contact_type"),
-                    contact_value: contact_row.get("contact_value"),
-                    is_primary: contact_row.get::<bool, _>("is_primary"),
-                    created_at: contact_row.get("created_at"),
+                    id: contact_row.try_get("", "id").unwrap_or(0),
+                    person_id: contact_row.try_get("", "person_id").unwrap_or(0),
+                    contact_type: contact_row.try_get("", "contact_type").unwrap_or_default(),
+                    contact_value: contact_row.try_get("", "contact_value").unwrap_or_default(),
+                    is_primary: contact_row.try_get("", "is_primary").unwrap_or(false),
+                    created_at: contact_row.try_get("", "created_at").unwrap_or_default(),
                 }
             }).collect();
 
             people_with_contacts.push(PersonWithContacts {
                 id: person_id as i32,
-                first_name: person_row.get("first_name"),
-                last_name: person_row.get("last_name"),
-                is_primary: person_row.get::<bool, _>("is_primary"),
+                first_name: person_row.try_get("", "first_name").unwrap_or_default(),
+                last_name: person_row.try_get("", "last_name").unwrap_or_default(),
+                is_primary: person_row.try_get("", "is_primary").unwrap_or(false),
                 contacts,
             });
         }
 
         // Get pet count for this household
-        let pet_count_row = sqlx::query(
+        let pet_count_row = db.query_one(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
             r#"
             SELECT COUNT(*) as count
             FROM patient_households
             WHERE household_id = ?
-            "#
-        )
-        .bind(household_id)
-        .fetch_one(pool)
-        .await?;
+            "#,
+            [household_id.into()]
+        ))
+        .await
+        .map_err(|e| format!("Failed to count pets: {}", e))?
+        .ok_or("Failed to count pets")?;
 
-        let pet_count: i64 = pet_count_row.get("count");
+        let pet_count: i64 = pet_count_row.try_get("", "count")
+            .map_err(|e| format!("Failed to get pet count: {}", e))?;
 
         results.push(HouseholdSearchResult {
             id: household_id as i32,
-            household_name: row.get("household_name"),
-            address: row.get("address"),
+            household_name: row.try_get("", "household_name").unwrap_or_default(),
+            address: row.try_get("", "address").ok(),
             people: people_with_contacts,
             pet_count: pet_count as i32,
             relevance_score: 0.0,
@@ -158,24 +169,25 @@ async fn get_all_households_internal(
 
 // Search households using FTS5
 pub async fn search_households(
-    pool: &SqlitePool,
+    db: &DatabaseConnection,
     query: &str,
     limit: Option<i32>,
     offset: Option<i32>,
-) -> Result<SearchHouseholdsResponse, sqlx::Error> {
+) -> Result<SearchHouseholdsResponse, String> {
     let limit = limit.unwrap_or(10).min(100); // Max 100 results
     let offset = offset.unwrap_or(0);
 
     // Handle empty or too short queries
     if query.trim().is_empty() || query.trim().len() < 2 {
         // For empty queries, return all households (without FTS5 search)
-        return get_all_households_internal(pool, limit, offset).await;
+        return get_all_households_internal(db, limit, offset).await;
     }
 
     let fts_query = sanitize_fts5_query(query);
 
     // Search using FTS5
-    let search_results = sqlx::query(
+    let search_results = db.query_all(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
         r#"
         SELECT
             h.id,
@@ -188,35 +200,38 @@ pub async fn search_households(
         WHERE household_search MATCH ?
         ORDER BY relevance_score
         LIMIT ? OFFSET ?
-        "#
-    )
-    .bind(&fts_query)
-    .bind(limit)
-    .bind(offset)
-    .fetch_all(pool)
-    .await?;
+        "#,
+        [fts_query.clone().into(), limit.into(), offset.into()]
+    ))
+    .await
+    .map_err(|e| format!("Failed to search households: {}", e))?;
 
     // Get total count
-    let total_row = sqlx::query(
+    let total_row = db.query_one(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
         r#"
         SELECT COUNT(*) as count
         FROM household_search
         WHERE household_search MATCH ?
-        "#
-    )
-    .bind(&fts_query)
-    .fetch_one(pool)
-    .await?;
+        "#,
+        [fts_query.into()]
+    ))
+    .await
+    .map_err(|e| format!("Failed to count search results: {}", e))?
+    .ok_or("Failed to count search results")?;
 
-    let total: i32 = total_row.get("count");
+    let total: i32 = total_row.try_get("", "count")
+        .map_err(|e| format!("Failed to get count: {}", e))?;
 
     let mut results = Vec::new();
 
     for row in search_results {
-        let household_id: i64 = row.get("id");
+        let household_id: i64 = row.try_get("", "id")
+            .map_err(|e| format!("Failed to get id: {}", e))?;
 
         // Get people for this household
-        let people_rows = sqlx::query(
+        let people_rows = db.query_all(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
             r#"
             SELECT
                 p.id,
@@ -226,19 +241,21 @@ pub async fn search_households(
             FROM people p
             WHERE p.household_id = ?
             ORDER BY p.is_primary DESC, p.last_name, p.first_name
-            "#
-        )
-        .bind(household_id)
-        .fetch_all(pool)
-        .await?;
+            "#,
+            [household_id.into()]
+        ))
+        .await
+        .map_err(|e| format!("Failed to fetch people: {}", e))?;
 
         let mut people_with_contacts = Vec::new();
 
         for person_row in people_rows {
-            let person_id: i64 = person_row.get("id");
+            let person_id: i64 = person_row.try_get("", "id")
+                .map_err(|e| format!("Failed to get person id: {}", e))?;
 
             // Get contacts for this person
-            let contact_rows = sqlx::query(
+            let contact_rows = db.query_all(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
                 r#"
                 SELECT
                     id,
@@ -250,54 +267,57 @@ pub async fn search_households(
                 FROM person_contacts
                 WHERE person_id = ?
                 ORDER BY is_primary DESC, contact_type
-                "#
-            )
-            .bind(person_id)
-            .fetch_all(pool)
-            .await?;
+                "#,
+                [person_id.into()]
+            ))
+            .await
+            .map_err(|e| format!("Failed to fetch contacts: {}", e))?;
 
-            let contacts: Vec<PersonContact> = contact_rows.into_iter().map(|contact_row| {
+            let contacts: Vec<PersonContact> = contact_rows.iter().map(|contact_row| {
                 PersonContact {
-                    id: contact_row.get::<i32, _>("id"),
-                    person_id: contact_row.get::<i32, _>("person_id"),
-                    contact_type: contact_row.get("contact_type"),
-                    contact_value: contact_row.get("contact_value"),
-                    is_primary: contact_row.get::<bool, _>("is_primary"),
-                    created_at: contact_row.get("created_at"),
+                    id: contact_row.try_get("", "id").unwrap_or(0),
+                    person_id: contact_row.try_get("", "person_id").unwrap_or(0),
+                    contact_type: contact_row.try_get("", "contact_type").unwrap_or_default(),
+                    contact_value: contact_row.try_get("", "contact_value").unwrap_or_default(),
+                    is_primary: contact_row.try_get("", "is_primary").unwrap_or(false),
+                    created_at: contact_row.try_get("", "created_at").unwrap_or_default(),
                 }
             }).collect();
 
             people_with_contacts.push(PersonWithContacts {
                 id: person_id as i32,
-                first_name: person_row.get("first_name"),
-                last_name: person_row.get("last_name"),
-                is_primary: person_row.get::<bool, _>("is_primary"),
+                first_name: person_row.try_get("", "first_name").unwrap_or_default(),
+                last_name: person_row.try_get("", "last_name").unwrap_or_default(),
+                is_primary: person_row.try_get("", "is_primary").unwrap_or(false),
                 contacts,
             });
         }
 
         // Get pet count for this household
-        let pet_count_row = sqlx::query(
+        let pet_count_row = db.query_one(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
             r#"
             SELECT COUNT(*) as count
             FROM patient_households
             WHERE household_id = ?
-            "#
-        )
-        .bind(household_id)
-        .fetch_one(pool)
-        .await?;
+            "#,
+            [household_id.into()]
+        ))
+        .await
+        .map_err(|e| format!("Failed to count pets: {}", e))?
+        .ok_or("Failed to count pets")?;
 
-        let pet_count: i64 = pet_count_row.get("count");
+        let pet_count: i64 = pet_count_row.try_get("", "count")
+            .map_err(|e| format!("Failed to get pet count: {}", e))?;
 
         results.push(HouseholdSearchResult {
             id: household_id as i32,
-            household_name: row.get("household_name"),
-            address: row.get("address"),
+            household_name: row.try_get("", "household_name").unwrap_or_default(),
+            address: row.try_get("", "address").ok(),
             people: people_with_contacts,
             pet_count: pet_count as i32,
-            relevance_score: row.get::<f64, _>("relevance_score"),
-            snippet: row.get("snippet"),
+            relevance_score: row.try_get("", "relevance_score").unwrap_or(0.0),
+            snippet: row.try_get("", "snippet").ok(),
         });
     }
 
@@ -312,14 +332,15 @@ pub async fn search_households(
 
 // Quick search for autocomplete (lighter weight)
 pub async fn quick_search_households(
-    pool: &SqlitePool,
+    db: &DatabaseConnection,
     query: &str,
     limit: i32,
-) -> Result<Vec<(i32, String)>, sqlx::Error> {
+) -> Result<Vec<(i32, String)>, String> {
     let fts_query = sanitize_fts5_query(query);
     let limit = limit.min(20);
 
-    let results = sqlx::query(
+    let results = db.query_all(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
         r#"
         SELECT
             household_id,
@@ -328,18 +349,17 @@ pub async fn quick_search_households(
         WHERE household_search MATCH ?
         ORDER BY bm25(household_search)
         LIMIT ?
-        "#
-    )
-    .bind(&fts_query)
-    .bind(limit)
-    .fetch_all(pool)
-    .await?;
+        "#,
+        [fts_query.into(), limit.into()]
+    ))
+    .await
+    .map_err(|e| format!("Failed to quick search households: {}", e))?;
 
     Ok(results
-        .into_iter()
+        .iter()
         .map(|r| {
-            let id: i64 = r.get("household_id");
-            let name: Option<String> = r.get("display_name");
+            let id: i64 = r.try_get("", "household_id").unwrap_or(0);
+            let name: Option<String> = r.try_get("", "display_name").ok();
             (id as i32, name.unwrap_or_default())
         })
         .collect())
@@ -348,12 +368,13 @@ pub async fn quick_search_households(
 // Search households by contact value (phone, email)
 #[allow(dead_code)]
 pub async fn search_households_by_contact(
-    pool: &SqlitePool,
+    db: &DatabaseConnection,
     contact_value: &str,
-) -> Result<Vec<HouseholdSearchResult>, sqlx::Error> {
+) -> Result<Vec<HouseholdSearchResult>, String> {
     let search_pattern = format!("%{}%", contact_value);
 
-    let household_rows = sqlx::query(
+    let household_rows = db.query_all(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
         r#"
         SELECT DISTINCT h.id, h.household_name, h.address
         FROM households h
@@ -361,19 +382,21 @@ pub async fn search_households_by_contact(
         JOIN person_contacts pc ON pc.person_id = p.id
         WHERE pc.contact_value LIKE ?
         LIMIT 10
-        "#
-    )
-    .bind(&search_pattern)
-    .fetch_all(pool)
-    .await?;
+        "#,
+        [search_pattern.into()]
+    ))
+    .await
+    .map_err(|e| format!("Failed to search by contact: {}", e))?;
 
     let mut results = Vec::new();
 
     for household_row in household_rows {
-        let household_id: i64 = household_row.get("id");
+        let household_id: i64 = household_row.try_get("", "id")
+            .map_err(|e| format!("Failed to get id: {}", e))?;
 
         // Get all people for this household
-        let people_rows = sqlx::query(
+        let people_rows = db.query_all(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
             r#"
             SELECT
                 p.id,
@@ -383,18 +406,20 @@ pub async fn search_households_by_contact(
             FROM people p
             WHERE p.household_id = ?
             ORDER BY p.is_primary DESC, p.last_name, p.first_name
-            "#
-        )
-        .bind(household_id)
-        .fetch_all(pool)
-        .await?;
+            "#,
+            [household_id.into()]
+        ))
+        .await
+        .map_err(|e| format!("Failed to fetch people: {}", e))?;
 
         let mut people_with_contacts = Vec::new();
 
         for person_row in people_rows {
-            let person_id: i64 = person_row.get("id");
+            let person_id: i64 = person_row.try_get("", "id")
+                .map_err(|e| format!("Failed to get person id: {}", e))?;
 
-            let contact_rows = sqlx::query(
+            let contact_rows = db.query_all(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
                 r#"
                 SELECT
                     id,
@@ -406,50 +431,53 @@ pub async fn search_households_by_contact(
                 FROM person_contacts
                 WHERE person_id = ?
                 ORDER BY is_primary DESC, contact_type
-                "#
-            )
-            .bind(person_id)
-            .fetch_all(pool)
-            .await?;
+                "#,
+                [person_id.into()]
+            ))
+            .await
+            .map_err(|e| format!("Failed to fetch contacts: {}", e))?;
 
-            let contacts: Vec<PersonContact> = contact_rows.into_iter().map(|contact_row| {
+            let contacts: Vec<PersonContact> = contact_rows.iter().map(|contact_row| {
                 PersonContact {
-                    id: contact_row.get::<i32, _>("id"),
-                    person_id: contact_row.get::<i32, _>("person_id"),
-                    contact_type: contact_row.get("contact_type"),
-                    contact_value: contact_row.get("contact_value"),
-                    is_primary: contact_row.get::<bool, _>("is_primary"),
-                    created_at: contact_row.get("created_at"),
+                    id: contact_row.try_get("", "id").unwrap_or(0),
+                    person_id: contact_row.try_get("", "person_id").unwrap_or(0),
+                    contact_type: contact_row.try_get("", "contact_type").unwrap_or_default(),
+                    contact_value: contact_row.try_get("", "contact_value").unwrap_or_default(),
+                    is_primary: contact_row.try_get("", "is_primary").unwrap_or(false),
+                    created_at: contact_row.try_get("", "created_at").unwrap_or_default(),
                 }
             }).collect();
 
             people_with_contacts.push(PersonWithContacts {
                 id: person_id as i32,
-                first_name: person_row.get("first_name"),
-                last_name: person_row.get("last_name"),
-                is_primary: person_row.get::<bool, _>("is_primary"),
+                first_name: person_row.try_get("", "first_name").unwrap_or_default(),
+                last_name: person_row.try_get("", "last_name").unwrap_or_default(),
+                is_primary: person_row.try_get("", "is_primary").unwrap_or(false),
                 contacts,
             });
         }
 
         // Get pet count for this household
-        let pet_count_row = sqlx::query(
+        let pet_count_row = db.query_one(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
             r#"
             SELECT COUNT(*) as count
             FROM patient_households
             WHERE household_id = ?
-            "#
-        )
-        .bind(household_id)
-        .fetch_one(pool)
-        .await?;
+            "#,
+            [household_id.into()]
+        ))
+        .await
+        .map_err(|e| format!("Failed to count pets: {}", e))?
+        .ok_or("Failed to count pets")?;
 
-        let pet_count: i64 = pet_count_row.get("count");
+        let pet_count: i64 = pet_count_row.try_get("", "count")
+            .map_err(|e| format!("Failed to get pet count: {}", e))?;
 
         results.push(HouseholdSearchResult {
             id: household_id as i32,
-            household_name: household_row.get("household_name"),
-            address: household_row.get("address"),
+            household_name: household_row.try_get("", "household_name").unwrap_or_default(),
+            address: household_row.try_get("", "address").ok(),
             people: people_with_contacts,
             pet_count: pet_count as i32,
             relevance_score: 1.0,
@@ -461,14 +489,19 @@ pub async fn search_households_by_contact(
 }
 
 // Rebuild FTS5 index (for maintenance)
-pub async fn rebuild_search_index(pool: &SqlitePool) -> Result<(), sqlx::Error> {
+pub async fn rebuild_search_index(db: &DatabaseConnection) -> Result<(), String> {
     // Clear existing index
-    sqlx::query("DELETE FROM household_search")
-        .execute(pool)
-        .await?;
+    db.execute(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "DELETE FROM household_search",
+        []
+    ))
+    .await
+    .map_err(|e| format!("Failed to clear search index: {}", e))?;
 
     // Rebuild from households
-    let household_rows = sqlx::query(
+    let household_rows = db.query_all(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
         r#"
         SELECT
             h.id,
@@ -480,17 +513,19 @@ pub async fn rebuild_search_index(pool: &SqlitePool) -> Result<(), sqlx::Error> 
         LEFT JOIN people p ON p.household_id = h.id
         LEFT JOIN person_contacts pc ON pc.person_id = p.id
         GROUP BY h.id
-        "#
-    )
-    .fetch_all(pool)
-    .await?;
+        "#,
+        []
+    ))
+    .await
+    .map_err(|e| format!("Failed to fetch households for reindex: {}", e))?;
 
     for household_row in household_rows {
-        let id: i64 = household_row.get("id");
-        let household_name: Option<String> = household_row.get("household_name");
-        let address: Option<String> = household_row.get("address");
-        let people_names: Option<String> = household_row.get("people_names");
-        let contact_values: Option<String> = household_row.get("contact_values");
+        let id: i64 = household_row.try_get("", "id")
+            .map_err(|e| format!("Failed to get id: {}", e))?;
+        let household_name: Option<String> = household_row.try_get("", "household_name").ok();
+        let address: Option<String> = household_row.try_get("", "address").ok();
+        let people_names: Option<String> = household_row.try_get("", "people_names").ok();
+        let contact_values: Option<String> = household_row.try_get("", "contact_values").ok();
 
         // Generate display name
         let display_name = if let Some(name) = &household_name {
@@ -506,7 +541,8 @@ pub async fn rebuild_search_index(pool: &SqlitePool) -> Result<(), sqlx::Error> 
             format!("Household {}", id)
         };
 
-        sqlx::query(
+        db.execute(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
             r#"
             INSERT INTO household_search (
                 household_id,
@@ -517,16 +553,18 @@ pub async fn rebuild_search_index(pool: &SqlitePool) -> Result<(), sqlx::Error> 
                 display_name
             )
             VALUES (?, ?, ?, ?, ?, ?)
-            "#
-        )
-        .bind(id)
-        .bind(&household_name)
-        .bind(&address)
-        .bind(&people_names)
-        .bind(&contact_values)
-        .bind(&display_name)
-        .execute(pool)
-        .await?;
+            "#,
+            [
+                id.into(),
+                sea_orm::Value::String(household_name.map(Box::new)),
+                sea_orm::Value::String(address.map(Box::new)),
+                sea_orm::Value::String(people_names.map(Box::new)),
+                sea_orm::Value::String(contact_values.map(Box::new)),
+                display_name.into(),
+            ]
+        ))
+        .await
+        .map_err(|e| format!("Failed to insert into search index: {}", e))?;
     }
 
     Ok(())

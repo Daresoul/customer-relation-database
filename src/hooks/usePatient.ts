@@ -5,10 +5,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { App } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { PatientService } from '../services/patientService';
 import { Patient, UpdatePatientInput } from '../types';
 import { PatientDetail, DeletePatientResponse } from '../types/patient';
 import dayjs from 'dayjs';
+import { createMutationErrorHandler } from '../utils/errors';
 
 /**
  * Calculate age from date of birth
@@ -110,6 +112,7 @@ export function usePatientDetail(patientId: number) {
 export function useUpdatePatient() {
   const queryClient = useQueryClient();
   const { notification } = App.useApp();
+  const { t } = useTranslation('errors');
 
   return useMutation({
     mutationFn: async ({
@@ -162,14 +165,7 @@ export function useUpdatePatient() {
       if (context?.previousPatient) {
         queryClient.setQueryData(['patient', patientId], context.previousPatient);
       }
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      notification.error({
-        message: 'Failed to Update Patient',
-        description: `Error: ${errorMessage}`,
-        placement: 'bottomRight',
-        duration: 5,
-      });
-      console.error('Update patient error:', error);
+      createMutationErrorHandler(notification, 'Update Patient', t, 'usePatient')(error);
     },
     onSuccess: (updatedPatient, { patientId }) => {
       // Update cache with server response
@@ -208,6 +204,7 @@ export function useDeletePatient() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { notification } = App.useApp();
+  const { t } = useTranslation('errors');
 
   return useMutation({
     mutationFn: async (patientId: number) => {
@@ -231,16 +228,7 @@ export function useDeletePatient() {
       });
       navigate(response.redirectTo);
     },
-    onError: (error) => {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      notification.error({
-        message: 'Failed to Delete Patient',
-        description: `Error: ${errorMessage}`,
-        placement: 'bottomRight',
-        duration: 5,
-      });
-      console.error('Delete patient error:', error);
-    }
+    onError: createMutationErrorHandler(notification, 'Delete Patient', t, 'usePatient'),
   });
 }
 

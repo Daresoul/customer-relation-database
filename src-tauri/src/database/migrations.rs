@@ -1,4 +1,4 @@
-use sqlx::{SqlitePool, Row};
+use sqlx::{self, SqlitePool, Row};
 
 pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     // Create migrations tracking table

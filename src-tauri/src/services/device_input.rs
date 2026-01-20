@@ -13,8 +13,8 @@ use rand::Rng;
 use crate::services::device_input::PortType::HIDDevice;
 use crate::services::device_parser::DeviceParserService;
 use crate::services::file_storage::FileStorageService;
-use crate::commands::file_history::record_device_file_access_internal;
-use crate::database::connection::DatabasePool;
+use crate::commands::file_history::record_device_file_access_internal_seaorm;
+use crate::database::SeaOrmPool;
 
 // Thread handle for managing listener lifecycle
 // Stores JoinHandle, shutdown channel, and cleanup data for graceful thread termination
@@ -1098,9 +1098,9 @@ fn handle_device_data(app_handle: &AppHandle, data: &[u8], device_name: &str, de
                 file_name, device_name_str, device_type_str);
 
             tauri::async_runtime::spawn(async move {
-                // Get database pool from Tauri state
-                if let Some(pool) = app_handle_track.try_state::<DatabasePool>() {
-                    log::info!("   ✅ Database pool retrieved for file tracking");
+                // Get database connection from Tauri state
+                if let Some(db) = app_handle_track.try_state::<SeaOrmPool>() {
+                    log::info!("   ✅ Database connection retrieved for file tracking");
 
                     // Save file to storage
                     match FileStorageService::save_device_file(&app_handle_track, &file_name, &file_data_vec) {
@@ -1108,12 +1108,11 @@ fn handle_device_data(app_handle: &AppHandle, data: &[u8], device_name: &str, de
                             log::info!("   ✅ File saved successfully - ID: {}, Path: {}", file_id, file_path);
 
                             // Track file access
-                            let pool_guard = pool.lock().await;
                             let file_size = file_data_vec.len() as i64;
                             log::info!("   📊 Recording file access - Size: {} bytes, Type: {}", file_size, mime_type);
 
-                            if let Err(e) = record_device_file_access_internal(
-                                &*pool_guard,
+                            if let Err(e) = record_device_file_access_internal_seaorm(
+                                &**db,
                                 file_id,
                                 file_name.clone(),
                                 file_path,
@@ -1133,7 +1132,7 @@ fn handle_device_data(app_handle: &AppHandle, data: &[u8], device_name: &str, de
                         }
                     }
                 } else {
-                    log::error!("   ❌ Failed to get database pool from app state for file tracking");
+                    log::error!("   ❌ Failed to get database connection from app state for file tracking");
                 }
             });
         }

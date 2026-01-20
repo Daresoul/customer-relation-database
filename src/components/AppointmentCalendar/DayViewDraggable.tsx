@@ -23,7 +23,7 @@ const DayViewDraggable: React.FC<DayViewDraggableProps> = ({
   onUpdateAppointment,
 }) => {
   const themeColors = useThemeColors();
-  const { data: rooms = [] } = useRooms({ active_only: true });
+  const { data: rooms = [] } = useRooms({ activeOnly: true });
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState<{ slot: number; y: number } | null>(null);
@@ -55,8 +55,8 @@ const DayViewDraggable: React.FC<DayViewDraggableProps> = ({
 
   // Filter appointments for the selected day
   const dayAppointments = appointments
-    .filter(apt => dayjs(apt.start_time).isSame(selectedDate, 'day'))
-    .sort((a, b) => dayjs(a.start_time).valueOf() - dayjs(b.start_time).valueOf());
+    .filter(apt => dayjs(apt.startTime).isSame(selectedDate, 'day'))
+    .sort((a, b) => dayjs(a.startTime).valueOf() - dayjs(b.startTime).valueOf());
 
   // Calculate slot index from time (15-minute precision) - same as WeekView
   const getSlotFromTime = (date: Dayjs): number => {
@@ -68,8 +68,8 @@ const DayViewDraggable: React.FC<DayViewDraggableProps> = ({
 
   // Calculate appointment position and height - same as WeekView
   const getAppointmentStyle = (apt: Appointment) => {
-    const start = dayjs(apt.start_time);
-    const end = dayjs(apt.end_time);
+    const start = dayjs(apt.startTime);
+    const end = dayjs(apt.endTime);
     const startSlot = getSlotFromTime(start);
     const endSlot = getSlotFromTime(end);
     const slotHeight = 20; // Height of each 15-minute slot (80px hour / 4)
@@ -84,8 +84,8 @@ const DayViewDraggable: React.FC<DayViewDraggableProps> = ({
   const calculateAppointmentLayout = (appointments: Appointment[]) => {
     const appointmentsWithLayout = appointments.map(apt => ({
       ...apt,
-      startSlot: getSlotFromTime(dayjs(apt.start_time)),
-      endSlot: getSlotFromTime(dayjs(apt.end_time)),
+      startSlot: getSlotFromTime(dayjs(apt.startTime)),
+      endSlot: getSlotFromTime(dayjs(apt.endTime)),
       column: 0,
       totalColumns: 1,
     }));
@@ -233,31 +233,31 @@ const DayViewDraggable: React.FC<DayViewDraggableProps> = ({
 
   // Get room color for appointment
   const getRoomColor = (appointment: Appointment): string => {
-    if (!appointment.room_id) {
+    if (!appointment.roomId) {
       return '#1890ff'; // Default blue color for appointments without rooms
     }
 
-    const room = rooms.find(r => r.id === appointment.room_id);
+    const room = rooms.find(r => r.id === appointment.roomId);
     return room?.color || '#1890ff'; // Fallback to default blue
   };
 
   // Create tooltip content for appointment
   const getTooltipContent = (apt: Appointment) => {
-    const room = rooms.find(r => r.id === apt.room_id);
+    const room = rooms.find(r => r.id === apt.roomId);
 
     return (
       <div>
         <div className={styles.tooltipInfo}>
-          <strong>Patient:</strong> {apt.patient_name || 'Unknown Patient'}
+          <strong>Patient:</strong> {apt.patientName || 'Unknown Patient'}
         </div>
         <div className={styles.tooltipInfo}>
-          <strong>Microchip ID:</strong> {apt.microchip_id || '-'}
+          <strong>Microchip ID:</strong> {apt.microchipId || '-'}
         </div>
         <div className={styles.tooltipInfo}>
-          <strong>Time:</strong> {dayjs(apt.start_time).format('HH:mm')} - {dayjs(apt.end_time).format('HH:mm')}
+          <strong>Time:</strong> {dayjs(apt.startTime).format('HH:mm')} - {dayjs(apt.endTime).format('HH:mm')}
         </div>
         <div className={styles.tooltipInfo}>
-          <strong>Date:</strong> {dayjs(apt.start_time).format('MMM DD, YYYY')}
+          <strong>Date:</strong> {dayjs(apt.startTime).format('MMM DD, YYYY')}
         </div>
         {room && (
           <div className={styles.tooltipInfo}>
@@ -477,7 +477,7 @@ const DayViewDraggable: React.FC<DayViewDraggableProps> = ({
                           </div>
                           {style.height > 40 && (
                             <div className={styles.appointmentTime}>
-                              {dayjs(apt.start_time).format('HH:mm')} - {dayjs(apt.end_time).format('HH:mm')}
+                              {dayjs(apt.startTime).format('HH:mm')} - {dayjs(apt.endTime).format('HH:mm')}
                             </div>
                           )}
                         </Card>

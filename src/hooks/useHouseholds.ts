@@ -1,72 +1,137 @@
 /**
- * Hook for managing households
+ * Hook for managing households using React Query
  */
 
-import { useState, useEffect, useCallback } from 'react';
-import { invoke } from '@tauri-apps/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { App } from 'antd';
+import { useTranslation } from 'react-i18next';
+import { HouseholdService } from '../services/householdService';
 import { HouseholdSearchResult } from '../types';
+import type { HouseholdWithPeople, CreateHouseholdWithPeopleDto } from '../types/household';
+import { createMutationErrorHandler } from '../utils/errors';
+
+const HOUSEHOLDS_KEY = 'households';
 
 export const useHouseholds = () => {
-  const [households, setHouseholds] = useState<HouseholdSearchResult[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  return useQuery({
+    queryKey: [HOUSEHOLDS_KEY],
+    queryFn: async (): Promise<HouseholdSearchResult[]> => {
+      // Use search with empty-ish query to get all households
+      // The backend handles this case by returning all households
+      try {
+        const response = await HouseholdService.searchHouseholds('*', 100, 0);
+        return response.results.map((result) => ({
+          id: result.id,
+          householdName: result.householdName || 'Unnamed Household',
+          address: result.address,
+          city: undefined,
+          postalCode: undefined,
+          contacts: result.people?.flatMap((person) =>
+            person.contacts?.map((contact) => ({
+              type: contact.contactType as 'phone' | 'email' | 'mobile' | 'work',
+              value: contact.contactValue,
+              isPrimary: contact.isPrimary
+            })) || []
+          ) || [],
+          petCount: 0,
+          relevanceScore: 1.0
+        }));
+      } catch {
+        // Fallback: return empty array if search fails
+        return [];
+      }
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+};
 
-  const loadHouseholds = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
+export const useHousehold = (householdId: number | undefined) => {
+  return useQuery({
+    queryKey: [HOUSEHOLDS_KEY, 'detail', householdId],
+    queryFn: () => householdId ? HouseholdService.getHouseholdWithPeople(householdId) : null,
+    enabled: !!householdId,
+    staleTime: 5 * 60 * 1000,
+  });
+};
 
+export const useCreateHousehold = () => {
+  const { notification } = App.useApp();
+  const { t } = useTranslation('errors');
+  const queryClient = useQueryClient();
 
-      // Get all households directly without search
-      const householdsWithPeople = await invoke<any[]>('get_all_households', {
-        limit: 100,
-        offset: 0
+  return useMutation({
+    mutationFn: (dto: CreateHouseholdWithPeopleDto) =>
+      HouseholdService.createHouseholdWithPeople(dto),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: [HOUSEHOLDS_KEY] });
+      notification.success({
+        message: 'Household Created',
+        description: `${data.household.householdName || 'New household'} has been created`,
+        placement: 'bottomRight',
+        duration: 3,
       });
+    },
+    onError: createMutationErrorHandler(notification, 'Create Household', t, 'useHouseholds'),
+  });
+};
 
+export const useUpdateHousehold = () => {
+  const { notification } = App.useApp();
+  const { t } = useTranslation('errors');
+  const queryClient = useQueryClient();
 
-      // Convert the response to our format
-      const householdResults = householdsWithPeople.map((hwp: any) => ({
-        id: hwp.household?.id || hwp.id,
-        householdName: hwp.household?.household_name || hwp.household_name || 'Unnamed Household',
-        address: hwp.household?.address || hwp.address,
-        city: undefined,
-        postalCode: undefined,
-        contacts: hwp.people?.flatMap((person: any) =>
-          person.contacts?.map((contact: any) => ({
-            type: contact.contact_type as 'phone' | 'email' | 'mobile' | 'work',
-            value: contact.contact_value,
-            isPrimary: contact.is_primary
-          })) || []
-        ) || [],
-        petCount: hwp.pet_count || hwp.petCount || 0,
-        relevanceScore: 1.0
-      }));
+  return useMutation({
+    mutationFn: ({ householdId, updates }: {
+      householdId: number;
+      updates: { householdName?: string; address?: string; notes?: string };
+    }) => HouseholdService.updateHousehold(householdId, updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [HOUSEHOLDS_KEY] });
+      notification.success({
+        message: 'Household Updated',
+        description: 'Household information has been saved',
+        placement: 'bottomRight',
+        duration: 3,
+      });
+    },
+    onError: createMutationErrorHandler(notification, 'Update Household', t, 'useHouseholds'),
+  });
+};
 
-      setHouseholds(householdResults);
-    } catch (err) {
-      console.error('Failed to load households - Full error:', err);
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      console.error('Error message:', errorMessage);
-      setError(errorMessage);
-      setHouseholds([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+export const useDeleteHousehold = () => {
+  const { notification } = App.useApp();
+  const { t } = useTranslation('errors');
+  const queryClient = useQueryClient();
 
-  // Load households on mount
-  useEffect(() => {
-    loadHouseholds();
-  }, [loadHouseholds]);
+  return useMutation({
+    mutationFn: (householdId: number) => HouseholdService.deleteHousehold(householdId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [HOUSEHOLDS_KEY] });
+      notification.success({
+        message: 'Household Deleted',
+        description: 'Household has been removed',
+        placement: 'bottomRight',
+        duration: 3,
+      });
+    },
+    onError: createMutationErrorHandler(notification, 'Delete Household', t, 'useHouseholds'),
+  });
+};
 
-  const refreshHouseholds = useCallback(() => {
-    loadHouseholds();
-  }, [loadHouseholds]);
+export const useSearchHouseholds = (query: string, limit?: number) => {
+  return useQuery({
+    queryKey: [HOUSEHOLDS_KEY, 'search', query, limit],
+    queryFn: () => HouseholdService.searchHouseholds(query, limit),
+    enabled: query.length >= 2,
+    staleTime: 30 * 1000, // 30 seconds for search results
+  });
+};
 
-  return {
-    households,
-    loading,
-    error,
-    refreshHouseholds
-  };
+export const useQuickSearchHouseholds = (query: string, limit?: number) => {
+  return useQuery({
+    queryKey: [HOUSEHOLDS_KEY, 'quickSearch', query, limit],
+    queryFn: () => HouseholdService.quickSearchHouseholds(query, limit),
+    enabled: query.length >= 2,
+    staleTime: 30 * 1000,
+  });
 };

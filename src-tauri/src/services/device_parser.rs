@@ -83,7 +83,7 @@ impl DeviceParserService {
                 }
                 Ok(Event::Eof) => break,
                 Err(e) => {
-                    eprintln!("XML parse error at position {}: {}", reader.buffer_position(), e);
+                    log::warn!("XML parse error at position {}: {}", reader.buffer_position(), e);
                     break;
                 }
                 _ => {}

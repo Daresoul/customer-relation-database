@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { MedicalService } from '@/services/medicalService';
 import { App } from 'antd';
+import { useTranslation } from 'react-i18next';
+import { createMutationErrorHandler } from '@/utils/errors';
 import type {
   MedicalRecordFilter,
   UpdateMedicalRecordInput,
@@ -56,6 +58,7 @@ export function useSearchMedicalRecords(
 export function useCreateMedicalRecord() {
   const queryClient = useQueryClient();
   const { notification } = App.useApp();
+  const { t } = useTranslation('errors');
 
   return useMutation({
     mutationFn: (input: CreateMedicalRecordInput) =>
@@ -78,21 +81,14 @@ export function useCreateMedicalRecord() {
         exact: false,
       });
     },
-    onError: (error: Error) => {
-      notification.error({
-        message: 'Failed to Create Medical Record',
-        description: `Error: ${error.message}`,
-        placement: 'bottomRight',
-        duration: 5,
-      });
-      console.error('Create medical record error:', error);
-    }
+    onError: createMutationErrorHandler(notification, 'Create Medical Record', t, 'useMedicalRecords'),
   });
 }
 
 export function useUpdateMedicalRecord() {
   const queryClient = useQueryClient();
   const { notification } = App.useApp();
+  const { t } = useTranslation('errors');
 
   return useMutation({
     mutationFn: ({
@@ -124,21 +120,14 @@ export function useUpdateMedicalRecord() {
         queryKey: ['medical-record', data.id],
       });
     },
-    onError: (error: Error) => {
-      notification.error({
-        message: 'Error',
-        description: `Failed to update medical record: ${error.message}`,
-        placement: 'bottomRight',
-        duration: 5,
-      });
-      console.error('Update medical record error:', error);
-    }
+    onError: createMutationErrorHandler(notification, 'Update Medical Record', t, 'useMedicalRecords'),
   });
 }
 
 export function useArchiveMedicalRecord() {
   const queryClient = useQueryClient();
   const { notification } = App.useApp();
+  const { t } = useTranslation('errors');
 
   return useMutation({
     mutationFn: ({
@@ -174,21 +163,14 @@ export function useArchiveMedicalRecord() {
         queryKey: ['medical-record', variables.recordId],
       });
     },
-    onError: (error: Error) => {
-      notification.error({
-        message: 'Error',
-        description: `Failed to archive medical record: ${error.message}`,
-        placement: 'bottomRight',
-        duration: 5,
-      });
-      console.error('Archive medical record error:', error);
-    }
+    onError: createMutationErrorHandler(notification, 'Archive Medical Record', t, 'useMedicalRecords'),
   });
 }
 
 export function useUploadAttachment() {
   const queryClient = useQueryClient();
   const { notification } = App.useApp();
+  const { t } = useTranslation('errors');
 
   return useMutation({
     mutationFn: ({
@@ -235,21 +217,14 @@ export function useUploadAttachment() {
         },
       });
     },
-    onError: (error: Error) => {
-      notification.error({
-        message: 'Error',
-        description: `Failed to upload file: ${error.message}`,
-        placement: 'bottomRight',
-        duration: 5,
-      });
-      console.error('Upload attachment error:', error);
-    }
+    onError: createMutationErrorHandler(notification, 'Upload File', t, 'useMedicalRecords'),
   });
 }
 
 export function useDeleteAttachment() {
   const queryClient = useQueryClient();
   const { notification } = App.useApp();
+  const { t } = useTranslation('errors');
 
   return useMutation({
     mutationFn: ({
@@ -278,20 +253,13 @@ export function useDeleteAttachment() {
         },
       });
     },
-    onError: (error: Error) => {
-      notification.error({
-        message: 'Error',
-        description: `Failed to delete attachment: ${error.message}`,
-        placement: 'bottomRight',
-        duration: 5,
-      });
-      console.error('Delete attachment error:', error);
-    }
+    onError: createMutationErrorHandler(notification, 'Delete Attachment', t, 'useMedicalRecords'),
   });
 }
 
 export function useDownloadAttachment() {
   const { notification } = App.useApp();
+  const { t } = useTranslation('errors');
 
   return useMutation({
     mutationFn: ({
@@ -309,15 +277,7 @@ export function useDownloadAttachment() {
         duration: 3,
       });
     },
-    onError: (error: Error) => {
-      notification.error({
-        message: 'Error',
-        description: `Failed to download file: ${error.message}`,
-        placement: 'bottomRight',
-        duration: 5,
-      });
-      console.error('Download attachment error:', error);
-    }
+    onError: createMutationErrorHandler(notification, 'Download File', t, 'useMedicalRecords'),
   });
 }
 
@@ -325,6 +285,7 @@ export function useDownloadAttachment() {
 export function useBulkArchiveMedicalRecords() {
   const queryClient = useQueryClient();
   const { notification } = App.useApp();
+  const { t } = useTranslation('errors');
 
   return useMutation({
     mutationFn: async ({
@@ -372,14 +333,6 @@ export function useBulkArchiveMedicalRecords() {
         queryKey: ['medical-records']
       });
     },
-    onError: (error: Error) => {
-      notification.error({
-        message: 'Error',
-        description: `Bulk operation failed: ${error.message}`,
-        placement: 'bottomRight',
-        duration: 5,
-      });
-      console.error('Bulk archive error:', error);
-    }
+    onError: createMutationErrorHandler(notification, 'Bulk Archive', t, 'useMedicalRecords'),
   });
 }

@@ -2,11 +2,18 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod database;
+mod entities;
 mod models;
 mod commands;
 mod services;
 
-use database::{create_pool, get_database_url, run_migrations};
+#[cfg(test)]
+mod test_utils;
+
+#[cfg(test)]
+mod tests;
+
+use database::{create_pools, get_database_url, run_migrations};
 use tauri::Manager;
 use tauri_plugin_log::{LogTarget, Builder};
 use log::LevelFilter;
@@ -47,44 +54,42 @@ fn main() {
             log::info!("Database URL: {}", db_url);
 
             // Initialize database in async runtime
-            let pool = tauri::async_runtime::block_on(async {
-                // Create database pool
-                let pool = create_pool(&db_url).await
+            let (sea_orm_pool, _legacy_pool) = tauri::async_runtime::block_on(async {
+                // Create database pools (SeaORM DatabaseConnection + legacy SqlitePool)
+                let (sea_orm_pool, legacy_pool) = create_pools(&db_url).await
                     .map_err(|e| format!("Failed to create database pool: {}", e))?;
 
-                // Run migrations
+                // Run migrations using the legacy pool
                 {
-                    let pool_guard = pool.lock().await;
+                    let pool_guard = legacy_pool.lock().await;
                     run_migrations(&*pool_guard).await
                         .map_err(|e| format!("Failed to run migrations: {}", e))?;
                 }
 
                 log::info!("Database initialized successfully");
-                Ok::<_, String>(pool)
+                Ok::<_, String>((sea_orm_pool, legacy_pool))
             })?;
 
-            // Store pool in app state
-            app.manage(pool.clone());
+            // Store SeaORM pool in app state (legacy pool only used internally for migrations)
+            app.manage(sea_orm_pool.clone());
 
-            // Start periodic sync scheduler in async runtime
-            let pool_for_scheduler = pool.clone();
+            // Start periodic sync scheduler in async runtime (uses SeaORM)
+            let sea_orm_pool_for_scheduler = sea_orm_pool.clone();
             tauri::async_runtime::spawn(async move {
-                services::sync_scheduler::SyncScheduler::start(pool_for_scheduler);
+                services::sync_scheduler::SyncScheduler::start(sea_orm_pool_for_scheduler);
             });
 
             // Initialize file watcher for device integrations
-            let pool_for_file_watcher = pool.clone();
+            let sea_orm_pool_for_watcher = sea_orm_pool.clone();
             let app_handle_for_watcher = app.handle();
             tauri::async_runtime::spawn(async move {
                 let _file_watcher = {
-                    let pool_guard = pool_for_file_watcher.lock().await;
-                    let mut watcher = services::file_watcher::FileWatcherService::new(pool_guard.clone());
+                    let mut watcher = services::file_watcher::FileWatcherService::new(sea_orm_pool_for_watcher);
                     watcher.set_app_handle(app_handle_for_watcher);
                     if let Err(e) = watcher.initialize().await {
                         log::error!("Failed to initialize file watcher: {}", e);
                     }
                     watcher
-                    // pool_guard is dropped here, releasing the lock
                 };
 
                 // Keep file watcher alive for the duration of the app
@@ -94,38 +99,34 @@ fn main() {
             });
 
             // Initialize serial port listeners for device integrations
-            let pool_for_serial = pool.clone();
+            let sea_orm_pool_for_serial = sea_orm_pool.clone();
             let app_handle_for_serial = app.handle();
             tauri::async_runtime::spawn(async move {
-                use models::device_integration::DeviceIntegrationRow;
+                use models::device_integration::ConnectionType;
 
-                // Query enabled serial_port integrations
-                let integrations = {
-                    let pool_guard = pool_for_serial.lock().await;
-                    sqlx::query_as::<_, DeviceIntegrationRow>(
-                        "SELECT * FROM device_integrations
-                         WHERE enabled = 1
-                         AND connection_type = 'serial_port'
-                         AND deleted_at IS NULL"
-                    )
-                    .fetch_all(&*pool_guard)
+                // Get all device integrations and filter for enabled serial port ones
+                let integrations = services::device_integration::DeviceIntegrationService::get_all(&sea_orm_pool_for_serial)
                     .await
                     .unwrap_or_else(|e| {
-                        log::error!("Failed to query serial port integrations: {}", e);
+                        log::error!("Failed to query device integrations: {}", e);
                         vec![]
-                    })
-                };
+                    });
 
-                log::info!("📡 Found {} enabled serial port integrations", integrations.len());
+                let serial_integrations: Vec<_> = integrations
+                    .into_iter()
+                    .filter(|i| i.enabled && i.connection_type == ConnectionType::SerialPort)
+                    .collect();
+
+                log::info!("📡 Found {} enabled serial port integrations", serial_integrations.len());
 
                 // Start listener for each
-                for integration in integrations {
+                for integration in serial_integrations {
                     if let Some(port_name) = integration.serial_port_name {
                         log::info!("🎧 Auto-starting listener for: {} ({})", integration.name, port_name);
                         if let Err(e) = services::device_input::start_listen(
                             app_handle_for_serial.clone(),
                             port_name,
-                            integration.device_type,
+                            integration.device_type.to_db_string().to_string(),
                             integration.id,
                         ) {
                             log::error!("❌ Failed to start listener for {}: {}", integration.name, e);

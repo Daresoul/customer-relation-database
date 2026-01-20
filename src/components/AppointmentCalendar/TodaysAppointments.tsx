@@ -22,7 +22,7 @@ const TodaysAppointments: React.FC<TodaysAppointmentsProps> = ({
   // Filter appointments to only show today's appointments
   const todaysAppointments = useMemo(() => {
     return allAppointments.filter(appointment => {
-      const appointmentDate = dayjs(appointment.start_time);
+      const appointmentDate = dayjs(appointment.startTime);
       return appointmentDate.isSame(today, 'day');
     });
   }, [allAppointments, today]);

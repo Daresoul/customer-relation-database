@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::fs;
 use uuid::Uuid;
-use sqlx::{SqlitePool, Row};
+use sea_orm::*;
 use crate::models::medical::{MedicalAttachment, AttachmentData};
 use chrono::Utc;
 use tauri::AppHandle;
@@ -33,7 +33,7 @@ impl FileStorageService {
 
     pub async fn upload_attachment(
         app_handle: &AppHandle,
-        pool: &SqlitePool,
+        db: &DatabaseConnection,
         medical_record_id: i64,
         file_name: String,
         file_data: Vec<u8>,
@@ -61,27 +61,29 @@ impl FileStorageService {
         let attachment_type = attachment_type.unwrap_or_else(|| "file".to_string());
 
         // Insert attachment record into database with device metadata
-        let result = sqlx::query(
+        let result = db.execute(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
             "INSERT INTO medical_attachments \
              (medical_record_id, file_id, original_name, file_size, mime_type, uploaded_at, \
               device_type, device_name, connection_method, attachment_type) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-        )
-        .bind(medical_record_id)
-        .bind(&file_id)
-        .bind(&file_name)
-        .bind(file_size)
-        .bind(&mime_type)
-        .bind(now)
-        .bind(&device_type)
-        .bind(&device_name)
-        .bind(&connection_method)
-        .bind(&attachment_type)
-        .execute(pool)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                medical_record_id.into(),
+                file_id.clone().into(),
+                file_name.clone().into(),
+                file_size.into(),
+                mime_type.clone().into(),
+                now.to_rfc3339().into(),
+                Value::String(device_type.clone().map(Box::new)),
+                Value::String(device_name.clone().map(Box::new)),
+                Value::String(connection_method.clone().map(Box::new)),
+                attachment_type.clone().into(),
+            ]
+        ))
         .await
         .map_err(|e| format!("Failed to save attachment record: {}", e))?;
 
-        let attachment_id = result.last_insert_rowid();
+        let attachment_id = result.last_insert_id() as i64;
 
         Ok(MedicalAttachment {
             id: attachment_id,
@@ -100,34 +102,37 @@ impl FileStorageService {
 
     pub async fn download_attachment(
         app_handle: &AppHandle,
-        pool: &SqlitePool,
+        db: &DatabaseConnection,
         attachment_id: i64,
     ) -> Result<AttachmentData, String> {
         // Get attachment record from database
-        let row = sqlx::query(
+        let row = db.query_one(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
             "SELECT file_id, original_name, mime_type \
-             FROM medical_attachments WHERE id = ?"
-        )
-        .bind(attachment_id)
-        .fetch_optional(pool)
+             FROM medical_attachments WHERE id = ?",
+            [attachment_id.into()]
+        ))
         .await
         .map_err(|e| format!("Failed to fetch attachment record: {}", e))?
         .ok_or("Attachment not found".to_string())?;
 
-        let file_id: String = row.get("file_id");
-        let original_name: String = row.get("original_name");
-        let mime_type: String = row.get("mime_type");
+        let file_id: String = row.try_get("", "file_id")
+            .map_err(|e| format!("Failed to get file_id: {}", e))?;
+        let original_name: String = row.try_get("", "original_name")
+            .map_err(|e| format!("Failed to get original_name: {}", e))?;
+        let mime_type: String = row.try_get("", "mime_type")
+            .map_err(|e| format!("Failed to get mime_type: {}", e))?;
 
         // Get storage directory and read file
         let storage_dir = Self::get_storage_dir(app_handle)?;
         let file_path = storage_dir.join(&file_id);
 
-        println!("Debug: file_storage download id={} path={}", attachment_id, file_path.display());
+        log::debug!("file_storage download id={} path={}", attachment_id, file_path.display());
 
         let file_data = fs::read(&file_path)
             .map_err(|e| format!("Failed to read file: {}", e))?;
 
-        println!("Debug: file_storage read bytes={}", file_data.len());
+        log::debug!("file_storage read bytes={}", file_data.len());
 
         Ok(AttachmentData {
             file_name: original_name,
@@ -138,25 +143,30 @@ impl FileStorageService {
 
     pub async fn delete_attachment(
         app_handle: &AppHandle,
-        pool: &SqlitePool,
+        db: &DatabaseConnection,
         attachment_id: i64,
     ) -> Result<(), String> {
         // Get file_id before deleting from database
-        let row = sqlx::query("SELECT file_id FROM medical_attachments WHERE id = ?")
-            .bind(attachment_id)
-            .fetch_optional(pool)
-            .await
-            .map_err(|e| format!("Failed to fetch attachment: {}", e))?
-            .ok_or("Attachment not found".to_string())?;
+        let row = db.query_one(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "SELECT file_id FROM medical_attachments WHERE id = ?",
+            [attachment_id.into()]
+        ))
+        .await
+        .map_err(|e| format!("Failed to fetch attachment: {}", e))?
+        .ok_or("Attachment not found".to_string())?;
 
-        let file_id: String = row.get("file_id");
+        let file_id: String = row.try_get("", "file_id")
+            .map_err(|e| format!("Failed to get file_id: {}", e))?;
 
         // Delete from database
-        sqlx::query("DELETE FROM medical_attachments WHERE id = ?")
-            .bind(attachment_id)
-            .execute(pool)
-            .await
-            .map_err(|e| format!("Failed to delete attachment record: {}", e))?;
+        db.execute(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "DELETE FROM medical_attachments WHERE id = ?",
+            [attachment_id.into()]
+        ))
+        .await
+        .map_err(|e| format!("Failed to delete attachment record: {}", e))?;
 
         // Delete file from disk
         let storage_dir = Self::get_storage_dir(app_handle)?;
@@ -173,7 +183,7 @@ impl FileStorageService {
     /// Clean up orphaned files (files in storage but not in database)
     pub async fn cleanup_orphaned_files(
         _app_handle: &AppHandle,
-        _pool: &SqlitePool,
+        _db: &DatabaseConnection,
     ) -> Result<usize, String> {
         // Temporary stub - return 0 files cleaned
         Ok(0)
@@ -201,10 +211,10 @@ impl FileStorageService {
     /// Materialize an attachment to a temporary path and return that path
     pub async fn materialize_attachment(
         app_handle: &AppHandle,
-        pool: &SqlitePool,
+        db: &DatabaseConnection,
         attachment_id: i64,
     ) -> Result<String, String> {
-        let data = Self::download_attachment(app_handle, pool, attachment_id).await?;
+        let data = Self::download_attachment(app_handle, db, attachment_id).await?;
 
         // Create temp path
         let mut tmp_dir = std::env::temp_dir();
@@ -225,13 +235,13 @@ impl FileStorageService {
     /// Write an attachment to a specific path chosen by the user
     pub async fn write_attachment_to_path(
         app_handle: &AppHandle,
-        pool: &SqlitePool,
+        db: &DatabaseConnection,
         attachment_id: i64,
         target_path: String,
     ) -> Result<(), String> {
         log::info!("💾 Saving attachment {} to: {}", attachment_id, target_path);
 
-        let data = Self::download_attachment(app_handle, pool, attachment_id).await?;
+        let data = Self::download_attachment(app_handle, db, attachment_id).await?;
         log::info!("   Downloaded {} bytes", data.file_data.len());
 
         let path = std::path::Path::new(&target_path);

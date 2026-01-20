@@ -10,6 +10,7 @@ import { getVersion } from '@tauri-apps/api/app';
 import { useTranslation } from 'react-i18next';
 import { updateService } from '../../services/updateService';
 import { useUpdater } from '../../hooks/useUpdater';
+import { extractErrorMessage } from '../../utils/errors';
 
 const { Text } = Typography;
 
@@ -149,7 +150,7 @@ export function UpdateSettings() {
       }
     } catch (error) {
       console.error('Update check failed:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      const errorMessage = extractErrorMessage(error);
 
       notification.error({
         message: t('updates.updateCheckFailed'),

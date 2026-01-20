@@ -6,7 +6,7 @@ use crate::models::{
     google_calendar::{GoogleCalendarEvent, GoogleCalendarSync, CalendarEventMapping},
     Appointment,
 };
-use sqlx::SqlitePool;
+use sea_orm::{DatabaseConnection, ConnectionTrait, Statement, DbBackend};
 
 #[allow(dead_code)]
 pub struct GoogleCalendarService {
@@ -206,12 +206,13 @@ impl GoogleCalendarService {
     }
 
     pub async fn save_event_mapping(
-        pool: &SqlitePool,
+        db: &DatabaseConnection,
         appointment_id: i64,
         event_id: String,
         calendar_id: String,
     ) -> Result<(), String> {
-        sqlx::query(
+        db.execute(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
             r#"
             INSERT INTO calendar_event_mappings (appointment_id, event_id, calendar_id)
             VALUES (?, ?, ?)
@@ -219,12 +220,9 @@ impl GoogleCalendarService {
                 event_id = excluded.event_id,
                 calendar_id = excluded.calendar_id,
                 updated_at = CURRENT_TIMESTAMP
-            "#
-        )
-        .bind(appointment_id)
-        .bind(&event_id)
-        .bind(&calendar_id)
-        .execute(pool)
+            "#,
+            [appointment_id.into(), event_id.into(), calendar_id.into()]
+        ))
         .await
         .map_err(|e| format!("Failed to save event mapping: {}", e))?;
 
@@ -232,27 +230,63 @@ impl GoogleCalendarService {
     }
 
     pub async fn get_event_mapping(
-        pool: &SqlitePool,
+        db: &DatabaseConnection,
         appointment_id: i64,
     ) -> Result<Option<CalendarEventMapping>, String> {
-        sqlx::query_as::<_, CalendarEventMapping>(
-            "SELECT * FROM calendar_event_mappings WHERE appointment_id = ?"
-        )
-        .bind(appointment_id)
-        .fetch_optional(pool)
+        use chrono::{DateTime, Utc};
+
+        let row = db.query_one(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "SELECT id, appointment_id, event_id, calendar_id, last_synced_at, created_at, updated_at FROM calendar_event_mappings WHERE appointment_id = ?",
+            [appointment_id.into()]
+        ))
         .await
-        .map_err(|e| format!("Failed to fetch event mapping: {}", e))
+        .map_err(|e| format!("Failed to fetch event mapping: {}", e))?;
+
+        match row {
+            Some(r) => {
+                let created_at: DateTime<Utc> = r.try_get::<Option<String>>("", "created_at")
+                    .unwrap_or(None)
+                    .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                    .map(|dt| dt.with_timezone(&Utc))
+                    .unwrap_or_else(Utc::now);
+
+                let updated_at: DateTime<Utc> = r.try_get::<Option<String>>("", "updated_at")
+                    .unwrap_or(None)
+                    .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                    .map(|dt| dt.with_timezone(&Utc))
+                    .unwrap_or_else(Utc::now);
+
+                let last_synced_at: Option<DateTime<Utc>> = r.try_get::<Option<String>>("", "last_synced_at")
+                    .unwrap_or(None)
+                    .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                    .map(|dt| dt.with_timezone(&Utc));
+
+                Ok(Some(CalendarEventMapping {
+                    id: r.try_get("", "id").unwrap_or(0),
+                    appointment_id: r.try_get("", "appointment_id").unwrap_or(0),
+                    event_id: r.try_get("", "event_id").unwrap_or_else(|_| String::new()),
+                    calendar_id: r.try_get("", "calendar_id").unwrap_or_else(|_| String::new()),
+                    last_synced_at,
+                    created_at,
+                    updated_at,
+                }))
+            }
+            None => Ok(None)
+        }
     }
 
     pub async fn delete_event_mapping(
-        pool: &SqlitePool,
+        db: &DatabaseConnection,
         appointment_id: i64,
     ) -> Result<(), String> {
-        sqlx::query("DELETE FROM calendar_event_mappings WHERE appointment_id = ?")
-            .bind(appointment_id)
-            .execute(pool)
-            .await
-            .map_err(|e| format!("Failed to delete event mapping: {}", e))?;
+        db.execute(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "DELETE FROM calendar_event_mappings WHERE appointment_id = ?",
+            [appointment_id.into()]
+        ))
+        .await
+        .map_err(|e| format!("Failed to delete event mapping: {}", e))?;
 
         Ok(())
     }

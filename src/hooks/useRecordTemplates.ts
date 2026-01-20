@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { App } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { TemplateService } from '@/services/templateService';
+import { createMutationErrorHandler } from '@/utils/errors';
 import type {
   RecordTemplate,
   CreateRecordTemplateInput,
@@ -32,6 +34,7 @@ export function useSearchRecordTemplates(searchTerm: string, recordType?: Record
 export function useCreateRecordTemplate() {
   const queryClient = useQueryClient();
   const { notification } = App.useApp();
+  const { t } = useTranslation('errors');
 
   return useMutation({
     mutationFn: (input: CreateRecordTemplateInput) =>
@@ -54,21 +57,14 @@ export function useCreateRecordTemplate() {
         exact: false,
       });
     },
-    onError: (error: Error) => {
-      notification.error({
-        message: 'Failed to Create Template',
-        description: `Error: ${error.message}`,
-        placement: 'bottomRight',
-        duration: 5,
-      });
-      console.error('Create template error:', error);
-    },
+    onError: createMutationErrorHandler(notification, 'Create Template', t, 'useRecordTemplates'),
   });
 }
 
 export function useUpdateRecordTemplate() {
   const queryClient = useQueryClient();
   const { notification } = App.useApp();
+  const { t } = useTranslation('errors');
 
   return useMutation({
     mutationFn: ({
@@ -96,21 +92,14 @@ export function useUpdateRecordTemplate() {
         exact: false,
       });
     },
-    onError: (error: Error) => {
-      notification.error({
-        message: 'Failed to Update Template',
-        description: `Error: ${error.message}`,
-        placement: 'bottomRight',
-        duration: 5,
-      });
-      console.error('Update template error:', error);
-    },
+    onError: createMutationErrorHandler(notification, 'Update Template', t, 'useRecordTemplates'),
   });
 }
 
 export function useDeleteRecordTemplate() {
   const queryClient = useQueryClient();
   const { notification } = App.useApp();
+  const { t } = useTranslation('errors');
 
   return useMutation({
     mutationFn: (templateId: number) => TemplateService.deleteRecordTemplate(templateId),
@@ -132,14 +121,6 @@ export function useDeleteRecordTemplate() {
         exact: false,
       });
     },
-    onError: (error: Error) => {
-      notification.error({
-        message: 'Failed to Delete Template',
-        description: `Error: ${error.message}`,
-        placement: 'bottomRight',
-        duration: 5,
-      });
-      console.error('Delete template error:', error);
-    },
+    onError: createMutationErrorHandler(notification, 'Delete Template', t, 'useRecordTemplates'),
   });
 }

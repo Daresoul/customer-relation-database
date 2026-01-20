@@ -6,6 +6,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { PatientWithOwners, SearchParams, AsyncState } from '../types';
 import { SearchService } from '../services';
 import { useDebounce } from './useDebounce';
+import { extractErrorMessage } from '../utils/errors';
 
 export function useSearch() {
   const [query, setQuery] = useState('');
@@ -39,8 +40,8 @@ export function useSearch() {
         lastFetch: Date.now()
       });
       return searchResults;
-    } catch (error: any) {
-      const errorMessage = error?.message || 'Search failed';
+    } catch (error: unknown) {
+      const errorMessage = extractErrorMessage(error);
       setResults(prev => ({
         ...prev,
         loading: false,

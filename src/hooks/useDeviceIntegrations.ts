@@ -1,10 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { App } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { useEffect, useState, useCallback } from 'react';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api';
 import { DeviceIntegrationService } from '../services/deviceIntegrationService';
 import { DeviceIntegration, CreateDeviceIntegrationInput, UpdateDeviceIntegrationInput, DeviceConnectionStatus, FileWatcherStatus } from '../types/deviceIntegration';
+import { createMutationErrorHandler } from '../utils/errors';
 
 export const useDeviceIntegrations = () => {
   return useQuery({
@@ -24,6 +26,7 @@ export const useDeviceIntegration = (id: number) => {
 
 export const useCreateDeviceIntegration = () => {
   const { notification } = App.useApp();
+  const { t } = useTranslation('errors');
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -37,21 +40,13 @@ export const useCreateDeviceIntegration = () => {
         duration: 3,
       });
     },
-    onError: (error: any) => {
-      console.error('Create device integration error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      notification.error({
-        message: 'Failed to Create Device Integration',
-        description: `Error: ${errorMessage}`,
-        placement: 'bottomRight',
-        duration: 5,
-      });
-    },
+    onError: createMutationErrorHandler(notification, 'Create Device Integration', t, 'useDeviceIntegrations'),
   });
 };
 
 export const useUpdateDeviceIntegration = () => {
   const { notification } = App.useApp();
+  const { t } = useTranslation('errors');
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -67,21 +62,13 @@ export const useUpdateDeviceIntegration = () => {
         duration: 3,
       });
     },
-    onError: (error: any) => {
-      console.error('Update device integration error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      notification.error({
-        message: 'Failed to Update Device Integration',
-        description: `Error: ${errorMessage}`,
-        placement: 'bottomRight',
-        duration: 5,
-      });
-    },
+    onError: createMutationErrorHandler(notification, 'Update Device Integration', t, 'useDeviceIntegrations'),
   });
 };
 
 export const useDeleteDeviceIntegration = () => {
   const { notification } = App.useApp();
+  const { t } = useTranslation('errors');
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -95,21 +82,13 @@ export const useDeleteDeviceIntegration = () => {
         duration: 3,
       });
     },
-    onError: (error: any) => {
-      console.error('Delete device integration error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      notification.error({
-        message: 'Failed to Delete Device Integration',
-        description: `Error: ${errorMessage}`,
-        placement: 'bottomRight',
-        duration: 5,
-      });
-    },
+    onError: createMutationErrorHandler(notification, 'Delete Device Integration', t, 'useDeviceIntegrations'),
   });
 };
 
 export const useToggleDeviceIntegration = () => {
   const { notification } = App.useApp();
+  const { t } = useTranslation('errors');
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -123,16 +102,7 @@ export const useToggleDeviceIntegration = () => {
         duration: 3,
       });
     },
-    onError: (error: any) => {
-      console.error('Toggle device integration error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      notification.error({
-        message: 'Failed to Toggle Device Integration',
-        description: `Error: ${errorMessage}`,
-        placement: 'bottomRight',
-        duration: 5,
-      });
-    },
+    onError: createMutationErrorHandler(notification, 'Toggle Device Integration', t, 'useDeviceIntegrations'),
   });
 };
 

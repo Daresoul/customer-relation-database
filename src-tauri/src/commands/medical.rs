@@ -1,40 +1,37 @@
 use tauri::{AppHandle, State};
-use crate::database::connection::DatabasePool;
+use crate::database::SeaOrmPool;
 use crate::models::medical::*;
 use crate::services::medical_record::MedicalRecordService;
 use crate::services::file_storage::FileStorageService;
 use crate::services::pdf_render::PdfRenderService;
 use crate::services::device_parser::DeviceParserService;
 use crate::services::device_pdf_service::{DevicePdfService, PatientData, DeviceTestData};
-use sqlx::Row;
+use sea_orm::{ConnectionTrait, Statement, DbBackend};
 
 // T031: Implement get_medical_records command
 #[tauri::command]
 pub async fn get_medical_records(
-    pool: State<'_, DatabasePool>,
-    #[allow(non_snake_case)]
-    patientId: i64,
+    pool: State<'_, SeaOrmPool>,
+    patient_id: i64,
     filter: Option<MedicalRecordFilter>,
     pagination: Option<PaginationParams>,
 ) -> Result<MedicalRecordsResponse, String> {
-    let pool = pool.lock().await;
-    MedicalRecordService::get_medical_records(&*pool, patientId, filter, pagination).await
+    MedicalRecordService::get_medical_records(&pool, patient_id, filter, pagination).await
 }
 
 // T032: Implement get_medical_record command
 #[tauri::command]
 pub async fn get_medical_record(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     record_id: i64,
     include_history: Option<bool>,
 ) -> Result<MedicalRecordDetail, String> {
-    println!("Debug: get_medical_record called for record_id: {}", record_id);
-    let pool = pool.lock().await;
+    log::debug!("get_medical_record called for record_id: {}", record_id);
     let include_history = include_history.unwrap_or(false);
-    let result = MedicalRecordService::get_medical_record(&*pool, record_id, include_history).await;
+    let result = MedicalRecordService::get_medical_record(&pool, record_id, include_history).await;
     match &result {
-        Ok(_) => println!("Debug: get_medical_record result: OK"),
-        Err(err) => eprintln!("Error: get_medical_record failed: {}", err),
+        Ok(_) => log::debug!("get_medical_record result: OK"),
+        Err(err) => log::error!("get_medical_record failed: {}", err),
     }
     result
 }
@@ -43,11 +40,9 @@ pub async fn get_medical_record(
 #[tauri::command]
 pub async fn create_medical_record(
     app_handle: AppHandle,
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     input: CreateMedicalRecordInput,
 ) -> Result<MedicalRecord, String> {
-    let pool_guard = pool.lock().await;
-
     // Validate input
     if input.name.is_empty() {
         return Err("Name is required".to_string());
@@ -61,18 +56,16 @@ pub async fn create_medical_record(
     // Note: We use the 'name' field for both procedures and notes
     // No need to check procedure_name separately
 
-    MedicalRecordService::create_medical_record(&app_handle, &*pool_guard, input).await
+    MedicalRecordService::create_medical_record(&app_handle, &pool, input).await
 }
 
 // T034: Implement update_medical_record command
 #[tauri::command]
 pub async fn update_medical_record(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     record_id: i64,
     updates: UpdateMedicalRecordInput,
 ) -> Result<MedicalRecord, String> {
-    let pool_guard = pool.lock().await;
-
     // Validate updates
     if let Some(ref name) = updates.name {
         if name.is_empty() {
@@ -85,74 +78,65 @@ pub async fn update_medical_record(
         }
     }
 
-    MedicalRecordService::update_medical_record(&*pool_guard, record_id, updates).await
+    MedicalRecordService::update_medical_record(&pool, record_id, updates).await
 }
 
 // T035: Implement archive_medical_record command
 #[tauri::command]
 pub async fn archive_medical_record(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     record_id: i64,
     archive: bool,
 ) -> Result<(), String> {
-    let pool = pool.lock().await;
-    MedicalRecordService::archive_medical_record(&*pool, record_id, archive).await
+    MedicalRecordService::archive_medical_record(&pool, record_id, archive).await
 }
 
 // T036: Implement upload_medical_attachment command
 #[tauri::command]
 pub async fn upload_medical_attachment(
     app_handle: AppHandle,
-    pool: State<'_, DatabasePool>,
-    #[allow(non_snake_case)]
-    medicalRecordId: i64,
-    #[allow(non_snake_case)]
-    fileName: String,
-    #[allow(non_snake_case)]
-    fileData: Vec<u8>,
-    #[allow(non_snake_case)]
-    mimeType: String,
-    #[allow(non_snake_case)]
-    deviceType: Option<String>,
-    #[allow(non_snake_case)]
-    deviceName: Option<String>,
-    #[allow(non_snake_case)]
-    connectionMethod: Option<String>,
-    #[allow(non_snake_case)]
-    attachmentType: Option<String>,
-    #[allow(non_snake_case)]
-    sourceFileId: Option<String>,
+    pool: State<'_, SeaOrmPool>,
+    medical_record_id: i64,
+    file_name: String,
+    file_data: Vec<u8>,
+    mime_type: String,
+    device_type: Option<String>,
+    device_name: Option<String>,
+    connection_method: Option<String>,
+    attachment_type: Option<String>,
+    source_file_id: Option<String>,
 ) -> Result<MedicalAttachment, String> {
-    let pool_guard = pool.lock().await;
-
     // Validate file
-    FileStorageService::validate_file(&fileData, &fileName, 100)?;
+    FileStorageService::validate_file(&file_data, &file_name, 100)?;
 
     // Check if medical record exists
-    let _ = sqlx::query("SELECT id FROM medical_records WHERE id = ?")
-        .bind(medicalRecordId)
-        .fetch_one(&*pool_guard)
-        .await
-        .map_err(|_| "Medical record not found".to_string())?;
+    let _ = pool.query_one(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "SELECT id FROM medical_records WHERE id = ?",
+        [medical_record_id.into()]
+    ))
+    .await
+    .map_err(|_| "Medical record not found".to_string())?
+    .ok_or("Medical record not found".to_string())?;
 
     let attachment = FileStorageService::upload_attachment(
         &app_handle,
-        &*pool_guard,
-        medicalRecordId,
-        fileName,
-        fileData,
-        mimeType,
-        deviceType,
-        deviceName,
-        connectionMethod,
-        attachmentType,
+        &pool,
+        medical_record_id,
+        file_name,
+        file_data,
+        mime_type,
+        device_type,
+        device_name,
+        connection_method,
+        attachment_type,
     ).await?;
 
     // If this file came from file_access_history, update the tracking
-    if let Some(source_file_id) = sourceFileId {
-        use crate::commands::file_history::update_file_attachment_internal;
-        if let Err(e) = update_file_attachment_internal(&*pool_guard, source_file_id, medicalRecordId).await {
-            eprintln!("Warning: Failed to update file attachment tracking: {}", e);
+    if let Some(file_id) = source_file_id {
+        use crate::commands::file_history::update_file_attachment_internal_seaorm;
+        if let Err(e) = update_file_attachment_internal_seaorm(&pool, file_id, medical_record_id).await {
+            log::warn!("Failed to update file attachment tracking: {}", e);
             // Don't fail the upload, just log the warning
         }
     }
@@ -164,15 +148,14 @@ pub async fn upload_medical_attachment(
 #[tauri::command]
 pub async fn download_medical_attachment(
     app_handle: AppHandle,
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     attachment_id: i64,
 ) -> Result<AttachmentData, String> {
-    println!("Debug: download_medical_attachment id={}", attachment_id);
-    let pool = pool.lock().await;
-    let res = FileStorageService::download_attachment(&app_handle, &*pool, attachment_id).await;
+    log::debug!("download_medical_attachment id={}", attachment_id);
+    let res = FileStorageService::download_attachment(&app_handle, &pool, attachment_id).await;
     match &res {
-        Ok(a) => println!("Debug: download_medical_attachment bytes={} mime={}", a.file_data.len(), a.mime_type),
-        Err(e) => eprintln!("Error: download_medical_attachment failed: {}", e),
+        Ok(a) => log::debug!("download_medical_attachment bytes={} mime={}", a.file_data.len(), a.mime_type),
+        Err(e) => log::error!("download_medical_attachment failed: {}", e),
     }
     res
 }
@@ -181,35 +164,31 @@ pub async fn download_medical_attachment(
 #[tauri::command]
 pub async fn delete_medical_attachment(
     app_handle: AppHandle,
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     attachment_id: i64,
 ) -> Result<(), String> {
-    let pool = pool.lock().await;
-    FileStorageService::delete_attachment(&app_handle, &*pool, attachment_id).await
+    FileStorageService::delete_attachment(&app_handle, &pool, attachment_id).await
 }
 
 // Get attachment content for text file viewer
 #[tauri::command]
 pub async fn get_attachment_content(
     app_handle: AppHandle,
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     attachment_id: i64,
 ) -> Result<Vec<u8>, String> {
-    let pool = pool.lock().await;
-    let attachment_data = FileStorageService::download_attachment(&app_handle, &*pool, attachment_id).await?;
+    let attachment_data = FileStorageService::download_attachment(&app_handle, &pool, attachment_id).await?;
     Ok(attachment_data.file_data)
 }
 
 // T039: Implement search_medical_records command
 #[tauri::command]
 pub async fn search_medical_records(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     patient_id: i64,
     search_term: String,
     include_archived: Option<bool>,
 ) -> Result<SearchMedicalRecordsResponse, String> {
-    let pool_guard = pool.lock().await;
-
     // Validate search term
     if search_term.len() < 2 {
         return Err("Search term must be at least 2 characters".to_string());
@@ -217,7 +196,7 @@ pub async fn search_medical_records(
 
     let include_archived = include_archived.unwrap_or(false);
     let records = MedicalRecordService::search_medical_records(
-        &*pool_guard,
+        &pool,
         patient_id,
         &search_term,
         include_archived,
@@ -232,54 +211,49 @@ pub async fn search_medical_records(
 // T040: Implement get_currencies command
 #[tauri::command]
 pub async fn get_currencies(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
 ) -> Result<Vec<Currency>, String> {
-    let pool = pool.lock().await;
-    MedicalRecordService::get_currencies(&*pool).await
+    MedicalRecordService::get_currencies(&pool).await
 }
 
 // Helper command to clean up orphaned files
 #[tauri::command]
 pub async fn cleanup_orphaned_files(
     app_handle: AppHandle,
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
 ) -> Result<usize, String> {
-    let pool = pool.lock().await;
-    FileStorageService::cleanup_orphaned_files(&app_handle, &*pool).await
+    FileStorageService::cleanup_orphaned_files(&app_handle, &pool).await
 }
 
 // Extra: Materialize attachment to temp and return path
 #[tauri::command]
 pub async fn materialize_medical_attachment(
     app_handle: AppHandle,
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     attachment_id: i64,
 ) -> Result<String, String> {
-    let pool = pool.lock().await;
-    FileStorageService::materialize_attachment(&app_handle, &*pool, attachment_id).await
+    FileStorageService::materialize_attachment(&app_handle, &pool, attachment_id).await
 }
 
 // Extra: Write attachment to a specific path
 #[tauri::command]
 pub async fn write_medical_attachment_to_path(
     app_handle: AppHandle,
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     attachment_id: i64,
     target_path: String,
 ) -> Result<(), String> {
-    let pool = pool.lock().await;
-    FileStorageService::write_attachment_to_path(&app_handle, &*pool, attachment_id, target_path).await
+    FileStorageService::write_attachment_to_path(&app_handle, &pool, attachment_id, target_path).await
 }
 
 // Open attachment with default app (materialize to temp first)
 #[tauri::command]
 pub async fn open_medical_attachment(
     app_handle: AppHandle,
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     attachment_id: i64,
 ) -> Result<(), String> {
-    let pool_guard = pool.lock().await;
-    let path = FileStorageService::materialize_attachment(&app_handle, &*pool_guard, attachment_id).await?;
+    let path = FileStorageService::materialize_attachment(&app_handle, &pool, attachment_id).await?;
     FileStorageService::open_path_with_default_app(&path)
 }
 
@@ -287,11 +261,10 @@ pub async fn open_medical_attachment(
 #[tauri::command]
 pub async fn print_medical_attachment(
     app_handle: AppHandle,
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     attachment_id: i64,
 ) -> Result<(), String> {
-    let pool_guard = pool.lock().await;
-    let path = FileStorageService::materialize_attachment(&app_handle, &*pool_guard, attachment_id).await?;
+    let path = FileStorageService::materialize_attachment(&app_handle, &pool, attachment_id).await?;
     FileStorageService::print_file(&path)
 }
 
@@ -299,16 +272,15 @@ pub async fn print_medical_attachment(
 #[tauri::command]
 pub async fn render_medical_attachment_pdf_thumbnail(
     app_handle: AppHandle,
-    pool: State<'_, DatabasePool>,
-    #[allow(non_snake_case)]
-    attachmentId: i64,
+    pool: State<'_, SeaOrmPool>,
+    attachment_id: i64,
     page: Option<u32>,
     width: Option<u32>,
 ) -> Result<String, String> {
     render_medical_attachment_pdf_thumbnail_with_options(
         app_handle,
         pool,
-        attachmentId,
+        attachment_id,
         page,
         width,
         false, // Don't force regenerate by default
@@ -319,16 +291,15 @@ pub async fn render_medical_attachment_pdf_thumbnail(
 #[tauri::command]
 pub async fn render_medical_attachment_pdf_thumbnail_force(
     app_handle: AppHandle,
-    pool: State<'_, DatabasePool>,
-    #[allow(non_snake_case)]
-    attachmentId: i64,
+    pool: State<'_, SeaOrmPool>,
+    attachment_id: i64,
     page: Option<u32>,
     width: Option<u32>,
 ) -> Result<String, String> {
     render_medical_attachment_pdf_thumbnail_with_options(
         app_handle,
         pool,
-        attachmentId,
+        attachment_id,
         page,
         width,
         true, // Force regenerate
@@ -337,21 +308,18 @@ pub async fn render_medical_attachment_pdf_thumbnail_force(
 
 async fn render_medical_attachment_pdf_thumbnail_with_options(
     app_handle: AppHandle,
-    pool: State<'_, DatabasePool>,
-    #[allow(non_snake_case)]
-    attachmentId: i64,
+    pool: State<'_, SeaOrmPool>,
+    attachment_id: i64,
     page: Option<u32>,
     width: Option<u32>,
     force_regenerate: bool,
 ) -> Result<String, String> {
-    println!("Debug: render_medical_attachment_pdf_thumbnail called - attachmentId={}, page={:?}, width={:?}, force={}",
-        attachmentId, page, width, force_regenerate);
-
-    let pool_guard = pool.lock().await;
+    log::debug!("render_medical_attachment_pdf_thumbnail called - attachment_id={}, page={:?}, width={:?}, force={}",
+        attachment_id, page, width, force_regenerate);
 
     // First materialize the attachment to a temp file to get a local path
-    let pdf_path = FileStorageService::materialize_attachment(&app_handle, &*pool_guard, attachmentId).await?;
-    println!("Debug: PDF materialized at: {}", pdf_path);
+    let pdf_path = FileStorageService::materialize_attachment(&app_handle, &pool, attachment_id).await?;
+    log::debug!("PDF materialized at: {}", pdf_path);
 
     // Build preview output path in a stable temp dir
     let mut tmp_dir = std::env::temp_dir();
@@ -359,23 +327,23 @@ async fn render_medical_attachment_pdf_thumbnail_with_options(
     tmp_dir.push("previews");
     let page_index = page.unwrap_or(1).saturating_sub(1); // 1-based to 0-based
     let target_width = width.unwrap_or(900);
-    let file_name = format!("attachment_{}_p{}_w{}.png", attachmentId, page_index + 1, target_width);
+    let file_name = format!("attachment_{}_p{}_w{}.png", attachment_id, page_index + 1, target_width);
     let out_path = tmp_dir.join(file_name);
 
     // Check if preview exists and is valid (not 0 bytes) unless force regenerate
     if !force_regenerate && out_path.exists() {
         if let Ok(metadata) = std::fs::metadata(&out_path) {
             if metadata.len() > 0 {
-                println!("Debug: Using cached preview: {} ({} bytes)", out_path.display(), metadata.len());
+                log::debug!("Using cached preview: {} ({} bytes)", out_path.display(), metadata.len());
                 return Ok(out_path.display().to_string());
             } else {
-                println!("Debug: Cached preview is 0 bytes, regenerating");
+                log::debug!("Cached preview is 0 bytes, regenerating");
                 // Delete the broken file
                 let _ = std::fs::remove_file(&out_path);
             }
         }
     } else if force_regenerate && out_path.exists() {
-        println!("Debug: Force regenerating preview, removing old file");
+        log::debug!("Force regenerating preview, removing old file");
         let _ = std::fs::remove_file(&out_path);
     }
 
@@ -395,7 +363,7 @@ async fn render_medical_attachment_pdf_thumbnail_with_options(
     std::fs::write(&out_path, &png_bytes)
         .map_err(|e| format!("Failed to write preview: {}", e))?;
 
-    println!("Debug: Wrote {} bytes to {:?}", png_bytes.len(), out_path);
+    log::debug!("Wrote {} bytes to {:?}", png_bytes.len(), out_path);
     Ok(out_path.display().to_string())
 }
 
@@ -403,13 +371,12 @@ async fn render_medical_attachment_pdf_thumbnail_with_options(
 #[tauri::command]
 pub async fn render_medical_attachment_pdf_page_png(
     app_handle: AppHandle,
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     attachment_id: i64,
     page: Option<u32>,
     width: Option<u32>,
 ) -> Result<Vec<u8>, String> {
-    let pool_guard = pool.lock().await;
-    let pdf_path = FileStorageService::materialize_attachment(&app_handle, &*pool_guard, attachment_id).await?;
+    let pdf_path = FileStorageService::materialize_attachment(&app_handle, &pool, attachment_id).await?;
     let page_index = page.unwrap_or(1).saturating_sub(1);
     let target_width = width.unwrap_or(900);
     let handle_clone = app_handle.clone();
@@ -423,11 +390,10 @@ pub async fn render_medical_attachment_pdf_page_png(
 #[tauri::command]
 pub async fn get_medical_attachment_pdf_page_count(
     app_handle: AppHandle,
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     attachment_id: i64,
 ) -> Result<u16, String> {
-    let pool_guard = pool.lock().await;
-    let pdf_path = FileStorageService::materialize_attachment(&app_handle, &*pool_guard, attachment_id).await?;
+    let pdf_path = FileStorageService::materialize_attachment(&app_handle, &pool, attachment_id).await?;
     let handle_clone = app_handle.clone();
     let res = tauri::async_runtime::spawn_blocking(move || PdfRenderService::get_page_count(&handle_clone, &pdf_path))
         .await
@@ -438,26 +404,24 @@ pub async fn get_medical_attachment_pdf_page_count(
 // Revert a medical record one step to previous version
 #[tauri::command]
 pub async fn revert_medical_record(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     record_id: i64,
 ) -> Result<MedicalRecord, String> {
-    let pool = pool.lock().await;
-    MedicalRecordService::revert_one_step(&*pool, record_id).await
+    MedicalRecordService::revert_one_step(&pool, record_id).await
 }
 
 // Get medical record snapshot at a specific version
 #[tauri::command]
 pub async fn get_medical_record_at_version(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     record_id: i64,
     version: i32,
 ) -> Result<MedicalRecord, String> {
-    println!("Debug: get_medical_record_at_version record_id={}, version={}", record_id, version);
-    let pool = pool.lock().await;
-    let res = MedicalRecordService::get_record_at_version(&*pool, record_id, version).await;
+    log::debug!("get_medical_record_at_version record_id={}, version={}", record_id, version);
+    let res = MedicalRecordService::get_record_at_version(&pool, record_id, version).await;
     match &res {
-        Ok(r) => println!("Debug: snapshot loaded: id={}, name={}, type={}, version={}", r.id, r.name, r.record_type, r.version),
-        Err(e) => eprintln!("Error: get_medical_record_at_version failed: {}", e),
+        Ok(r) => log::debug!("snapshot loaded: id={}, name={}, type={}, version={}", r.id, r.name, r.record_type, r.version),
+        Err(e) => log::error!("get_medical_record_at_version failed: {}", e),
     }
     res
 }
@@ -466,30 +430,29 @@ pub async fn get_medical_record_at_version(
 #[tauri::command]
 pub async fn regenerate_pdf_from_attachment(
     app_handle: AppHandle,
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     attachment_id: i64,
 ) -> Result<MedicalAttachment, String> {
-    println!("Debug: regenerate_pdf_from_attachment attachment_id={}", attachment_id);
-    let pool_guard = pool.lock().await;
+    log::debug!("regenerate_pdf_from_attachment attachment_id={}", attachment_id);
 
     // 1. Fetch the attachment with device metadata
-    let attachment_row = sqlx::query(
+    let attachment_row = pool.query_one(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
         "SELECT id, medical_record_id, file_id, original_name, mime_type, \
          file_size, uploaded_at, device_type, device_name, connection_method, attachment_type \
-         FROM medical_attachments WHERE id = ?"
-    )
-    .bind(attachment_id)
-    .fetch_optional(&*pool_guard)
+         FROM medical_attachments WHERE id = ?",
+        [attachment_id.into()]
+    ))
     .await
     .map_err(|e| format!("Failed to fetch attachment: {}", e))?
     .ok_or("Attachment not found".to_string())?;
 
-    let medical_record_id: i64 = attachment_row.try_get("medical_record_id")
+    let medical_record_id: i64 = attachment_row.try_get("", "medical_record_id")
         .map_err(|e| format!("Failed to get medical_record_id: {}", e))?;
-    let device_type: Option<String> = attachment_row.try_get("device_type").ok();
-    let device_name: Option<String> = attachment_row.try_get("device_name").ok();
-    let connection_method: Option<String> = attachment_row.try_get("connection_method").ok();
-    let original_name: String = attachment_row.try_get("original_name")
+    let device_type: Option<String> = attachment_row.try_get("", "device_type").ok();
+    let device_name: Option<String> = attachment_row.try_get("", "device_name").ok();
+    let connection_method: Option<String> = attachment_row.try_get("", "connection_method").ok();
+    let original_name: String = attachment_row.try_get("", "original_name")
         .map_err(|e| format!("Failed to get original_name: {}", e))?;
 
     // 2. Validate that this attachment has device metadata
@@ -497,10 +460,10 @@ pub async fn regenerate_pdf_from_attachment(
     let device_name = device_name.ok_or("This attachment is missing device name metadata.".to_string())?;
     let connection_method = connection_method.unwrap_or_else(|| "unknown".to_string()); // Default for old attachments without this field
 
-    println!("Debug: Regenerating PDF for device_type={}, device_name={}, connection_method={}", device_type, device_name, connection_method);
+    log::debug!("Regenerating PDF for device_type={}, device_name={}, connection_method={}", device_type, device_name, connection_method);
 
     // 3. Download the XML file data
-    let xml_data = FileStorageService::download_attachment(&app_handle, &*pool_guard, attachment_id).await?;
+    let xml_data = FileStorageService::download_attachment(&app_handle, &pool, attachment_id).await?;
 
     // 4. Parse the device data
     let device_data = DeviceParserService::parse_device_data(
@@ -511,56 +474,60 @@ pub async fn regenerate_pdf_from_attachment(
         &connection_method,
     )?;
 
-    println!("Debug: Parsed device data, patient_identifier={:?}", device_data.patient_identifier);
+    log::debug!("Parsed device data, patient_identifier={:?}", device_data.patient_identifier);
 
     // 5. Get patient info from the medical record
-    let record_row = sqlx::query(
-        "SELECT patient_id FROM medical_records WHERE id = ?"
-    )
-    .bind(medical_record_id)
-    .fetch_optional(&*pool_guard)
+    let record_row = pool.query_one(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "SELECT patient_id FROM medical_records WHERE id = ?",
+        [medical_record_id.into()]
+    ))
     .await
     .map_err(|e| format!("Failed to fetch medical record: {}", e))?
     .ok_or("Medical record not found".to_string())?;
 
-    let patient_id: i64 = record_row.try_get("patient_id")
+    let patient_id: i64 = record_row.try_get("", "patient_id")
         .map_err(|e| format!("Failed to get patient_id: {}", e))?;
 
     // Fetch patient details (simplified query to avoid schema issues)
-    let patient_row = sqlx::query(
+    let patient_row = pool.query_one(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
         "SELECT id, name, species, breed, microchip_id, gender, date_of_birth \
          FROM patients \
-         WHERE id = ?"
-    )
-    .bind(patient_id)
-    .fetch_optional(&*pool_guard)
+         WHERE id = ?",
+        [patient_id.into()]
+    ))
     .await
     .map_err(|e| format!("Failed to fetch patient: {}", e))?
     .ok_or("Patient not found".to_string())?;
 
     // Try to fetch owner information separately (optional, won't fail if tables don't exist)
-    let owner_name = sqlx::query_scalar::<_, String>(
+    let owner_row = pool.query_one(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
         "SELECT o.name FROM patient_owners po \
          JOIN owners o ON po.owner_id = o.id \
          WHERE po.patient_id = ? AND po.is_primary = 1 \
-         LIMIT 1"
-    )
-    .bind(patient_id)
-    .fetch_optional(&*pool_guard)
+         LIMIT 1",
+        [patient_id.into()]
+    ))
     .await
-    .unwrap_or(None)
-    .unwrap_or_default(); // Empty string - PDF will skip owner row
+    .ok()
+    .flatten();
+
+    let owner_name: String = owner_row
+        .and_then(|r| r.try_get::<String>("", "name").ok())
+        .unwrap_or_default(); // Empty string - PDF will skip owner row
 
     let patient_data = PatientData {
-        name: patient_row.try_get("name").unwrap_or_else(|_| "Непознат Пациент".to_string()),
+        name: patient_row.try_get("", "name").unwrap_or_else(|_| "Непознат Пациент".to_string()),
         owner: owner_name,
-        species: patient_row.try_get("species").unwrap_or_else(|_| "Непознат Вид".to_string()),
-        microchip_id: patient_row.try_get("microchip_id").ok(),
-        gender: patient_row.try_get("gender").unwrap_or_else(|_| "Непознат".to_string()),
-        date_of_birth: patient_row.try_get("date_of_birth").ok(),
+        species: patient_row.try_get("", "species").unwrap_or_else(|_| "Непознат Вид".to_string()),
+        microchip_id: patient_row.try_get("", "microchip_id").ok(),
+        gender: patient_row.try_get("", "gender").unwrap_or_else(|_| "Непознат".to_string()),
+        date_of_birth: patient_row.try_get("", "date_of_birth").ok(),
     };
 
-    println!("Debug: Patient info: name={}, microchip={:?}", patient_data.name, patient_data.microchip_id);
+    log::debug!("Patient info: name={}, microchip={:?}", patient_data.name, patient_data.microchip_id);
 
     // 6. Generate PDF using centralized service (same function as file watcher)
     let pdf_filename = format!("{}_regenerated.pdf", original_name.trim_end_matches(".xml"));
@@ -582,18 +549,18 @@ pub async fn regenerate_pdf_from_attachment(
         test_data,
     )?;
 
-    println!("Debug: PDF generated at {:?}", pdf_path);
+    log::debug!("PDF generated at {:?}", pdf_path);
 
     // 8. Read the generated PDF
     let pdf_bytes = std::fs::read(&pdf_path)
         .map_err(|e| format!("Failed to read generated PDF: {}", e))?;
 
-    println!("Debug: Read {} bytes from PDF", pdf_bytes.len());
+    log::debug!("Read {} bytes from PDF", pdf_bytes.len());
 
     // 9. Upload the PDF as a new attachment to the same medical record
     let pdf_attachment = FileStorageService::upload_attachment(
         &app_handle,
-        &*pool_guard,
+        &pool,
         medical_record_id,
         pdf_filename.clone(),
         pdf_bytes,
@@ -604,7 +571,7 @@ pub async fn regenerate_pdf_from_attachment(
         Some("generated_pdf".to_string()), // Attachment type for regenerated PDFs
     ).await?;
 
-    println!("Debug: PDF attachment uploaded with id={}", pdf_attachment.id);
+    log::debug!("PDF attachment uploaded with id={}", pdf_attachment.id);
 
     // Clean up temp file
     let _ = std::fs::remove_file(&pdf_path);
@@ -616,16 +583,16 @@ pub async fn regenerate_pdf_from_attachment(
 #[tauri::command]
 pub async fn regenerate_pdf_from_medical_record(
     app_handle: AppHandle,
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     medical_record_id: i64,
 ) -> Result<MedicalAttachment, String> {
-    println!("Debug: regenerate_pdf_from_medical_record medical_record_id={}", medical_record_id);
-    let pool_guard = pool.lock().await;
+    log::debug!("regenerate_pdf_from_medical_record medical_record_id={}", medical_record_id);
 
     // 1. Get all device data attachments for this medical record
     // Check for attachment_type = 'test_result' OR files with device metadata that aren't PDFs
     // This handles both new files (with proper attachment_type) and legacy files (with device_type set)
-    let attachment_rows = sqlx::query(
+    let attachment_rows = pool.query_all(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
         "SELECT id, medical_record_id, file_id, original_name, mime_type, \
          file_size, uploaded_at, device_type, device_name, connection_method, attachment_type \
          FROM medical_attachments \
@@ -633,10 +600,9 @@ pub async fn regenerate_pdf_from_medical_record(
          AND device_type IS NOT NULL \
          AND device_name IS NOT NULL \
          AND (attachment_type = 'test_result' \
-              OR (attachment_type != 'generated_pdf' AND mime_type != 'application/pdf'))"
-    )
-    .bind(medical_record_id)
-    .fetch_all(&*pool_guard)
+              OR (attachment_type != 'generated_pdf' AND mime_type != 'application/pdf'))",
+        [medical_record_id.into()]
+    ))
     .await
     .map_err(|e| format!("Failed to fetch device data attachments: {}", e))?;
 
@@ -644,37 +610,38 @@ pub async fn regenerate_pdf_from_medical_record(
         return Err("No device data attachments found for this medical record.".to_string());
     }
 
-    println!("Debug: Found {} test_result attachments", attachment_rows.len());
+    log::debug!("Found {} test_result attachments", attachment_rows.len());
 
     // 2. Get patient info from the medical record
-    let record_row = sqlx::query(
-        "SELECT patient_id FROM medical_records WHERE id = ?"
-    )
-    .bind(medical_record_id)
-    .fetch_optional(&*pool_guard)
+    let record_row = pool.query_one(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "SELECT patient_id FROM medical_records WHERE id = ?",
+        [medical_record_id.into()]
+    ))
     .await
     .map_err(|e| format!("Failed to fetch medical record: {}", e))?
     .ok_or("Medical record not found".to_string())?;
 
-    let patient_id: i64 = record_row.try_get("patient_id")
+    let patient_id: i64 = record_row.try_get("", "patient_id")
         .map_err(|e| format!("Failed to get patient_id: {}", e))?;
 
     // 3. Fetch patient details using the same query pattern as MedicalRecordService
-    let patient_row = sqlx::query(
+    let patient_row = pool.query_one(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
         "SELECT p.name, p.gender, p.date_of_birth, p.microchip_id, \
          s.name as species_name \
          FROM patients p \
          LEFT JOIN species s ON p.species_id = s.id \
-         WHERE p.id = ?"
-    )
-    .bind(patient_id)
-    .fetch_optional(&*pool_guard)
+         WHERE p.id = ?",
+        [patient_id.into()]
+    ))
     .await
     .map_err(|e| format!("Failed to fetch patient: {}", e))?
     .ok_or("Patient not found".to_string())?;
 
     // Try to get owner information - prefer primary contact's full name, fall back to household name
-    let owner_name = sqlx::query_scalar::<_, String>(
+    let owner_row = pool.query_one(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
         "SELECT COALESCE( \
             (SELECT p.first_name || ' ' || p.last_name \
              FROM people p \
@@ -688,58 +655,61 @@ pub async fn regenerate_pdf_from_medical_record(
              WHERE ph.patient_id = ? \
              LIMIT 1), \
             '' \
-         )"
-    )
-    .bind(patient_id)
-    .bind(patient_id)
-    .fetch_one(&*pool_guard)
+         ) as owner_name",
+        [patient_id.into(), patient_id.into()]
+    ))
     .await
-    .unwrap_or_default(); // Empty string - PDF will skip owner row
+    .ok()
+    .flatten();
+
+    let owner_name: String = owner_row
+        .and_then(|r| r.try_get::<String>("", "owner_name").ok())
+        .unwrap_or_default(); // Empty string - PDF will skip owner row
 
     let patient_data = PatientData {
-        name: patient_row.try_get("name").unwrap_or_else(|_| "Непознат Пациент".to_string()),
+        name: patient_row.try_get("", "name").unwrap_or_else(|_| "Непознат Пациент".to_string()),
         owner: owner_name,
-        species: patient_row.try_get("species_name").unwrap_or_else(|_| "Непознат Вид".to_string()),
-        microchip_id: patient_row.try_get("microchip_id").ok(),
-        gender: patient_row.try_get("gender").unwrap_or_else(|_| "Непознат".to_string()),
-        date_of_birth: patient_row.try_get("date_of_birth").ok(),
+        species: patient_row.try_get("", "species_name").unwrap_or_else(|_| "Непознат Вид".to_string()),
+        microchip_id: patient_row.try_get("", "microchip_id").ok(),
+        gender: patient_row.try_get("", "gender").unwrap_or_else(|_| "Непознат".to_string()),
+        date_of_birth: patient_row.try_get("", "date_of_birth").ok(),
     };
 
-    println!("Debug: Patient info: name={}, microchip={:?}", patient_data.name, patient_data.microchip_id);
+    log::debug!("Patient info: name={}, microchip={:?}", patient_data.name, patient_data.microchip_id);
 
     // 4. Parse each attachment and collect device data
     let mut all_device_data: Vec<DeviceTestData> = Vec::new();
 
     for attachment_row in &attachment_rows {
-        let attachment_id: i64 = attachment_row.try_get("id")
+        let attachment_id: i64 = attachment_row.try_get("", "id")
             .map_err(|e| format!("Failed to get attachment id: {}", e))?;
-        let device_type: Option<String> = attachment_row.try_get("device_type").ok();
-        let device_name: Option<String> = attachment_row.try_get("device_name").ok();
-        let connection_method: Option<String> = attachment_row.try_get("connection_method").ok();
-        let original_name: String = attachment_row.try_get("original_name")
+        let device_type: Option<String> = attachment_row.try_get("", "device_type").ok();
+        let device_name: Option<String> = attachment_row.try_get("", "device_name").ok();
+        let connection_method: Option<String> = attachment_row.try_get("", "connection_method").ok();
+        let original_name: String = attachment_row.try_get("", "original_name")
             .map_err(|e| format!("Failed to get original_name: {}", e))?;
 
         // Skip if missing device metadata
         let device_type = match device_type {
             Some(dt) => dt,
             None => {
-                println!("Debug: Skipping attachment {} - no device_type", attachment_id);
+                log::debug!("Skipping attachment {} - no device_type", attachment_id);
                 continue;
             }
         };
         let device_name = match device_name {
             Some(dn) => dn,
             None => {
-                println!("Debug: Skipping attachment {} - no device_name", attachment_id);
+                log::debug!("Skipping attachment {} - no device_name", attachment_id);
                 continue;
             }
         };
         let connection_method = connection_method.unwrap_or_else(|| "unknown".to_string());
 
-        println!("Debug: Processing attachment {} - device_type={}, device_name={}", attachment_id, device_type, device_name);
+        log::debug!("Processing attachment {} - device_type={}, device_name={}", attachment_id, device_type, device_name);
 
         // Download the file data
-        let file_data = FileStorageService::download_attachment(&app_handle, &*pool_guard, attachment_id).await?;
+        let file_data = FileStorageService::download_attachment(&app_handle, &pool, attachment_id).await?;
 
         // Parse the device data (works for XML, JSON, etc.)
         match DeviceParserService::parse_device_data(
@@ -750,7 +720,7 @@ pub async fn regenerate_pdf_from_medical_record(
             &connection_method,
         ) {
             Ok(parsed_data) => {
-                println!("Debug: Parsed device data from {}", original_name);
+                log::debug!("Parsed device data from {}", original_name);
                 all_device_data.push(DeviceTestData {
                     device_type: parsed_data.device_type.clone(),
                     device_name: parsed_data.device_name.clone(),
@@ -760,7 +730,7 @@ pub async fn regenerate_pdf_from_medical_record(
                 });
             }
             Err(e) => {
-                println!("Debug: Failed to parse attachment {}: {}", attachment_id, e);
+                log::debug!("Failed to parse attachment {}: {}", attachment_id, e);
                 // Continue with other attachments
             }
         }
@@ -770,7 +740,7 @@ pub async fn regenerate_pdf_from_medical_record(
         return Err("Could not parse any device data from test_result attachments.".to_string());
     }
 
-    println!("Debug: Parsed {} device data sets", all_device_data.len());
+    log::debug!("Parsed {} device data sets", all_device_data.len());
 
     // 5. Generate combined PDF using Java service
     use crate::services::java_pdf_service::JavaPdfService;
@@ -810,7 +780,7 @@ pub async fn regenerate_pdf_from_medical_record(
         .collect();
 
     // Generate PDF with all devices
-    println!("   ☕ Generating combined PDF report using Java...");
+    log::info!("Generating combined PDF report using Java...");
     JavaPdfService::generate_pdf_multi(
         &app_handle,
         pdf_path.to_str().ok_or("Invalid PDF path")?,
@@ -818,13 +788,13 @@ pub async fn regenerate_pdf_from_medical_record(
         &java_device_data,
     )?;
 
-    println!("Debug: PDF generated at {:?}", pdf_path);
+    log::debug!("PDF generated at {:?}", pdf_path);
 
     // 6. Read the generated PDF
     let pdf_bytes = std::fs::read(&pdf_path)
         .map_err(|e| format!("Failed to read generated PDF: {}", e))?;
 
-    println!("Debug: Read {} bytes from PDF", pdf_bytes.len());
+    log::debug!("Read {} bytes from PDF", pdf_bytes.len());
 
     // 7. Determine device metadata for the attachment
     let device_type_str = if all_device_data.len() > 1 {
@@ -841,7 +811,7 @@ pub async fn regenerate_pdf_from_medical_record(
     // 8. Upload the PDF as a new attachment
     let pdf_attachment = FileStorageService::upload_attachment(
         &app_handle,
-        &*pool_guard,
+        &pool,
         medical_record_id,
         pdf_filename.clone(),
         pdf_bytes,
@@ -852,7 +822,7 @@ pub async fn regenerate_pdf_from_medical_record(
         Some("generated_pdf".to_string()),
     ).await?;
 
-    println!("Debug: PDF attachment uploaded with id={}", pdf_attachment.id);
+    log::debug!("PDF attachment uploaded with id={}", pdf_attachment.id);
 
     // Clean up temp file
     let _ = std::fs::remove_file(&pdf_path);
@@ -864,163 +834,180 @@ pub async fn regenerate_pdf_from_medical_record(
 // Record Template Commands
 // ============================================================================
 
+// Helper function to map SeaORM row to RecordTemplate
+fn row_to_record_template(row: &sea_orm::QueryResult) -> Result<RecordTemplate, String> {
+    Ok(RecordTemplate {
+        id: row.try_get("", "id").map_err(|e| format!("Failed to get id: {}", e))?,
+        record_type: row.try_get("", "record_type").map_err(|e| format!("Failed to get record_type: {}", e))?,
+        title: row.try_get("", "title").map_err(|e| format!("Failed to get title: {}", e))?,
+        description: row.try_get("", "description").map_err(|e| format!("Failed to get description: {}", e))?,
+        price: row.try_get("", "price").ok(),
+        currency_id: row.try_get("", "currency_id").ok(),
+        created_at: row.try_get("", "created_at").map_err(|e| format!("Failed to get created_at: {}", e))?,
+        updated_at: row.try_get("", "updated_at").map_err(|e| format!("Failed to get updated_at: {}", e))?,
+    })
+}
+
 #[tauri::command]
 pub async fn get_record_templates(
-    pool: State<'_, DatabasePool>,
-    #[allow(non_snake_case)]
-    recordType: Option<String>,
+    pool: State<'_, SeaOrmPool>,
+    record_type: Option<String>,
 ) -> Result<Vec<RecordTemplate>, String> {
-    let pool = pool.lock().await;
-
-    let query = if let Some(ref rt) = recordType {
-        sqlx::query_as::<_, RecordTemplate>(
-            "SELECT * FROM record_templates WHERE record_type = ? ORDER BY title ASC"
-        )
-        .bind(rt)
+    let rows = if let Some(ref rt) = record_type {
+        pool.query_all(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "SELECT * FROM record_templates WHERE record_type = ? ORDER BY title ASC",
+            [rt.clone().into()]
+        ))
+        .await
+        .map_err(|e| format!("Failed to fetch record templates: {}", e))?
     } else {
-        sqlx::query_as::<_, RecordTemplate>(
-            "SELECT * FROM record_templates ORDER BY record_type, title ASC"
-        )
+        pool.query_all(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "SELECT * FROM record_templates ORDER BY record_type, title ASC",
+            []
+        ))
+        .await
+        .map_err(|e| format!("Failed to fetch record templates: {}", e))?
     };
 
-    let templates = query
-        .fetch_all(&*pool)
-        .await
-        .map_err(|e| format!("Failed to fetch record templates: {}", e))?;
-
-    Ok(templates)
+    let templates: Result<Vec<_>, _> = rows.iter().map(row_to_record_template).collect();
+    templates
 }
 
 #[tauri::command]
 pub async fn search_record_templates(
-    pool: State<'_, DatabasePool>,
-    #[allow(non_snake_case)]
-    searchTerm: String,
-    #[allow(non_snake_case)]
-    recordType: Option<String>,
+    pool: State<'_, SeaOrmPool>,
+    search_term: String,
+    record_type: Option<String>,
 ) -> Result<Vec<RecordTemplate>, String> {
-    let pool = pool.lock().await;
+    let search_pattern = format!("%{}%", search_term);
 
-    let search_pattern = format!("%{}%", searchTerm);
-
-    let query = if let Some(ref rt) = recordType {
-        sqlx::query_as::<_, RecordTemplate>(
-            "SELECT * FROM record_templates WHERE record_type = ? AND (title LIKE ? OR description LIKE ?) ORDER BY title ASC"
-        )
-        .bind(rt)
-        .bind(&search_pattern)
-        .bind(&search_pattern)
+    let rows = if let Some(ref rt) = record_type {
+        pool.query_all(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "SELECT * FROM record_templates WHERE record_type = ? AND (title LIKE ? OR description LIKE ?) ORDER BY title ASC",
+            [rt.clone().into(), search_pattern.clone().into(), search_pattern.clone().into()]
+        ))
+        .await
+        .map_err(|e| format!("Failed to search record templates: {}", e))?
     } else {
-        sqlx::query_as::<_, RecordTemplate>(
-            "SELECT * FROM record_templates WHERE title LIKE ? OR description LIKE ? ORDER BY record_type, title ASC"
-        )
-        .bind(&search_pattern)
-        .bind(&search_pattern)
+        pool.query_all(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "SELECT * FROM record_templates WHERE title LIKE ? OR description LIKE ? ORDER BY record_type, title ASC",
+            [search_pattern.clone().into(), search_pattern.clone().into()]
+        ))
+        .await
+        .map_err(|e| format!("Failed to search record templates: {}", e))?
     };
 
-    let templates = query
-        .fetch_all(&*pool)
-        .await
-        .map_err(|e| format!("Failed to search record templates: {}", e))?;
-
-    Ok(templates)
+    let templates: Result<Vec<_>, _> = rows.iter().map(row_to_record_template).collect();
+    templates
 }
 
 #[tauri::command]
 pub async fn create_record_template(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     input: CreateRecordTemplateInput,
 ) -> Result<RecordTemplate, String> {
-    let pool = pool.lock().await;
-
     // Validate record type
     if input.record_type != "procedure" && input.record_type != "note" && input.record_type != "test_result" {
         return Err(format!("Invalid record type: {}. Must be 'procedure', 'note', or 'test_result'", input.record_type));
     }
 
-    let result = sqlx::query(
-        "INSERT INTO record_templates (record_type, title, description, price, currency_id) VALUES (?, ?, ?, ?, ?)"
-    )
-    .bind(&input.record_type)
-    .bind(&input.title)
-    .bind(&input.description)
-    .bind(input.price)
-    .bind(input.currency_id)
-    .execute(&*pool)
+    use sea_orm::Value;
+    let result = pool.execute(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "INSERT INTO record_templates (record_type, title, description, price, currency_id) VALUES (?, ?, ?, ?, ?)",
+        [
+            input.record_type.clone().into(),
+            input.title.clone().into(),
+            input.description.clone().into(),
+            input.price.map(|p| Value::Double(Some(p))).unwrap_or(Value::Double(None)),
+            input.currency_id.map(|c| Value::BigInt(Some(c))).unwrap_or(Value::BigInt(None)),
+        ]
+    ))
     .await
     .map_err(|e| format!("Failed to create record template: {}", e))?;
 
-    let template_id = result.last_insert_rowid();
+    let template_id = result.last_insert_id() as i64;
 
-    let template = sqlx::query_as::<_, RecordTemplate>(
-        "SELECT * FROM record_templates WHERE id = ?"
-    )
-    .bind(template_id)
-    .fetch_one(&*pool)
+    let row = pool.query_one(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "SELECT * FROM record_templates WHERE id = ?",
+        [template_id.into()]
+    ))
     .await
-    .map_err(|e| format!("Failed to fetch created template: {}", e))?;
+    .map_err(|e| format!("Failed to fetch created template: {}", e))?
+    .ok_or("Template not found".to_string())?;
 
-    Ok(template)
+    row_to_record_template(&row)
 }
 
 #[tauri::command]
 pub async fn update_record_template(
-    pool: State<'_, DatabasePool>,
-    #[allow(non_snake_case)]
-    templateId: i64,
+    pool: State<'_, SeaOrmPool>,
+    template_id: i64,
     input: UpdateRecordTemplateInput,
 ) -> Result<RecordTemplate, String> {
-    let pool = pool.lock().await;
+    use sea_orm::Value;
 
     // Build dynamic UPDATE query for efficiency
     let mut set_clauses = Vec::new();
+    let mut params: Vec<Value> = Vec::new();
 
-    if input.title.is_some() { set_clauses.push("title = ?"); }
-    if input.description.is_some() { set_clauses.push("description = ?"); }
-    if input.price.is_some() { set_clauses.push("price = ?"); }
-    if input.currency_id.is_some() { set_clauses.push("currency_id = ?"); }
+    if let Some(ref title) = input.title {
+        set_clauses.push("title = ?");
+        params.push(title.clone().into());
+    }
+    if let Some(ref description) = input.description {
+        set_clauses.push("description = ?");
+        params.push(description.clone().into());
+    }
+    if let Some(price) = input.price {
+        set_clauses.push("price = ?");
+        params.push(Value::Double(Some(price)));
+    }
+    if let Some(currency_id) = input.currency_id {
+        set_clauses.push("currency_id = ?");
+        params.push(Value::BigInt(Some(currency_id)));
+    }
 
     if !set_clauses.is_empty() {
         let mut query_str = "UPDATE record_templates SET ".to_string();
         query_str.push_str(&set_clauses.join(", "));
         query_str.push_str(" WHERE id = ?");
+        params.push(template_id.into());
 
-        let mut query = sqlx::query(&query_str);
-
-        if let Some(title) = input.title { query = query.bind(title); }
-        if let Some(description) = input.description { query = query.bind(description); }
-        if let Some(price) = input.price { query = query.bind(price); }
-        if let Some(currency_id) = input.currency_id { query = query.bind(currency_id); }
-        query = query.bind(templateId);
-
-        query.execute(&*pool).await
+        pool.execute(Statement::from_sql_and_values(DbBackend::Sqlite, &query_str, params))
+            .await
             .map_err(|e| format!("Failed to update template: {}", e))?;
     }
 
-    let template = sqlx::query_as::<_, RecordTemplate>(
-        "SELECT * FROM record_templates WHERE id = ?"
-    )
-    .bind(templateId)
-    .fetch_one(&*pool)
+    let row = pool.query_one(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "SELECT * FROM record_templates WHERE id = ?",
+        [template_id.into()]
+    ))
     .await
-    .map_err(|e| format!("Failed to fetch updated template: {}", e))?;
+    .map_err(|e| format!("Failed to fetch updated template: {}", e))?
+    .ok_or("Template not found".to_string())?;
 
-    Ok(template)
+    row_to_record_template(&row)
 }
 
 #[tauri::command]
 pub async fn delete_record_template(
-    pool: State<'_, DatabasePool>,
-    #[allow(non_snake_case)]
-    templateId: i64,
+    pool: State<'_, SeaOrmPool>,
+    template_id: i64,
 ) -> Result<(), String> {
-    let pool = pool.lock().await;
-
-    sqlx::query("DELETE FROM record_templates WHERE id = ?")
-        .bind(templateId)
-        .execute(&*pool)
-        .await
-        .map_err(|e| format!("Failed to delete template: {}", e))?;
+    pool.execute(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "DELETE FROM record_templates WHERE id = ?",
+        [template_id.into()]
+    ))
+    .await
+    .map_err(|e| format!("Failed to delete template: {}", e))?;
 
     Ok(())
 }

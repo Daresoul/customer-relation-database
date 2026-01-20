@@ -10,6 +10,7 @@ pub mod oauth;
 pub mod sync_scheduler;
 pub mod species;
 pub mod breed;
+pub mod patient;
 pub mod device_input;
 pub mod file_watcher;
 pub mod device_integration;

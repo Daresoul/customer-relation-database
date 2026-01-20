@@ -5,6 +5,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Owner, OwnerWithPatients, CreateOwnerInput, UpdateOwnerInput, AsyncState } from '../types';
 import { OwnerService } from '../services';
+import { extractErrorMessage } from '../utils/errors';
 
 export function useOwners() {
   const [state, setState] = useState<AsyncState<Owner[]>>({
@@ -26,8 +27,8 @@ export function useOwners() {
         lastFetch: Date.now()
       });
       return owners;
-    } catch (error: any) {
-      const errorMessage = error?.message || 'Failed to load owners';
+    } catch (error: unknown) {
+      const errorMessage = extractErrorMessage(error);
       setState(prev => ({
         ...prev,
         loading: false,
@@ -41,7 +42,7 @@ export function useOwners() {
   const getOwnerWithPatients = useCallback(async (id: number): Promise<OwnerWithPatients> => {
     try {
       return await OwnerService.getOwnerWithPatients(id);
-    } catch (error: any) {
+    } catch (error: unknown) {
       throw error;
     }
   }, []);
@@ -58,7 +59,7 @@ export function useOwners() {
       }));
 
       return newOwner;
-    } catch (error: any) {
+    } catch (error: unknown) {
       throw error;
     }
   }, []);
@@ -77,7 +78,7 @@ export function useOwners() {
       }));
 
       return updatedOwner;
-    } catch (error: any) {
+    } catch (error: unknown) {
       throw error;
     }
   }, []);
@@ -86,7 +87,7 @@ export function useOwners() {
   const canDeleteOwner = useCallback(async (id: number): Promise<boolean> => {
     try {
       return await OwnerService.canDeleteOwner(id);
-    } catch (error: any) {
+    } catch (error: unknown) {
       throw error;
     }
   }, []);
@@ -107,7 +108,7 @@ export function useOwners() {
         ...prev,
         data: prev.data ? prev.data.filter(owner => owner.id !== id) : null
       }));
-    } catch (error: any) {
+    } catch (error: unknown) {
       throw error;
     }
   }, [canDeleteOwner]);

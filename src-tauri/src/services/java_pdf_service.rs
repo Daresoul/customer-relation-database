@@ -6,7 +6,6 @@ use serde::{Serialize, Deserialize};
 use serde_json::Value;
 use std::path::PathBuf;
 use std::fs;
-use tauri::Manager;
 
 /// Java PDF service - calls the iText 5 JAR for PDF generation
 /// This provides 100% identical output to the original print-app

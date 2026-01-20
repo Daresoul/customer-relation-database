@@ -1,89 +1,84 @@
+use crate::entities::app_settings::{self, Entity as AppSettingsEntity};
+use crate::entities::currency::{self, Entity as CurrencyEntity};
 use crate::models::{Currency, SettingsResponse, UpdateSettingsRequest};
-use crate::database::DatabasePool;
-use sqlx::Row;
+use chrono::Utc;
+use sea_orm::*;
 
 pub struct SettingsService;
 
 impl SettingsService {
-    pub async fn get_settings(pool: &DatabasePool, user_id: &str) -> Result<SettingsResponse, String> {
-        let pool = pool.lock().await;
+    /// Convert a SeaORM currency model to the API Currency model
+    fn currency_to_api_model(model: currency::Model) -> Currency {
+        Currency {
+            id: model.id,
+            code: model.code,
+            name: model.name,
+            symbol: model.symbol,
+        }
+    }
 
+    /// Convert a SeaORM app_settings model to the API AppSettings model
+    fn settings_to_api_model(model: app_settings::Model) -> crate::models::AppSettings {
+        crate::models::AppSettings {
+            id: model.id,
+            user_id: model.user_id,
+            language: model.language,
+            currency_id: model.currency_id,
+            theme: model.theme,
+            date_format: model.date_format,
+            created_at: model.created_at,
+            updated_at: model.updated_at,
+        }
+    }
+
+    pub async fn get_settings(db: &DatabaseConnection, user_id: &str) -> Result<SettingsResponse, String> {
         // Get settings for user
-        let settings_row = sqlx::query(
-            r#"
-            SELECT id, user_id, language, currency_id, theme, date_format, created_at, updated_at
-            FROM app_settings
-            WHERE user_id = ?1
-            "#
-        )
-        .bind(user_id)
-        .fetch_optional(&*pool)
-        .await
-        .map_err(|e| format!("Failed to get settings: {}", e))?;
+        let settings_model = AppSettingsEntity::find()
+            .filter(app_settings::Column::UserId.eq(user_id))
+            .one(db)
+            .await
+            .map_err(|e| format!("Failed to get settings: {}", e))?;
 
         // If no settings exist, create default ones
-        let settings_row = match settings_row {
-            Some(row) => row,
+        let settings_model = match settings_model {
+            Some(model) => model,
             None => {
                 // Create default settings
-                sqlx::query(
-                    r#"
-                    INSERT INTO app_settings (user_id, language, theme, date_format)
-                    VALUES (?1, 'en', 'light', 'MM/DD/YYYY')
-                    "#
-                )
-                .bind(user_id)
-                .execute(&*pool)
-                .await
-                .map_err(|e| format!("Failed to create default settings: {}", e))?;
+                let now = Utc::now();
+                let new_settings = app_settings::ActiveModel {
+                    user_id: Set(user_id.to_string()),
+                    language: Set("en".to_string()),
+                    currency_id: Set(None),
+                    theme: Set("light".to_string()),
+                    date_format: Set("MM/DD/YYYY".to_string()),
+                    created_at: Set(now),
+                    updated_at: Set(now),
+                    ..Default::default()
+                };
+
+                let result = AppSettingsEntity::insert(new_settings)
+                    .exec(db)
+                    .await
+                    .map_err(|e| format!("Failed to create default settings: {}", e))?;
 
                 // Fetch the newly created settings
-                sqlx::query(
-                    r#"
-                    SELECT id, user_id, language, currency_id, theme, date_format, created_at, updated_at
-                    FROM app_settings
-                    WHERE user_id = ?1
-                    "#
-                )
-                .bind(user_id)
-                .fetch_one(&*pool)
-                .await
-                .map_err(|e| format!("Failed to fetch created settings: {}", e))?
+                AppSettingsEntity::find_by_id(result.last_insert_id)
+                    .one(db)
+                    .await
+                    .map_err(|e| format!("Failed to fetch created settings: {}", e))?
+                    .ok_or_else(|| "Failed to find created settings".to_string())?
             }
         };
 
-        // Extract values from row
-        let settings = crate::models::AppSettings {
-            id: settings_row.try_get("id").map_err(|e| format!("Failed to get id: {}", e))?,
-            user_id: settings_row.try_get("user_id").map_err(|e| format!("Failed to get user_id: {}", e))?,
-            language: settings_row.try_get("language").map_err(|e| format!("Failed to get language: {}", e))?,
-            currency_id: settings_row.try_get("currency_id").map_err(|e| format!("Failed to get currency_id: {}", e))?,
-            theme: settings_row.try_get("theme").map_err(|e| format!("Failed to get theme: {}", e))?,
-            date_format: settings_row.try_get("date_format").map_err(|e| format!("Failed to get date_format: {}", e))?,
-            created_at: settings_row.try_get("created_at").map_err(|e| format!("Failed to get created_at: {}", e))?,
-            updated_at: settings_row.try_get("updated_at").map_err(|e| format!("Failed to get updated_at: {}", e))?,
-        };
+        let settings = Self::settings_to_api_model(settings_model.clone());
 
         // Get currency if set
-        let currency = if let Some(currency_id) = settings.currency_id {
-            let currency_row = sqlx::query(
-                r#"
-                SELECT id, code, name, symbol
-                FROM currencies
-                WHERE id = ?1
-                "#
-            )
-            .bind(currency_id)
-            .fetch_optional(&*pool)
-            .await
-            .map_err(|e| format!("Failed to get currency: {}", e))?;
-
-            currency_row.map(|row| Currency {
-                id: row.try_get("id").unwrap_or_default(),
-                code: row.try_get("code").unwrap_or_default(),
-                name: row.try_get("name").unwrap_or_default(),
-                symbol: row.try_get("symbol").ok(),
-            })
+        let currency = if let Some(currency_id) = settings_model.currency_id {
+            CurrencyEntity::find_by_id(currency_id)
+                .one(db)
+                .await
+                .map_err(|e| format!("Failed to get currency: {}", e))?
+                .map(Self::currency_to_api_model)
         } else {
             None
         };
@@ -92,12 +87,10 @@ impl SettingsService {
     }
 
     pub async fn update_settings(
-        pool: &DatabasePool,
+        db: &DatabaseConnection,
         user_id: &str,
         request: UpdateSettingsRequest,
     ) -> Result<SettingsResponse, String> {
-        let pool_guard = pool.lock().await;
-
         // Validate inputs
         if let Some(ref language) = request.language {
             if language != "en" && language != "mk" {
@@ -107,15 +100,12 @@ impl SettingsService {
 
         if let Some(currency_id) = request.currency_id {
             // Validate currency exists
-            let count: (i64,) = sqlx::query_as(
-                "SELECT COUNT(*) FROM currencies WHERE id = ?1"
-            )
-            .bind(currency_id)
-            .fetch_one(&*pool_guard)
-            .await
-            .map_err(|e| format!("Failed to validate currency: {}", e))?;
+            let currency_exists = CurrencyEntity::find_by_id(currency_id)
+                .one(db)
+                .await
+                .map_err(|e| format!("Failed to validate currency: {}", e))?;
 
-            if count.0 == 0 {
+            if currency_exists.is_none() {
                 return Err(format!("Invalid currency_id: {}", currency_id));
             }
         }
@@ -127,99 +117,81 @@ impl SettingsService {
         }
 
         // Get current settings first
-        let current = sqlx::query(
-            "SELECT * FROM app_settings WHERE user_id = ?1"
-        )
-        .bind(user_id)
-        .fetch_optional(&*pool_guard)
-        .await
-        .map_err(|e| format!("Failed to get current settings: {}", e))?;
-
-        if current.is_none() {
-            // Create default settings first
-            sqlx::query(
-                r#"
-                INSERT INTO app_settings (user_id, language, theme, date_format)
-                VALUES (?1, 'en', 'light', 'MM/DD/YYYY')
-                "#
-            )
-            .bind(user_id)
-            .execute(&*pool_guard)
+        let current = AppSettingsEntity::find()
+            .filter(app_settings::Column::UserId.eq(user_id))
+            .one(db)
             .await
-            .map_err(|e| format!("Failed to create settings: {}", e))?;
-        }
+            .map_err(|e| format!("Failed to get current settings: {}", e))?;
 
-        // Update each field if provided
-        if let Some(ref language) = request.language {
-            sqlx::query("UPDATE app_settings SET language = ?1, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?2")
-                .bind(language)
-                .bind(user_id)
-                .execute(&*pool_guard)
-                .await
-                .map_err(|e| format!("Failed to update language: {}", e))?;
+        let current = match current {
+            Some(model) => model,
+            None => {
+                // Create default settings first
+                let now = Utc::now();
+                let new_settings = app_settings::ActiveModel {
+                    user_id: Set(user_id.to_string()),
+                    language: Set("en".to_string()),
+                    currency_id: Set(None),
+                    theme: Set("light".to_string()),
+                    date_format: Set("MM/DD/YYYY".to_string()),
+                    created_at: Set(now),
+                    updated_at: Set(now),
+                    ..Default::default()
+                };
+
+                let result = AppSettingsEntity::insert(new_settings)
+                    .exec(db)
+                    .await
+                    .map_err(|e| format!("Failed to create settings: {}", e))?;
+
+                AppSettingsEntity::find_by_id(result.last_insert_id)
+                    .one(db)
+                    .await
+                    .map_err(|e| format!("Failed to fetch created settings: {}", e))?
+                    .ok_or_else(|| "Failed to find created settings".to_string())?
+            }
+        };
+
+        // Update the settings model
+        let now = Utc::now();
+        let mut settings_model: app_settings::ActiveModel = current.into();
+
+        if let Some(language) = request.language {
+            settings_model.language = Set(language);
         }
 
         if let Some(currency_id) = request.currency_id {
-            println!("DEBUG: Updating currency_id to: {}", currency_id);
-            let result = sqlx::query("UPDATE app_settings SET currency_id = ?1, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?2")
-                .bind(currency_id)
-                .bind(user_id)
-                .execute(&*pool_guard)
-                .await
-                .map_err(|e| format!("Failed to update currency: {}", e))?;
-            println!("DEBUG: Currency update affected {} rows", result.rows_affected());
+            log::debug!("Updating currency_id to: {}", currency_id);
+            settings_model.currency_id = Set(Some(currency_id));
         }
 
-        if let Some(ref theme) = request.theme {
-            sqlx::query("UPDATE app_settings SET theme = ?1, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?2")
-                .bind(theme)
-                .bind(user_id)
-                .execute(&*pool_guard)
-                .await
-                .map_err(|e| format!("Failed to update theme: {}", e))?;
+        if let Some(theme) = request.theme {
+            settings_model.theme = Set(theme);
         }
 
-        if let Some(ref date_format) = request.date_format {
-            sqlx::query("UPDATE app_settings SET date_format = ?1, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?2")
-                .bind(date_format)
-                .bind(user_id)
-                .execute(&*pool_guard)
-                .await
-                .map_err(|e| format!("Failed to update date format: {}", e))?;
+        if let Some(date_format) = request.date_format {
+            settings_model.date_format = Set(date_format);
         }
 
-        // Drop the pool guard before calling get_settings
-        drop(pool_guard);
+        settings_model.updated_at = Set(now);
+
+        settings_model
+            .update(db)
+            .await
+            .map_err(|e| format!("Failed to update settings: {}", e))?;
 
         // Return updated settings
-        Self::get_settings(pool, user_id).await
+        Self::get_settings(db, user_id).await
     }
 
     #[allow(dead_code)]
-    pub async fn get_currencies(pool: &DatabasePool) -> Result<Vec<Currency>, String> {
-        let pool = pool.lock().await;
+    pub async fn get_currencies(db: &DatabaseConnection) -> Result<Vec<Currency>, String> {
+        let currencies = CurrencyEntity::find()
+            .order_by_asc(currency::Column::Code)
+            .all(db)
+            .await
+            .map_err(|e| format!("Failed to get currencies: {}", e))?;
 
-        let rows = sqlx::query(
-            r#"
-            SELECT id, code, name, symbol
-            FROM currencies
-            ORDER BY code
-            "#
-        )
-        .fetch_all(&*pool)
-        .await
-        .map_err(|e| format!("Failed to get currencies: {}", e))?;
-
-        let currencies = rows
-            .iter()
-            .map(|row| Currency {
-                id: row.try_get("id").unwrap_or_default(),
-                code: row.try_get("code").unwrap_or_default(),
-                name: row.try_get("name").unwrap_or_default(),
-                symbol: row.try_get("symbol").ok(),
-            })
-            .collect();
-
-        Ok(currencies)
+        Ok(currencies.into_iter().map(Self::currency_to_api_model).collect())
     }
 }

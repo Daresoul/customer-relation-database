@@ -66,8 +66,8 @@ const WeekViewDraggable: React.FC<WeekViewDraggableProps> = ({
 
   // Filter appointments for the week
   const weekAppointments = appointments.filter(apt =>
-    dayjs(apt.start_time).isAfter(startOfWeek.subtract(1, 'second')) &&
-    dayjs(apt.start_time).isBefore(endOfWeek.add(1, 'second'))
+    dayjs(apt.startTime).isAfter(startOfWeek.subtract(1, 'second')) &&
+    dayjs(apt.startTime).isBefore(endOfWeek.add(1, 'second'))
   );
 
   const getStatusColor = (status: string): string => {
@@ -83,7 +83,7 @@ const WeekViewDraggable: React.FC<WeekViewDraggableProps> = ({
   // Get appointments for a specific time slot
   const getAppointmentsForSlot = (dayDate: Dayjs, hour: number, minute: number) => {
     return weekAppointments.filter(apt => {
-      const aptStart = dayjs(apt.start_time);
+      const aptStart = dayjs(apt.startTime);
       return aptStart.isSame(dayDate, 'day') &&
              aptStart.hour() === hour &&
              aptStart.minute() >= minute &&
@@ -316,7 +316,7 @@ const WeekViewDraggable: React.FC<WeekViewDraggableProps> = ({
                         className={styles.appointmentTag}
                         onClick={() => onSelectAppointment(apt)}
                       >
-                        <div>{dayjs(apt.start_time).format('HH:mm')}</div>
+                        <div>{dayjs(apt.startTime).format('HH:mm')}</div>
                         <div className={styles.appointmentTitle}>{apt.title}</div>
                       </Tag>
                     ))}

@@ -26,8 +26,8 @@ const DayView: React.FC<DayViewProps> = ({
 
   // Filter appointments for the selected day
   const dayAppointments = appointments
-    .filter(apt => dayjs(apt.start_time).isSame(selectedDate, 'day'))
-    .sort((a, b) => dayjs(a.start_time).valueOf() - dayjs(b.start_time).valueOf());
+    .filter(apt => dayjs(apt.startTime).isSame(selectedDate, 'day'))
+    .sort((a, b) => dayjs(a.startTime).valueOf() - dayjs(b.startTime).valueOf());
 
 
   // Generate 15-minute time slots from 8 AM to 8 PM
@@ -43,7 +43,7 @@ const DayView: React.FC<DayViewProps> = ({
 
   const getAppointmentsForSlot = (hour: number, minute: number) => {
     return dayAppointments.filter(apt => {
-      const aptStart = dayjs(apt.start_time);
+      const aptStart = dayjs(apt.startTime);
       return aptStart.hour() === hour &&
              aptStart.minute() >= minute &&
              aptStart.minute() < minute + 15;
@@ -107,11 +107,11 @@ const DayView: React.FC<DayViewProps> = ({
                         </div>
                         <Space size="small">
                           <span className={styles.secondaryText}>
-                            <ClockCircleOutlined /> {dayjs(apt.start_time).format('HH:mm')} - {dayjs(apt.end_time).format('HH:mm')}
+                            <ClockCircleOutlined /> {dayjs(apt.startTime).format('HH:mm')} - {dayjs(apt.endTime).format('HH:mm')}
                           </span>
-                          {apt.room_name && (
+                          {apt.roomName && (
                             <span className={styles.secondaryText}>
-                              📍 {apt.room_name}
+                              📍 {apt.roomName}
                             </span>
                           )}
                         </Space>

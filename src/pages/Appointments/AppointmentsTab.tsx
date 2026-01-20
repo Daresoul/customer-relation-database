@@ -33,9 +33,9 @@ import {
 import {
   useAppointments,
   useAppointmentDetail,
-  useRooms,
   useCalendarAppointments,
 } from '../../hooks/useAppointments';
+import { useRooms } from '../../hooks/useRooms';
 import styles from './Appointments.module.css';
 
 const { RangePicker } = DatePicker;

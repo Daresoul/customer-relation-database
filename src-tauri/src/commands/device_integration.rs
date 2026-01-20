@@ -1,4 +1,4 @@
-use crate::database::DatabasePool;
+use crate::database::SeaOrmPool;
 use crate::models::device_integration::{
     DeviceIntegration, CreateDeviceIntegrationInput, UpdateDeviceIntegrationInput, ConnectionType
 };
@@ -8,14 +8,14 @@ use tauri::{State, AppHandle};
 
 #[tauri::command]
 pub async fn get_device_integrations(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
 ) -> Result<Vec<DeviceIntegration>, String> {
     DeviceIntegrationService::get_all(&pool).await
 }
 
 #[tauri::command]
 pub async fn get_device_integration(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     id: i64,
 ) -> Result<DeviceIntegration, String> {
     DeviceIntegrationService::get_by_id(&pool, id).await
@@ -24,7 +24,7 @@ pub async fn get_device_integration(
 #[tauri::command]
 pub async fn create_device_integration(
     app_handle: AppHandle,
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     input: CreateDeviceIntegrationInput,
 ) -> Result<DeviceIntegration, String> {
     let integration = DeviceIntegrationService::create(&pool, input).await?;
@@ -47,7 +47,7 @@ pub async fn create_device_integration(
 #[tauri::command]
 pub async fn update_device_integration(
     app_handle: AppHandle,
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     id: i64,
     input: UpdateDeviceIntegrationInput,
 ) -> Result<DeviceIntegration, String> {
@@ -80,7 +80,7 @@ pub async fn update_device_integration(
 
 #[tauri::command]
 pub async fn delete_device_integration(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     id: i64,
 ) -> Result<(), String> {
     // Get integration to stop listener if needed
@@ -99,7 +99,7 @@ pub async fn delete_device_integration(
 #[tauri::command]
 pub async fn toggle_device_integration_enabled(
     app_handle: AppHandle,
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     id: i64,
 ) -> Result<DeviceIntegration, String> {
     let integration = DeviceIntegrationService::toggle_enabled(&pool, id).await?;

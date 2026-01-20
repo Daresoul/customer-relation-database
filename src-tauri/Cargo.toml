@@ -9,10 +9,12 @@ edition = "2021"
 tauri-build = { version = "1.5", features = [] }
 
 [dependencies]
-tauri = { version = "1.5", features = [ "dialog-open", "window-print", "process-relaunch", "updater", "dialog-save", "fs-read-file", "shell-open"] }
+tauri = { version = "1.5", features = [ "dialog-open", "window-print", "process-relaunch", "updater", "dialog-save", "fs-read-file", "shell-open", "test"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-sqlx = { version = "0.7", features = ["runtime-tokio-native-tls", "sqlite", "chrono"] }
+sea-orm = { version = "1.1", features = ["sqlx-sqlite", "runtime-tokio-native-tls", "macros", "with-chrono"] }
+# SQLx macros for FromRow derive (transitional - migrate to SeaORM entities gradually)
+sqlx = { version = "0.8", default-features = false, features = ["macros", "sqlite"] }
 tokio = { version = "1", features = ["full"] }
 thiserror = "1.0"
 chrono = { version = "0.4", features = ["serde", "clock"] }

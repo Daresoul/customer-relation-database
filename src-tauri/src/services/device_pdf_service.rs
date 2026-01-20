@@ -36,7 +36,7 @@ impl DevicePdfService {
         patient: PatientData,
         device_data: DeviceTestData,
     ) -> Result<(), String> {
-        println!("☕ Generating PDF using Java JAR (iText 5) for device type: {}", device_data.device_type);
+        log::debug!("Generating PDF using Java JAR (iText 5) for device type: {}", device_data.device_type);
 
         // All PDF generation now goes through Java JAR
         // This provides:

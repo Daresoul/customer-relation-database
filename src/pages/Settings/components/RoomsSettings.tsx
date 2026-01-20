@@ -22,7 +22,7 @@ const RoomsSettings: React.FC<RoomsSettingsProps> = ({ isUpdating }) => {
   const [roomForm] = Form.useForm();
 
   // Fetch rooms data from database (show both active and inactive for settings management)
-  const { data: rooms = [], isLoading, refetch } = useRooms({ active_only: false });
+  const { data: rooms = [], isLoading, refetch } = useRooms({ activeOnly: false });
 
   const createRoomMutation = useCreateRoom();
   const updateRoomMutation = useUpdateRoom();
@@ -35,7 +35,7 @@ const RoomsSettings: React.FC<RoomsSettingsProps> = ({ isUpdating }) => {
     roomForm.setFieldsValue({
       capacity: 1,
       color: '#1890ff',
-      is_active: true,
+      isActive: true,
     });
     setRoomModalVisible(true);
   };
@@ -48,7 +48,7 @@ const RoomsSettings: React.FC<RoomsSettingsProps> = ({ isUpdating }) => {
       description: room.description,
       capacity: room.capacity,
       color: room.color || '#1890ff',
-      is_active: room.is_active,
+      isActive: room.isActive,
     };
     roomForm.setFieldsValue(formValues);
     setRoomModalVisible(true);
@@ -58,7 +58,7 @@ const RoomsSettings: React.FC<RoomsSettingsProps> = ({ isUpdating }) => {
     try {
       await updateRoomMutation.mutateAsync({
         id: roomId,
-        data: { is_active: false },
+        data: { isActive: false },
       });
       refetch();
     } catch (error) {
@@ -73,7 +73,7 @@ const RoomsSettings: React.FC<RoomsSettingsProps> = ({ isUpdating }) => {
         description: values.description || null,
         capacity: values.capacity || 1,
         color: values.color || '#1890ff',
-        is_active: values.is_active !== undefined ? values.is_active : true,
+        isActive: values.isActive !== undefined ? values.isActive : true,
       };
 
       if (editingRoom) {
@@ -102,9 +102,9 @@ const RoomsSettings: React.FC<RoomsSettingsProps> = ({ isUpdating }) => {
       width: 80,
       render: (color: string, record: Room) => (
         <div
-          className={`${styles.roomColorBox} ${!record.is_active ? styles.roomColorInactive : ''}`}
+          className={`${styles.roomColorBox} ${!record.isActive ? styles.roomColorInactive : ''}`}
           style={{
-            backgroundColor: record.is_active ? color || '#1890ff' : '#d9d9d9'
+            backgroundColor: record.isActive ? color || '#1890ff' : '#d9d9d9'
           }}
           title={`Room color: ${color || '#1890ff'}`}
         />
@@ -115,9 +115,9 @@ const RoomsSettings: React.FC<RoomsSettingsProps> = ({ isUpdating }) => {
       dataIndex: 'name',
       key: 'name',
       render: (text: string, record: Room) => (
-        <span className={record.is_active ? styles.roomNameActive : styles.roomNameInactive}>
+        <span className={record.isActive ? styles.roomNameActive : styles.roomNameInactive}>
           {text}
-          {!record.is_active && ' (Inactive)'}
+          {!record.isActive && ' (Inactive)'}
         </span>
       ),
     },
@@ -144,7 +144,7 @@ const RoomsSettings: React.FC<RoomsSettingsProps> = ({ isUpdating }) => {
           >
             Edit
           </Button>
-          {record.is_active && (
+          {record.isActive && (
             <Popconfirm
               title={t('settings:rooms.confirmDelete')}
               onConfirm={() => handleDeactivateRoom(record.id)}

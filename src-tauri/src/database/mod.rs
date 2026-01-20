@@ -5,5 +5,5 @@ pub mod queries;
 
 // Re-export commonly used items
 pub use config::{get_database_path, get_database_url};
-pub use connection::{create_pool, DatabasePool};
+pub use connection::{create_pools, SeaOrmPool};
 pub use migrations::run_migrations;

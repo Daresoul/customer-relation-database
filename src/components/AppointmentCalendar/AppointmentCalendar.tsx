@@ -47,35 +47,35 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
 
 
   // Fetch room data for colors
-  const { data: rooms = [] } = useRooms({ active_only: true });
+  const { data: rooms = [] } = useRooms({ activeOnly: true });
 
   // Helper function to get room color
   const getRoomColor = (appointment: Appointment): string => {
-    if (!appointment.room_id) {
+    if (!appointment.roomId) {
       return '#1890ff'; // Default blue color for appointments without rooms
     }
 
-    const room = rooms.find(r => r.id === appointment.room_id);
+    const room = rooms.find(r => r.id === appointment.roomId);
     return room?.color || '#1890ff'; // Fallback to default blue
   };
 
   // Create tooltip content for appointment
   const getTooltipContent = (apt: Appointment) => {
-    const room = rooms.find(r => r.id === apt.room_id);
+    const room = rooms.find(r => r.id === apt.roomId);
 
     return (
       <div>
         <div className={styles.tooltipLine}>
-          <strong>{t('details.patient')}:</strong> {apt.patient_name || t('details.unknownPatient')}
+          <strong>{t('details.patient')}:</strong> {apt.patientName || t('details.unknownPatient')}
         </div>
         <div className={styles.tooltipLine}>
-          <strong>Microchip ID:</strong> {apt.microchip_id || '-'}
+          <strong>Microchip ID:</strong> {apt.microchipId || '-'}
         </div>
         <div className={styles.tooltipLine}>
-          <strong>{t('details.time')}:</strong> {dayjs(apt.start_time).format('HH:mm')} - {dayjs(apt.end_time).format('HH:mm')}
+          <strong>{t('details.time')}:</strong> {dayjs(apt.startTime).format('HH:mm')} - {dayjs(apt.endTime).format('HH:mm')}
         </div>
         <div className={styles.tooltipLine}>
-          <strong>{t('fields.date')}:</strong> {dayjs(apt.start_time).format('MMM DD, YYYY')}
+          <strong>{t('fields.date')}:</strong> {dayjs(apt.startTime).format('MMM DD, YYYY')}
         </div>
         {room && (
           <div className={styles.tooltipLine}>
@@ -124,7 +124,7 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
 
   // Filter appointments by room if selected
   const filteredAppointments = useMemo(() => {
-    const filtered = !selectedRoomId ? allAppointments : allAppointments.filter((apt) => apt.room_id === selectedRoomId);
+    const filtered = !selectedRoomId ? allAppointments : allAppointments.filter((apt) => apt.roomId === selectedRoomId);
 
 
     return filtered;
@@ -134,7 +134,7 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
   const appointmentsByDate = useMemo(() => {
     const grouped: Record<string, Appointment[]> = {};
     filteredAppointments.forEach((apt) => {
-      const dateKey = dayjs(apt.start_time).format('YYYY-MM-DD');
+      const dateKey = dayjs(apt.startTime).format('YYYY-MM-DD');
       if (!grouped[dateKey]) {
         grouped[dateKey] = [];
       }
@@ -172,7 +172,7 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                   color={getRoomColor(apt)}
                   text={
                     <span className={styles.appointmentText}>
-                      {dayjs(apt.start_time).format('HH:mm')} - {apt.title}
+                      {dayjs(apt.startTime).format('HH:mm')} - {apt.title}
                     </span>
                   }
                 />
@@ -206,10 +206,10 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
               }}
             >
               <div className={styles.appointmentTime}>
-                {dayjs(apt.start_time).format('HH:mm')} - {dayjs(apt.end_time).format('HH:mm')}
+                {dayjs(apt.startTime).format('HH:mm')} - {dayjs(apt.endTime).format('HH:mm')}
               </div>
               <div className={styles.appointmentTitle}>{apt.title}</div>
-              <div className={styles.appointmentPatient}>{apt.patient_name || 'Patient'}</div>
+              <div className={styles.appointmentPatient}>{apt.patientName || 'Patient'}</div>
               <Tag color={getRoomColor(apt)}>
                 {apt.status.replace('_', ' ')}
               </Tag>

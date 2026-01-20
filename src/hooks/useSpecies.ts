@@ -1,7 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { App } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { SpeciesService } from '../services/speciesService';
 import { Species, CreateSpeciesInput, UpdateSpeciesInput } from '../types/species';
+import { createMutationErrorHandler } from '../utils/errors';
 
 export const useSpecies = (activeOnly: boolean = true) => {
   return useQuery({
@@ -21,6 +23,7 @@ export const useSpeciesById = (id: number) => {
 
 export const useCreateSpecies = () => {
   const { notification } = App.useApp();
+  const { t } = useTranslation('errors');
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -34,21 +37,13 @@ export const useCreateSpecies = () => {
         duration: 3,
       });
     },
-    onError: (error: any) => {
-      console.error('Create species error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      notification.error({
-        message: 'Failed to Create Species',
-        description: `Error: ${errorMessage}`,
-        placement: 'bottomRight',
-        duration: 5,
-      });
-    },
+    onError: createMutationErrorHandler(notification, 'Create Species', t, 'useSpecies'),
   });
 };
 
 export const useUpdateSpecies = () => {
   const { notification } = App.useApp();
+  const { t } = useTranslation('errors');
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -63,21 +58,13 @@ export const useUpdateSpecies = () => {
         duration: 3,
       });
     },
-    onError: (error: any) => {
-      console.error('Update species error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      notification.error({
-        message: 'Failed to Update Species',
-        description: `Error: ${errorMessage}`,
-        placement: 'bottomRight',
-        duration: 5,
-      });
-    },
+    onError: createMutationErrorHandler(notification, 'Update Species', t, 'useSpecies'),
   });
 };
 
 export const useDeleteSpecies = () => {
   const { notification } = App.useApp();
+  const { t } = useTranslation('errors');
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -92,15 +79,6 @@ export const useDeleteSpecies = () => {
         duration: 3,
       });
     },
-    onError: (error: any) => {
-      console.error('Delete species error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      notification.error({
-        message: 'Failed to Delete Species',
-        description: `Error: ${errorMessage}`,
-        placement: 'bottomRight',
-        duration: 5,
-      });
-    },
+    onError: createMutationErrorHandler(notification, 'Delete Species', t, 'useSpecies'),
   });
 };

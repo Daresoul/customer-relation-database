@@ -1,12 +1,13 @@
 // T027-T029: Google Calendar Tauri commands
-use crate::database::DatabasePool;
-use crate::models::google_calendar::{GoogleCalendarSettings, GoogleCalendarSettingsResponse};
+use crate::database::SeaOrmPool;
+use crate::models::google_calendar::GoogleCalendarSettingsResponse;
 #[allow(unused_imports)]
 use crate::models::sync_log::{SyncLog, SyncDirection, SyncType, SyncStatus};
 use crate::services::oauth::{OAuthFlowState, OAuthService};
 #[allow(unused_imports)]
 use chrono::Utc;
 use tauri::State;
+use sea_orm::*;
 
 // ===== T027: OAuth Commands =====
 
@@ -17,17 +18,17 @@ pub async fn start_oauth_flow() -> Result<OAuthFlowState, String> {
 
 #[tauri::command]
 pub async fn complete_oauth_flow(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     code: String,
     state: String,
 ) -> Result<GoogleCalendarSettingsResponse, String> {
-    println!("complete_oauth_flow called");
+    log::info!("complete_oauth_flow called");
 
     // Exchange code for tokens
-    println!("Exchanging code for tokens...");
+    log::info!("Exchanging code for tokens...");
     let (access_token, refresh_token, expires_in) =
         OAuthService::exchange_code_for_tokens(code, state).await?;
-    println!("✓ Tokens received, expires_in: {}s", expires_in);
+    log::info!("Tokens received, expires_in: {}s", expires_in);
 
     // Calculate token expiration
     let token_expires_at = Utc::now() + chrono::Duration::seconds(expires_in);
@@ -38,50 +39,52 @@ pub async fn complete_oauth_flow(
     // Create or find "Clinic Appointments" calendar
     let calendar_id = create_clinic_calendar(&access_token).await?;
 
-    // Save settings to database
-    let pool = pool.lock().await;
-
     // Check if settings exist
-    let existing: Option<GoogleCalendarSettings> = sqlx::query_as(
-        "SELECT * FROM google_calendar_settings WHERE user_id = 'default'"
-    )
-    .fetch_optional(&*pool)
-    .await
-    .map_err(|e| format!("Failed to check settings: {}", e))?;
+    let existing = pool
+        .query_one(Statement::from_string(
+            DbBackend::Sqlite,
+            "SELECT id FROM google_calendar_settings WHERE user_id = 'default'".to_string(),
+        ))
+        .await
+        .map_err(|e| format!("Failed to check settings: {}", e))?;
 
-    if let Some(_) = existing {
+    if existing.is_some() {
         // Update existing settings
-        sqlx::query(
+        pool.execute(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
             "UPDATE google_calendar_settings
              SET access_token = ?, refresh_token = ?, calendar_id = ?,
                  token_expires_at = ?, updated_at = CURRENT_TIMESTAMP
-             WHERE user_id = 'default'"
-        )
-        .bind(&access_token)
-        .bind(&refresh_token)
-        .bind(&calendar_id)
-        .bind(token_expires_at)
-        .execute(&*pool)
+             WHERE user_id = 'default'",
+            [
+                access_token.clone().into(),
+                refresh_token.into(),
+                calendar_id.clone().into(),
+                token_expires_at.to_rfc3339().into(),
+            ],
+        ))
         .await
         .map_err(|e| format!("Failed to update settings: {}", e))?;
     } else {
         // Insert new settings
-        sqlx::query(
+        pool.execute(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
             "INSERT INTO google_calendar_settings
              (user_id, access_token, refresh_token, calendar_id, sync_enabled, token_expires_at)
-             VALUES ('default', ?, ?, ?, 0, ?)"
-        )
-        .bind(&access_token)
-        .bind(&refresh_token)
-        .bind(&calendar_id)
-        .bind(token_expires_at)
-        .execute(&*pool)
+             VALUES ('default', ?, ?, ?, 0, ?)",
+            [
+                access_token.clone().into(),
+                refresh_token.into(),
+                calendar_id.clone().into(),
+                token_expires_at.to_rfc3339().into(),
+            ],
+        ))
         .await
         .map_err(|e| format!("Failed to save settings: {}", e))?;
     }
 
     // Return response
-    println!("✓ OAuth flow completed successfully");
+    log::info!("OAuth flow completed successfully");
     Ok(GoogleCalendarSettingsResponse {
         connected: true,
         connected_email: Some(user_email),
@@ -100,7 +103,7 @@ pub async fn cancel_oauth_flow() -> Result<(), String> {
 pub fn check_oauth_callback() -> Option<(String, String)> {
     let result = OAuthService::check_oauth_callback();
     if result.is_some() {
-        println!("check_oauth_callback command: returning callback data");
+        log::debug!("check_oauth_callback command: returning callback data");
     }
     result
 }
@@ -109,22 +112,25 @@ pub fn check_oauth_callback() -> Option<(String, String)> {
 
 #[tauri::command]
 pub async fn get_google_calendar_settings(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
 ) -> Result<GoogleCalendarSettingsResponse, String> {
-    let pool = pool.lock().await;
+    let row = pool
+        .query_one(Statement::from_string(
+            DbBackend::Sqlite,
+            "SELECT access_token, refresh_token, calendar_id, sync_enabled, last_sync, token_expires_at FROM google_calendar_settings WHERE user_id = 'default'".to_string(),
+        ))
+        .await
+        .map_err(|e| format!("Failed to query settings: {}", e))?;
 
-    let settings: Option<GoogleCalendarSettings> = sqlx::query_as(
-        "SELECT * FROM google_calendar_settings WHERE user_id = 'default'"
-    )
-    .fetch_optional(&*pool)
-    .await
-    .map_err(|e| format!("Failed to query settings: {}", e))?;
+    if let Some(row) = row {
+        let access_token: Option<String> = row.try_get("", "access_token").ok();
+        let calendar_id: Option<String> = row.try_get("", "calendar_id").ok();
+        let sync_enabled: bool = row.try_get::<i32>("", "sync_enabled").map(|v| v != 0).unwrap_or(false);
+        let last_sync: Option<String> = row.try_get("", "last_sync").ok();
 
-    if let Some(settings) = settings {
-        let connected = settings.access_token.is_some();
+        let connected = access_token.is_some();
         let connected_email = if connected {
-            // Try to get email from UserInfo API
-            if let Some(ref token) = settings.access_token {
+            if let Some(ref token) = access_token {
                 get_user_email(token).await.ok()
             } else {
                 None
@@ -136,9 +142,9 @@ pub async fn get_google_calendar_settings(
         Ok(GoogleCalendarSettingsResponse {
             connected,
             connected_email,
-            calendar_id: settings.calendar_id,
-            sync_enabled: settings.sync_enabled,
-            last_sync: settings.last_sync.map(|dt| dt.to_rfc3339()),
+            calendar_id,
+            sync_enabled,
+            last_sync,
         })
     } else {
         // Return default not-connected state
@@ -154,57 +160,62 @@ pub async fn get_google_calendar_settings(
 
 #[tauri::command]
 pub async fn update_sync_enabled(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     enabled: bool,
 ) -> Result<GoogleCalendarSettingsResponse, String> {
-    let pool = pool.lock().await;
-
     // Check if connected
-    let settings: Option<GoogleCalendarSettings> = sqlx::query_as(
-        "SELECT * FROM google_calendar_settings WHERE user_id = 'default'"
-    )
-    .fetch_optional(&*pool)
-    .await
-    .map_err(|e| format!("Failed to query settings: {}", e))?;
+    let row = pool
+        .query_one(Statement::from_string(
+            DbBackend::Sqlite,
+            "SELECT calendar_id FROM google_calendar_settings WHERE user_id = 'default'".to_string(),
+        ))
+        .await
+        .map_err(|e| format!("Failed to query settings: {}", e))?
+        .ok_or("Google Calendar not connected")?;
 
-    let settings = settings.ok_or("Google Calendar not connected")?;
-
-    if settings.calendar_id.is_none() {
+    let calendar_id: Option<String> = row.try_get("", "calendar_id").ok();
+    if calendar_id.is_none() {
         return Err("Google Calendar not connected".to_string());
     }
 
     // Update sync_enabled
-    sqlx::query(
-        "UPDATE google_calendar_settings SET sync_enabled = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = 'default'"
-    )
-    .bind(enabled)
-    .execute(&*pool)
+    pool.execute(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "UPDATE google_calendar_settings SET sync_enabled = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = 'default'",
+        [enabled.into()],
+    ))
     .await
     .map_err(|e| format!("Failed to update settings: {}", e))?;
 
     // TODO: If enabling, trigger initial sync
 
     // Fetch updated settings
-    let settings: Option<GoogleCalendarSettings> = sqlx::query_as(
-        "SELECT * FROM google_calendar_settings WHERE user_id = 'default'"
-    )
-    .fetch_optional(&*pool)
-    .await
-    .map_err(|e| format!("Failed to query updated settings: {}", e))?;
+    let row = pool
+        .query_one(Statement::from_string(
+            DbBackend::Sqlite,
+            "SELECT access_token, calendar_id, sync_enabled, last_sync FROM google_calendar_settings WHERE user_id = 'default'".to_string(),
+        ))
+        .await
+        .map_err(|e| format!("Failed to query updated settings: {}", e))?;
 
-    if let Some(settings) = settings {
-        let connected_email = if let Some(ref token) = settings.access_token {
+    if let Some(row) = row {
+        let access_token: Option<String> = row.try_get("", "access_token").ok();
+        let calendar_id: Option<String> = row.try_get("", "calendar_id").ok();
+        let sync_enabled: bool = row.try_get::<i32>("", "sync_enabled").map(|v| v != 0).unwrap_or(false);
+        let last_sync: Option<String> = row.try_get("", "last_sync").ok();
+
+        let connected_email = if let Some(ref token) = access_token {
             get_user_email(token).await.ok()
         } else {
             None
         };
 
         Ok(GoogleCalendarSettingsResponse {
-            connected: settings.access_token.is_some(),
+            connected: access_token.is_some(),
             connected_email,
-            calendar_id: settings.calendar_id,
-            sync_enabled: settings.sync_enabled,
-            last_sync: settings.last_sync.map(|dt| dt.to_rfc3339()),
+            calendar_id,
+            sync_enabled,
+            last_sync,
         })
     } else {
         Err("Settings not found after update".to_string())
@@ -213,18 +224,16 @@ pub async fn update_sync_enabled(
 
 #[tauri::command]
 pub async fn disconnect_google_calendar(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
 ) -> Result<(), String> {
-    let pool = pool.lock().await;
-
     // Clear tokens
-    sqlx::query(
+    pool.execute(Statement::from_string(
+        DbBackend::Sqlite,
         "UPDATE google_calendar_settings
          SET access_token = NULL, refresh_token = NULL, sync_enabled = 0,
              token_expires_at = NULL, updated_at = CURRENT_TIMESTAMP
-         WHERE user_id = 'default'"
-    )
-    .execute(&*pool)
+         WHERE user_id = 'default'".to_string(),
+    ))
     .await
     .map_err(|e| format!("Failed to disconnect: {}", e))?;
 
@@ -233,20 +242,20 @@ pub async fn disconnect_google_calendar(
 
 #[tauri::command]
 pub async fn revoke_google_access(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
 ) -> Result<(), String> {
-    let pool = pool.lock().await;
-
     // Get access token
-    let settings: Option<GoogleCalendarSettings> = sqlx::query_as(
-        "SELECT * FROM google_calendar_settings WHERE user_id = 'default'"
-    )
-    .fetch_optional(&*pool)
-    .await
-    .map_err(|e| format!("Failed to query settings: {}", e))?;
+    let row = pool
+        .query_one(Statement::from_string(
+            DbBackend::Sqlite,
+            "SELECT access_token FROM google_calendar_settings WHERE user_id = 'default'".to_string(),
+        ))
+        .await
+        .map_err(|e| format!("Failed to query settings: {}", e))?;
 
-    if let Some(settings) = settings {
-        if let Some(token) = settings.access_token {
+    if let Some(row) = row {
+        let access_token: Option<String> = row.try_get("", "access_token").ok();
+        if let Some(token) = access_token {
             // Call Google revoke endpoint
             let client = reqwest::Client::new();
             let _ = client
@@ -259,13 +268,13 @@ pub async fn revoke_google_access(
     }
 
     // Clear tokens from database
-    sqlx::query(
+    pool.execute(Statement::from_string(
+        DbBackend::Sqlite,
         "UPDATE google_calendar_settings
          SET access_token = NULL, refresh_token = NULL, sync_enabled = 0,
              token_expires_at = NULL, updated_at = CURRENT_TIMESTAMP
-         WHERE user_id = 'default'"
-    )
-    .execute(&*pool)
+         WHERE user_id = 'default'".to_string(),
+    ))
     .await
     .map_err(|e| format!("Failed to disconnect: {}", e))?;
 
@@ -276,42 +285,39 @@ pub async fn revoke_google_access(
 
 #[tauri::command]
 pub async fn trigger_manual_sync(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
 ) -> Result<SyncLog, String> {
-    #[allow(unused_imports)]
-    use crate::models::appointments::AppointmentStatus;
     use crate::services::oauth::get_valid_access_token;
 
-    let pool_guard = pool.lock().await;
-
     // Check if connected
-    let settings: Option<GoogleCalendarSettings> = sqlx::query_as(
-        "SELECT * FROM google_calendar_settings WHERE user_id = 'default'"
-    )
-    .fetch_optional(&*pool_guard)
-    .await
-    .map_err(|e| format!("Failed to query settings: {}", e))?;
+    let row = pool
+        .query_one(Statement::from_string(
+            DbBackend::Sqlite,
+            "SELECT calendar_id, access_token, refresh_token, token_expires_at FROM google_calendar_settings WHERE user_id = 'default'".to_string(),
+        ))
+        .await
+        .map_err(|e| format!("Failed to query settings: {}", e))?
+        .ok_or("Google Calendar not connected")?;
 
-    let settings = settings.ok_or("Google Calendar not connected")?;
-
-    let calendar_id = settings.calendar_id.ok_or("No calendar ID configured")?;
+    let calendar_id: String = row.try_get("", "calendar_id")
+        .map_err(|_| "No calendar ID configured".to_string())?;
 
     // Get valid access token (will refresh if needed)
-    let access_token = get_valid_access_token(&*pool_guard).await?;
+    let access_token = get_valid_access_token(&pool).await?;
 
     // Create sync log
-    let result = sqlx::query(
-        "INSERT INTO sync_logs (direction, sync_type, status, started_at)
-         VALUES ('to_google', 'manual', 'in_progress', CURRENT_TIMESTAMP)"
-    )
-    .execute(&*pool_guard)
+    let result = pool.execute(Statement::from_string(
+        DbBackend::Sqlite,
+        "INSERT INTO sync_logs (direction, sync_type, status, started_at) VALUES ('to_google', 'manual', 'in_progress', CURRENT_TIMESTAMP)".to_string()
+    ))
     .await
     .map_err(|e| format!("Failed to create sync log: {}", e))?;
 
-    let sync_log_id = result.last_insert_rowid();
+    let sync_log_id = result.last_insert_id() as i64;
 
     // Get all future appointments with patient and room info
-    let appointments: Vec<(i64, String, Option<String>, String, String, Option<String>, Option<String>, Option<String>, String)> = sqlx::query_as(
+    let appointments = pool.query_all(Statement::from_string(
+        DbBackend::Sqlite,
         "SELECT
             a.id, a.title, a.description, a.start_time, a.end_time,
             p.name as patient_name, p.microchip_id, r.name as room_name, a.status
@@ -321,30 +327,39 @@ pub async fn trigger_manual_sync(
          WHERE a.deleted_at IS NULL
          AND a.status != 'cancelled'
          AND datetime(a.start_time) >= datetime('now')
-         ORDER BY a.start_time"
-    )
-    .fetch_all(&*pool_guard)
+         ORDER BY a.start_time".to_string()
+    ))
     .await
     .map_err(|e| format!("Failed to fetch appointments: {}", e))?;
 
-    println!("Found {} future appointments to sync", appointments.len());
+    log::info!("Found {} future appointments to sync", appointments.len());
 
     let mut items_synced = 0;
     let mut items_failed = 0;
     let client = reqwest::Client::new();
 
-    for (appt_id, title, description, start_time, end_time, patient_name, microchip_id, room_name, status) in appointments {
+    for row in appointments {
+        let appt_id: i64 = row.try_get("", "id").unwrap_or(0);
+        let title: String = row.try_get("", "title").unwrap_or_default();
+        let description: Option<String> = row.try_get("", "description").ok();
+        let start_time: String = row.try_get("", "start_time").unwrap_or_default();
+        let end_time: String = row.try_get("", "end_time").unwrap_or_default();
+        let patient_name: Option<String> = row.try_get("", "patient_name").ok();
+        let microchip_id: Option<String> = row.try_get("", "microchip_id").ok();
+        let room_name: Option<String> = row.try_get("", "room_name").ok();
+        let status: String = row.try_get("", "status").unwrap_or_default();
+
         // Check if already synced
-        let existing: Option<(String,)> = sqlx::query_as(
-            "SELECT event_id FROM calendar_event_mappings WHERE appointment_id = ?"
-        )
-        .bind(appt_id)
-        .fetch_optional(&*pool_guard)
+        let existing = pool.query_one(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "SELECT event_id FROM calendar_event_mappings WHERE appointment_id = ?",
+            [appt_id.into()]
+        ))
         .await
         .map_err(|e| format!("Failed to check mapping: {}", e))?;
 
         if existing.is_some() {
-            println!("Appointment {} already synced, skipping", appt_id);
+            log::debug!("Appointment {} already synced, skipping", appt_id);
             continue;
         }
 
@@ -398,107 +413,105 @@ pub async fn trigger_manual_sync(
                     Ok(event) => {
                         if let Some(event_id) = event["id"].as_str() {
                             // Save mapping
-                            let _ = sqlx::query(
-                                "INSERT INTO calendar_event_mappings (appointment_id, event_id, calendar_id, last_synced_at)
-                                 VALUES (?, ?, ?, CURRENT_TIMESTAMP)"
-                            )
-                            .bind(appt_id)
-                            .bind(event_id)
-                            .bind(&calendar_id)
-                            .execute(&*pool_guard)
+                            let _ = pool.execute(Statement::from_sql_and_values(
+                                DbBackend::Sqlite,
+                                "INSERT INTO calendar_event_mappings (appointment_id, event_id, calendar_id, last_synced_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
+                                [appt_id.into(), event_id.to_string().into(), calendar_id.clone().into()]
+                            ))
                             .await;
 
-                            println!("✓ Synced appointment {} to Google Calendar (event_id: {})", appt_id, event_id);
+                            log::info!("Synced appointment {} to Google Calendar (event_id: {})", appt_id, event_id);
                             items_synced += 1;
                         } else {
-                            eprintln!("✗ Failed to sync appointment {}: No event ID in response", appt_id);
+                            log::error!("Failed to sync appointment {}: No event ID in response", appt_id);
                             items_failed += 1;
                         }
                     }
                     Err(e) => {
-                        eprintln!("✗ Failed to parse event response for appointment {}: {}", appt_id, e);
+                        log::error!("Failed to parse event response for appointment {}: {}", appt_id, e);
                         items_failed += 1;
                     }
                 }
             }
             Ok(resp) => {
                 let error = resp.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-                eprintln!("✗ Failed to sync appointment {}: {}", appt_id, error);
+                log::error!("Failed to sync appointment {}: {}", appt_id, error);
                 items_failed += 1;
             }
             Err(e) => {
-                eprintln!("✗ Network error syncing appointment {}: {}", appt_id, e);
+                log::error!("Network error syncing appointment {}: {}", appt_id, e);
                 items_failed += 1;
             }
         }
     }
 
     // Update sync log
-    sqlx::query(
-        "UPDATE sync_logs SET status = 'success', items_synced = ?, items_failed = ?,
-         completed_at = CURRENT_TIMESTAMP WHERE id = ?"
-    )
-    .bind(items_synced)
-    .bind(items_failed)
-    .bind(sync_log_id)
-    .execute(&*pool_guard)
+    pool.execute(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "UPDATE sync_logs SET status = 'success', items_synced = ?, items_failed = ?, completed_at = CURRENT_TIMESTAMP WHERE id = ?",
+        [items_synced.into(), items_failed.into(), sync_log_id.into()]
+    ))
     .await
     .map_err(|e| format!("Failed to update sync log: {}", e))?;
 
     // Update last_sync timestamp
-    sqlx::query(
-        "UPDATE google_calendar_settings SET last_sync = CURRENT_TIMESTAMP WHERE user_id = 'default'"
-    )
-    .execute(&*pool_guard)
+    pool.execute(Statement::from_string(
+        DbBackend::Sqlite,
+        "UPDATE google_calendar_settings SET last_sync = CURRENT_TIMESTAMP WHERE user_id = 'default'".to_string()
+    ))
     .await
     .map_err(|e| format!("Failed to update last sync: {}", e))?;
 
-    println!("Manual sync completed: {} synced, {} failed", items_synced, items_failed);
+    log::info!("Manual sync completed: {} synced, {} failed", items_synced, items_failed);
 
     // Fetch and return the sync log
-    let sync_log: SyncLog = sqlx::query_as(
-        "SELECT * FROM sync_logs WHERE id = ?"
-    )
-    .bind(sync_log_id)
-    .fetch_one(&*pool_guard)
+    let row = pool.query_one(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "SELECT * FROM sync_logs WHERE id = ?",
+        [sync_log_id.into()]
+    ))
     .await
-    .map_err(|e| format!("Failed to fetch sync log: {}", e))?;
+    .map_err(|e| format!("Failed to fetch sync log: {}", e))?
+    .ok_or("Sync log not found")?;
 
-    Ok(sync_log)
+    Ok(row_to_sync_log(&row)?)
 }
 
 #[tauri::command]
 pub async fn get_sync_history(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     limit: i64,
 ) -> Result<Vec<SyncLog>, String> {
-    let pool = pool.lock().await;
-
-    let sync_logs: Vec<SyncLog> = sqlx::query_as(
-        "SELECT * FROM sync_logs ORDER BY started_at DESC LIMIT ?"
-    )
-    .bind(limit)
-    .fetch_all(&*pool)
+    let rows = pool.query_all(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "SELECT * FROM sync_logs ORDER BY started_at DESC LIMIT ?",
+        [limit.into()]
+    ))
     .await
     .map_err(|e| format!("Failed to fetch sync history: {}", e))?;
 
-    Ok(sync_logs)
+    let sync_logs: Result<Vec<SyncLog>, String> = rows.iter()
+        .map(row_to_sync_log)
+        .collect();
+
+    sync_logs
 }
 
 #[tauri::command]
 pub async fn check_sync_status(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
 ) -> Result<Option<SyncLog>, String> {
-    let pool = pool.lock().await;
-
-    let sync_log: Option<SyncLog> = sqlx::query_as(
-        "SELECT * FROM sync_logs WHERE status = 'in_progress' ORDER BY started_at DESC LIMIT 1"
-    )
-    .fetch_optional(&*pool)
+    let row = pool.query_one(Statement::from_string(
+        DbBackend::Sqlite,
+        "SELECT * FROM sync_logs WHERE status = 'in_progress' ORDER BY started_at DESC LIMIT 1".to_string()
+    ))
     .await
     .map_err(|e| format!("Failed to check sync status: {}", e))?;
 
-    Ok(sync_log)
+    match row {
+        Some(r) => Ok(Some(row_to_sync_log(&r)?)),
+        None => Ok(None),
+    }
 }
 
 // ===== Helper Functions =====
@@ -527,7 +540,7 @@ async fn create_clinic_calendar(access_token: &str) -> Result<String, String> {
     let client = reqwest::Client::new();
 
     // First, check if calendar already exists
-    println!("Checking for existing 'Clinic Appointments' calendar...");
+    log::info!("Checking for existing 'Clinic Appointments' calendar...");
     let list_response = client
         .get("https://www.googleapis.com/calendar/v3/users/me/calendarList")
         .header("Authorization", format!("Bearer {}", access_token))
@@ -542,11 +555,11 @@ async fn create_clinic_calendar(access_token: &str) -> Result<String, String> {
 
     // Look for existing "Clinic Appointments" calendar
     if let Some(items) = calendar_list["items"].as_array() {
-        println!("Found {} existing calendars", items.len());
+        log::debug!("Found {} existing calendars", items.len());
         for item in items {
             if item["summary"].as_str() == Some("Clinic Appointments") {
                 if let Some(calendar_id) = item["id"].as_str() {
-                    println!("✓ Found existing 'Clinic Appointments' calendar: {}", calendar_id);
+                    log::info!("Found existing 'Clinic Appointments' calendar: {}", calendar_id);
                     return Ok(calendar_id.to_string());
                 }
             }
@@ -554,7 +567,7 @@ async fn create_clinic_calendar(access_token: &str) -> Result<String, String> {
     }
 
     // Calendar doesn't exist, create it
-    println!("Creating 'Clinic Appointments' calendar...");
+    log::info!("Creating 'Clinic Appointments' calendar...");
     let create_response = client
         .post("https://www.googleapis.com/calendar/v3/calendars")
         .header("Authorization", format!("Bearer {}", access_token))
@@ -578,16 +591,55 @@ async fn create_clinic_calendar(access_token: &str) -> Result<String, String> {
         .await
         .map_err(|e| format!("Failed to parse created calendar: {}", e))?;
 
-    println!("Calendar creation response: {:?}", calendar);
+    log::debug!("Calendar creation response: {:?}", calendar);
 
     calendar["id"]
         .as_str()
         .map(|s| {
-            println!("✓ Created calendar with ID: {}", s);
+            log::info!("Created calendar with ID: {}", s);
             s.to_string()
         })
         .ok_or_else(|| {
-            eprintln!("Calendar response missing 'id' field. Full response: {:?}", calendar);
+            log::error!("Calendar response missing 'id' field. Full response: {:?}", calendar);
             "Calendar ID not found in response".to_string()
         })
+}
+
+// Helper to convert SeaORM row to SyncLog
+fn row_to_sync_log(row: &sea_orm::QueryResult) -> Result<SyncLog, String> {
+    let direction_str: String = row.try_get("", "direction").unwrap_or_else(|_| "to_google".to_string());
+    let sync_type_str: String = row.try_get("", "sync_type").unwrap_or_else(|_| "manual".to_string());
+    let status_str: String = row.try_get("", "status").unwrap_or_else(|_| "success".to_string());
+
+    let direction = match direction_str.as_str() {
+        "to_google" => SyncDirection::ToGoogle,
+        "from_google" => SyncDirection::FromGoogle,
+        _ => SyncDirection::ToGoogle,
+    };
+
+    let sync_type = match sync_type_str.as_str() {
+        "manual" => SyncType::Manual,
+        "incremental" => SyncType::Incremental,
+        "initial" => SyncType::Initial,
+        _ => SyncType::Manual,
+    };
+
+    let status = match status_str.as_str() {
+        "success" => SyncStatus::Success,
+        "failed" => SyncStatus::Failed,
+        "in_progress" => SyncStatus::InProgress,
+        _ => SyncStatus::Success,
+    };
+
+    Ok(SyncLog {
+        id: row.try_get("", "id").map_err(|e| format!("Failed to get id: {}", e))?,
+        direction,
+        sync_type,
+        status,
+        items_synced: row.try_get("", "items_synced").unwrap_or(0),
+        items_failed: row.try_get("", "items_failed").unwrap_or(0),
+        error_message: row.try_get("", "error_message").ok(),
+        started_at: row.try_get("", "started_at").map_err(|e| format!("Failed to get started_at: {}", e))?,
+        completed_at: row.try_get("", "completed_at").ok(),
+    })
 }

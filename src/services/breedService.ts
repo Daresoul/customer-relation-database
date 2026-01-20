@@ -1,29 +1,28 @@
-import { invoke } from '@tauri-apps/api/tauri';
+import { ApiService } from './api';
 import { Breed, CreateBreedInput, UpdateBreedInput } from '../types/breed';
 
 export class BreedService {
   static async getBreeds(speciesId?: number, activeOnly?: boolean): Promise<Breed[]> {
     const filter = {
-      species_id: speciesId !== undefined ? speciesId : null,
-      active_only: activeOnly !== undefined ? activeOnly : null
+      speciesId: speciesId ?? null,
+      activeOnly: activeOnly ?? null
     };
-
-    return await invoke('get_breeds', { filter });
+    return ApiService.invoke('get_breeds', { filter });
   }
 
   static async getBreed(id: number): Promise<Breed> {
-    return await invoke('get_breed', { id });
+    return ApiService.invoke('get_breed', { id });
   }
 
   static async createBreed(data: CreateBreedInput): Promise<Breed> {
-    return await invoke('create_breed', { data });
+    return ApiService.invoke('create_breed', { data });
   }
 
   static async updateBreed(id: number, data: UpdateBreedInput): Promise<Breed> {
-    return await invoke('update_breed', { id, data });
+    return ApiService.invoke('update_breed', { id, data });
   }
 
   static async deleteBreed(id: number, hardDelete: boolean = false): Promise<void> {
-    return await invoke('delete_breed', { id, hard_delete: hardDelete });
+    return ApiService.invoke('delete_breed', { id, hardDelete });
   }
 }

@@ -1,6 +1,6 @@
 use crate::models::{SettingsResponse, UpdateSettingsRequest};
 use crate::services::settings::SettingsService;
-use crate::database::DatabasePool;
+use crate::database::SeaOrmPool;
 use tauri::State;
 use serde::Deserialize;
 
@@ -18,17 +18,17 @@ pub struct UpdateSettingsInput {
 
 #[tauri::command]
 pub async fn get_app_settings(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
 ) -> Result<SettingsResponse, String> {
     SettingsService::get_settings(&pool, "default").await
 }
 
 #[tauri::command]
 pub async fn update_app_settings(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     updates: UpdateSettingsInput,
 ) -> Result<SettingsResponse, String> {
-    println!("DEBUG: update_app_settings called with: {:?}", updates);
+    log::debug!("update_app_settings called with: {:?}", updates);
 
     let request = UpdateSettingsRequest {
         language: updates.language,
@@ -41,10 +41,10 @@ pub async fn update_app_settings(
 
     match &result {
         Ok(response) => {
-            println!("DEBUG: Settings updated successfully. Currency ID: {:?}", response.settings.currency_id);
+            log::debug!("Settings updated successfully. Currency ID: {:?}", response.settings.currency_id);
         },
         Err(e) => {
-            println!("DEBUG: Settings update failed: {}", e);
+            log::error!("Settings update failed: {}", e);
         }
     }
 

@@ -152,13 +152,13 @@ impl OAuthService {
             .map(|params: HashMap<String, String>| {
                 if let (Some(code), Some(state)) = (params.get("code"), params.get("state")) {
                     // Store callback params for frontend to retrieve
-                    println!("✓ OAuth callback received: code={}, state={}",
+                    log::info!("OAuth callback received: code={}, state={}",
                         &code[..10.min(code.len())],
                         &state[..10.min(state.len())]);
                     {
                         let mut callback = OAUTH_CALLBACK.lock().unwrap();
                         *callback = Some((code.clone(), state.clone()));
-                        println!("✓ OAuth callback stored in memory");
+                        log::debug!("OAuth callback stored in memory");
                     }
 
                     warp::reply::html(
@@ -268,7 +268,7 @@ impl OAuthService {
             .request_async(async_http_client)
             .await
             .map_err(|e| {
-                eprintln!("Token exchange error details: {:?}", e);
+                log::error!("Token exchange error details: {:?}", e);
                 format!("Failed to exchange code for tokens: {}. This usually means the authorization code expired (they expire after 10 minutes) or the redirect URI doesn't match. Error details: {}", e, e)
             })?;
 
@@ -289,7 +289,7 @@ impl OAuthService {
         let mut callback = OAUTH_CALLBACK.lock().unwrap();
         let result = callback.take(); // Take and clear
         if result.is_some() {
-            println!("✓ OAuth callback retrieved and cleared");
+            log::debug!("OAuth callback retrieved and cleared");
         }
         result
     }
@@ -331,35 +331,40 @@ impl OAuthService {
 }
 
 // T039: Token refresh middleware
-use crate::models::google_calendar::GoogleCalendarSettings;
 use chrono::Utc;
 
-/// Get a valid access token, refreshing if necessary
+/// Get a valid access token, refreshing if necessary (SeaORM version)
 pub async fn get_valid_access_token(
-    pool: &sqlx::SqlitePool,
+    db: &sea_orm::DatabaseConnection,
 ) -> Result<String, String> {
+    use sea_orm::{ConnectionTrait, Statement, DbBackend};
+
     // Get current settings
-    let settings: Option<GoogleCalendarSettings> = sqlx::query_as(
-        "SELECT * FROM google_calendar_settings WHERE user_id = 'default'"
-    )
-    .fetch_optional(pool)
+    let row = db.query_one(Statement::from_string(
+        DbBackend::Sqlite,
+        "SELECT access_token, refresh_token, token_expires_at FROM google_calendar_settings WHERE user_id = 'default'".to_string()
+    ))
     .await
-    .map_err(|e| format!("Failed to query settings: {}", e))?;
+    .map_err(|e| format!("Failed to query settings: {}", e))?
+    .ok_or("Google Calendar not configured")?;
 
-    let settings = settings.ok_or("Google Calendar not configured")?;
+    let access_token: String = row.try_get("", "access_token")
+        .map_err(|_| "No access token available".to_string())?;
 
-    let access_token = settings.access_token
-        .ok_or("No access token available")?;
+    let refresh_token: String = row.try_get("", "refresh_token")
+        .map_err(|_| "No refresh token available".to_string())?;
 
-    let refresh_token = settings.refresh_token
-        .ok_or("No refresh token available")?;
+    let token_expires_at: Option<String> = row.try_get("", "token_expires_at").ok();
 
     // Check if token is expired (with 5 minute buffer)
-    let needs_refresh = if let Some(expires_at) = settings.token_expires_at {
-        let buffer = chrono::Duration::minutes(5);
-        Utc::now() + buffer >= expires_at
+    let needs_refresh = if let Some(expires_str) = token_expires_at {
+        if let Ok(expires_at) = chrono::DateTime::parse_from_rfc3339(&expires_str) {
+            let buffer = chrono::Duration::minutes(5);
+            Utc::now() + buffer >= expires_at
+        } else {
+            false
+        }
     } else {
-        // No expiration time stored, assume it needs refresh
         false
     };
 
@@ -369,7 +374,7 @@ pub async fn get_valid_access_token(
     }
 
     // Token is expired or about to expire, refresh it
-    println!("Access token expired, refreshing...");
+    log::info!("Access token expired, refreshing...");
 
     let (new_access_token, expires_in) = OAuthService::refresh_access_token(refresh_token).await?;
 
@@ -377,18 +382,15 @@ pub async fn get_valid_access_token(
     let new_expires_at = Utc::now() + chrono::Duration::seconds(expires_in);
 
     // Update database with new token
-    sqlx::query(
-        "UPDATE google_calendar_settings
-         SET access_token = ?, token_expires_at = ?, updated_at = CURRENT_TIMESTAMP
-         WHERE user_id = 'default'"
-    )
-    .bind(&new_access_token)
-    .bind(new_expires_at)
-    .execute(pool)
+    db.execute(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "UPDATE google_calendar_settings SET access_token = ?, token_expires_at = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = 'default'",
+        [new_access_token.clone().into(), new_expires_at.to_rfc3339().into()]
+    ))
     .await
     .map_err(|e| format!("Failed to update access token: {}", e))?;
 
-    println!("Access token refreshed successfully");
+    log::info!("Access token refreshed successfully");
 
     Ok(new_access_token)
 }

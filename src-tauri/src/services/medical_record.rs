@@ -1,4 +1,4 @@
-use sqlx::{SqlitePool, Row};
+use sea_orm::*;
 use crate::models::medical::*;
 use crate::models::dto::MaybeNull;
 use chrono::{Utc, DateTime};
@@ -9,7 +9,7 @@ pub struct MedicalRecordService;
 
 impl MedicalRecordService {
     pub async fn get_medical_records(
-        pool: &SqlitePool,
+        db: &DatabaseConnection,
         patient_id: i64,
         filter: Option<MedicalRecordFilter>,
         pagination: Option<PaginationParams>,
@@ -18,61 +18,58 @@ impl MedicalRecordService {
         let page_size = pagination.as_ref().and_then(|p| p.page_size).unwrap_or(50);
         let offset = ((page - 1) * page_size) as i64;
 
-        // Build the query based on filters using safe parameterized queries
-        let mut query = sqlx::QueryBuilder::new(
+        // Build the query based on filters
+        let mut sql = String::from(
             "SELECT id, patient_id, record_type, name, procedure_name, description, \
              price, currency_id, is_archived, version, created_at, updated_at, \
              created_by, updated_by \
-             FROM medical_records WHERE patient_id = "
+             FROM medical_records WHERE patient_id = ?"
         );
-        query.push_bind(patient_id);
+        let mut params: Vec<Value> = vec![patient_id.into()];
 
         if let Some(ref f) = filter {
             if let Some(ref record_type) = f.record_type {
-                query.push(" AND record_type = ");
-                query.push_bind(record_type);
+                sql.push_str(" AND record_type = ?");
+                params.push(record_type.clone().into());
             }
             if let Some(is_archived) = f.is_archived {
-                query.push(" AND is_archived = ");
-                query.push_bind(if is_archived { 1 } else { 0 });
+                sql.push_str(" AND is_archived = ?");
+                params.push((if is_archived { 1i32 } else { 0i32 }).into());
             }
             if let Some(ref search_term) = f.search_term {
-                query.push(" AND (name LIKE ");
-                query.push_bind(format!("%{}%", search_term));
-                query.push(" OR description LIKE ");
-                query.push_bind(format!("%{}%", search_term));
-                query.push(")");
+                sql.push_str(" AND (name LIKE ? OR description LIKE ?)");
+                let pattern = format!("%{}%", search_term);
+                params.push(pattern.clone().into());
+                params.push(pattern.into());
             }
         } else {
             // Default to not showing archived records
-            query.push(" AND is_archived = 0");
+            sql.push_str(" AND is_archived = 0");
         }
 
-        query.push(" ORDER BY created_at DESC LIMIT ");
-        query.push_bind(page_size);
-        query.push(" OFFSET ");
-        query.push_bind(offset);
+        sql.push_str(" ORDER BY created_at DESC LIMIT ? OFFSET ?");
+        params.push(page_size.into());
+        params.push(offset.into());
 
-        println!("Executing safe parameterized query for patient_id: {}", patient_id);
+        log::debug!("Executing safe parameterized query for patient_id: {}", patient_id);
 
-        let rows = query
-            .build()
-            .fetch_all(pool)
+        let rows = db
+            .query_all(Statement::from_sql_and_values(DbBackend::Sqlite, &sql, params))
             .await
             .map_err(|e| {
-                eprintln!("SQL Error: {}", e);
+                log::error!("SQL Error: {}", e);
                 format!("Failed to fetch medical records: {}", e)
             })?;
 
-        println!("Got {} rows from database", rows.len());
+        log::debug!("Got {} rows from database", rows.len());
 
         let mut records = Vec::new();
         for row in rows {
-            println!("Processing row...");
-            let record_id: i64 = row.get("id");
-            let is_archived_int: i64 = row.get("is_archived");
-            let created_at_str: Option<String> = row.try_get("created_at").ok();
-            let updated_at_str: Option<String> = row.try_get("updated_at").ok();
+            log::trace!("Processing row...");
+            let record_id: i64 = row.try_get("", "id").map_err(|e| e.to_string())?;
+            let is_archived_int: i64 = row.try_get("", "is_archived").unwrap_or(0);
+            let created_at_str: Option<String> = row.try_get("", "created_at").ok();
+            let updated_at_str: Option<String> = row.try_get("", "updated_at").ok();
 
             let created_at = created_at_str
                 .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
@@ -85,65 +82,64 @@ impl MedicalRecordService {
                 .unwrap_or_else(|| Utc::now());
 
             // Handle price as either integer or float
-            let price: Option<f64> = row.try_get::<Option<i64>, _>("price")
+            let price: Option<f64> = row.try_get::<i64>("", "price")
                 .ok()
-                .flatten()
                 .map(|i| i as f64)
-                .or_else(|| row.try_get("price").ok().flatten());
+                .or_else(|| row.try_get::<f64>("", "price").ok());
 
             // Fetch attachments for this record
-            let attachments = sqlx::query_as::<_, MedicalAttachment>(
-                "SELECT id, medical_record_id, file_id, original_name, mime_type, \
-                 file_size, uploaded_at, device_type, device_name, connection_method, attachment_type \
-                 FROM medical_attachments WHERE medical_record_id = ?"
-            )
-            .bind(record_id)
-            .fetch_all(pool)
-            .await
-            .unwrap_or_else(|_| Vec::new());
+            let attachments = Self::fetch_attachments(db, record_id).await.unwrap_or_default();
 
             records.push(MedicalRecord {
                 id: record_id,
-                patient_id: row.get("patient_id"),
-                record_type: row.get("record_type"),
-                name: row.get("name"),
-                procedure_name: row.get("procedure_name"),
-                description: row.get("description"),
+                patient_id: row.try_get("", "patient_id").unwrap_or(0),
+                record_type: row.try_get("", "record_type").unwrap_or_default(),
+                name: row.try_get("", "name").unwrap_or_default(),
+                procedure_name: row.try_get("", "procedure_name").ok(),
+                description: row.try_get("", "description").unwrap_or_default(),
                 price,
-                currency_id: row.get("currency_id"),
+                currency_id: row.try_get("", "currency_id").ok(),
                 is_archived: is_archived_int != 0,
-                version: row.get("version"),
+                version: row.try_get("", "version").unwrap_or(1),
                 created_at,
                 updated_at,
-                created_by: row.get("created_by"),
-                updated_by: row.get("updated_by"),
+                created_by: row.try_get("", "created_by").ok(),
+                updated_by: row.try_get("", "updated_by").ok(),
                 attachments: if attachments.is_empty() { None } else { Some(attachments) },
             });
         }
 
-        println!("Found {} records", records.len());
+        log::debug!("Found {} records", records.len());
 
         // Get total count
-        let mut count_query = "SELECT COUNT(*) FROM medical_records WHERE patient_id = ?".to_string();
+        let mut count_sql = String::from("SELECT COUNT(*) as cnt FROM medical_records WHERE patient_id = ?");
+        let mut count_params: Vec<Value> = vec![patient_id.into()];
+
         if let Some(ref f) = filter {
             if let Some(ref record_type) = f.record_type {
-                count_query.push_str(&format!(" AND record_type = '{}'", record_type));
+                count_sql.push_str(" AND record_type = ?");
+                count_params.push(record_type.clone().into());
             }
             if let Some(is_archived) = f.is_archived {
-                count_query.push_str(&format!(" AND is_archived = {}", if is_archived { 1 } else { 0 }));
+                count_sql.push_str(" AND is_archived = ?");
+                count_params.push((if is_archived { 1i32 } else { 0i32 }).into());
             }
             if let Some(ref search_term) = f.search_term {
-                count_query.push_str(&format!(" AND (name LIKE '%{}%' OR description LIKE '%{}%')", search_term, search_term));
+                count_sql.push_str(" AND (name LIKE ? OR description LIKE ?)");
+                let pattern = format!("%{}%", search_term);
+                count_params.push(pattern.clone().into());
+                count_params.push(pattern.into());
             }
         } else {
-            count_query.push_str(" AND is_archived = 0");
+            count_sql.push_str(" AND is_archived = 0");
         }
 
-        let total: i64 = sqlx::query_scalar(&count_query)
-            .bind(patient_id)
-            .fetch_one(pool)
+        let total: i64 = db
+            .query_one(Statement::from_sql_and_values(DbBackend::Sqlite, &count_sql, count_params))
             .await
-            .map_err(|e| format!("Failed to count medical records: {}", e))?;
+            .map_err(|e| format!("Failed to count medical records: {}", e))?
+            .map(|r| r.try_get::<i64>("", "cnt").unwrap_or(0))
+            .unwrap_or(0);
 
         Ok(MedicalRecordsResponse {
             records,
@@ -153,27 +149,83 @@ impl MedicalRecordService {
         })
     }
 
+    /// Helper to fetch attachments for a medical record
+    async fn fetch_attachments(db: &DatabaseConnection, record_id: i64) -> Result<Vec<MedicalAttachment>, String> {
+        let rows = db
+            .query_all(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "SELECT id, medical_record_id, file_id, original_name, mime_type, \
+                 file_size, uploaded_at, device_type, device_name, connection_method, attachment_type \
+                 FROM medical_attachments WHERE medical_record_id = ?",
+                [record_id.into()],
+            ))
+            .await
+            .map_err(|e| format!("Failed to fetch attachments: {}", e))?;
+
+        let attachments: Vec<MedicalAttachment> = rows
+            .iter()
+            .filter_map(|row| {
+                let uploaded_at_str: Option<String> = row.try_get("", "uploaded_at").ok();
+                let uploaded_at = uploaded_at_str
+                    .as_deref()
+                    .map(Self::parse_datetime)
+                    .unwrap_or_else(Utc::now);
+
+                Some(MedicalAttachment {
+                    id: row.try_get("", "id").ok()?,
+                    medical_record_id: row.try_get("", "medical_record_id").ok()?,
+                    file_id: row.try_get("", "file_id").ok()?,
+                    original_name: row.try_get("", "original_name").ok()?,
+                    file_size: row.try_get("", "file_size").ok(),
+                    mime_type: row.try_get("", "mime_type").ok(),
+                    uploaded_at,
+                    device_type: row.try_get("", "device_type").ok(),
+                    device_name: row.try_get("", "device_name").ok(),
+                    connection_method: row.try_get("", "connection_method").ok(),
+                    attachment_type: row.try_get("", "attachment_type").ok(),
+                })
+            })
+            .collect();
+
+        Ok(attachments)
+    }
+
+    /// Helper to parse datetime strings
+    fn parse_datetime(s: &str) -> DateTime<Utc> {
+        // Try RFC3339 first
+        if let Ok(dt) = DateTime::parse_from_rfc3339(s) {
+            return dt.with_timezone(&Utc);
+        }
+        // Try common SQLite CURRENT_TIMESTAMP format
+        if let Ok(naive) = chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S") {
+            return DateTime::<Utc>::from_naive_utc_and_offset(naive, Utc);
+        }
+        // Fallback to now
+        Utc::now()
+    }
+
     pub async fn get_medical_record(
-        pool: &SqlitePool,
+        db: &DatabaseConnection,
         record_id: i64,
         include_history: bool,
     ) -> Result<MedicalRecordDetail, String> {
         // Get the record
-        let row = sqlx::query(
-            "SELECT id, patient_id, record_type, name, procedure_name, description, \
-             price, currency_id, is_archived, version, created_at, updated_at, \
-             created_by, updated_by \
-             FROM medical_records WHERE id = ?"
-        )
-        .bind(record_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| format!("Failed to fetch medical record: {}", e))?
-        .ok_or("Medical record not found".to_string())?;
+        let row = db
+            .query_one(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "SELECT id, patient_id, record_type, name, procedure_name, description, \
+                 price, currency_id, is_archived, version, created_at, updated_at, \
+                 created_by, updated_by \
+                 FROM medical_records WHERE id = ?",
+                [record_id.into()],
+            ))
+            .await
+            .map_err(|e| format!("Failed to fetch medical record: {}", e))?
+            .ok_or("Medical record not found".to_string())?;
 
-        let is_archived_int: i64 = row.get("is_archived");
-        let created_at_str: Option<String> = row.try_get("created_at").ok();
-        let updated_at_str: Option<String> = row.try_get("updated_at").ok();
+        let is_archived_int: i64 = row.try_get("", "is_archived").unwrap_or(0);
+        let created_at_str: Option<String> = row.try_get("", "created_at").ok();
+        let updated_at_str: Option<String> = row.try_get("", "updated_at").ok();
 
         let created_at = created_at_str
             .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
@@ -186,92 +238,35 @@ impl MedicalRecordService {
             .unwrap_or_else(|| Utc::now());
 
         // Handle price as either integer or float
-        let price: Option<f64> = row.try_get::<Option<i64>, _>("price")
+        let price: Option<f64> = row.try_get::<i64>("", "price")
             .ok()
-            .flatten()
             .map(|i| i as f64)
-            .or_else(|| row.try_get("price").ok().flatten());
+            .or_else(|| row.try_get::<f64>("", "price").ok());
 
         let record = MedicalRecord {
-            id: row.get("id"),
-            patient_id: row.get("patient_id"),
-            record_type: row.get("record_type"),
-            name: row.get("name"),
-            procedure_name: row.get("procedure_name"),
-            description: row.get("description"),
+            id: row.try_get("", "id").unwrap_or(0),
+            patient_id: row.try_get("", "patient_id").unwrap_or(0),
+            record_type: row.try_get("", "record_type").unwrap_or_default(),
+            name: row.try_get("", "name").unwrap_or_default(),
+            procedure_name: row.try_get("", "procedure_name").ok(),
+            description: row.try_get("", "description").unwrap_or_default(),
             price,
-            currency_id: row.get("currency_id"),
+            currency_id: row.try_get("", "currency_id").ok(),
             is_archived: is_archived_int != 0,
-            version: row.get("version"),
+            version: row.try_get("", "version").unwrap_or(1),
             created_at,
             updated_at,
-            created_by: row.get("created_by"),
-            updated_by: row.get("updated_by"),
+            created_by: row.try_get("", "created_by").ok(),
+            updated_by: row.try_get("", "updated_by").ok(),
             attachments: None,
         };
 
-        // Get attachments (tolerant to different datetime formats)
-        let attachment_rows = sqlx::query(
-            "SELECT id, medical_record_id, file_id, original_name, mime_type, \
-             file_size, uploaded_at, device_type, device_name, connection_method, attachment_type \
-             FROM medical_attachments WHERE medical_record_id = ?"
-        )
-        .bind(record_id)
-        .fetch_all(pool)
-        .await
-        .unwrap_or_else(|_| Vec::new());
-
-        fn parse_dt(s: &str) -> DateTime<Utc> {
-            // Try RFC3339 first
-            if let Ok(dt) = DateTime::parse_from_rfc3339(s) {
-                return dt.with_timezone(&Utc);
-            }
-            // Try common SQLite CURRENT_TIMESTAMP format
-            if let Ok(naive) = chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S") {
-                return DateTime::<Utc>::from_naive_utc_and_offset(naive, Utc);
-            }
-            // Fallback to now
-            Utc::now()
-        }
-
-        let attachments: Vec<MedicalAttachment> = attachment_rows
-            .into_iter()
-            .map(|row| {
-                let uploaded_at_str: Option<String> = row.try_get("uploaded_at").ok();
-                let uploaded_at = uploaded_at_str
-                    .as_deref()
-                    .map(parse_dt)
-                    .unwrap_or_else(Utc::now);
-
-                MedicalAttachment {
-                    id: row.get("id"),
-                    medical_record_id: row.get("medical_record_id"),
-                    file_id: row.get("file_id"),
-                    original_name: row.get("original_name"),
-                    file_size: row.try_get("file_size").ok(),
-                    mime_type: row.try_get("mime_type").ok(),
-                    uploaded_at,
-                    device_type: row.try_get("device_type").ok(),
-                    device_name: row.try_get("device_name").ok(),
-                    connection_method: row.try_get("connection_method").ok(),
-                    attachment_type: row.try_get("attachment_type").ok(),
-                }
-            })
-            .collect();
+        // Get attachments using helper
+        let attachments = Self::fetch_attachments(db, record_id).await.unwrap_or_default();
 
         // Get history if requested
         let history = if include_history {
-            sqlx::query_as::<_, MedicalRecordHistory>(
-                "SELECT id, medical_record_id, version, changed_fields, old_values, \
-                 new_values, changed_by, changed_at \
-                 FROM medical_record_history \
-                 WHERE medical_record_id = ? \
-                 ORDER BY changed_at DESC"
-            )
-            .bind(record_id)
-            .fetch_all(pool)
-            .await
-            .map_err(|e| format!("Failed to fetch history: {}", e))?
+            Self::fetch_history(db, record_id).await?
         } else {
             Vec::new()
         };
@@ -283,41 +278,82 @@ impl MedicalRecordService {
         })
     }
 
+    /// Helper to fetch history for a medical record
+    async fn fetch_history(db: &DatabaseConnection, record_id: i64) -> Result<Vec<MedicalRecordHistory>, String> {
+        let rows = db
+            .query_all(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "SELECT id, medical_record_id, version, changed_fields, old_values, \
+                 new_values, changed_by, changed_at \
+                 FROM medical_record_history \
+                 WHERE medical_record_id = ? \
+                 ORDER BY changed_at DESC",
+                [record_id.into()],
+            ))
+            .await
+            .map_err(|e| format!("Failed to fetch history: {}", e))?;
+
+        let history: Vec<MedicalRecordHistory> = rows
+            .iter()
+            .filter_map(|row| {
+                let changed_at_str: Option<String> = row.try_get("", "changed_at").ok();
+                let changed_at = changed_at_str
+                    .as_deref()
+                    .map(Self::parse_datetime)
+                    .unwrap_or_else(Utc::now);
+
+                Some(MedicalRecordHistory {
+                    id: row.try_get("", "id").ok()?,
+                    medical_record_id: row.try_get("", "medical_record_id").ok()?,
+                    version: row.try_get("", "version").ok()?,
+                    changed_fields: row.try_get("", "changed_fields").ok()?,
+                    old_values: row.try_get("", "old_values").ok(),
+                    new_values: row.try_get("", "new_values").ok()?,
+                    changed_by: row.try_get("", "changed_by").ok(),
+                    changed_at,
+                })
+            })
+            .collect();
+
+        Ok(history)
+    }
+
     pub async fn create_medical_record(
         app_handle: &tauri::AppHandle,
-        pool: &SqlitePool,
+        db: &DatabaseConnection,
         input: CreateMedicalRecordInput,
     ) -> Result<MedicalRecord, String> {
-        println!("🔍 Creating medical record with input:");
-        println!("   device_test_data: {:?}", input.device_test_data.is_some());
-        println!("   device_type: {:?}", input.device_type);
-        println!("   device_name: {:?}", input.device_name);
+        log::debug!("Creating medical record with input: device_test_data={:?}, device_type={:?}, device_name={:?}",
+            input.device_test_data.is_some(), input.device_type, input.device_name);
 
         let now = Utc::now();
 
         // Development: do not populate procedure_name; use name as the single source of truth
         let procedure_name: Option<String> = None;
 
-        let result = sqlx::query(
-            "INSERT INTO medical_records \
-             (patient_id, record_type, name, procedure_name, description, \
-              price, currency_id, is_archived, version, created_at, updated_at) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?)"
-        )
-        .bind(input.patient_id)
-        .bind(&input.record_type)
-        .bind(&input.name)
-        .bind(&procedure_name)
-        .bind(&input.description)
-        .bind(input.price)
-        .bind(input.currency_id)
-        .bind(now)
-        .bind(now)
-        .execute(pool)
-        .await
-        .map_err(|e| format!("Failed to create medical record: {}", e))?;
+        let result = db
+            .execute(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "INSERT INTO medical_records \
+                 (patient_id, record_type, name, procedure_name, description, \
+                  price, currency_id, is_archived, version, created_at, updated_at) \
+                 VALUES (?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?)",
+                [
+                    input.patient_id.into(),
+                    input.record_type.clone().into(),
+                    input.name.clone().into(),
+                    procedure_name.clone().into(),
+                    input.description.clone().into(),
+                    input.price.into(),
+                    input.currency_id.into(),
+                    now.to_rfc3339().into(),
+                    now.to_rfc3339().into(),
+                ],
+            ))
+            .await
+            .map_err(|e| format!("Failed to create medical record: {}", e))?;
 
-        let id = result.last_insert_rowid();
+        let id = result.last_insert_id() as i64;
 
         let record = MedicalRecord {
             id,
@@ -348,35 +384,33 @@ impl MedicalRecordService {
             "is_archived": record.is_archived
         });
 
-        let _ = sqlx::query(
-            "INSERT INTO medical_record_history (medical_record_id, version, changed_fields, old_values, new_values, changed_by) VALUES (?, ?, ?, ?, ?, ?)"
-        )
-        .bind(id)
-        .bind(1)
-        .bind("created")
-        .bind(Option::<String>::None)
-        .bind(new_snapshot.to_string())
-        .bind(&record.created_by)
-        .execute(pool)
-        .await;
+        let _ = db
+            .execute(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "INSERT INTO medical_record_history (medical_record_id, version, changed_fields, old_values, new_values, changed_by) VALUES (?, ?, ?, ?, ?, ?)",
+                [
+                    id.into(),
+                    1i32.into(),
+                    "created".into(),
+                    Value::String(None),
+                    new_snapshot.to_string().into(),
+                    Value::String(None),
+                ],
+            ))
+            .await;
 
-        println!(
-            "History snapshot insert (create): rec_id={}, version=1, fields=created, new={}",
-            id,
-            new_snapshot
-        );
+        log::debug!("History snapshot insert (create): rec_id={}, version=1, fields=created, new={}", id, new_snapshot);
 
         // Generate PDFs if device test data is present
-        println!("🔍 [PDF] Checking for device data:");
-        println!("   device_test_data (legacy): {}", input.device_test_data.is_some());
-        println!("   device_data_list: {}", input.device_data_list.is_some());
+        log::debug!("[PDF] Checking for device data: device_test_data (legacy)={}, device_data_list={}",
+            input.device_test_data.is_some(), input.device_data_list.is_some());
 
         // Collect all device data (either from device_data_list or legacy single device)
         let mut all_device_data: Vec<crate::services::device_pdf_service::DeviceTestData> = Vec::new();
 
         // Add devices from device_data_list (new multi-device format)
         if let Some(ref device_list) = input.device_data_list {
-            println!("📄 [PDF] Found {} devices in device_data_list", device_list.len());
+            log::debug!("[PDF] Found {} devices in device_data_list", device_list.len());
             for device in device_list {
                 all_device_data.push(crate::services::device_pdf_service::DeviceTestData {
                     device_type: device.device_type.clone(),
@@ -390,7 +424,7 @@ impl MedicalRecordService {
 
         // Add legacy single device if present
         if input.device_test_data.is_some() && input.device_type.is_some() && input.device_name.is_some() {
-            println!("📄 [PDF] Found legacy single device data");
+            log::debug!("[PDF] Found legacy single device data");
             all_device_data.push(crate::services::device_pdf_service::DeviceTestData {
                 device_type: input.device_type.unwrap(),
                 device_name: input.device_name.unwrap(),
@@ -402,13 +436,13 @@ impl MedicalRecordService {
 
         // Generate PDF if we have any device data
         if !all_device_data.is_empty() {
-            println!("📄 [PDF] Generating PDF with {} device samples...", all_device_data.len());
+            log::debug!("[PDF] Generating PDF with {} device samples...", all_device_data.len());
 
             // Get patient data for PDF generation
-            let patient_data = match Self::get_patient_for_pdf(pool, input.patient_id).await {
+            let patient_data = match Self::get_patient_for_pdf(db, input.patient_id).await {
                 Ok(p) => p,
                 Err(e) => {
-                    eprintln!("⚠️  Failed to get patient data for PDF: {}", e);
+                    log::warn!("Failed to get patient data for PDF: {}", e);
                     return Ok(record); // Return the record anyway, just skip PDF generation
                 }
             };
@@ -420,8 +454,8 @@ impl MedicalRecordService {
             }
 
             // Generate PDF with all devices
-            if let Err(e) = Self::generate_and_save_pdfs_multi(app_handle, pool, id, &patient_data, &all_device_data).await {
-                eprintln!("⚠️  Failed to generate PDFs: {}", e);
+            if let Err(e) = Self::generate_and_save_pdfs_multi(app_handle, db, id, &patient_data, &all_device_data).await {
+                log::warn!("Failed to generate PDFs: {}", e);
                 // Continue anyway - the record was created successfully
             }
         }
@@ -431,66 +465,69 @@ impl MedicalRecordService {
 
     /// Helper to get patient data for PDF generation
     async fn get_patient_for_pdf(
-        pool: &SqlitePool,
+        db: &DatabaseConnection,
         patient_id: i64,
     ) -> Result<crate::services::device_pdf_service::PatientData, String> {
         // Simple query - just get patient and species data
-        let row = sqlx::query(
-            "SELECT p.name, p.gender, p.date_of_birth, p.microchip_id, \
-             s.name as species_name \
-             FROM patients p \
-             LEFT JOIN species s ON p.species_id = s.id \
-             WHERE p.id = ?"
-        )
-        .bind(patient_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| format!("Failed to fetch patient: {}", e))?
-        .ok_or("Patient not found".to_string())?;
+        let row = db
+            .query_one(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "SELECT p.name, p.gender, p.date_of_birth, p.microchip_id, \
+                 s.name as species_name \
+                 FROM patients p \
+                 LEFT JOIN species s ON p.species_id = s.id \
+                 WHERE p.id = ?",
+                [patient_id.into()],
+            ))
+            .await
+            .map_err(|e| format!("Failed to fetch patient: {}", e))?
+            .ok_or("Patient not found".to_string())?;
 
-        let birthdate: Option<String> = row.try_get("date_of_birth").ok().flatten();
+        let birthdate: Option<String> = row.try_get("", "date_of_birth").ok();
 
         // Try to get owner information - prefer primary contact's full name, fall back to household name
-        println!("   🔍 Looking up owner for patient_id: {}", patient_id);
+        log::debug!("Looking up owner for patient_id: {}", patient_id);
 
-        let owner_result = sqlx::query_scalar::<_, String>(
-            "SELECT COALESCE( \
-                (SELECT p.first_name || ' ' || p.last_name \
-                 FROM people p \
-                 WHERE p.household_id = h.id AND p.is_primary = 1 \
-                 LIMIT 1), \
-                h.household_name \
-             ) as owner_name \
-             FROM households h \
-             JOIN patient_households ph ON h.id = ph.household_id \
-             WHERE ph.patient_id = ? \
-             LIMIT 1"
-        )
-        .bind(patient_id)
-        .fetch_optional(pool)
-        .await;
+        let owner_result = db
+            .query_one(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "SELECT COALESCE( \
+                    (SELECT p.first_name || ' ' || p.last_name \
+                     FROM people p \
+                     WHERE p.household_id = h.id AND p.is_primary = 1 \
+                     LIMIT 1), \
+                    h.household_name \
+                 ) as owner_name \
+                 FROM households h \
+                 JOIN patient_households ph ON h.id = ph.household_id \
+                 WHERE ph.patient_id = ? \
+                 LIMIT 1",
+                [patient_id.into()],
+            ))
+            .await;
 
         let owner = match owner_result {
-            Ok(Some(name)) => {
-                println!("   ✅ Found owner: {}", name);
+            Ok(Some(r)) => {
+                let name: String = r.try_get("", "owner_name").unwrap_or_default();
+                log::debug!("Found owner: {}", name);
                 name
             }
             Ok(None) => {
-                println!("   ⚠️  No household link found for patient");
+                log::debug!("No household link found for patient");
                 String::new() // Empty string - PDF will skip owner row
             }
             Err(e) => {
-                println!("   ❌ Owner query failed: {}", e);
+                log::warn!("Owner query failed: {}", e);
                 String::new() // Empty string - PDF will skip owner row
             }
         };
 
         Ok(crate::services::device_pdf_service::PatientData {
-            name: row.get("name"),
+            name: row.try_get("", "name").unwrap_or_default(),
             owner,
-            species: row.try_get("species_name").ok().flatten().unwrap_or_else(|| "Unknown Species".to_string()),
-            microchip_id: row.try_get("microchip_id").ok().flatten(),
-            gender: row.try_get("gender").ok().flatten().unwrap_or_else(|| "Unknown".to_string()),
+            species: row.try_get::<String>("", "species_name").ok().unwrap_or_else(|| "Unknown Species".to_string()),
+            microchip_id: row.try_get("", "microchip_id").ok(),
+            gender: row.try_get::<String>("", "gender").ok().unwrap_or_else(|| "Unknown".to_string()),
             date_of_birth: birthdate,
         })
     }
@@ -498,7 +535,7 @@ impl MedicalRecordService {
     /// Generate Java PDF report with multiple device samples and save as attachment
     async fn generate_and_save_pdfs_multi(
         app_handle: &tauri::AppHandle,
-        pool: &SqlitePool,
+        db: &DatabaseConnection,
         medical_record_id: i64,
         patient_data: &crate::services::device_pdf_service::PatientData,
         device_data_list: &[crate::services::device_pdf_service::DeviceTestData],
@@ -527,7 +564,7 @@ impl MedicalRecordService {
         let pdf_path = reports_dir.join(&pdf_filename);
 
         // Generate Java PDF with all devices
-        println!("   ☕ Generating combined PDF report using Java...");
+        log::debug!("Generating combined PDF report using Java...");
         JavaPdfService::generate_pdf_multi(
             app_handle,
             pdf_path.to_str().ok_or("Invalid PDF path")?,
@@ -551,7 +588,7 @@ impl MedicalRecordService {
         // Save PDF as attachment
         Self::save_pdf_attachment(
             app_handle,
-            pool,
+            db,
             medical_record_id,
             &pdf_path,
             &pdf_filename,
@@ -560,7 +597,7 @@ impl MedicalRecordService {
             device_name_str
         ).await?;
 
-        println!("✅ PDF report generated and saved as attachment");
+        log::debug!("PDF report generated and saved as attachment");
         Ok(())
     }
 
@@ -568,18 +605,18 @@ impl MedicalRecordService {
     #[allow(dead_code)]
     async fn generate_and_save_pdfs(
         app_handle: &tauri::AppHandle,
-        pool: &SqlitePool,
+        db: &DatabaseConnection,
         medical_record_id: i64,
         patient_data: &crate::services::device_pdf_service::PatientData,
         device_data: &crate::services::device_pdf_service::DeviceTestData,
     ) -> Result<(), String> {
-        Self::generate_and_save_pdfs_multi(app_handle, pool, medical_record_id, patient_data, &[device_data.clone()]).await
+        Self::generate_and_save_pdfs_multi(app_handle, db, medical_record_id, patient_data, &[device_data.clone()]).await
     }
 
     /// Save a PDF file as an attachment to a medical record
     async fn save_pdf_attachment(
         app_handle: &tauri::AppHandle,
-        pool: &SqlitePool,
+        db: &DatabaseConnection,
         medical_record_id: i64,
         pdf_path: &std::path::Path,
         filename: &str,
@@ -612,128 +649,139 @@ impl MedicalRecordService {
         std::fs::copy(pdf_path, &dest_path)
             .map_err(|e| format!("Failed to copy {} PDF to storage: {}", pdf_type, e))?;
 
-        println!("   📁 Copied {} PDF to: {}", pdf_type, dest_path.display());
+        log::debug!("Copied {} PDF to: {}", pdf_type, dest_path.display());
 
         // Create attachment record
         let now = chrono::Utc::now();
-        sqlx::query(
+        db.execute(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
             "INSERT INTO medical_attachments \
              (medical_record_id, file_id, original_name, mime_type, file_size, uploaded_at, device_type, device_name, connection_method, attachment_type) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-        )
-        .bind(medical_record_id)
-        .bind(&file_id)
-        .bind(filename)
-        .bind("application/pdf")
-        .bind(pdf_bytes.len() as i64)
-        .bind(now)
-        .bind(format!("{}_report", device_type))
-        .bind(format!("{} Report ({})", device_name, pdf_type))
-        .bind("pdf_generation")
-        .bind("generated_pdf") // Attachment type for auto-generated PDFs
-        .execute(pool)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                medical_record_id.into(),
+                file_id.clone().into(),
+                filename.into(),
+                "application/pdf".into(),
+                (pdf_bytes.len() as i64).into(),
+                now.to_rfc3339().into(),
+                format!("{}_report", device_type).into(),
+                format!("{} Report ({})", device_name, pdf_type).into(),
+                "pdf_generation".into(),
+                "generated_pdf".into(),
+            ],
+        ))
         .await
         .map_err(|e| format!("Failed to create attachment record: {}", e))?;
 
-        println!("   💾 Saved {} PDF attachment: {} (file_id: {})", pdf_type, filename, file_id);
+        log::debug!("Saved {} PDF attachment: {} (file_id: {})", pdf_type, filename, file_id);
 
         Ok(())
     }
 
     pub async fn update_medical_record(
-        pool: &SqlitePool,
+        db: &DatabaseConnection,
         record_id: i64,
         updates: UpdateMedicalRecordInput,
     ) -> Result<MedicalRecord, String> {
         let now = Utc::now();
 
         // Fetch current record for diffing/history
-        let old_row = sqlx::query(
-            "SELECT id, patient_id, record_type, name, procedure_name, description, \
-             price, currency_id, is_archived, version, created_at, updated_at, \
-             created_by, updated_by \
-             FROM medical_records WHERE id = ?"
-        )
-        .bind(record_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| format!("Failed to fetch existing medical record: {}", e))?
-        .ok_or("Medical record not found".to_string())?;
+        let old_row = db
+            .query_one(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "SELECT id, patient_id, record_type, name, procedure_name, description, \
+                 price, currency_id, is_archived, version, created_at, updated_at, \
+                 created_by, updated_by \
+                 FROM medical_records WHERE id = ?",
+                [record_id.into()],
+            ))
+            .await
+            .map_err(|e| format!("Failed to fetch existing medical record: {}", e))?
+            .ok_or("Medical record not found".to_string())?;
 
-        // Build dynamic update query
-        let mut update_fields = Vec::new();
-        if updates.name.is_some() {
-            update_fields.push("name = ?1");
+        // Build dynamic update query with sequential placeholders
+        let mut update_parts: Vec<&str> = Vec::new();
+        let mut params: Vec<Value> = Vec::new();
+
+        if let Some(ref name) = updates.name {
+            update_parts.push("name = ?");
+            params.push(name.clone().into());
         }
-        if updates.procedure_name.is_some() {
-            update_fields.push("procedure_name = ?2");
+        if let Some(ref procedure_name) = updates.procedure_name {
+            update_parts.push("procedure_name = ?");
+            params.push(procedure_name.clone().into());
         }
-        if updates.description.is_some() {
-            update_fields.push("description = ?3");
+        if let Some(ref description) = updates.description {
+            update_parts.push("description = ?");
+            params.push(description.clone().into());
         }
         // MaybeNull fields - check for Null or Value, not Undefined
-        if !matches!(updates.price, MaybeNull::Undefined) {
-            update_fields.push("price = ?4");
+        match &updates.price {
+            MaybeNull::Undefined => {},
+            MaybeNull::Null => {
+                update_parts.push("price = ?");
+                params.push(Value::Double(None));
+            },
+            MaybeNull::Value(v) => {
+                update_parts.push("price = ?");
+                params.push((*v).into());
+            },
         }
-        if !matches!(updates.currency_id, MaybeNull::Undefined) {
-            update_fields.push("currency_id = ?5");
+        match &updates.currency_id {
+            MaybeNull::Undefined => {},
+            MaybeNull::Null => {
+                update_parts.push("currency_id = ?");
+                params.push(Value::BigInt(None));
+            },
+            MaybeNull::Value(v) => {
+                update_parts.push("currency_id = ?");
+                params.push((*v).into());
+            },
         }
-        if updates.is_archived.is_some() {
-            update_fields.push("is_archived = ?6");
+        if let Some(is_archived) = updates.is_archived {
+            update_parts.push("is_archived = ?");
+            params.push((if is_archived { 1i32 } else { 0i32 }).into());
         }
 
-        if update_fields.is_empty() {
+        if update_parts.is_empty() {
             return Err("No fields to update".to_string());
         }
 
-        update_fields.push("updated_at = ?7");
-        update_fields.push("version = version + 1");
+        update_parts.push("updated_at = ?");
+        params.push(now.to_rfc3339().into());
+
+        update_parts.push("version = version + 1");
+
+        // Add record_id at the end for WHERE clause
+        params.push(record_id.into());
 
         let query = format!(
-            "UPDATE medical_records SET {} WHERE id = ?8",
-            update_fields.join(", ")
+            "UPDATE medical_records SET {} WHERE id = ?",
+            update_parts.join(", ")
         );
 
-        // Convert MaybeNull to Option for binding
-        let price_opt: Option<f64> = match &updates.price {
-            MaybeNull::Undefined => None, // Won't be used since field not in query
-            MaybeNull::Null => None,
-            MaybeNull::Value(v) => Some(*v),
-        };
-        let currency_id_opt: Option<i64> = match &updates.currency_id {
-            MaybeNull::Undefined => None, // Won't be used since field not in query
-            MaybeNull::Null => None,
-            MaybeNull::Value(v) => Some(*v),
-        };
-
-        sqlx::query(&query)
-            .bind(&updates.name)
-            .bind(&updates.procedure_name)
-            .bind(&updates.description)
-            .bind(price_opt)
-            .bind(currency_id_opt)
-            .bind(updates.is_archived)
-            .bind(now)
-            .bind(record_id)
-            .execute(pool)
+        db.execute(Statement::from_sql_and_values(DbBackend::Sqlite, &query, params))
             .await
             .map_err(|e| format!("Failed to update medical record: {}", e))?;
 
         // Fetch the updated record
-        let row = sqlx::query(
-            "SELECT id, patient_id, record_type, name, procedure_name, description, \
-             price, currency_id, is_archived, version, created_at, updated_at, \
-             created_by, updated_by \
-             FROM medical_records WHERE id = ?"
-        )
-        .bind(record_id)
-        .fetch_one(pool)
-        .await
-        .map_err(|e| format!("Failed to fetch updated medical record: {}", e))?;
+        let row = db
+            .query_one(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "SELECT id, patient_id, record_type, name, procedure_name, description, \
+                 price, currency_id, is_archived, version, created_at, updated_at, \
+                 created_by, updated_by \
+                 FROM medical_records WHERE id = ?",
+                [record_id.into()],
+            ))
+            .await
+            .map_err(|e| format!("Failed to fetch updated medical record: {}", e))?
+            .ok_or("Updated record not found".to_string())?;
 
-        let is_archived_int: i64 = row.get("is_archived");
-        let created_at_str: Option<String> = row.try_get("created_at").ok();
-        let updated_at_str: Option<String> = row.try_get("updated_at").ok();
+        let is_archived_int: i64 = row.try_get("", "is_archived").unwrap_or(0);
+        let created_at_str: Option<String> = row.try_get("", "created_at").ok();
+        let updated_at_str: Option<String> = row.try_get("", "updated_at").ok();
 
         let created_at = created_at_str
             .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
@@ -746,43 +794,44 @@ impl MedicalRecordService {
             .unwrap_or_else(|| Utc::now());
 
         // Handle price as either integer or float
-        let price: Option<f64> = row.try_get::<Option<i64>, _>("price")
+        let price: Option<f64> = row.try_get::<i64>("", "price")
             .ok()
-            .flatten()
             .map(|i| i as f64)
-            .or_else(|| row.try_get("price").ok().flatten());
+            .or_else(|| row.try_get::<f64>("", "price").ok());
 
         let updated_record = MedicalRecord {
-            id: row.get("id"),
-            patient_id: row.get("patient_id"),
-            record_type: row.get("record_type"),
-            name: row.get("name"),
-            procedure_name: row.get("procedure_name"),
-            description: row.get("description"),
+            id: row.try_get("", "id").unwrap_or(0),
+            patient_id: row.try_get("", "patient_id").unwrap_or(0),
+            record_type: row.try_get("", "record_type").unwrap_or_default(),
+            name: row.try_get("", "name").unwrap_or_default(),
+            procedure_name: row.try_get("", "procedure_name").ok(),
+            description: row.try_get("", "description").unwrap_or_default(),
             price,
-            currency_id: row.get("currency_id"),
+            currency_id: row.try_get("", "currency_id").ok(),
             is_archived: is_archived_int != 0,
-            version: row.get("version"),
+            version: row.try_get("", "version").unwrap_or(1),
             created_at,
             updated_at,
-            created_by: row.get("created_by"),
-            updated_by: row.get("updated_by"),
+            created_by: row.try_get("", "created_by").ok(),
+            updated_by: row.try_get("", "updated_by").ok(),
             attachments: None,
         };
 
         // Build full snapshot history entry
         // Old snapshot
-        let old_is_archived_int: Option<i64> = old_row.try_get("is_archived").ok();
-        let old_is_archived = old_is_archived_int.map(|i| i != 0).unwrap_or(false);
-        let old_price_int: Option<i64> = old_row.try_get("price").ok();
-        let old_price: Option<f64> = old_price_int.map(|i| i as f64).or_else(|| old_row.try_get("price").ok());
+        let old_is_archived_int: i64 = old_row.try_get("", "is_archived").unwrap_or(0);
+        let old_is_archived = old_is_archived_int != 0;
+        let old_price: Option<f64> = old_row.try_get::<i64>("", "price")
+            .ok()
+            .map(|i| i as f64)
+            .or_else(|| old_row.try_get::<f64>("", "price").ok());
         let old_snapshot = json!({
-            "record_type": old_row.try_get::<String,_>("record_type").unwrap_or_default(),
-            "name": old_row.try_get::<Option<String>,_>("name").ok().flatten(),
-            "procedure_name": old_row.try_get::<Option<String>,_>("procedure_name").ok().flatten(),
-            "description": old_row.try_get::<Option<String>,_>("description").ok().flatten(),
+            "record_type": old_row.try_get::<String>("", "record_type").unwrap_or_default(),
+            "name": old_row.try_get::<String>("", "name").ok(),
+            "procedure_name": old_row.try_get::<String>("", "procedure_name").ok(),
+            "description": old_row.try_get::<String>("", "description").ok(),
             "price": old_price,
-            "currency_id": old_row.try_get::<Option<i64>,_>("currency_id").ok().flatten(),
+            "currency_id": old_row.try_get::<i64>("", "currency_id").ok(),
             "is_archived": old_is_archived
         });
 
@@ -807,39 +856,39 @@ impl MedicalRecordService {
         if old_snapshot.get("currency_id") != new_snapshot.get("currency_id") { changed_fields.push("currency_id"); }
         if old_snapshot.get("is_archived") != new_snapshot.get("is_archived") { changed_fields.push("is_archived"); }
 
-        println!(
-            "History snapshot insert (update): rec_id={}, version={}, fields={}",
-            record_id,
-            updated_record.version,
-            changed_fields.join(",")
-        );
-        let _ = sqlx::query(
-            "INSERT INTO medical_record_history (medical_record_id, version, changed_fields, old_values, new_values, changed_by) VALUES (?, ?, ?, ?, ?, ?)"
-        )
-        .bind(record_id)
-        .bind(updated_record.version)
-        .bind(changed_fields.join(","))
-        .bind(old_snapshot.to_string())
-        .bind(new_snapshot.to_string())
-        .bind(&updated_record.updated_by)
-        .execute(pool)
-        .await;
+        log::debug!("History snapshot insert (update): rec_id={}, version={}, fields={}", record_id, updated_record.version, changed_fields.join(","));
+        let _ = db
+            .execute(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "INSERT INTO medical_record_history (medical_record_id, version, changed_fields, old_values, new_values, changed_by) VALUES (?, ?, ?, ?, ?, ?)",
+                [
+                    record_id.into(),
+                    updated_record.version.into(),
+                    changed_fields.join(",").into(),
+                    old_snapshot.to_string().into(),
+                    new_snapshot.to_string().into(),
+                    Value::String(updated_record.updated_by.clone().map(Box::new)),
+                ],
+            ))
+            .await;
 
         Ok(updated_record)
     }
 
     pub async fn archive_medical_record(
-        pool: &SqlitePool,
+        db: &DatabaseConnection,
         record_id: i64,
         archive: bool,
     ) -> Result<(), String> {
-        sqlx::query(
-            "UPDATE medical_records SET is_archived = ?, updated_at = ? WHERE id = ?"
-        )
-        .bind(archive)
-        .bind(Utc::now())
-        .bind(record_id)
-        .execute(pool)
+        db.execute(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "UPDATE medical_records SET is_archived = ?, updated_at = ? WHERE id = ?",
+            [
+                (if archive { 1i32 } else { 0i32 }).into(),
+                Utc::now().to_rfc3339().into(),
+                record_id.into(),
+            ],
+        ))
         .await
         .map_err(|e| format!("Failed to archive medical record: {}", e))?;
 
@@ -847,40 +896,47 @@ impl MedicalRecordService {
     }
 
     pub async fn search_medical_records(
-        pool: &SqlitePool,
+        db: &DatabaseConnection,
         patient_id: i64,
         search_term: &str,
         include_archived: bool,
     ) -> Result<Vec<MedicalRecord>, String> {
-        let mut query = "SELECT id, patient_id, record_type, name, procedure_name, description, \
-                         price, currency_id, is_archived, version, created_at, updated_at, \
-                         created_by, updated_by \
-                         FROM medical_records \
-                         WHERE patient_id = ? \
-                         AND (name LIKE ? OR description LIKE ? OR procedure_name LIKE ?)".to_string();
+        let mut sql = String::from(
+            "SELECT id, patient_id, record_type, name, procedure_name, description, \
+             price, currency_id, is_archived, version, created_at, updated_at, \
+             created_by, updated_by \
+             FROM medical_records \
+             WHERE patient_id = ? \
+             AND (name LIKE ? OR description LIKE ? OR procedure_name LIKE ?)"
+        );
 
         if !include_archived {
-            query.push_str(" AND is_archived = 0");
+            sql.push_str(" AND is_archived = 0");
         }
 
-        query.push_str(" ORDER BY created_at DESC");
+        sql.push_str(" ORDER BY created_at DESC");
 
         let search_pattern = format!("%{}%", search_term);
 
-        let rows = sqlx::query(&query)
-            .bind(patient_id)
-            .bind(&search_pattern)
-            .bind(&search_pattern)
-            .bind(&search_pattern)
-            .fetch_all(pool)
+        let rows = db
+            .query_all(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                &sql,
+                [
+                    patient_id.into(),
+                    search_pattern.clone().into(),
+                    search_pattern.clone().into(),
+                    search_pattern.into(),
+                ],
+            ))
             .await
             .map_err(|e| format!("Failed to search medical records: {}", e))?;
 
         let mut records = Vec::new();
         for row in rows {
-            let is_archived_int: i64 = row.get("is_archived");
-            let created_at_str: Option<String> = row.try_get("created_at").ok();
-            let updated_at_str: Option<String> = row.try_get("updated_at").ok();
+            let is_archived_int: i64 = row.try_get("", "is_archived").unwrap_or(0);
+            let created_at_str: Option<String> = row.try_get("", "created_at").ok();
+            let updated_at_str: Option<String> = row.try_get("", "updated_at").ok();
 
             let created_at = created_at_str
                 .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
@@ -893,108 +949,119 @@ impl MedicalRecordService {
                 .unwrap_or_else(|| Utc::now());
 
             // Handle price as either integer or float
-            let price: Option<f64> = row.try_get::<Option<i64>, _>("price")
+            let price: Option<f64> = row.try_get::<i64>("", "price")
                 .ok()
-                .flatten()
                 .map(|i| i as f64)
-                .or_else(|| row.try_get("price").ok().flatten());
+                .or_else(|| row.try_get::<f64>("", "price").ok());
 
             records.push(MedicalRecord {
-                id: row.get("id"),
-                patient_id: row.get("patient_id"),
-                record_type: row.get("record_type"),
-                name: row.get("name"),
-                procedure_name: row.get("procedure_name"),
-                description: row.get("description"),
+                id: row.try_get("", "id").unwrap_or(0),
+                patient_id: row.try_get("", "patient_id").unwrap_or(0),
+                record_type: row.try_get("", "record_type").unwrap_or_default(),
+                name: row.try_get("", "name").unwrap_or_default(),
+                procedure_name: row.try_get("", "procedure_name").ok(),
+                description: row.try_get("", "description").unwrap_or_default(),
                 price,
-                currency_id: row.get("currency_id"),
+                currency_id: row.try_get("", "currency_id").ok(),
                 is_archived: is_archived_int != 0,
-                version: row.get("version"),
+                version: row.try_get("", "version").unwrap_or(1),
                 created_at,
                 updated_at,
-                created_by: row.get("created_by"),
-                updated_by: row.get("updated_by"),
+                created_by: row.try_get("", "created_by").ok(),
+                updated_by: row.try_get("", "updated_by").ok(),
                 attachments: None,
             });
         }
         Ok(records)
     }
 
-    pub async fn get_currencies(pool: &SqlitePool) -> Result<Vec<Currency>, String> {
-        let currencies = sqlx::query_as::<_, Currency>(
-            "SELECT id, code, name, symbol FROM currencies ORDER BY id"
-        )
-        .fetch_all(pool)
-        .await
-        .map_err(|e| format!("Failed to fetch currencies: {}", e))?;
+    pub async fn get_currencies(db: &DatabaseConnection) -> Result<Vec<Currency>, String> {
+        let rows = db
+            .query_all(Statement::from_string(
+                DbBackend::Sqlite,
+                "SELECT id, code, name, symbol FROM currencies ORDER BY id".to_string(),
+            ))
+            .await
+            .map_err(|e| format!("Failed to fetch currencies: {}", e))?;
 
-        println!("DEBUG: Fetched currencies from DB: {:?}", currencies);
+        let currencies: Vec<Currency> = rows
+            .iter()
+            .filter_map(|row| {
+                Some(Currency {
+                    id: row.try_get("", "id").ok()?,
+                    code: row.try_get("", "code").ok()?,
+                    name: row.try_get("", "name").ok()?,
+                    symbol: row.try_get("", "symbol").ok(),
+                })
+            })
+            .collect();
+
+        log::debug!("Fetched currencies from DB: {:?}", currencies);
         Ok(currencies)
     }
 
     // Get a record snapshot at a specific version using history new_values
     pub async fn get_record_at_version(
-        pool: &SqlitePool,
+        db: &DatabaseConnection,
         record_id: i64,
         version: i32,
     ) -> Result<MedicalRecord, String> {
         // Fetch base record
-        let row = sqlx::query(
-            "SELECT id, patient_id, record_type, name, procedure_name, description, \
-             price, currency_id, is_archived, version, created_at, updated_at, \
-             created_by, updated_by \
-             FROM medical_records WHERE id = ?"
-        )
-        .bind(record_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| format!("Failed to fetch medical record: {}", e))?
-        .ok_or("Medical record not found".to_string())?;
+        let row = db
+            .query_one(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "SELECT id, patient_id, record_type, name, procedure_name, description, \
+                 price, currency_id, is_archived, version, created_at, updated_at, \
+                 created_by, updated_by \
+                 FROM medical_records WHERE id = ?",
+                [record_id.into()],
+            ))
+            .await
+            .map_err(|e| format!("Failed to fetch medical record: {}", e))?
+            .ok_or("Medical record not found".to_string())?;
 
         let mut base = MedicalRecord {
-            id: row.get("id"),
-            patient_id: row.get("patient_id"),
-            record_type: row.get("record_type"),
-            name: row.get("name"),
-            procedure_name: row.get("procedure_name"),
-            description: row.get("description"),
-            price: row
-                .try_get::<Option<i64>, _>("price")
+            id: row.try_get("", "id").unwrap_or(0),
+            patient_id: row.try_get("", "patient_id").unwrap_or(0),
+            record_type: row.try_get("", "record_type").unwrap_or_default(),
+            name: row.try_get("", "name").unwrap_or_default(),
+            procedure_name: row.try_get("", "procedure_name").ok(),
+            description: row.try_get("", "description").unwrap_or_default(),
+            price: row.try_get::<i64>("", "price")
                 .ok()
-                .flatten()
                 .map(|i| i as f64)
-                .or_else(|| row.try_get("price").ok().flatten()),
-            currency_id: row.get("currency_id"),
+                .or_else(|| row.try_get::<f64>("", "price").ok()),
+            currency_id: row.try_get("", "currency_id").ok(),
             is_archived: {
-                let v: i64 = row.get("is_archived");
+                let v: i64 = row.try_get("", "is_archived").unwrap_or(0);
                 v != 0
             },
-            version: row.get("version"),
+            version: row.try_get("", "version").unwrap_or(1),
             created_at: {
-                let s: Option<String> = row.try_get("created_at").ok();
+                let s: Option<String> = row.try_get("", "created_at").ok();
                 s.and_then(|s| DateTime::parse_from_rfc3339(&s).ok()).map(|d| d.with_timezone(&Utc)).unwrap_or_else(|| Utc::now())
             },
             updated_at: {
-                let s: Option<String> = row.try_get("updated_at").ok();
+                let s: Option<String> = row.try_get("", "updated_at").ok();
                 s.and_then(|s| DateTime::parse_from_rfc3339(&s).ok()).map(|d| d.with_timezone(&Utc)).unwrap_or_else(|| Utc::now())
             },
-            created_by: row.get("created_by"),
-            updated_by: row.get("updated_by"),
+            created_by: row.try_get("", "created_by").ok(),
+            updated_by: row.try_get("", "updated_by").ok(),
             attachments: None,
         };
 
         // Fetch history snapshot
-        let hrow = sqlx::query(
-            "SELECT new_values FROM medical_record_history WHERE medical_record_id = ? AND version = ?"
-        )
-        .bind(record_id)
-        .bind(version)
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| format!("Failed to fetch history: {}", e))?;
+        let hrow = db
+            .query_one(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "SELECT new_values FROM medical_record_history WHERE medical_record_id = ? AND version = ?",
+                [record_id.into(), version.into()],
+            ))
+            .await
+            .map_err(|e| format!("Failed to fetch history: {}", e))?;
 
         if let Some(hr) = hrow {
-            let json_str: String = hr.get("new_values");
+            let json_str: String = hr.try_get("", "new_values").unwrap_or_default();
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(&json_str) {
                 if let Some(rt) = v.get("record_type").and_then(|x| x.as_str()) { base.record_type = rt.to_string(); }
                 if let Some(nm) = v.get("name").and_then(|x| x.as_str()) { base.name = nm.to_string(); }
@@ -1012,21 +1079,22 @@ impl MedicalRecordService {
 
     // Revert a record one step to its previous version using latest history old_values
     pub async fn revert_one_step(
-        pool: &SqlitePool,
+        db: &DatabaseConnection,
         record_id: i64,
     ) -> Result<MedicalRecord, String> {
         // Fetch latest history entry
-        let row = sqlx::query(
-            "SELECT version, old_values FROM medical_record_history \
-             WHERE medical_record_id = ? ORDER BY version DESC LIMIT 1"
-        )
-        .bind(record_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| format!("Failed to fetch history: {}", e))?
-        .ok_or("No history available to revert".to_string())?;
+        let row = db
+            .query_one(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "SELECT version, old_values FROM medical_record_history \
+                 WHERE medical_record_id = ? ORDER BY version DESC LIMIT 1",
+                [record_id.into()],
+            ))
+            .await
+            .map_err(|e| format!("Failed to fetch history: {}", e))?
+            .ok_or("No history available to revert".to_string())?;
 
-        let old_values_str: Option<String> = row.try_get("old_values").ok();
+        let old_values_str: Option<String> = row.try_get("", "old_values").ok();
         if old_values_str.is_none() {
             return Err("No previous values recorded to revert".to_string());
         }
@@ -1073,6 +1141,6 @@ impl MedicalRecordService {
             return Err("No revertable fields in previous version".to_string());
         }
 
-        Self::update_medical_record(pool, record_id, updates).await
+        Self::update_medical_record(db, record_id, updates).await
     }
 }

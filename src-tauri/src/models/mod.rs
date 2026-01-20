@@ -74,6 +74,6 @@ pub use breed::{
 };
 #[allow(unused_imports)]
 pub use device_integration::{
-    DeviceIntegration, DeviceIntegrationRow, DeviceType, ConnectionType,
+    DeviceIntegration, DeviceType, ConnectionType,
     CreateDeviceIntegrationInput, UpdateDeviceIntegrationInput
 };

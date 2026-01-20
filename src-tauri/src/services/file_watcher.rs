@@ -2,7 +2,7 @@ use notify::{Watcher, RecursiveMode, Event, Result as NotifyResult, EventKind};
 use std::path::PathBuf;
 use std::sync::mpsc::channel;
 use glob::Pattern;
-use sqlx::{SqlitePool, Row};
+use sea_orm::{DatabaseConnection, ConnectionTrait, Statement, DbBackend};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -10,7 +10,7 @@ use tauri::Manager;
 use serde::{Serialize, Deserialize};
 use crate::services::device_parser::DeviceParserService;
 use crate::services::file_storage::FileStorageService;
-use crate::commands::file_history::record_device_file_access_internal;
+use crate::commands::file_history::record_device_file_access_internal_seaorm;
 
 // Track connection status for file watchers
 static FILE_WATCHER_STATUS: OnceLock<Mutex<HashMap<i64, FileWatcherStatus>>> = OnceLock::new();
@@ -91,15 +91,15 @@ fn remove_file_watcher_status(integration_id: i64) {
 }
 
 pub struct FileWatcherService {
-    pool: SqlitePool,
+    db: Arc<DatabaseConnection>,
     watchers: HashMap<i64, notify::RecommendedWatcher>,
     app_handle: Option<tauri::AppHandle>,
 }
 
 impl FileWatcherService {
-    pub fn new(pool: SqlitePool) -> Self {
+    pub fn new(db: Arc<DatabaseConnection>) -> Self {
         Self {
-            pool,
+            db,
             watchers: HashMap::new(),
             app_handle: None,
         }
@@ -114,14 +114,15 @@ impl FileWatcherService {
         log::info!("🔍 Initializing file watchers for enabled device integrations...");
 
         // Query all enabled file-watch device integrations
-        let integrations = sqlx::query(
+        let integrations = self.db.query_all(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
             "SELECT id, name, watch_directory, file_pattern, device_type
              FROM device_integrations
              WHERE connection_type = 'file_watch'
                AND enabled = 1
-               AND deleted_at IS NULL"
-        )
-        .fetch_all(&self.pool)
+               AND deleted_at IS NULL",
+            []
+        ))
         .await
         .map_err(|e| {
             let error_msg = format!("Failed to query device integrations: {}", e);
@@ -138,11 +139,11 @@ impl FileWatcherService {
 
         // Set up watcher for each integration
         for row in integrations {
-            let id: i64 = row.get("id");
-            let name: String = row.get("name");
-            let watch_directory: Option<String> = row.get("watch_directory");
-            let file_pattern: Option<String> = row.get("file_pattern");
-            let device_type: String = row.get("device_type");
+            let id: i64 = row.try_get("", "id").map_err(|e| format!("Failed to get id: {}", e))?;
+            let name: String = row.try_get("", "name").map_err(|e| format!("Failed to get name: {}", e))?;
+            let watch_directory: Option<String> = row.try_get("", "watch_directory").ok();
+            let file_pattern: Option<String> = row.try_get("", "file_pattern").ok();
+            let device_type: String = row.try_get("", "device_type").map_err(|e| format!("Failed to get device_type: {}", e))?;
 
             log::info!("   📂 Setting up file watcher - ID: {}, Name: '{}', Device: {}",
                 id, name, device_type);
@@ -219,7 +220,7 @@ impl FileWatcherService {
         let device_type_clone = device_type.to_string();
         let _dir_clone = directory.to_string();
         let app_handle_clone = self.app_handle.clone();
-        let pool_clone = self.pool.clone();
+        let db_clone = self.db.clone();
 
         // Create a deduplication cache (file path -> last processed timestamp)
         let processed_files: Arc<Mutex<HashMap<String, u64>>> = Arc::new(Mutex::new(HashMap::new()));
@@ -318,7 +319,7 @@ impl FileWatcherService {
 
                                                         // Save file and track access (async)
                                                         let app_handle_track = app_handle.clone();
-                                                        let pool_track = pool_clone.clone();
+                                                        let db_track = db_clone.clone();
                                                         let file_name_track = file_name_str.clone();
                                                         let file_data_track = file_data.clone();
                                                         let device_type_track = device_type_clone.clone();
@@ -335,8 +336,8 @@ impl FileWatcherService {
                                                                     let file_size = file_data_track.len() as i64;
                                                                     log::info!("   📊 Recording file access - Size: {} bytes", file_size);
 
-                                                                    if let Err(e) = record_device_file_access_internal(
-                                                                        &pool_track,
+                                                                    if let Err(e) = record_device_file_access_internal_seaorm(
+                                                                        &*db_track,
                                                                         file_id,
                                                                         file_name_track.clone(),
                                                                         file_path,

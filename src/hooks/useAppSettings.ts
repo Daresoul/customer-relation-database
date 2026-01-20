@@ -5,11 +5,12 @@ import { useEffect } from 'react';
 import { App } from 'antd';
 import { updateDateFormatInStorage } from '../utils/dateFormatter';
 import { useTheme } from '../contexts/ThemeContext';
+import { createMutationErrorHandler } from '../utils/errors';
 
 export const useAppSettings = () => {
   const { notification } = App.useApp();
   const queryClient = useQueryClient();
-  const { i18n } = useTranslation();
+  const { i18n, t } = useTranslation('errors');
   const { setThemeMode } = useTheme();
 
   const { data, isLoading, error } = useQuery({
@@ -52,16 +53,7 @@ export const useAppSettings = () => {
         duration: 3,
       });
     },
-    onError: (error) => {
-      console.error('Failed to update settings:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      notification.error({
-        message: 'Failed to Update Settings',
-        description: `${i18n.t('common:operationFailed')}: ${errorMessage}`,
-        placement: 'bottomRight',
-        duration: 5,
-      });
-    },
+    onError: createMutationErrorHandler(notification, 'Update Settings', t, 'useAppSettings'),
   });
 
   // Apply settings on load

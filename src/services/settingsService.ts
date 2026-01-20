@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api';
+import { ApiService } from './api';
 
 export interface AppSettings {
   id: number;
@@ -7,7 +7,6 @@ export interface AppSettings {
   currencyId: number | null;
   theme: 'light' | 'dark';
   dateFormat: string;
-  // Google Calendar integration
   googleCalendarSync?: boolean;
   createdAt: string;
   updatedAt: string;
@@ -30,17 +29,15 @@ export interface UpdateSettingsRequest {
   currencyId?: number;
   theme?: 'light' | 'dark';
   dateFormat?: string;
-  // Google Calendar integration
   googleCalendarSync?: boolean;
 }
 
 export class SettingsService {
   static async getSettings(): Promise<SettingsResponse> {
     try {
-      return await invoke<SettingsResponse>('get_app_settings');
-    } catch (error) {
-      console.error('Failed to get settings:', error);
-      // Return default settings
+      return await ApiService.invoke<SettingsResponse>('get_app_settings');
+    } catch {
+      // Return default settings on error
       return {
         settings: {
           id: 0,
@@ -57,8 +54,7 @@ export class SettingsService {
   }
 
   static async updateSettings(updates: UpdateSettingsRequest): Promise<SettingsResponse> {
-    // Wrap the updates in an object to match the Tauri command's expected parameter
-    return await invoke<SettingsResponse>('update_app_settings', {
+    return ApiService.invoke<SettingsResponse>('update_app_settings', {
       updates: {
         language: updates.language,
         currencyId: updates.currencyId,
@@ -69,6 +65,6 @@ export class SettingsService {
   }
 
   static async getCurrencies(): Promise<Currency[]> {
-    return await invoke<Currency[]>('get_currencies');
+    return ApiService.invoke<Currency[]>('get_currencies');
   }
 }

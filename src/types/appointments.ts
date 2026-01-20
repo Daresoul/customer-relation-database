@@ -2,22 +2,23 @@ export type AppointmentStatus = 'scheduled' | 'in_progress' | 'completed' | 'can
 
 export interface Appointment {
   id: number;
-  patient_id: number;
+  patientId: number;
   title: string;
   description?: string;
-  start_time: string;
-  end_time: string;
-  room_id?: number;
+  startTime: string;
+  endTime: string;
+  roomId?: number;
   status: AppointmentStatus;
-  created_at: string;
-  updated_at: string;
-  deleted_at?: string;
-  created_by: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string;
+  createdBy: string;
   // Additional fields for display
-  patient_name?: string;
+  patientName?: string;
   species?: string;
   breed?: string;
-  microchip_id?: string;
+  microchipId?: string;
+  roomName?: string;
 }
 
 export interface AppointmentDetail {
@@ -39,59 +40,59 @@ export interface Room {
   description?: string;
   capacity: number;
   color: string;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface CreateAppointmentInput {
-  patient_id: number;
+  patientId: number;
   title: string;
   description?: string;
-  start_time: string;
-  end_time: string;
-  room_id?: number;
+  startTime: string;
+  endTime: string;
+  roomId?: number;
 }
 
 export interface UpdateAppointmentInput {
   title?: string;
   description?: string;
-  start_time?: string;
-  end_time?: string;
-  room_id?: number;
+  startTime?: string;
+  endTime?: string;
+  roomId?: number;
   status?: AppointmentStatus;
 }
 
 export interface AppointmentFilter {
-  start_date?: string;
-  end_date?: string;
-  patient_id?: number;
-  room_id?: number;
+  startDate?: string;
+  endDate?: string;
+  patientId?: number;
+  roomId?: number;
   status?: AppointmentStatus;
-  include_deleted?: boolean;
-  include_cancelled?: boolean;
+  includeDeleted?: boolean;
+  includeCancelled?: boolean;
 }
 
 export interface AppointmentListResponse {
   appointments: Appointment[];
   total: number;
-  has_more: boolean;
+  hasMore: boolean;
 }
 
 export interface DuplicateAppointmentInput {
-  appointment_id: number;
-  target_date: string;
+  appointmentId: number;
+  targetDate: string;
 }
 
 export interface ConflictCheckInput {
-  start_time: string;
-  end_time: string;
-  room_id?: number;
-  exclude_appointment_id?: number;
+  startTime: string;
+  endTime: string;
+  roomId?: number;
+  excludeAppointmentId?: number;
 }
 
 export interface ConflictCheckResponse {
-  has_conflicts: boolean;
+  hasConflicts: boolean;
   conflicts: Appointment[];
 }
 
@@ -105,25 +106,25 @@ export interface UpdateRoomInput {
   name?: string;
   description?: string;
   capacity?: number;
-  is_active?: boolean;
+  isActive?: boolean;
 }
 
 export interface RoomFilter {
-  active_only?: boolean;
+  activeOnly?: boolean;
 }
 
 export interface RoomAvailability {
   room: Room;
-  is_available: boolean;
-  next_available?: string;
-  current_appointments: RoomAppointmentSlot[];
+  isAvailable: boolean;
+  nextAvailable?: string;
+  currentAppointments: RoomAppointmentSlot[];
 }
 
 export interface RoomAppointmentSlot {
-  appointment_id: number;
-  patient_name: string;
-  start_time: string;
-  end_time: string;
+  appointmentId: number;
+  patientName: string;
+  startTime: string;
+  endTime: string;
   status: string;
 }
 

@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/tauri';
+import { ApiService } from './api';
 import {
   Appointment,
   AppointmentDetail,
@@ -16,80 +16,80 @@ import {
   UpdateRoomInput,
 } from '../types/appointments';
 
-class AppointmentService {
+export class AppointmentService {
   // Appointment operations
-  async getAppointments(
+  static async getAppointments(
     filter: AppointmentFilter,
     limit: number = 20,
     offset: number = 0
   ): Promise<AppointmentListResponse> {
-    return invoke('get_appointments', { filter, limit, offset });
+    return ApiService.invoke('get_appointments', { filter, limit, offset });
   }
 
-  async getAppointment(id: number): Promise<AppointmentDetail> {
-    return invoke('get_appointment', { id });
+  static async getAppointment(id: number): Promise<AppointmentDetail> {
+    return ApiService.invoke('get_appointment', { id });
   }
 
-  async createAppointment(
+  static async createAppointment(
     input: CreateAppointmentInput,
     createdBy?: string
   ): Promise<Appointment> {
-    return invoke('create_appointment', { input, createdBy });
+    return ApiService.invoke('create_appointment', { input, createdBy });
   }
 
-  async updateAppointment(
+  static async updateAppointment(
     id: number,
     input: UpdateAppointmentInput,
     updatedBy?: string
   ): Promise<Appointment> {
-    return invoke('update_appointment', { id, input, updatedBy });
+    return ApiService.invoke('update_appointment', { id, input, updatedBy });
   }
 
-  async deleteAppointment(id: number): Promise<void> {
-    return invoke('delete_appointment', { id });
+  static async deleteAppointment(id: number): Promise<void> {
+    return ApiService.invoke('delete_appointment', { id });
   }
 
-  async checkConflicts(input: ConflictCheckInput): Promise<ConflictCheckResponse> {
-    return invoke('check_conflicts', { input });
+  static async checkConflicts(input: ConflictCheckInput): Promise<ConflictCheckResponse> {
+    return ApiService.invoke('check_conflicts', { input });
   }
 
-  async duplicateAppointment(
+  static async duplicateAppointment(
     input: DuplicateAppointmentInput,
     createdBy?: string
   ): Promise<Appointment> {
-    return invoke('duplicate_appointment', { input, createdBy });
+    return ApiService.invoke('duplicate_appointment', { input, createdBy });
   }
 
   // Room operations
-  async getRooms(filter?: RoomFilter): Promise<Room[]> {
-    return invoke('get_rooms', { filter });
+  static async getRooms(filter?: RoomFilter): Promise<Room[]> {
+    return ApiService.invoke('get_rooms', { filter });
   }
 
-  async getRoom(id: number): Promise<Room> {
-    return invoke('get_room', { id });
+  static async getRoom(id: number): Promise<Room> {
+    return ApiService.invoke('get_room', { id });
   }
 
-  async createRoom(input: CreateRoomInput): Promise<Room> {
-    return invoke('create_room', { input });
+  static async createRoom(input: CreateRoomInput): Promise<Room> {
+    return ApiService.invoke('create_room', { input });
   }
 
-  async updateRoom(id: number, input: UpdateRoomInput): Promise<Room> {
-    return invoke('update_room', { id, input });
+  static async updateRoom(id: number, input: UpdateRoomInput): Promise<Room> {
+    return ApiService.invoke('update_room', { id, input });
   }
 
-  async deleteRoom(id: number): Promise<void> {
-    return invoke('delete_room', { id });
+  static async deleteRoom(id: number): Promise<void> {
+    return ApiService.invoke('delete_room', { id });
   }
 
-  async getRoomAvailability(
+  static async getRoomAvailability(
     roomId: number,
     checkTime: string
   ): Promise<RoomAvailability> {
-    return invoke('get_room_availability', { roomId, checkTime });
+    return ApiService.invoke('get_room_availability', { roomId, checkTime });
   }
 
   // Helper methods
-  formatTimeSlot(date: Date): string {
+  static formatTimeSlot(date: Date): string {
     // Round to nearest 15 minutes
     const minutes = date.getMinutes();
     const roundedMinutes = Math.round(minutes / 15) * 15;
@@ -99,18 +99,18 @@ class AppointmentService {
     return date.toISOString();
   }
 
-  validateTimeSlot(date: Date): boolean {
+  static validateTimeSlot(date: Date): boolean {
     const minutes = date.getMinutes();
     return minutes % 15 === 0;
   }
 
-  calculateDuration(startTime: string, endTime: string): number {
+  static calculateDuration(startTime: string, endTime: string): number {
     const start = new Date(startTime);
     const end = new Date(endTime);
     return (end.getTime() - start.getTime()) / (1000 * 60); // Duration in minutes
   }
 
-  generateTimeSlots(
+  static generateTimeSlots(
     startHour: number = 8,
     endHour: number = 18,
     intervalMinutes: number = 15
@@ -135,7 +135,7 @@ class AppointmentService {
     return slots;
   }
 
-  getStatusColor(status: string): string {
+  static getStatusColor(status: string): string {
     const colors: Record<string, string> = {
       scheduled: '#1890ff',
       in_progress: '#faad14',
@@ -145,15 +145,37 @@ class AppointmentService {
     return colors[status] || '#d9d9d9';
   }
 
-  isAppointmentEditable(appointment: Appointment): boolean {
+  static isAppointmentEditable(appointment: Appointment): boolean {
     return (
       appointment.status === 'scheduled' &&
-      !appointment.deleted_at &&
-      new Date(appointment.start_time) > new Date()
+      !appointment.deletedAt &&
+      new Date(appointment.startTime) > new Date()
     );
   }
 }
 
-export const appointmentService = new AppointmentService();
+// Default export for backwards compatibility with hooks using instance methods
+const appointmentServiceInstance = {
+  getAppointments: AppointmentService.getAppointments,
+  getAppointment: AppointmentService.getAppointment,
+  createAppointment: AppointmentService.createAppointment,
+  updateAppointment: AppointmentService.updateAppointment,
+  deleteAppointment: AppointmentService.deleteAppointment,
+  checkConflicts: AppointmentService.checkConflicts,
+  duplicateAppointment: AppointmentService.duplicateAppointment,
+  getRooms: AppointmentService.getRooms,
+  getRoom: AppointmentService.getRoom,
+  createRoom: AppointmentService.createRoom,
+  updateRoom: AppointmentService.updateRoom,
+  deleteRoom: AppointmentService.deleteRoom,
+  getRoomAvailability: AppointmentService.getRoomAvailability,
+  formatTimeSlot: AppointmentService.formatTimeSlot,
+  validateTimeSlot: AppointmentService.validateTimeSlot,
+  calculateDuration: AppointmentService.calculateDuration,
+  generateTimeSlots: AppointmentService.generateTimeSlots,
+  getStatusColor: AppointmentService.getStatusColor,
+  isAppointmentEditable: AppointmentService.isAppointmentEditable,
+};
 
-export default new AppointmentService();
+export const appointmentService = appointmentServiceInstance;
+export default appointmentServiceInstance;

@@ -1,10 +1,10 @@
 use crate::services::device_input::{scan_ports, start_listen, stop_listen, get_all_connection_statuses, enrich_port_info_with_device_names, PortInfo, DeviceConnectionStatus};
 use crate::services::file_watcher::{get_all_file_watcher_statuses, FileWatcherStatus};
 use crate::services::device_integration::DeviceIntegrationService;
-use crate::database::connection::DatabasePool;
+use crate::database::SeaOrmPool;
 use crate::models::Patient;
 use tauri::{State, AppHandle};
-use sqlx::Row;
+use sea_orm::{ConnectionTrait, Statement, DbBackend};
 
 #[tauri::command]
 pub async fn get_available_ports() -> Result<Vec<PortInfo>, String> {
@@ -30,7 +30,7 @@ pub fn get_file_watcher_statuses() -> Vec<FileWatcherStatus> {
 #[tauri::command]
 pub async fn start_device_integration_listener(
     app_handle: AppHandle,
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     integration_id: i64,
 ) -> Result<(), String> {
     // Get the device integration from the database
@@ -58,7 +58,7 @@ pub async fn start_device_integration_listener(
 /// Stop listening to a device integration's serial port
 #[tauri::command]
 pub async fn stop_device_integration_listener(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     integration_id: i64,
 ) -> Result<(), String> {
     // Get the device integration from the database
@@ -75,13 +75,12 @@ pub async fn stop_device_integration_listener(
 /// Searches in order: microchip_id, name
 #[tauri::command]
 pub async fn resolve_patient_from_identifier(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     identifier: String,
 ) -> Result<Option<Patient>, String> {
-    let pool_guard = pool.lock().await;
-
     // First try to find by microchip ID (exact match)
-    let microchip_result = sqlx::query(
+    let microchip_result = pool.query_one(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
         "SELECT p.id, p.name, p.species_id, p.breed_id, p.gender, p.date_of_birth,
                 p.weight, p.medical_notes, p.is_active, p.created_at,
                 p.updated_at, p.microchip_id, p.color,
@@ -91,36 +90,19 @@ pub async fn resolve_patient_from_identifier(
          LEFT JOIN species s ON p.species_id = s.id
          LEFT JOIN breeds b ON p.breed_id = b.id
          WHERE p.microchip_id = ? AND p.is_active = 1
-         LIMIT 1"
-    )
-    .bind(&identifier)
-    .fetch_optional(&*pool_guard)
+         LIMIT 1",
+        [identifier.clone().into()]
+    ))
     .await
     .map_err(|e| format!("Database error: {}", e))?;
 
     if let Some(row) = microchip_result {
-        return Ok(Some(Patient {
-            id: row.get("id"),
-            name: row.get("name"),
-            species_id: row.get("species_id"),
-            breed_id: row.get("breed_id"),
-            species: row.get("species"),
-            breed: row.get("breed"),
-            color: row.get("color"),
-            gender: row.get("gender"),
-            date_of_birth: row.get("date_of_birth"),
-            weight: row.get("weight"),
-            medical_notes: row.get("medical_notes"),
-            is_active: row.get::<i64, _>("is_active") == 1,
-            household_id: None, // Not needed for device data resolution
-            created_at: row.get("created_at"),
-            updated_at: row.get("updated_at"),
-            microchip_id: row.get("microchip_id"),
-        }));
+        return Ok(Some(row_to_patient(&row)?));
     }
 
     // If not found by microchip, try by name (case-insensitive, partial match)
-    let name_result = sqlx::query(
+    let name_result = pool.query_one(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
         "SELECT p.id, p.name, p.species_id, p.breed_id, p.gender, p.date_of_birth,
                 p.weight, p.medical_notes, p.is_active, p.created_at,
                 p.updated_at, p.microchip_id, p.color,
@@ -136,36 +118,61 @@ pub async fn resolve_patient_from_identifier(
                 WHEN LOWER(p.name) LIKE LOWER(?) THEN 1  -- Starts with
                 ELSE 2  -- Contains
             END
-         LIMIT 1"
-    )
-    .bind(format!("%{}%", identifier))
-    .bind(&identifier)
-    .bind(format!("{}%", identifier))
-    .fetch_optional(&*pool_guard)
+         LIMIT 1",
+        [
+            format!("%{}%", identifier).into(),
+            identifier.clone().into(),
+            format!("{}%", identifier).into(),
+        ]
+    ))
     .await
     .map_err(|e| format!("Database error: {}", e))?;
 
     if let Some(row) = name_result {
-        return Ok(Some(Patient {
-            id: row.get("id"),
-            name: row.get("name"),
-            species_id: row.get("species_id"),
-            breed_id: row.get("breed_id"),
-            species: row.get("species"),
-            breed: row.get("breed"),
-            color: row.get("color"),
-            gender: row.get("gender"),
-            date_of_birth: row.get("date_of_birth"),
-            weight: row.get("weight"),
-            medical_notes: row.get("medical_notes"),
-            is_active: row.get::<i64, _>("is_active") == 1,
-            household_id: None, // Not needed for device data resolution
-            created_at: row.get("created_at"),
-            updated_at: row.get("updated_at"),
-            microchip_id: row.get("microchip_id"),
-        }));
+        return Ok(Some(row_to_patient(&row)?));
     }
 
     // No match found
     Ok(None)
+}
+
+fn row_to_patient(row: &sea_orm::QueryResult) -> Result<Patient, String> {
+    use chrono::{DateTime, Utc, NaiveDate};
+
+    // Parse date_of_birth from string to NaiveDate
+    let date_of_birth: Option<NaiveDate> = row.try_get::<Option<String>>("", "date_of_birth")
+        .unwrap_or(None)
+        .and_then(|s| NaiveDate::parse_from_str(&s, "%Y-%m-%d").ok());
+
+    // Parse created_at and updated_at from string to DateTime<Utc>
+    let created_at: DateTime<Utc> = row.try_get::<Option<String>>("", "created_at")
+        .unwrap_or(None)
+        .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+        .map(|dt| dt.with_timezone(&Utc))
+        .unwrap_or_else(Utc::now);
+
+    let updated_at: DateTime<Utc> = row.try_get::<Option<String>>("", "updated_at")
+        .unwrap_or(None)
+        .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+        .map(|dt| dt.with_timezone(&Utc))
+        .unwrap_or_else(Utc::now);
+
+    Ok(Patient {
+        id: row.try_get("", "id").map_err(|e| format!("Failed to get id: {}", e))?,
+        name: row.try_get("", "name").map_err(|e| format!("Failed to get name: {}", e))?,
+        species_id: row.try_get("", "species_id").unwrap_or(0),
+        breed_id: row.try_get("", "breed_id").unwrap_or(None),
+        species: row.try_get("", "species").unwrap_or(None),
+        breed: row.try_get("", "breed").unwrap_or(None),
+        color: row.try_get("", "color").unwrap_or(None),
+        gender: row.try_get("", "gender").unwrap_or(None),
+        date_of_birth,
+        weight: row.try_get("", "weight").unwrap_or(None),
+        medical_notes: row.try_get("", "medical_notes").unwrap_or(None),
+        is_active: row.try_get::<i64>("", "is_active").unwrap_or(1) == 1,
+        household_id: None, // Not needed for device data resolution
+        created_at,
+        updated_at,
+        microchip_id: row.try_get("", "microchip_id").unwrap_or(None),
+    })
 }

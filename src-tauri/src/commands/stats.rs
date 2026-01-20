@@ -1,5 +1,6 @@
 use tauri::State;
-use crate::database::DatabasePool;
+use crate::database::SeaOrmPool;
+use sea_orm::*;
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]
@@ -12,28 +13,28 @@ pub struct DashboardStats {
 
 #[tauri::command]
 pub async fn get_dashboard_stats(
-    pool: State<'_, DatabasePool>
+    pool: State<'_, SeaOrmPool>
 ) -> Result<DashboardStats, String> {
-    let pool = pool.lock().await;
-
     // Get all counts in a single query for efficiency
-    let stats = sqlx::query_as::<_, (i64, i64, i64, i64)>(
-        r#"
-        SELECT
-            (SELECT COUNT(*) FROM patients) as total_patients,
-            (SELECT COUNT(*) FROM patients WHERE is_active = 1 OR is_active IS NULL) as active_patients,
-            (SELECT COUNT(*) FROM households) as total_households,
-            (SELECT COUNT(*) FROM medical_records WHERE is_archived = 0) as total_medical_records
-        "#
-    )
-    .fetch_one(&*pool)
-    .await
-    .map_err(|e| format!("Failed to get stats: {}", e))?;
+    let row = pool
+        .query_one(Statement::from_string(
+            DbBackend::Sqlite,
+            r#"
+            SELECT
+                (SELECT COUNT(*) FROM patients) as total_patients,
+                (SELECT COUNT(*) FROM patients WHERE is_active = 1 OR is_active IS NULL) as active_patients,
+                (SELECT COUNT(*) FROM households) as total_households,
+                (SELECT COUNT(*) FROM medical_records WHERE is_archived = 0) as total_medical_records
+            "#.to_string(),
+        ))
+        .await
+        .map_err(|e| format!("Failed to get stats: {}", e))?
+        .ok_or_else(|| "No stats returned".to_string())?;
 
     Ok(DashboardStats {
-        total_patients: stats.0,
-        active_patients: stats.1,
-        total_households: stats.2,
-        total_medical_records: stats.3,
+        total_patients: row.try_get("", "total_patients").unwrap_or(0),
+        active_patients: row.try_get("", "active_patients").unwrap_or(0),
+        total_households: row.try_get("", "total_households").unwrap_or(0),
+        total_medical_records: row.try_get("", "total_medical_records").unwrap_or(0),
     })
 }

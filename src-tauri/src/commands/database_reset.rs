@@ -1,5 +1,5 @@
-use tauri::{AppHandle, State};
-use crate::database::{DatabasePool, get_database_path, run_migrations};
+use tauri::AppHandle;
+use crate::database::{SeaOrmPool, get_database_path, get_database_url, run_migrations, connection::create_pool};
 use rand::{Rng, seq::SliceRandom, SeedableRng};
 use crate::models::dto::CreatePatientDto;
 use crate::services::medical_record::MedicalRecordService;
@@ -10,18 +10,63 @@ use fake::{Fake, faker::{
     address::en::*,
     lorem::en::*,
 }};
+use sqlx::SqlitePool;
+
+/// Helper function to create a patient (inline sqlx implementation for seeding)
+async fn create_patient_for_seed(pool: &SqlitePool, dto: CreatePatientDto) -> Result<i64, sqlx::Error> {
+    // Start a transaction
+    let mut tx = pool.begin().await?;
+
+    // Insert the patient
+    let result = sqlx::query(
+        "INSERT INTO patients (name, species_id, breed_id, gender, date_of_birth, weight, medical_notes, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+    )
+    .bind(&dto.name)
+    .bind(dto.species_id)
+    .bind(dto.breed_id)
+    .bind(&dto.gender)
+    .bind(&dto.date_of_birth)
+    .bind(&dto.weight)
+    .bind(&dto.medical_notes)
+    .bind(true)
+    .execute(&mut *tx)
+    .await?;
+
+    let patient_id = result.last_insert_rowid();
+
+    // If household_id is provided, create the relationship
+    if let Some(household_id) = dto.household_id {
+        sqlx::query(
+            "INSERT INTO patient_households (patient_id, household_id, relationship_type, is_primary)
+             VALUES (?, ?, 'Pet', 1)"
+        )
+        .bind(patient_id)
+        .bind(household_id)
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    // Commit the transaction
+    tx.commit().await?;
+
+    Ok(patient_id)
+}
 
 #[tauri::command]
 pub async fn reset_database(
     app: AppHandle,
-    pool: State<'_, DatabasePool>
 ) -> Result<String, String> {
     println!("Resetting database...");
 
     // Get the database path
     let db_path = get_database_path(&app).map_err(|e| e.to_string())?;
+    let db_url = get_database_url(&app).map_err(|e| e.to_string())?;
 
-    // Lock the pool
+    // Create pool for DDL operations
+    let pool = create_pool(&db_url)
+        .await
+        .map_err(|e| format!("Failed to create pool: {}", e))?;
     let pool_guard = pool.lock().await;
 
     // Drop all tables
@@ -74,10 +119,14 @@ pub async fn reset_database(
 
 #[tauri::command]
 pub async fn wipe_database_data(
-    pool: State<'_, DatabasePool>
+    app: AppHandle,
 ) -> Result<String, String> {
     println!("Wiping database data (keeping schema)...");
 
+    let db_url = get_database_url(&app).map_err(|e| e.to_string())?;
+    let pool = create_pool(&db_url)
+        .await
+        .map_err(|e| format!("Failed to create pool: {}", e))?;
     let pool_guard = pool.lock().await;
 
     // Delete data in correct order to respect foreign keys
@@ -112,10 +161,12 @@ pub async fn wipe_database_data(
     ))
 }
 
+use tauri::State;
+
 #[tauri::command]
 pub async fn populate_database(
     app: AppHandle,
-    pool: State<'_, DatabasePool>,
+    sea_orm_pool: State<'_, SeaOrmPool>,
     households: Option<i32>,
     seed: Option<u64>,
 ) -> Result<String, String> {
@@ -126,6 +177,12 @@ pub async fn populate_database(
     println!("[SEED] Requested households: {}", households);
     println!("[SEED] Timestamp: {}", Utc::now());
     println!("[SEED] ========================================\n");
+
+    // Create pool for DDL operations (admin command creates its own pool)
+    let db_url = get_database_url(&app).map_err(|e| e.to_string())?;
+    let pool = create_pool(&db_url)
+        .await
+        .map_err(|e| format!("Failed to create pool: {}", e))?;
 
     // Ensure migrations are run first
     let pool_guard = pool.lock().await;
@@ -391,15 +448,15 @@ pub async fn populate_database(
                     pet_num + 1, name, species_name,
                     weight.map_or("?".to_string(), |w| format!("{:.2}", w)));
 
-            let patient = match crate::database::queries::patient::create_patient(&*pool, dto).await {
-                Ok(p) => p,
+            let patient_id = match create_patient_for_seed(&*pool, dto).await {
+                Ok(id) => id,
                 Err(e) => {
                     println!("[SEED] ERROR: Failed to create patient: {}", e);
                     return Err(format!("Failed to create patient: {}", e));
                 }
             };
             created_patients += 1;
-            println!("[SEED]        -> Patient ID: {}", patient.id);
+            println!("[SEED]        -> Patient ID: {}", patient_id);
 
             // Create medical records - varying amounts per pet
             let has_many_records = rng.gen_bool(0.2); // 20% have extensive history
@@ -438,7 +495,7 @@ pub async fn populate_database(
                 let currency_id = Some([1i64, 2, 3, 4].choose(&mut rng).copied().unwrap());
 
                 let input = CreateMedicalRecordInput {
-                    patient_id: patient.id,
+                    patient_id: patient_id,
                     record_type: "procedure".to_string(),
                     name: proc_name.to_string(),
                     procedure_name: None,
@@ -451,7 +508,7 @@ pub async fn populate_database(
                     device_data_list: None,
                 };
 
-                match MedicalRecordService::create_medical_record(&app, &*pool, input).await {
+                match MedicalRecordService::create_medical_record(&app, &sea_orm_pool, input).await {
                     Ok(_) => {
                         created_records += 1;
                         if proc_num == 0 {
@@ -461,17 +518,17 @@ pub async fn populate_database(
                     }
                     Err(e) => {
                         println!("[SEED] ERROR: Failed to create procedure for patient {}: {}",
-                                patient.id, e);
+                                patient_id, e);
                         println!("[SEED] ERROR: Patient exists check...");
                         let patient_check: Result<(i64,), _> = sqlx::query_as(
                             "SELECT id FROM patients WHERE id = ?"
                         )
-                        .bind(patient.id)
+                        .bind(patient_id)
                         .fetch_one(&*pool)
                         .await;
                         match patient_check {
                             Ok((id,)) => println!("[SEED] ERROR: Patient {} exists in DB", id),
-                            Err(e) => println!("[SEED] ERROR: Patient {} NOT FOUND: {}", patient.id, e),
+                            Err(e) => println!("[SEED] ERROR: Patient {} NOT FOUND: {}", patient_id, e),
                         }
                         return Err(format!("Failed to create procedure: {}", e));
                     }
@@ -497,7 +554,7 @@ pub async fn populate_database(
                 let description = sentences.join(" ");
 
                 let input = CreateMedicalRecordInput {
-                    patient_id: patient.id,
+                    patient_id: patient_id,
                     record_type: "note".to_string(),
                     name: title.to_string(),
                     procedure_name: None,
@@ -510,12 +567,12 @@ pub async fn populate_database(
                     device_data_list: None,
                 };
 
-                match MedicalRecordService::create_medical_record(&app, &*pool, input).await {
+                match MedicalRecordService::create_medical_record(&app, &sea_orm_pool, input).await {
                     Ok(_) => {
                         created_records += 1;
                     }
                     Err(e) => {
-                        println!("[SEED] ERROR: Failed to create note for patient {}: {}", patient.id, e);
+                        println!("[SEED] ERROR: Failed to create note for patient {}: {}", patient_id, e);
                         return Err(format!("Failed to create note: {}", e));
                     }
                 }

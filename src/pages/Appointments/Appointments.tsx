@@ -39,8 +39,8 @@ import {
 import {
   useAppointments,
   useAppointmentDetail,
-  useRooms,
 } from '../../hooks/useAppointments';
+import { useRooms } from '../../hooks/useRooms';
 import styles from './Appointments.module.css';
 
 const { Header, Content, Sider } = Layout;
@@ -227,11 +227,11 @@ const Appointments: React.FC = () => {
 
   // Calculate statistics
   const todayCount = appointments.filter((apt) =>
-    dayjs(apt.start_time).isSame(dayjs(), 'day')
+    dayjs(apt.startTime).isSame(dayjs(), 'day')
   ).length;
 
   const weekCount = appointments.filter((apt) =>
-    dayjs(apt.start_time).isSame(dayjs(), 'week')
+    dayjs(apt.startTime).isSame(dayjs(), 'week')
   ).length;
 
   const scheduledCount = appointments.filter(
@@ -360,14 +360,14 @@ const Appointments: React.FC = () => {
                 </div>
                 <div>
                   <strong>{t('fields.date')}:</strong>{' '}
-                  {dayjs(appointmentDetail.appointment.start_time).format(
+                  {dayjs(appointmentDetail.appointment.startTime).format(
                     'MMMM DD, YYYY'
                   )}
                 </div>
                 <div>
                   <strong>{t('details.time')}:</strong>{' '}
-                  {dayjs(appointmentDetail.appointment.start_time).format('HH:mm')} -{' '}
-                  {dayjs(appointmentDetail.appointment.end_time).format('HH:mm')}
+                  {dayjs(appointmentDetail.appointment.startTime).format('HH:mm')} -{' '}
+                  {dayjs(appointmentDetail.appointment.endTime).format('HH:mm')}
                 </div>
                 {appointmentDetail.room && (
                   <div>

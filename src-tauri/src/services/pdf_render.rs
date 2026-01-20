@@ -69,7 +69,7 @@ impl PdfRenderService {
             .map_err(|e| format!("Failed to save preview: {}", e))?;
         if let Ok(md) = fs::metadata(out_path) {
             let sz = md.len();
-            println!("Debug: pdfium saved PNG {}x{} bytes={} -> {}", w, h, sz, out_path);
+            log::debug!("pdfium saved PNG {}x{} bytes={} -> {}", w, h, sz, out_path);
             if sz == 0 {
                 return Err("Preview file is empty".to_string());
             }
@@ -104,7 +104,7 @@ impl PdfRenderService {
         image.write_to(&mut buf, ImageFormat::Png)
             .map_err(|e| format!("Failed to encode PNG: {}", e))?;
         let v = buf.into_inner();
-        println!("Debug: pdfium encoded PNG bytes={}", v.len());
+        log::debug!("pdfium encoded PNG bytes={}", v.len());
         if v.is_empty() { return Err("Encoded PNG was empty".into()); }
         Ok(v)
     }

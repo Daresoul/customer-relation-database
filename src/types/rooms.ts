@@ -4,13 +4,13 @@ export interface Room {
   description?: string;
   capacity: number;
   color: string;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface RoomFilter {
-  active_only: boolean;
+  activeOnly: boolean;
 }
 
 export interface CreateRoomInput {
@@ -25,20 +25,20 @@ export interface UpdateRoomInput {
   description?: string;
   capacity?: number;
   color?: string;
-  is_active?: boolean;
+  isActive?: boolean;
 }
 
 export interface RoomAvailability {
   room: Room;
-  is_available: boolean;
-  next_available?: string;
-  current_appointments: RoomAppointmentSlot[];
+  isAvailable: boolean;
+  nextAvailable?: string;
+  currentAppointments: RoomAppointmentSlot[];
 }
 
 export interface RoomAppointmentSlot {
-  appointment_id: number;
-  patient_name: string;
-  start_time: string;
-  end_time: string;
+  appointmentId: number;
+  patientName: string;
+  startTime: string;
+  endTime: string;
   status: string;
 }

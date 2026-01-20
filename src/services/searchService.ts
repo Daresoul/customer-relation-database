@@ -52,8 +52,7 @@ export class SearchService {
       });
 
       return Array.from(suggestions).slice(0, 5);
-    } catch (error) {
-      console.error('Failed to get search suggestions:', error);
+    } catch {
       return [];
     }
   }
@@ -102,8 +101,7 @@ export class SearchService {
       } else {
         return this.getHouseholdSuggestions(query);
       }
-    } catch (error) {
-      console.error('Failed to get search suggestions:', error);
+    } catch {
       return [];
     }
   }
@@ -140,8 +138,7 @@ export class SearchService {
       });
 
       return Array.from(suggestions).slice(0, 5);
-    } catch (error) {
-      console.error('Failed to get household suggestions:', error);
+    } catch {
       return [];
     }
   }

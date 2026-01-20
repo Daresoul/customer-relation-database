@@ -1,9 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { App } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { RoomService } from '../services/roomService';
 import { Room, RoomFilter, CreateRoomInput, UpdateRoomInput } from '../types/rooms';
+import { createMutationErrorHandler } from '../utils/errors';
 
-export const useRooms = (filter: RoomFilter = { active_only: true }) => {
+export const useRooms = (filter: RoomFilter = { activeOnly: true }) => {
   return useQuery({
     queryKey: ['rooms', filter],
     queryFn: () => RoomService.getRooms(filter),
@@ -21,6 +23,7 @@ export const useRoom = (id: number) => {
 
 export const useCreateRoom = () => {
   const { notification } = App.useApp();
+  const { t } = useTranslation('errors');
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -34,21 +37,13 @@ export const useCreateRoom = () => {
         duration: 3,
       });
     },
-    onError: (error: any) => {
-      console.error('Create room error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      notification.error({
-        message: 'Failed to Create Room',
-        description: `Error: ${errorMessage}`,
-        placement: 'bottomRight',
-        duration: 5,
-      });
-    },
+    onError: createMutationErrorHandler(notification, 'Create Room', t, 'useRooms'),
   });
 };
 
 export const useUpdateRoom = () => {
   const { notification } = App.useApp();
+  const { t } = useTranslation('errors');
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -64,21 +59,13 @@ export const useUpdateRoom = () => {
         duration: 3,
       });
     },
-    onError: (error: any) => {
-      console.error('Update room error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      notification.error({
-        message: 'Failed to Update Room',
-        description: `Error: ${errorMessage}`,
-        placement: 'bottomRight',
-        duration: 5,
-      });
-    },
+    onError: createMutationErrorHandler(notification, 'Update Room', t, 'useRooms'),
   });
 };
 
 export const useDeleteRoom = () => {
   const { notification } = App.useApp();
+  const { t } = useTranslation('errors');
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -92,15 +79,6 @@ export const useDeleteRoom = () => {
         duration: 3,
       });
     },
-    onError: (error: any) => {
-      console.error('Delete room error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      notification.error({
-        message: 'Failed to Delete Room',
-        description: `Error: ${errorMessage}`,
-        placement: 'bottomRight',
-        duration: 5,
-      });
-    },
+    onError: createMutationErrorHandler(notification, 'Delete Room', t, 'useRooms'),
   });
 };

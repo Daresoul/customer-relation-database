@@ -1,6 +1,5 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::FromRow;
 use crate::models::dto::MaybeNull;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -70,26 +69,6 @@ impl ConnectionType {
     }
 }
 
-// Database row representation
-#[derive(Debug, Clone, FromRow)]
-pub struct DeviceIntegrationRow {
-    pub id: i64,
-    pub name: String,
-    pub device_type: String,
-    pub connection_type: String,
-    pub watch_directory: Option<String>,
-    pub file_pattern: Option<String>,
-    pub serial_port_name: Option<String>,
-    pub serial_baud_rate: Option<i64>,
-    pub tcp_host: Option<String>,
-    pub tcp_port: Option<i64>,
-    pub enabled: bool,
-    pub last_connected_at: Option<DateTime<Utc>>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    pub deleted_at: Option<DateTime<Utc>>,
-}
-
 // Domain model
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeviceIntegration {
@@ -116,28 +95,6 @@ pub struct DeviceIntegration {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub deleted_at: Option<DateTime<Utc>>,
-}
-
-impl DeviceIntegration {
-    pub fn from_row(row: DeviceIntegrationRow) -> Result<Self, String> {
-        Ok(Self {
-            id: row.id,
-            name: row.name,
-            device_type: DeviceType::from_db_string(&row.device_type)?,
-            connection_type: ConnectionType::from_db_string(&row.connection_type)?,
-            watch_directory: row.watch_directory,
-            file_pattern: row.file_pattern,
-            serial_port_name: row.serial_port_name,
-            serial_baud_rate: row.serial_baud_rate,
-            tcp_host: row.tcp_host,
-            tcp_port: row.tcp_port,
-            enabled: row.enabled,
-            last_connected_at: row.last_connected_at,
-            created_at: row.created_at,
-            updated_at: row.updated_at,
-            deleted_at: row.deleted_at,
-        })
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

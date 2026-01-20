@@ -29,7 +29,7 @@ import {
   UpdateAppointmentInput,
   ConflictCheckInput,
 } from '../../types/appointments';
-import { useRooms } from '../../hooks/useAppointments';
+import { useRooms } from '../../hooks/useRooms';
 import appointmentService from '../../services/appointmentService';
 import { usePatients } from '../../hooks/usePatients';
 import { useTranslation } from 'react-i18next';
@@ -69,7 +69,7 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
   const [conflicts, setConflicts] = useState<Appointment[]>([]);
   const [checkingConflicts, setCheckingConflicts] = useState(false);
 
-  const { rooms: hookRooms } = useRooms({ active_only: true });
+  const { rooms: hookRooms } = useRooms({ activeOnly: true });
   const rooms = propsRooms || hookRooms;
   const { patients } = usePatients();
 
@@ -84,13 +84,13 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
     if (isVisible) {
       if (mode === 'edit' && appointment) {
         form.setFieldsValue({
-          patient_id: appointment.patient_id,
+          patientId: appointment.patientId,
           title: appointment.title,
           description: appointment.description,
-          date: dayjs(appointment.start_time),
-          start_time: dayjs(appointment.start_time),
-          end_time: dayjs(appointment.end_time),
-          room_id: appointment.room_id,
+          date: dayjs(appointment.startTime),
+          startTime: dayjs(appointment.startTime),
+          endTime: dayjs(appointment.endTime),
+          roomId: appointment.roomId,
           status: appointment.status,
         });
       } else if (mode === 'create') {
@@ -110,8 +110,8 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
 
         form.setFieldsValue({
           date: defaultDate,
-          start_time: defaultStartTime,
-          end_time: defaultEndTime,
+          startTime: defaultStartTime,
+          endTime: defaultEndTime,
         });
       }
     }
@@ -119,9 +119,9 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
 
   // Check for conflicts when room or time changes
   const checkConflicts = async () => {
-    const values = form.getFieldsValue(['date', 'start_time', 'end_time', 'room_id']);
-    
-    if (!values.date || !values.start_time || !values.end_time || !values.room_id) {
+    const values = form.getFieldsValue(['date', 'startTime', 'endTime', 'roomId']);
+
+    if (!values.date || !values.startTime || !values.endTime || !values.roomId) {
       setConflicts([]);
       return;
     }
@@ -129,17 +129,17 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
     setCheckingConflicts(true);
     try {
       const startDateTime = dayjs(values.date)
-        .hour(values.start_time.hour())
-        .minute(values.start_time.minute());
+        .hour(values.startTime.hour())
+        .minute(values.startTime.minute());
       const endDateTime = dayjs(values.date)
-        .hour(values.end_time.hour())
-        .minute(values.end_time.minute());
+        .hour(values.endTime.hour())
+        .minute(values.endTime.minute());
 
       const input: ConflictCheckInput = {
-        start_time: startDateTime.toISOString(),
-        end_time: endDateTime.toISOString(),
-        room_id: values.room_id,
-        exclude_appointment_id: mode === 'edit' ? appointment?.id : undefined,
+        startTime: startDateTime.toISOString(),
+        endTime: endDateTime.toISOString(),
+        roomId: values.roomId,
+        excludeAppointmentId: mode === 'edit' ? appointment?.id : undefined,
       };
 
       const response = await appointmentService.checkConflicts(input);
@@ -167,13 +167,13 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
 
       // Combine date and time
       const startDateTime = dayjs(values.date)
-        .hour(values.start_time.hour())
-        .minute(values.start_time.minute())
+        .hour(values.startTime.hour())
+        .minute(values.startTime.minute())
         .second(0)
         .millisecond(0);
       const endDateTime = dayjs(values.date)
-        .hour(values.end_time.hour())
-        .minute(values.end_time.minute())
+        .hour(values.endTime.hour())
+        .minute(values.endTime.minute())
         .second(0)
         .millisecond(0);
 
@@ -234,12 +234,12 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
       }
 
       const data: any = {
-        patient_id: values.patient_id,
+        patientId: values.patientId,
         title: values.title,
         description: values.description,
-        start_time: startDateTime.toISOString(),
-        end_time: endDateTime.toISOString(),
-        room_id: values.room_id,
+        startTime: startDateTime.toISOString(),
+        endTime: endDateTime.toISOString(),
+        roomId: values.roomId,
       };
 
       if (mode === 'edit') {
@@ -302,7 +302,7 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item
-              name="patient_id"
+              name="patientId"
               label={t('appointments:fields.patient')}
               rules={[{ required: true, message: t('appointments:validation.selectPatient') }]}
             >
@@ -322,7 +322,7 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
           </Col>
           <Col span={12}>
             <Form.Item
-              name="room_id"
+              name="roomId"
               label={t('appointments:fields.room')}
             >
               <Select
@@ -380,7 +380,7 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
           </Col>
           <Col span={8}>
             <Form.Item
-              name="start_time"
+              name="startTime"
               label={t('appointments:fields.startTime')}
               rules={[{ required: true, message: t('appointments:validation.selectStartTime') }]}
             >
@@ -395,7 +395,7 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
           </Col>
           <Col span={8}>
             <Form.Item
-              name="end_time"
+              name="endTime"
               label={t('appointments:fields.endTime')}
               rules={[{ required: true, message: t('appointments:validation.selectEndTime') }]}
             >
@@ -425,7 +425,7 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
         )}
 
         {(() => {
-          const roomId = form.getFieldValue('room_id');
+          const roomId = form.getFieldValue('roomId');
           const selectedRoom = rooms?.find(r => r.id === roomId);
           const totalAppointments = mode === 'edit' ? conflicts.length : conflicts.length + 1;
           const capacityExceeded = selectedRoom && totalAppointments > selectedRoom.capacity;
@@ -439,8 +439,8 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
                   <ul>
                     {conflicts.map((conflict) => (
                       <li key={conflict.id}>
-                        {conflict.title} ({dayjs(conflict.start_time).format('HH:mm')} -
-                        {dayjs(conflict.end_time).format('HH:mm')})
+                        {conflict.title} ({dayjs(conflict.startTime).format('HH:mm')} -
+                        {dayjs(conflict.endTime).format('HH:mm')})
                       </li>
                     ))}
                   </ul>

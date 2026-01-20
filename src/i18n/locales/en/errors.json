@@ -1,0 +1,191 @@
+{
+  "failedTo": "Failed to {{operation}}",
+
+  "network": {
+    "error": "Unable to connect to the server. Please check your internet connection.",
+    "timeout": "The request took too long. Please try again.",
+    "connectionRefused": "Could not connect to the server. Please try again later.",
+    "connectionLost": "Connection to the server was lost. Please check your network.",
+    "offline": "You appear to be offline. Please check your internet connection."
+  },
+
+  "auth": {
+    "unauthorized": "Please log in to continue.",
+    "sessionExpired": "Your session has expired. Please log in again.",
+    "forbidden": "You do not have permission to perform this action.",
+    "invalidCredentials": "Invalid username or password.",
+    "accountLocked": "Your account has been locked. Please contact support.",
+    "tokenExpired": "Your authentication token has expired. Please log in again."
+  },
+
+  "generic": {
+    "notFound": "The requested resource was not found.",
+    "alreadyExists": "This record already exists.",
+    "duplicateEntry": "A record with this information already exists.",
+    "conflict": "This record has been modified by someone else. Please refresh and try again.",
+    "validation": "Please check your input and try again.",
+    "requiredFieldMissing": "Please fill in all required fields.",
+    "invalidFormat": "The data format is invalid. Please check your input.",
+    "unexpected": "An unexpected error occurred."
+  },
+
+  "patient": {
+    "notFound": "Patient not found. They may have been deleted.",
+    "alreadyExists": "A patient with this information already exists.",
+    "hasAppointments": "Cannot delete patient with scheduled appointments.",
+    "hasMedicalRecords": "Cannot delete patient with existing medical records.",
+    "invalidData": "Please check the patient information and try again.",
+    "inactive": "This patient has been marked as inactive.",
+    "microchipAlreadyRegistered": "This microchip ID is already registered to another patient.",
+    "invalidDateOfBirth": "Please enter a valid date of birth.",
+    "invalidWeight": "Please enter a valid weight."
+  },
+
+  "household": {
+    "notFound": "Household not found.",
+    "hasPatients": "Cannot delete household with registered patients.",
+    "duplicate": "A household with this name already exists.",
+    "primaryContactRequired": "At least one primary contact is required."
+  },
+
+  "owner": {
+    "notFound": "Owner not found.",
+    "hasPatients": "Cannot delete owner who is linked to patients.",
+    "invalidContactInfo": "Please provide valid contact information.",
+    "invalidEmail": "Please enter a valid email address.",
+    "invalidPhone": "Please enter a valid phone number.",
+    "invalidAddress": "Please enter a valid address."
+  },
+
+  "appointment": {
+    "notFound": "Appointment not found.",
+    "conflict": "This time slot conflicts with an existing appointment.",
+    "roomNotAvailable": "The selected room is not available at this time.",
+    "inPast": "Cannot schedule appointments in the past.",
+    "cancelled": "This appointment has been cancelled.",
+    "completed": "This appointment has already been completed.",
+    "invalidTimeRange": "End time must be after start time.",
+    "tooShort": "Appointment must be at least 15 minutes.",
+    "tooLong": "Appointment cannot exceed 8 hours.",
+    "patientRequired": "Please select a patient for this appointment.",
+    "invalidStatus": "Invalid appointment status.",
+    "cannotModifyPast": "Cannot modify appointments that have already occurred."
+  },
+
+  "room": {
+    "notFound": "Room not found.",
+    "alreadyExists": "A room with this name already exists.",
+    "hasAppointments": "Cannot delete room with scheduled appointments.",
+    "inactive": "This room is currently inactive.",
+    "invalidCapacity": "Please enter a valid room capacity.",
+    "atCapacity": "This room is at full capacity for this time slot."
+  },
+
+  "medicalRecord": {
+    "notFound": "Medical record not found.",
+    "archived": "This medical record has been archived.",
+    "cannotEditArchived": "Cannot edit an archived medical record. Please restore it first.",
+    "attachmentNotFound": "Attachment not found.",
+    "attachmentTooLarge": "File is too large. Maximum size is 50MB.",
+    "invalidFileType": "This file type is not supported.",
+    "uploadFailed": "Failed to upload file. Please try again.",
+    "downloadFailed": "Failed to download file. Please try again.",
+    "pdfGenerationFailed": "Failed to generate PDF. Please try again.",
+    "templateNotFound": "Record template not found.",
+    "invalidRecordType": "Invalid medical record type."
+  },
+
+  "species": {
+    "notFound": "Species not found.",
+    "hasPatients": "Cannot delete species with registered patients.",
+    "alreadyExists": "This species already exists.",
+    "invalid": "Please select a valid species."
+  },
+
+  "breed": {
+    "notFound": "Breed not found.",
+    "hasPatients": "Cannot delete breed with registered patients.",
+    "alreadyExists": "This breed already exists for the selected species.",
+    "invalid": "Please select a valid breed."
+  },
+
+  "device": {
+    "notFound": "Device not found.",
+    "connectionFailed": "Failed to connect to device. Please check the connection.",
+    "offline": "Device is offline or not responding.",
+    "busy": "Device is currently busy. Please try again.",
+    "invalidConfig": "Invalid device configuration. Please check settings.",
+    "serialPortError": "Error accessing serial port. Please check the connection.",
+    "serialPortInUse": "Serial port is already in use by another application.",
+    "fileWatchError": "Error monitoring file directory.",
+    "parseError": "Failed to parse device data. The format may be unsupported.",
+    "dataInvalid": "Received invalid data from device.",
+    "timeout": "Device did not respond in time."
+  },
+
+  "googleCalendar": {
+    "authFailed": "Failed to authenticate with Google. Please try again.",
+    "tokenExpired": "Google authentication expired. Please reconnect.",
+    "syncFailed": "Failed to sync with Google Calendar.",
+    "notFound": "Google Calendar not found.",
+    "permissionDenied": "Permission denied by Google. Please check your account settings.",
+    "quotaExceeded": "Google API quota exceeded. Please try again later.",
+    "disconnected": "Google Calendar is not connected.",
+    "syncInProgress": "A sync is already in progress. Please wait."
+  },
+
+  "settings": {
+    "notFound": "Settings not found.",
+    "invalid": "Invalid settings configuration.",
+    "saveFailed": "Failed to save settings. Please try again.",
+    "invalidDateFormat": "Invalid date format selected.",
+    "invalidCurrency": "Invalid currency selected.",
+    "invalidLanguage": "Invalid language selected.",
+    "invalidTheme": "Invalid theme selected."
+  },
+
+  "file": {
+    "notFound": "File not found.",
+    "readError": "Failed to read file.",
+    "writeError": "Failed to write file.",
+    "storageFull": "Storage is full. Please free up space.",
+    "permissionDenied": "Permission denied. Cannot access the file.",
+    "corrupted": "The file appears to be corrupted.",
+    "unsupportedFormat": "This file format is not supported."
+  },
+
+  "database": {
+    "error": "A database error occurred. Please try again.",
+    "connectionFailed": "Failed to connect to database.",
+    "locked": "Database is temporarily locked. Please try again.",
+    "migrationFailed": "Database migration failed. Please contact support.",
+    "integrityError": "Data integrity error. Please contact support.",
+    "foreignKeyViolation": "Cannot delete this record as it is referenced elsewhere.",
+    "uniqueConstraintViolation": "A record with this value already exists."
+  },
+
+  "server": {
+    "error": "Something went wrong on our end. Please try again later.",
+    "internal": "An internal error occurred. Please try again.",
+    "unavailable": "Service is temporarily unavailable. Please try again later.",
+    "maintenance": "System is under maintenance. Please try again later.",
+    "rateLimited": "Too many requests. Please slow down and try again."
+  },
+
+  "update": {
+    "checkFailed": "Failed to check for updates. Please try again later.",
+    "downloadFailed": "Failed to download update. Please try again.",
+    "installFailed": "Failed to install update. Please try again.",
+    "noUpdatesAvailable": "You are running the latest version."
+  },
+
+  "category": {
+    "network": "Unable to connect to the server. Please check your connection.",
+    "auth": "Authentication required. Please log in.",
+    "permission": "You do not have permission to perform this action.",
+    "notFound": "The requested resource was not found.",
+    "validation": "Please check your input and try again.",
+    "timeout": "The request took too long. Please try again.",
+    "server": "Something went wrong on our end. Please try again later."
+  }
+}

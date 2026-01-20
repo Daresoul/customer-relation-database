@@ -1,4 +1,9 @@
-import { invoke } from '@tauri-apps/api/tauri';
+/**
+ * Household Service
+ * Uses ApiService for automatic case transformation between frontend (camelCase) and backend (snake_case)
+ */
+
+import { ApiService } from './api';
 import {
   HouseholdWithPeople,
   CreateHouseholdWithPeopleDto,
@@ -8,291 +13,141 @@ import {
   validateHouseholdDto,
 } from '../types/household';
 
-// Create a new household with people
-export async function createHouseholdWithPeople(
-  dto: CreateHouseholdWithPeopleDto
-): Promise<HouseholdWithPeople> {
-  // Validate before sending
-  const error = validateHouseholdDto(dto);
-  if (error) {
-    throw new Error(error);
-  }
+export class HouseholdService {
+  /**
+   * Create a new household with people
+   */
+  static async createHouseholdWithPeople(
+    dto: CreateHouseholdWithPeopleDto
+  ): Promise<HouseholdWithPeople> {
+    // Validate before sending
+    const error = validateHouseholdDto(dto);
+    if (error) {
+      throw new Error(error);
+    }
 
-  // Transform camelCase to snake_case for Rust backend
-  const transformedDto = {
-    household: {
-      household_name: dto.household.householdName || null,
-      address: dto.household.address || null,
-      notes: dto.household.notes || null,
-    },
-    people: dto.people.map(personWithContacts => ({
-      person: {
-        first_name: personWithContacts.person.firstName || '',
-        last_name: personWithContacts.person.lastName || '',
-        is_primary: personWithContacts.person.isPrimary || false,
-      },
-      contacts: personWithContacts.contacts.map(contact => ({
-        contact_type: contact.contactType || 'phone',
-        contact_value: contact.contactValue || '',
-        is_primary: contact.isPrimary || false,
-      })),
-    })),
-  };
-
-  try {
-    const backendResult = await invoke<any>('create_household_with_people', { dto: transformedDto });
-
-    // Transform snake_case response back to camelCase for frontend
-
-    const result: HouseholdWithPeople = {
-      household: {
-        id: backendResult.household?.id || 0,
-        householdName: backendResult.household?.household_name || null,
-        address: backendResult.household?.address || null,
-        notes: backendResult.household?.notes || null,
-        createdAt: backendResult.household?.created_at || new Date().toISOString(),
-        updatedAt: backendResult.household?.updated_at || new Date().toISOString(),
-      },
-      people: (backendResult.people || []).map((person: any) => {
-        return {
-          id: person?.id || 0,
-          firstName: person?.first_name || '',
-          lastName: person?.last_name || '',
-          isPrimary: person?.is_primary || false,
-          contacts: (person?.contacts || []).map((contact: any) => {
-            return {
-              id: contact?.id || 0,
-              personId: contact?.person_id || person?.id || 0,
-              contactType: contact?.contact_type || 'phone',
-              contactValue: contact?.contact_value || '',
-              isPrimary: contact?.is_primary || false,
-              createdAt: contact?.created_at || new Date().toISOString(),
-            };
-          }),
-        };
-      }),
-    };
-
-    console.log('🔧 Service: Created household:', result);
+    const result = await ApiService.invoke<HouseholdWithPeople>('create_household_with_people', { dto });
 
     // Validate transformation was successful
     if (!result.household || result.household.id === 0) {
-      throw new Error('Failed to transform household data - invalid household');
+      throw new Error('Failed to create household - invalid response');
     }
 
     if (!result.people || result.people.length === 0) {
-      throw new Error('Failed to transform household data - no people found');
-    }
-
-    // Check if people have valid names
-    const invalidPeople = result.people.filter(person =>
-      !person.firstName || !person.lastName ||
-      typeof person.firstName !== 'string' ||
-      typeof person.lastName !== 'string'
-    );
-
-    if (invalidPeople.length > 0) {
-      throw new Error('Failed to transform household data - invalid person names after transformation');
+      throw new Error('Failed to create household - no people found');
     }
 
     return result;
-  } catch (error) {
-    console.error('Failed to create household:', error);
-    throw error;
-  }
-}
-
-// Create a patient with a new household
-export async function createPatientWithHousehold(
-  dto: CreatePatientWithHouseholdDto
-): Promise<CreatePatientWithHouseholdResponse> {
-  // Validate household part
-  const householdDto: CreateHouseholdWithPeopleDto = {
-    household: dto.household,
-    people: dto.people,
-  };
-  const error = validateHouseholdDto(householdDto);
-  if (error) {
-    throw new Error(error);
   }
 
-  try {
-    const response = await invoke<any>('create_patient_with_household', { dto });
-    return {
-      household: response.household,
-      patientId: response.patient_id,
+  /**
+   * Create a patient with a new household
+   */
+  static async createPatientWithHousehold(
+    dto: CreatePatientWithHouseholdDto
+  ): Promise<CreatePatientWithHouseholdResponse> {
+    // Validate household part
+    const householdDto: CreateHouseholdWithPeopleDto = {
+      household: dto.household,
+      people: dto.people,
     };
-  } catch (error) {
-    console.error('Failed to create patient with household:', error);
-    throw error;
-  }
-}
+    const error = validateHouseholdDto(householdDto);
+    if (error) {
+      throw new Error(error);
+    }
 
-// Search households
-export async function searchHouseholds(
-  query: string,
-  limit?: number,
-  offset?: number
-): Promise<SearchHouseholdsResponse> {
-  if (query.length < 2) {
-    throw new Error('Search query must be at least 2 characters');
+    return ApiService.invoke<CreatePatientWithHouseholdResponse>('create_patient_with_household', { dto });
   }
 
-  try {
-    const backendResult = await invoke<any>('search_households', {
+  /**
+   * Search households
+   */
+  static async searchHouseholds(
+    query: string,
+    limit?: number,
+    offset?: number
+  ): Promise<SearchHouseholdsResponse> {
+    if (query.length < 2) {
+      throw new Error('Search query must be at least 2 characters');
+    }
+
+    return ApiService.invoke<SearchHouseholdsResponse>('search_households', {
       query,
       limit: limit || 10,
       offset: offset || 0,
     });
-
-    // Transform snake_case response back to camelCase for frontend
-    const result: SearchHouseholdsResponse = {
-      results: (backendResult.results || []).map((household: any) => ({
-        id: household?.id || 0,
-        householdName: household?.household_name || null,
-        address: household?.address || null,
-        people: (household?.people || []).map((person: any) => ({
-          id: person?.id || 0,
-          firstName: person?.first_name || '',
-          lastName: person?.last_name || '',
-          isPrimary: person?.is_primary || false,
-          contacts: (person?.contacts || []).map((contact: any) => ({
-            id: contact?.id || 0,
-            personId: contact?.person_id || person?.id || 0,
-            contactType: contact?.contact_type || 'phone',
-            contactValue: contact?.contact_value || '',
-            isPrimary: contact?.is_primary || false,
-            createdAt: contact?.created_at || new Date().toISOString(),
-          })),
-        })),
-        relevanceScore: household?.relevance_score || 0,
-        snippet: household?.snippet || undefined,
-      })),
-      total: backendResult.total || 0,
-      hasMore: backendResult.has_more || false,
-    };
-
-    return result;
-  } catch (error) {
-    console.error('Failed to search households:', error);
-    throw error;
-  }
-}
-
-// Quick search for autocomplete
-export async function quickSearchHouseholds(
-  query: string,
-  limit?: number
-): Promise<Array<{ id: number; name: string }>> {
-  if (query.length < 2) {
-    return [];
   }
 
-  try {
-    const results = await invoke<Array<[number, string]>>('quick_search_households', {
+  /**
+   * Quick search for autocomplete
+   */
+  static async quickSearchHouseholds(
+    query: string,
+    limit?: number
+  ): Promise<Array<{ id: number; name: string }>> {
+    if (query.length < 2) {
+      return [];
+    }
+
+    const results = await ApiService.invoke<Array<[number, string]>>('quick_search_households', {
       query,
       limit: limit || 10,
     });
 
     return results.map(([id, name]) => ({ id, name }));
-  } catch (error) {
-    console.error('Failed to quick search households:', error);
-    return [];
   }
-}
 
-// Get household with all people and contacts
-export async function getHouseholdWithPeople(
-  householdId: number
-): Promise<HouseholdWithPeople | null> {
-  try {
-    const backendResult = await invoke<any>('get_household_with_people', {
+  /**
+   * Get household with all people and contacts
+   */
+  static async getHouseholdWithPeople(
+    householdId: number
+  ): Promise<HouseholdWithPeople | null> {
+    const result = await ApiService.invoke<HouseholdWithPeople | null>('get_household_with_people', {
       householdId,
     });
 
-    if (!backendResult) {
-      return null;
-    }
-
-    // Transform snake_case response back to camelCase for frontend
-    const result: HouseholdWithPeople = {
-      household: {
-        id: backendResult.household?.id || 0,
-        householdName: backendResult.household?.household_name || null,
-        address: backendResult.household?.address || null,
-        notes: backendResult.household?.notes || null,
-        createdAt: backendResult.household?.created_at || new Date().toISOString(),
-        updatedAt: backendResult.household?.updated_at || new Date().toISOString(),
-      },
-      people: (backendResult.people || []).map((person: any) => ({
-        id: person?.id || 0,
-        firstName: person?.first_name || '',
-        lastName: person?.last_name || '',
-        isPrimary: person?.is_primary || false,
-        contacts: (person?.contacts || []).map((contact: any) => ({
-          id: contact?.id || 0,
-          personId: contact?.person_id || person?.id || 0,
-          contactType: contact?.contact_type || 'phone',
-          contactValue: contact?.contact_value || '',
-          isPrimary: contact?.is_primary || false,
-          createdAt: contact?.created_at || new Date().toISOString(),
-        })),
-      })),
-    };
-
     return result;
-  } catch (error) {
-    console.error('Failed to get household:', error);
-    throw error;
   }
-}
 
-// Update household information
-export async function updateHousehold(
-  householdId: number,
-  updates: {
-    householdName?: string;
-    address?: string;
-    notes?: string;
-  }
-): Promise<void> {
-  try {
-    await invoke('update_household', {
+  /**
+   * Update household information
+   */
+  static async updateHousehold(
+    householdId: number,
+    updates: {
+      householdName?: string;
+      address?: string;
+      notes?: string;
+    }
+  ): Promise<void> {
+    await ApiService.invoke('update_household', {
       householdId,
       householdName: updates.householdName || null,
       address: updates.address || null,
       notes: updates.notes || null,
     });
-  } catch (error) {
-    console.error('Failed to update household:', error);
-    throw error;
   }
-}
 
-// Delete household (will cascade delete people and contacts)
-export async function deleteHousehold(householdId: number): Promise<void> {
-  try {
-    await invoke('delete_household', { householdId });
-  } catch (error) {
-    console.error('Failed to delete household:', error);
-    throw error;
+  /**
+   * Delete household (will cascade delete people and contacts)
+   */
+  static async deleteHousehold(householdId: number): Promise<void> {
+    await ApiService.invoke('delete_household', { householdId });
   }
-}
 
-// Rebuild search index (for maintenance)
-export async function rebuildHouseholdSearchIndex(): Promise<void> {
-  try {
-    await invoke('rebuild_household_search_index');
-  } catch (error) {
-    console.error('Failed to rebuild search index:', error);
-    throw error;
+  /**
+   * Rebuild search index (for maintenance)
+   */
+  static async rebuildHouseholdSearchIndex(): Promise<void> {
+    await ApiService.invoke('rebuild_household_search_index');
   }
-}
 
-// Backward compatibility wrapper class
-export class HouseholdService {
+  /**
+   * Search households (simple format for backward compatibility)
+   */
   static async searchHouseholdsSimple(query: string): Promise<any[]> {
-    const response = await searchHouseholds(query);
+    const response = await this.searchHouseholds(query);
     return response.results.map(result => ({
       id: result.id,
       householdName: result.householdName,
@@ -308,6 +163,9 @@ export class HouseholdService {
     }));
   }
 
+  /**
+   * Create household (backward compatibility wrapper)
+   */
   static async createHousehold(data: any): Promise<any> {
     // Check if it's the new format with people array
     if (data.people && Array.isArray(data.people)) {
@@ -348,7 +206,7 @@ export class HouseholdService {
         }))
       };
 
-      const result = await createHouseholdWithPeople(dto);
+      const result = await this.createHouseholdWithPeople(dto);
       return {
         id: result.household.id,
         householdName: result.household.householdName
@@ -388,10 +246,20 @@ export class HouseholdService {
       });
     }
 
-    const result = await createHouseholdWithPeople(dto);
+    const result = await this.createHouseholdWithPeople(dto);
     return {
       id: result.household.id,
       householdName: result.household.householdName
     };
   }
 }
+
+// Export standalone functions for backward compatibility
+export const createHouseholdWithPeople = HouseholdService.createHouseholdWithPeople.bind(HouseholdService);
+export const createPatientWithHousehold = HouseholdService.createPatientWithHousehold.bind(HouseholdService);
+export const searchHouseholds = HouseholdService.searchHouseholds.bind(HouseholdService);
+export const quickSearchHouseholds = HouseholdService.quickSearchHouseholds.bind(HouseholdService);
+export const getHouseholdWithPeople = HouseholdService.getHouseholdWithPeople.bind(HouseholdService);
+export const updateHousehold = HouseholdService.updateHousehold.bind(HouseholdService);
+export const deleteHousehold = HouseholdService.deleteHousehold.bind(HouseholdService);
+export const rebuildHouseholdSearchIndex = HouseholdService.rebuildHouseholdSearchIndex.bind(HouseholdService);

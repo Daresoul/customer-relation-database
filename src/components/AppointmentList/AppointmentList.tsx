@@ -124,11 +124,11 @@ const AppointmentList: React.FC<AppointmentListProps> = ({
   ];
 
   const renderAppointmentItem = (appointment: Appointment) => {
-    const startTime = dayjs(appointment.start_time);
-    const endTime = dayjs(appointment.end_time);
+    const startTime = dayjs(appointment.startTime);
+    const endTime = dayjs(appointment.endTime);
     const duration = appointmentService.calculateDuration(
-      appointment.start_time,
-      appointment.end_time
+      appointment.startTime,
+      appointment.endTime
     );
     const isToday = startTime.isSame(dayjs(), 'day');
     const isPast = startTime.isBefore(dayjs());
@@ -156,7 +156,7 @@ const AppointmentList: React.FC<AppointmentListProps> = ({
                 </Title>
                 <Space size="small">
                   <Text type="secondary">
-                    <UserOutlined /> {appointment.patient_name || 'Unknown Patient'}
+                    <UserOutlined /> {appointment.patientName || 'Unknown Patient'}
                   </Text>
                   {appointment.species && (
                     <Text type="secondary">• {appointment.species}</Text>
@@ -192,10 +192,10 @@ const AppointmentList: React.FC<AppointmentListProps> = ({
                 </Space>
               </Tooltip>
 
-              {appointment.room_id && (
+              {appointment.roomId && (
                 <Space size="small">
                   <EnvironmentOutlined />
-                  <Text>Room {appointment.room_id}</Text>
+                  <Text>Room {appointment.roomId}</Text>
                 </Space>
               )}
 
@@ -215,7 +215,7 @@ const AppointmentList: React.FC<AppointmentListProps> = ({
 
           <div className={styles.appointmentListFooter}>
             <Text type="secondary" style={{ fontSize: 12 }}>
-              Created {dayjs(appointment.created_at).fromNow()} by {appointment.created_by}
+              Created {dayjs(appointment.createdAt).fromNow()} by {appointment.createdBy}
             </Text>
           </div>
         </div>

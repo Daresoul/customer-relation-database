@@ -1,5 +1,5 @@
 use tauri::State;
-use crate::database::connection::DatabasePool;
+use crate::database::SeaOrmPool;
 use crate::services::appointments::AppointmentService;
 use crate::services::oauth::get_valid_access_token;
 use crate::models::{
@@ -7,62 +7,53 @@ use crate::models::{
     CreateAppointmentInput, UpdateAppointmentInput, AppointmentFilter,
     ConflictCheckInput, ConflictCheckResponse, DuplicateAppointmentInput
 };
-use crate::models::google_calendar::GoogleCalendarSettings;
 use std::sync::Arc;
-use tokio::sync::Mutex;
-use sqlx::SqlitePool;
 use chrono::Utc;
+use sea_orm::{DatabaseConnection, ConnectionTrait, Statement, DbBackend};
 
 #[tauri::command]
 pub async fn get_appointments(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     filter: AppointmentFilter,
     limit: i64,
     offset: i64,
 ) -> Result<AppointmentListResponse, String> {
-    println!("get_appointments called with filter: {:?}, limit: {}, offset: {}", filter, limit, offset);
-    let pool = pool.lock().await;
-    let result = AppointmentService::get_appointments(&*pool, filter, limit, offset).await;
+    log::debug!("get_appointments called with filter: {:?}, limit: {}, offset: {}", filter, limit, offset);
+    let result = AppointmentService::get_appointments(&pool, filter, limit, offset).await;
     match &result {
         Ok(response) => {
-            println!("get_appointments returning {} appointments, total: {}", response.appointments.len(), response.total);
+            log::debug!("get_appointments returning {} appointments, total: {}", response.appointments.len(), response.total);
         }
         Err(e) => {
-            println!("get_appointments error: {}", e);
+            log::error!("get_appointments error: {}", e);
         }
     }
-    result.map_err(|e| e.to_string())
+    result
 }
 
 #[tauri::command]
 pub async fn get_appointment(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     id: i64,
 ) -> Result<AppointmentDetail, String> {
-    let pool = pool.lock().await;
-    AppointmentService::get_appointment_by_id(&*pool, id)
-        .await
-        .map_err(|e| e.to_string())
+    AppointmentService::get_appointment_by_id(&pool, id).await
 }
 
 #[tauri::command]
 pub async fn create_appointment(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     input: CreateAppointmentInput,
     created_by: Option<String>,
 ) -> Result<Appointment, String> {
-    let pool_guard = pool.lock().await;
     let created_by = created_by.unwrap_or_else(|| "system".to_string());
-    let appointment = AppointmentService::create_appointment(&*pool_guard, input, created_by)
-        .await
-        .map_err(|e| e.to_string())?;
+    let appointment = AppointmentService::create_appointment(&pool, input, created_by).await?;
 
     // Trigger sync to Google Calendar if enabled (non-blocking)
     let appointment_id = appointment.id;
-    let pool_clone = pool.inner().clone();
+    let db = pool.inner().clone();
     tokio::spawn(async move {
-        if let Err(e) = trigger_sync_after_create(pool_clone, appointment_id).await {
-            eprintln!("Failed to sync appointment to Google Calendar: {}", e);
+        if let Err(e) = trigger_sync_after_create(db, appointment_id).await {
+            log::error!("Failed to sync appointment to Google Calendar: {}", e);
         }
     });
 
@@ -71,31 +62,28 @@ pub async fn create_appointment(
 
 #[tauri::command]
 pub async fn update_appointment(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     id: i64,
     input: UpdateAppointmentInput,
     updated_by: Option<String>,
 ) -> Result<Appointment, String> {
-    let pool_guard = pool.lock().await;
     let updated_by = updated_by.unwrap_or_else(|| "system".to_string());
 
     // Check if appointment is being cancelled
     let is_cancellation = input.status == Some(AppointmentStatus::Cancelled);
 
-    let appointment = AppointmentService::update_appointment(&*pool_guard, id, input, updated_by)
-        .await
-        .map_err(|e| e.to_string())?;
+    let appointment = AppointmentService::update_appointment(&pool, id, input, updated_by).await?;
 
     // Trigger sync to Google Calendar if enabled (non-blocking)
-    let pool_clone = pool.inner().clone();
+    let db = pool.inner().clone();
     tokio::spawn(async move {
         if is_cancellation {
-            if let Err(e) = trigger_sync_after_cancel(pool_clone, id).await {
-                eprintln!("Failed to sync cancellation to Google Calendar: {}", e);
+            if let Err(e) = trigger_sync_after_cancel(db, id).await {
+                log::error!("Failed to sync cancellation to Google Calendar: {}", e);
             }
         } else {
-            if let Err(e) = trigger_sync_after_update(pool_clone, id).await {
-                eprintln!("Failed to sync update to Google Calendar: {}", e);
+            if let Err(e) = trigger_sync_after_update(db, id).await {
+                log::error!("Failed to sync update to Google Calendar: {}", e);
             }
         }
     });
@@ -105,72 +93,57 @@ pub async fn update_appointment(
 
 #[tauri::command]
 pub async fn delete_appointment(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     id: i64,
 ) -> Result<(), String> {
-    let pool = pool.lock().await;
-    AppointmentService::delete_appointment(&*pool, id)
-        .await
-        .map_err(|e| e.to_string())
+    AppointmentService::delete_appointment(&pool, id).await
 }
 
 #[tauri::command]
 pub async fn check_conflicts(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     input: ConflictCheckInput,
 ) -> Result<ConflictCheckResponse, String> {
-    let pool = pool.lock().await;
-    AppointmentService::check_conflicts(&*pool, input)
-        .await
-        .map_err(|e| e.to_string())
+    AppointmentService::check_conflicts(&pool, input).await
 }
 
 #[tauri::command]
 pub async fn duplicate_appointment(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     input: DuplicateAppointmentInput,
     created_by: Option<String>,
 ) -> Result<Appointment, String> {
-    let pool = pool.lock().await;
     let created_by = created_by.unwrap_or_else(|| "system".to_string());
-    AppointmentService::duplicate_appointment(&*pool, input, created_by)
-        .await
-        .map_err(|e| e.to_string())
+    AppointmentService::duplicate_appointment(&pool, input, created_by).await
 }
 
-// ===== Google Calendar Sync Helpers =====
+// ===== Google Calendar Sync Helpers (using SeaORM) =====
 
 async fn trigger_sync_after_create(
-    pool: Arc<Mutex<SqlitePool>>,
+    db: Arc<DatabaseConnection>,
     appointment_id: i64,
 ) -> Result<(), String> {
-    let pool = pool.lock().await;
-
     // Check if sync is enabled
-    let settings: Option<GoogleCalendarSettings> = sqlx::query_as(
-        "SELECT * FROM google_calendar_settings WHERE user_id = 'default' AND sync_enabled = 1"
-    )
-    .fetch_optional(&*pool)
+    let row = db.query_one(Statement::from_string(
+        DbBackend::Sqlite,
+        "SELECT calendar_id, sync_enabled FROM google_calendar_settings WHERE user_id = 'default' AND sync_enabled = 1".to_string()
+    ))
     .await
     .map_err(|e| format!("Failed to check sync settings: {}", e))?;
 
-    let settings = match settings {
-        Some(s) => s,
+    let row = match row {
+        Some(r) => r,
         None => return Ok(()), // Sync not enabled
     };
 
-    let calendar_id = match settings.calendar_id {
-        Some(id) => id,
-        None => return Err("No calendar ID configured".to_string()),
-    };
+    let calendar_id: String = row.try_get("", "calendar_id")
+        .map_err(|_| "No calendar ID configured".to_string())?;
 
     // Get valid access token (will refresh if needed)
-    let access_token = get_valid_access_token(&*pool).await?;
+    let access_token = get_valid_access_token(&db).await?;
 
     // Get appointment details
-    let appointment: AppointmentDetail = AppointmentService::get_appointment_by_id(&*pool, appointment_id)
-        .await
-        .map_err(|e| format!("Failed to get appointment: {}", e))?;
+    let appointment = fetch_appointment_detail_seaorm(&db, appointment_id).await?;
 
     // Format event summary and description with all details
     let patient_name = appointment.patient.as_ref()
@@ -182,7 +155,7 @@ async fn trigger_sync_after_create(
     let mut desc_parts = Vec::new();
     desc_parts.push(format!("Patient: {}", patient_name));
 
-    if let Some(_patient) = &appointment.patient {
+    if appointment.patient.is_some() {
         desc_parts.push(format!("Microchip ID: {}",
             appointment.appointment.microchip_id.as_deref().unwrap_or("-")));
     }
@@ -241,15 +214,11 @@ async fn trigger_sync_after_create(
         .to_string();
 
     // Save mapping
-    sqlx::query(
-        "INSERT INTO calendar_event_mappings (appointment_id, event_id, calendar_id, last_synced_at)
-         VALUES (?, ?, ?, ?)"
-    )
-    .bind(appointment_id)
-    .bind(&event_id)
-    .bind(&calendar_id)
-    .bind(Utc::now())
-    .execute(&*pool)
+    db.execute(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "INSERT INTO calendar_event_mappings (appointment_id, event_id, calendar_id, last_synced_at) VALUES (?, ?, ?, ?)",
+        [appointment_id.into(), event_id.into(), calendar_id.into(), Utc::now().to_rfc3339().into()]
+    ))
     .await
     .map_err(|e| format!("Failed to save event mapping: {}", e))?;
 
@@ -257,54 +226,47 @@ async fn trigger_sync_after_create(
 }
 
 async fn trigger_sync_after_update(
-    pool_arc: Arc<Mutex<SqlitePool>>,
+    db: Arc<DatabaseConnection>,
     appointment_id: i64,
 ) -> Result<(), String> {
-    let pool = pool_arc.lock().await;
-
     // Check if sync is enabled
-    let settings: Option<GoogleCalendarSettings> = sqlx::query_as(
-        "SELECT * FROM google_calendar_settings WHERE user_id = 'default' AND sync_enabled = 1"
-    )
-    .fetch_optional(&*pool)
+    let row = db.query_one(Statement::from_string(
+        DbBackend::Sqlite,
+        "SELECT calendar_id, sync_enabled FROM google_calendar_settings WHERE user_id = 'default' AND sync_enabled = 1".to_string()
+    ))
     .await
     .map_err(|e| format!("Failed to check sync settings: {}", e))?;
 
-    let settings = match settings {
-        Some(s) => s,
+    let row = match row {
+        Some(r) => r,
         None => return Ok(()), // Sync not enabled
     };
 
-    let calendar_id = match settings.calendar_id {
-        Some(id) => id,
-        None => return Err("No calendar ID configured".to_string()),
-    };
+    let calendar_id: String = row.try_get("", "calendar_id")
+        .map_err(|_| "No calendar ID configured".to_string())?;
 
     // Get valid access token (will refresh if needed)
-    let access_token = get_valid_access_token(&*pool).await?;
+    let access_token = get_valid_access_token(&db).await?;
 
     // Check if mapping exists
-    let mapping: Option<(String, String)> = sqlx::query_as(
-        "SELECT event_id, calendar_id FROM calendar_event_mappings WHERE appointment_id = ?"
-    )
-    .bind(appointment_id)
-    .fetch_optional(&*pool)
+    let mapping = db.query_one(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "SELECT event_id, calendar_id FROM calendar_event_mappings WHERE appointment_id = ?",
+        [appointment_id.into()]
+    ))
     .await
     .map_err(|e| format!("Failed to check event mapping: {}", e))?;
 
-    let (event_id, _) = match mapping {
-        Some(m) => m,
+    let event_id: String = match mapping {
+        Some(m) => m.try_get("", "event_id").map_err(|_| "Event ID not found".to_string())?,
         None => {
-            // No mapping exists, drop lock and create event instead
-            drop(pool);
-            return trigger_sync_after_create(pool_arc.clone(), appointment_id).await;
+            // No mapping exists, create event instead
+            return trigger_sync_after_create(db.clone(), appointment_id).await;
         }
     };
 
     // Get appointment details
-    let appointment: AppointmentDetail = AppointmentService::get_appointment_by_id(&*pool, appointment_id)
-        .await
-        .map_err(|e| format!("Failed to get appointment: {}", e))?;
+    let appointment = fetch_appointment_detail_seaorm(&db, appointment_id).await?;
 
     // Format event summary and description with all details
     let patient_name = appointment.patient.as_ref()
@@ -316,7 +278,7 @@ async fn trigger_sync_after_update(
     let mut desc_parts = Vec::new();
     desc_parts.push(format!("Patient: {}", patient_name));
 
-    if let Some(_patient) = &appointment.patient {
+    if appointment.patient.is_some() {
         desc_parts.push(format!("Microchip ID: {}",
             appointment.appointment.microchip_id.as_deref().unwrap_or("-")));
     }
@@ -365,12 +327,11 @@ async fn trigger_sync_after_update(
     }
 
     // Update last_synced_at
-    sqlx::query(
-        "UPDATE calendar_event_mappings SET last_synced_at = ? WHERE appointment_id = ?"
-    )
-    .bind(Utc::now())
-    .bind(appointment_id)
-    .execute(&*pool)
+    db.execute(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "UPDATE calendar_event_mappings SET last_synced_at = ? WHERE appointment_id = ?",
+        [Utc::now().to_rfc3339().into(), appointment_id.into()]
+    ))
     .await
     .map_err(|e| format!("Failed to update sync timestamp: {}", e))?;
 
@@ -378,43 +339,39 @@ async fn trigger_sync_after_update(
 }
 
 async fn trigger_sync_after_cancel(
-    pool: Arc<Mutex<SqlitePool>>,
+    db: Arc<DatabaseConnection>,
     appointment_id: i64,
 ) -> Result<(), String> {
-    let pool = pool.lock().await;
-
     // Check if sync is enabled
-    let settings: Option<GoogleCalendarSettings> = sqlx::query_as(
-        "SELECT * FROM google_calendar_settings WHERE user_id = 'default' AND sync_enabled = 1"
-    )
-    .fetch_optional(&*pool)
+    let row = db.query_one(Statement::from_string(
+        DbBackend::Sqlite,
+        "SELECT calendar_id, sync_enabled FROM google_calendar_settings WHERE user_id = 'default' AND sync_enabled = 1".to_string()
+    ))
     .await
     .map_err(|e| format!("Failed to check sync settings: {}", e))?;
 
-    let settings = match settings {
-        Some(s) => s,
+    let row = match row {
+        Some(r) => r,
         None => return Ok(()), // Sync not enabled
     };
 
-    let calendar_id = match settings.calendar_id {
-        Some(id) => id,
-        None => return Err("No calendar ID configured".to_string()),
-    };
+    let calendar_id: String = row.try_get("", "calendar_id")
+        .map_err(|_| "No calendar ID configured".to_string())?;
 
     // Get valid access token (will refresh if needed)
-    let access_token = get_valid_access_token(&*pool).await?;
+    let access_token = get_valid_access_token(&db).await?;
 
     // Check if mapping exists
-    let mapping: Option<(String, String)> = sqlx::query_as(
-        "SELECT event_id, calendar_id FROM calendar_event_mappings WHERE appointment_id = ?"
-    )
-    .bind(appointment_id)
-    .fetch_optional(&*pool)
+    let mapping = db.query_one(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "SELECT event_id, calendar_id FROM calendar_event_mappings WHERE appointment_id = ?",
+        [appointment_id.into()]
+    ))
     .await
     .map_err(|e| format!("Failed to check event mapping: {}", e))?;
 
-    let (event_id, _) = match mapping {
-        Some(m) => m,
+    let event_id: String = match mapping {
+        Some(m) => m.try_get("", "event_id").map_err(|_| "Event ID not found".to_string())?,
         None => return Ok(()), // No event to delete
     };
 
@@ -433,13 +390,116 @@ async fn trigger_sync_after_cancel(
     }
 
     // Delete mapping
-    sqlx::query(
-        "DELETE FROM calendar_event_mappings WHERE appointment_id = ?"
-    )
-    .bind(appointment_id)
-    .execute(&*pool)
+    db.execute(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "DELETE FROM calendar_event_mappings WHERE appointment_id = ?",
+        [appointment_id.into()]
+    ))
     .await
     .map_err(|e| format!("Failed to delete event mapping: {}", e))?;
 
     Ok(())
+}
+
+// Helper to fetch appointment detail using SeaORM
+async fn fetch_appointment_detail_seaorm(
+    db: &DatabaseConnection,
+    appointment_id: i64,
+) -> Result<AppointmentDetail, String> {
+    use crate::models::{Appointment, PatientInfo, Room};
+
+    let row = db.query_one(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        r#"SELECT a.id, a.patient_id, a.title, a.description, a.start_time, a.end_time,
+                  a.room_id, a.status, a.created_at, a.updated_at, a.deleted_at,
+                  a.created_by, p.microchip_id, p.name as patient_name, s.name as species, b.name as breed
+           FROM appointments a
+           LEFT JOIN patients p ON a.patient_id = p.id
+           LEFT JOIN species s ON p.species_id = s.id
+           LEFT JOIN breeds b ON p.breed_id = b.id
+           WHERE a.id = ? AND a.deleted_at IS NULL"#,
+        [appointment_id.into()]
+    ))
+    .await
+    .map_err(|e| format!("Failed to fetch appointment: {}", e))?
+    .ok_or("Appointment not found")?;
+
+    let patient_id: i64 = row.try_get("", "patient_id").unwrap_or(0);
+    let room_id: Option<i64> = row.try_get("", "room_id").ok();
+    let status_str: String = row.try_get("", "status").unwrap_or_else(|_| "scheduled".to_string());
+
+    let appointment = Appointment {
+        id: row.try_get("", "id").unwrap_or(0),
+        patient_id,
+        title: row.try_get("", "title").unwrap_or_default(),
+        description: row.try_get("", "description").ok(),
+        start_time: row.try_get("", "start_time").unwrap_or_default(),
+        end_time: row.try_get("", "end_time").unwrap_or_default(),
+        room_id,
+        status: match status_str.as_str() {
+            "scheduled" => AppointmentStatus::Scheduled,
+            "in_progress" => AppointmentStatus::InProgress,
+            "completed" => AppointmentStatus::Completed,
+            "cancelled" => AppointmentStatus::Cancelled,
+            _ => AppointmentStatus::Scheduled,
+        },
+        created_at: row.try_get("", "created_at").unwrap_or_default(),
+        updated_at: row.try_get("", "updated_at").unwrap_or_default(),
+        deleted_at: row.try_get("", "deleted_at").ok(),
+        created_by: row.try_get("", "created_by").unwrap_or_else(|_| "system".to_string()),
+        patient_name: row.try_get("", "patient_name").ok(),
+        species: row.try_get("", "species").ok(),
+        breed: row.try_get("", "breed").ok(),
+        microchip_id: row.try_get("", "microchip_id").ok(),
+    };
+
+    // Get patient info
+    let patient: Option<PatientInfo> = if patient_id > 0 {
+        let patient_row = db.query_one(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "SELECT p.id, p.name, s.name as species, b.name as breed FROM patients p LEFT JOIN species s ON p.species_id = s.id LEFT JOIN breeds b ON p.breed_id = b.id WHERE p.id = ?",
+            [patient_id.into()]
+        ))
+        .await
+        .map_err(|e| format!("Failed to fetch patient: {}", e))?;
+
+        patient_row.map(|r| PatientInfo {
+            id: r.try_get("", "id").unwrap_or(0),
+            name: r.try_get("", "name").unwrap_or_default(),
+            species: r.try_get("", "species").ok(),
+            breed: r.try_get("", "breed").ok(),
+        })
+    } else {
+        None
+    };
+
+    // Get room info
+    let room: Option<Room> = if let Some(rid) = room_id {
+        let room_row = db.query_one(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "SELECT * FROM rooms WHERE id = ?",
+            [rid.into()]
+        ))
+        .await
+        .map_err(|e| format!("Failed to fetch room: {}", e))?;
+
+        room_row.map(|r| Room {
+            id: r.try_get("", "id").unwrap_or(0),
+            name: r.try_get("", "name").unwrap_or_default(),
+            description: r.try_get("", "description").ok(),
+            capacity: r.try_get("", "capacity").unwrap_or(1),
+            color: r.try_get("", "color").unwrap_or_else(|_| "#1890ff".to_string()),
+            is_active: r.try_get("", "is_active").unwrap_or(true),
+            created_at: r.try_get("", "created_at").unwrap_or_default(),
+            updated_at: r.try_get("", "updated_at").unwrap_or_default(),
+        })
+    } else {
+        None
+    };
+
+    Ok(AppointmentDetail {
+        appointment,
+        patient,
+        room,
+    })
 }

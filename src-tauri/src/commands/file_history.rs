@@ -1,52 +1,68 @@
 use crate::models::medical::{FileAccessHistory, FileAccessHistoryWithRecord};
-use crate::database::connection::DatabasePool;
-use chrono::{Utc, Duration};
-use sqlx::SqlitePool;
+use crate::database::SeaOrmPool;
+use chrono::{Utc, Duration, DateTime};
 use tauri::State;
+use sea_orm::{ConnectionTrait, Statement, DbBackend, DatabaseConnection};
+
+// Helper function to map SeaORM row to FileAccessHistory
+fn row_to_file_access_history(row: &sea_orm::QueryResult) -> Result<FileAccessHistory, String> {
+    Ok(FileAccessHistory {
+        id: row.try_get("", "id").map_err(|e| format!("Failed to get id: {}", e))?,
+        file_id: row.try_get("", "file_id").map_err(|e| format!("Failed to get file_id: {}", e))?,
+        original_name: row.try_get("", "original_name").map_err(|e| format!("Failed to get original_name: {}", e))?,
+        file_path: row.try_get("", "file_path").map_err(|e| format!("Failed to get file_path: {}", e))?,
+        file_size: row.try_get("", "file_size").ok(),
+        mime_type: row.try_get("", "mime_type").ok(),
+        device_type: row.try_get("", "device_type").map_err(|e| format!("Failed to get device_type: {}", e))?,
+        device_name: row.try_get("", "device_name").map_err(|e| format!("Failed to get device_name: {}", e))?,
+        connection_method: row.try_get("", "connection_method").ok(),
+        received_at: row.try_get("", "received_at").map_err(|e| format!("Failed to get received_at: {}", e))?,
+        first_attached_to_record_id: row.try_get("", "first_attached_to_record_id").ok(),
+        first_attached_at: row.try_get::<Option<DateTime<Utc>>>("", "first_attached_at").ok().flatten(),
+        attachment_count: row.try_get("", "attachment_count").unwrap_or(0),
+        last_accessed_at: row.try_get("", "last_accessed_at").map_err(|e| format!("Failed to get last_accessed_at: {}", e))?,
+    })
+}
 
 /// Get recent device files from the last 14 days
 #[tauri::command]
 pub async fn get_recent_device_files(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     days: Option<i64>,
 ) -> Result<Vec<FileAccessHistoryWithRecord>, String> {
-    let pool = pool.lock().await;
     let days = days.unwrap_or(14); // Default to 14 days
     let cutoff_date = Utc::now() - Duration::days(days);
 
-    let files = sqlx::query_as::<_, FileAccessHistory>(
-        r#"
-        SELECT *
-        FROM file_access_history
-        WHERE received_at >= ?
-        ORDER BY received_at DESC
-        LIMIT 100
-        "#
-    )
-    .bind(cutoff_date)
-    .fetch_all(&*pool)
+    let rows = pool.query_all(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "SELECT * FROM file_access_history WHERE received_at >= ? ORDER BY received_at DESC LIMIT 100",
+        [cutoff_date.to_rfc3339().into()]
+    ))
     .await
     .map_err(|e| format!("Failed to fetch recent files: {}", e))?;
+
+    let files: Result<Vec<FileAccessHistory>, _> = rows.iter().map(row_to_file_access_history).collect();
+    let files = files?;
 
     // Enrich with medical record details
     let mut enriched_files = Vec::new();
     for file in files {
         let (patient_name, record_name) = if let Some(record_id) = file.first_attached_to_record_id {
-            let result: Option<(String, String)> = sqlx::query_as(
-                r#"
-                SELECT p.name, mr.name
-                FROM medical_records mr
-                JOIN patients p ON mr.patient_id = p.id
-                WHERE mr.id = ?
-                "#
-            )
-            .bind(record_id)
-            .fetch_optional(&*pool)
+            let result = pool.query_one(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "SELECT p.name as patient_name, mr.name as record_name \
+                 FROM medical_records mr \
+                 JOIN patients p ON mr.patient_id = p.id \
+                 WHERE mr.id = ?",
+                [record_id.into()]
+            ))
             .await
             .map_err(|e| format!("Failed to fetch record details: {}", e))?;
 
-            if let Some((pname, rname)) = result {
-                (Some(pname), Some(rname))
+            if let Some(row) = result {
+                let pname: Option<String> = row.try_get("", "patient_name").ok();
+                let rname: Option<String> = row.try_get("", "record_name").ok();
+                (pname, rname)
             } else {
                 (None, None)
             }
@@ -67,35 +83,36 @@ pub async fn get_recent_device_files(
 /// Get file history for a specific file_id
 #[tauri::command]
 pub async fn get_file_history(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     file_id: String,
 ) -> Result<Option<FileAccessHistoryWithRecord>, String> {
-    let pool = pool.lock().await;
-    let file = sqlx::query_as::<_, FileAccessHistory>(
-        "SELECT * FROM file_access_history WHERE file_id = ?"
-    )
-    .bind(&file_id)
-    .fetch_optional(&*pool)
+    let row = pool.query_one(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "SELECT * FROM file_access_history WHERE file_id = ?",
+        [file_id.into()]
+    ))
     .await
     .map_err(|e| format!("Failed to fetch file history: {}", e))?;
 
-    if let Some(file) = file {
+    if let Some(row) = row {
+        let file = row_to_file_access_history(&row)?;
+
         let (patient_name, record_name) = if let Some(record_id) = file.first_attached_to_record_id {
-            let result: Option<(String, String)> = sqlx::query_as(
-                r#"
-                SELECT p.name, mr.name
-                FROM medical_records mr
-                JOIN patients p ON mr.patient_id = p.id
-                WHERE mr.id = ?
-                "#
-            )
-            .bind(record_id)
-            .fetch_optional(&*pool)
+            let result = pool.query_one(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "SELECT p.name as patient_name, mr.name as record_name \
+                 FROM medical_records mr \
+                 JOIN patients p ON mr.patient_id = p.id \
+                 WHERE mr.id = ?",
+                [record_id.into()]
+            ))
             .await
             .map_err(|e| format!("Failed to fetch record details: {}", e))?;
 
-            if let Some((pname, rname)) = result {
-                (Some(pname), Some(rname))
+            if let Some(row) = result {
+                let pname: Option<String> = row.try_get("", "patient_name").ok();
+                let rname: Option<String> = row.try_get("", "record_name").ok();
+                (pname, rname)
             } else {
                 (None, None)
             }
@@ -113,9 +130,9 @@ pub async fn get_file_history(
     }
 }
 
-/// Internal function for recording file access (called from Rust code)
-pub async fn record_device_file_access_internal(
-    pool: &SqlitePool,
+/// Internal function for recording file access (called from Rust code) - SeaORM version
+pub async fn record_device_file_access_internal_seaorm(
+    db: &DatabaseConnection,
     file_id: String,
     original_name: String,
     file_path: String,
@@ -125,43 +142,44 @@ pub async fn record_device_file_access_internal(
     device_name: String,
     connection_method: Option<String>,
 ) -> Result<(), String> {
+    use sea_orm::Value;
+
     // Check if file already exists
-    let existing: Option<(i64,)> = sqlx::query_as(
-        "SELECT id FROM file_access_history WHERE file_id = ?"
-    )
-    .bind(&file_id)
-    .fetch_optional(pool)
+    let existing = db.query_one(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "SELECT id FROM file_access_history WHERE file_id = ?",
+        [file_id.clone().into()]
+    ))
     .await
     .map_err(|e| format!("Failed to check existing file: {}", e))?;
 
     if existing.is_some() {
         // Update last_accessed_at
-        sqlx::query(
-            "UPDATE file_access_history SET last_accessed_at = ? WHERE file_id = ?"
-        )
-        .bind(Utc::now())
-        .bind(&file_id)
-        .execute(pool)
+        db.execute(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "UPDATE file_access_history SET last_accessed_at = ? WHERE file_id = ?",
+            [Utc::now().to_rfc3339().into(), file_id.into()]
+        ))
         .await
         .map_err(|e| format!("Failed to update file access: {}", e))?;
     } else {
         // Insert new record
-        sqlx::query(
-            r#"
-            INSERT INTO file_access_history
-            (file_id, original_name, file_path, file_size, mime_type, device_type, device_name, connection_method)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            "#
-        )
-        .bind(&file_id)
-        .bind(&original_name)
-        .bind(&file_path)
-        .bind(file_size)
-        .bind(mime_type)
-        .bind(&device_type)
-        .bind(&device_name)
-        .bind(connection_method)
-        .execute(pool)
+        db.execute(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "INSERT INTO file_access_history \
+             (file_id, original_name, file_path, file_size, mime_type, device_type, device_name, connection_method) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                file_id.into(),
+                original_name.into(),
+                file_path.into(),
+                file_size.map(|s| Value::BigInt(Some(s))).unwrap_or(Value::BigInt(None)),
+                Value::String(mime_type.map(Box::new)),
+                device_type.into(),
+                device_name.into(),
+                Value::String(connection_method.map(Box::new)),
+            ]
+        ))
         .await
         .map_err(|e| format!("Failed to record file access: {}", e))?;
     }
@@ -172,7 +190,7 @@ pub async fn record_device_file_access_internal(
 /// Record or update file access history when device data is received
 #[tauri::command]
 pub async fn record_device_file_access(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     file_id: String,
     original_name: String,
     file_path: String,
@@ -182,9 +200,8 @@ pub async fn record_device_file_access(
     device_name: String,
     connection_method: Option<String>,
 ) -> Result<(), String> {
-    let pool = pool.lock().await;
-    record_device_file_access_internal(
-        &*pool,
+    record_device_file_access_internal_seaorm(
+        &pool,
         file_id,
         original_name,
         file_path,
@@ -196,56 +213,59 @@ pub async fn record_device_file_access(
     ).await
 }
 
-/// Internal function for updating file attachment (called from Rust code)
-pub async fn update_file_attachment_internal(
-    pool: &SqlitePool,
+/// Internal function for updating file attachment (called from Rust code) - SeaORM version
+pub async fn update_file_attachment_internal_seaorm(
+    db: &DatabaseConnection,
     file_id: String,
     medical_record_id: i64,
 ) -> Result<(), String> {
     // Check if this is the first attachment
-    let existing: Option<(Option<i64>, i32)> = sqlx::query_as(
-        "SELECT first_attached_to_record_id, attachment_count FROM file_access_history WHERE file_id = ?"
-    )
-    .bind(&file_id)
-    .fetch_optional(pool)
+    let existing = db.query_one(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "SELECT first_attached_to_record_id, attachment_count FROM file_access_history WHERE file_id = ?",
+        [file_id.clone().into()]
+    ))
     .await
     .map_err(|e| format!("Failed to fetch file history: {}", e))?;
 
-    if let Some((first_record_id, count)) = existing {
+    if let Some(row) = existing {
+        let first_record_id: Option<i64> = row.try_get("", "first_attached_to_record_id").ok();
+        let count: i32 = row.try_get("", "attachment_count").unwrap_or(0);
+
         if first_record_id.is_none() {
             // This is the first attachment
-            sqlx::query(
-                r#"
-                UPDATE file_access_history
-                SET first_attached_to_record_id = ?,
-                    first_attached_at = ?,
-                    attachment_count = ?,
-                    last_accessed_at = ?
-                WHERE file_id = ?
-                "#
-            )
-            .bind(medical_record_id)
-            .bind(Utc::now())
-            .bind(count + 1)
-            .bind(Utc::now())
-            .bind(&file_id)
-            .execute(pool)
+            db.execute(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "UPDATE file_access_history \
+                 SET first_attached_to_record_id = ?, \
+                     first_attached_at = ?, \
+                     attachment_count = ?, \
+                     last_accessed_at = ? \
+                 WHERE file_id = ?",
+                [
+                    medical_record_id.into(),
+                    Utc::now().to_rfc3339().into(),
+                    (count + 1).into(),
+                    Utc::now().to_rfc3339().into(),
+                    file_id.clone().into(),
+                ]
+            ))
             .await
             .map_err(|e| format!("Failed to update file attachment: {}", e))?;
         } else {
             // Just increment count
-            sqlx::query(
-                r#"
-                UPDATE file_access_history
-                SET attachment_count = ?,
-                    last_accessed_at = ?
-                WHERE file_id = ?
-                "#
-            )
-            .bind(count + 1)
-            .bind(Utc::now())
-            .bind(&file_id)
-            .execute(pool)
+            db.execute(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "UPDATE file_access_history \
+                 SET attachment_count = ?, \
+                     last_accessed_at = ? \
+                 WHERE file_id = ?",
+                [
+                    (count + 1).into(),
+                    Utc::now().to_rfc3339().into(),
+                    file_id.clone().into(),
+                ]
+            ))
             .await
             .map_err(|e| format!("Failed to update attachment count: {}", e))?;
         }
@@ -257,29 +277,27 @@ pub async fn update_file_attachment_internal(
 /// Update file history when attached to a medical record (Tauri command wrapper)
 #[tauri::command]
 pub async fn update_file_attachment(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     file_id: String,
     medical_record_id: i64,
 ) -> Result<(), String> {
-    let pool = pool.lock().await;
-    update_file_attachment_internal(&*pool, file_id, medical_record_id).await
+    update_file_attachment_internal_seaorm(&pool, file_id, medical_record_id).await
 }
 
 /// Clean up old file history entries (older than specified days)
 #[tauri::command]
 pub async fn cleanup_old_file_history(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     days: Option<i64>,
 ) -> Result<i64, String> {
-    let pool = pool.lock().await;
     let days = days.unwrap_or(14); // Default to 14 days
     let cutoff_date = Utc::now() - Duration::days(days);
 
-    let result = sqlx::query(
-        "DELETE FROM file_access_history WHERE received_at < ?"
-    )
-    .bind(cutoff_date)
-    .execute(&*pool)
+    let result = pool.execute(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "DELETE FROM file_access_history WHERE received_at < ?",
+        [cutoff_date.to_rfc3339().into()]
+    ))
     .await
     .map_err(|e| format!("Failed to cleanup old files: {}", e))?;
 
@@ -289,30 +307,30 @@ pub async fn cleanup_old_file_history(
 /// Download device file by file_id from storage (includes device metadata for PDF generation)
 #[tauri::command]
 pub async fn download_device_file(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     file_id: String,
 ) -> Result<DeviceFileDownloadResponse, String> {
-    use sqlx::Row;
-
-    let pool = pool.lock().await;
-
     // Get file metadata from file_access_history (including device metadata)
-    let row = sqlx::query(
+    let row = pool.query_one(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
         "SELECT original_name, file_path, mime_type, device_type, device_name, connection_method \
-         FROM file_access_history WHERE file_id = ?"
-    )
-    .bind(&file_id)
-    .fetch_optional(&*pool)
+         FROM file_access_history WHERE file_id = ?",
+        [file_id.into()]
+    ))
     .await
     .map_err(|e| format!("Failed to fetch file metadata: {}", e))?
     .ok_or("File not found in history")?;
 
-    let original_name: String = row.get("original_name");
-    let file_path: String = row.get("file_path");
-    let mime_type: Option<String> = row.get("mime_type");
-    let device_type: String = row.get("device_type");
-    let device_name: String = row.get("device_name");
-    let connection_method: Option<String> = row.get("connection_method");
+    let original_name: String = row.try_get("", "original_name")
+        .map_err(|e| format!("Failed to get original_name: {}", e))?;
+    let file_path: String = row.try_get("", "file_path")
+        .map_err(|e| format!("Failed to get file_path: {}", e))?;
+    let mime_type: Option<String> = row.try_get("", "mime_type").ok();
+    let device_type: String = row.try_get("", "device_type")
+        .map_err(|e| format!("Failed to get device_type: {}", e))?;
+    let device_name: String = row.try_get("", "device_name")
+        .map_err(|e| format!("Failed to get device_name: {}", e))?;
+    let connection_method: Option<String> = row.try_get("", "connection_method").ok();
 
     // Read file from disk
     let file_data = std::fs::read(&file_path)

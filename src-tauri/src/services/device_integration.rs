@@ -1,95 +1,104 @@
-use crate::database::DatabasePool;
+use crate::entities::device_integration::{self, Entity as DeviceIntegrationEntity};
 use crate::models::device_integration::{
-    DeviceIntegration, DeviceIntegrationRow, CreateDeviceIntegrationInput,
-    UpdateDeviceIntegrationInput
+    DeviceIntegration, CreateDeviceIntegrationInput,
+    UpdateDeviceIntegrationInput, DeviceType, ConnectionType
 };
 use crate::models::dto::MaybeNull;
-use sqlx::Row;
 use chrono::Utc;
+use sea_orm::*;
 
 pub struct DeviceIntegrationService;
 
 impl DeviceIntegrationService {
+    /// Convert a SeaORM device_integration model to the API DeviceIntegration model
+    fn to_api_model(model: device_integration::Model) -> Result<DeviceIntegration, String> {
+        Ok(DeviceIntegration {
+            id: model.id,
+            name: model.name,
+            device_type: DeviceType::from_db_string(&model.device_type)?,
+            connection_type: ConnectionType::from_db_string(&model.connection_type)?,
+            watch_directory: model.watch_directory,
+            file_pattern: model.file_pattern,
+            serial_port_name: model.serial_port_name,
+            serial_baud_rate: model.serial_baud_rate,
+            tcp_host: model.tcp_host,
+            tcp_port: model.tcp_port,
+            enabled: model.enabled,
+            last_connected_at: model.last_connected_at,
+            created_at: model.created_at,
+            updated_at: model.updated_at,
+            deleted_at: model.deleted_at,
+        })
+    }
+
     /// Get all device integrations
-    pub async fn get_all(pool: &DatabasePool) -> Result<Vec<DeviceIntegration>, String> {
-        let pool_guard = pool.lock().await;
+    pub async fn get_all(db: &DatabaseConnection) -> Result<Vec<DeviceIntegration>, String> {
+        let models = DeviceIntegrationEntity::find()
+            .filter(device_integration::Column::DeletedAt.is_null())
+            .order_by_asc(device_integration::Column::Name)
+            .all(db)
+            .await
+            .map_err(|e| format!("Failed to fetch device integrations: {}", e))?;
 
-        let rows: Vec<DeviceIntegrationRow> = sqlx::query_as::<_, DeviceIntegrationRow>(
-            "SELECT * FROM device_integrations WHERE deleted_at IS NULL ORDER BY name"
-        )
-        .fetch_all(&*pool_guard)
-        .await
-        .map_err(|e| format!("Failed to fetch device integrations: {}", e))?;
-
-        let integrations: Result<Vec<DeviceIntegration>, String> = rows
+        models
             .into_iter()
-            .map(|row| DeviceIntegration::from_row(row))
-            .collect();
-
-        integrations
+            .map(Self::to_api_model)
+            .collect()
     }
 
     /// Get device integration by ID
-    pub async fn get_by_id(pool: &DatabasePool, id: i64) -> Result<DeviceIntegration, String> {
-        let pool_guard = pool.lock().await;
+    pub async fn get_by_id(db: &DatabaseConnection, id: i64) -> Result<DeviceIntegration, String> {
+        let model = DeviceIntegrationEntity::find_by_id(id)
+            .filter(device_integration::Column::DeletedAt.is_null())
+            .one(db)
+            .await
+            .map_err(|e| format!("Failed to fetch device integration: {}", e))?
+            .ok_or_else(|| "Device integration not found".to_string())?;
 
-        let row: DeviceIntegrationRow = sqlx::query_as::<_, DeviceIntegrationRow>(
-            "SELECT * FROM device_integrations WHERE id = ? AND deleted_at IS NULL"
-        )
-        .bind(id)
-        .fetch_one(&*pool_guard)
-        .await
-        .map_err(|e| format!("Failed to fetch device integration: {}", e))?;
-
-        DeviceIntegration::from_row(row)
+        Self::to_api_model(model)
     }
 
     /// Create a new device integration
     pub async fn create(
-        pool: &DatabasePool,
+        db: &DatabaseConnection,
         input: CreateDeviceIntegrationInput,
     ) -> Result<DeviceIntegration, String> {
-        let id = {
-            let pool_guard = pool.lock().await;
+        let now = Utc::now();
 
-            let result = sqlx::query(
-                r#"
-                INSERT INTO device_integrations (
-                    name, device_type, connection_type,
-                    watch_directory, file_pattern,
-                    serial_port_name, serial_baud_rate,
-                    tcp_host, tcp_port,
-                    enabled
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-                "#
-            )
-            .bind(&input.name)
-            .bind(input.device_type.to_db_string())
-            .bind(input.connection_type.to_db_string())
-            .bind(&input.watch_directory)
-            .bind(&input.file_pattern)
-            .bind(&input.serial_port_name)
-            .bind(input.serial_baud_rate)
-            .bind(&input.tcp_host)
-            .bind(input.tcp_port)
-            .execute(&*pool_guard)
+        let new_integration = device_integration::ActiveModel {
+            name: Set(input.name),
+            device_type: Set(input.device_type.to_db_string().to_string()),
+            connection_type: Set(input.connection_type.to_db_string().to_string()),
+            watch_directory: Set(input.watch_directory),
+            file_pattern: Set(input.file_pattern),
+            serial_port_name: Set(input.serial_port_name),
+            serial_baud_rate: Set(input.serial_baud_rate),
+            tcp_host: Set(input.tcp_host),
+            tcp_port: Set(input.tcp_port),
+            enabled: Set(true),
+            last_connected_at: Set(None),
+            created_at: Set(now),
+            updated_at: Set(now),
+            deleted_at: Set(None),
+            ..Default::default()
+        };
+
+        let result = DeviceIntegrationEntity::insert(new_integration)
+            .exec(db)
             .await
             .map_err(|e| format!("Failed to create device integration: {}", e))?;
 
-            result.last_insert_rowid()
-        }; // Release lock here
-
-        Self::get_by_id(pool, id).await
+        Self::get_by_id(db, result.last_insert_id).await
     }
 
     /// Update an existing device integration
     pub async fn update(
-        pool: &DatabasePool,
+        db: &DatabaseConnection,
         id: i64,
         input: UpdateDeviceIntegrationInput,
     ) -> Result<DeviceIntegration, String> {
-        // Get current values first (before acquiring lock for update)
-        let current = Self::get_by_id(pool, id).await?;
+        // Get current values first
+        let current = Self::get_by_id(db, id).await?;
 
         // Use new values if provided, otherwise use current values
         let name = input.name.unwrap_or(current.name);
@@ -126,105 +135,97 @@ impl DeviceIntegrationService {
         };
         let enabled = input.enabled.unwrap_or(current.enabled);
 
-        // Now acquire lock for the update
-        {
-            let pool_guard = pool.lock().await;
+        // Fetch the entity model for update
+        let entity = DeviceIntegrationEntity::find_by_id(id)
+            .one(db)
+            .await
+            .map_err(|e| format!("Failed to fetch device integration: {}", e))?
+            .ok_or_else(|| "Device integration not found".to_string())?;
 
-            sqlx::query(
-                r#"
-                UPDATE device_integrations SET
-                    name = ?,
-                    connection_type = ?,
-                    watch_directory = ?,
-                    file_pattern = ?,
-                    serial_port_name = ?,
-                    serial_baud_rate = ?,
-                    tcp_host = ?,
-                    tcp_port = ?,
-                    enabled = ?,
-                    updated_at = ?
-                WHERE id = ?
-                "#
-            )
-            .bind(&name)
-            .bind(connection_type.to_db_string())
-            .bind(&watch_directory)
-            .bind(&file_pattern)
-            .bind(&serial_port_name)
-            .bind(serial_baud_rate)
-            .bind(&tcp_host)
-            .bind(tcp_port)
-            .bind(enabled)
-            .bind(Utc::now().to_rfc3339())
-            .bind(id)
-            .execute(&*pool_guard)
+        let now = Utc::now();
+        let mut model: device_integration::ActiveModel = entity.into();
+
+        model.name = Set(name);
+        model.connection_type = Set(connection_type.to_db_string().to_string());
+        model.watch_directory = Set(watch_directory);
+        model.file_pattern = Set(file_pattern);
+        model.serial_port_name = Set(serial_port_name);
+        model.serial_baud_rate = Set(serial_baud_rate);
+        model.tcp_host = Set(tcp_host);
+        model.tcp_port = Set(tcp_port);
+        model.enabled = Set(enabled);
+        model.updated_at = Set(now);
+
+        model
+            .update(db)
             .await
             .map_err(|e| format!("Failed to update device integration: {}", e))?;
-        } // Release lock here
 
-        // Fetch and return the updated integration
-        Self::get_by_id(pool, id).await
+        Self::get_by_id(db, id).await
     }
 
     /// Delete a device integration (soft delete)
-    pub async fn delete(pool: &DatabasePool, id: i64) -> Result<(), String> {
-        let pool_guard = pool.lock().await;
+    pub async fn delete(db: &DatabaseConnection, id: i64) -> Result<(), String> {
+        let entity = DeviceIntegrationEntity::find_by_id(id)
+            .one(db)
+            .await
+            .map_err(|e| format!("Failed to fetch device integration: {}", e))?
+            .ok_or_else(|| "Device integration not found".to_string())?;
 
-        sqlx::query(
-            "UPDATE device_integrations SET deleted_at = ? WHERE id = ?"
-        )
-        .bind(Utc::now().to_rfc3339())
-        .bind(id)
-        .execute(&*pool_guard)
-        .await
-        .map_err(|e| format!("Failed to delete device integration: {}", e))?;
+        let now = Utc::now();
+        let mut model: device_integration::ActiveModel = entity.into();
+        model.deleted_at = Set(Some(now));
+        model.updated_at = Set(now);
+
+        model
+            .update(db)
+            .await
+            .map_err(|e| format!("Failed to delete device integration: {}", e))?;
 
         Ok(())
     }
 
     /// Toggle enabled status
-    pub async fn toggle_enabled(pool: &DatabasePool, id: i64) -> Result<DeviceIntegration, String> {
-        {
-            let pool_guard = pool.lock().await;
-
-            // Get current enabled status
-            let current_enabled: bool = sqlx::query(
-                "SELECT enabled FROM device_integrations WHERE id = ? AND deleted_at IS NULL"
-            )
-            .bind(id)
-            .fetch_one(&*pool_guard)
+    pub async fn toggle_enabled(db: &DatabaseConnection, id: i64) -> Result<DeviceIntegration, String> {
+        let entity = DeviceIntegrationEntity::find_by_id(id)
+            .filter(device_integration::Column::DeletedAt.is_null())
+            .one(db)
             .await
             .map_err(|e| format!("Failed to fetch device integration: {}", e))?
-            .get(0);
+            .ok_or_else(|| "Device integration not found".to_string())?;
 
-            // Toggle the status and update timestamp
-            sqlx::query(
-                "UPDATE device_integrations SET enabled = ?, updated_at = ? WHERE id = ?"
-            )
-            .bind(!current_enabled)
-            .bind(Utc::now().to_rfc3339())
-            .bind(id)
-            .execute(&*pool_guard)
+        let new_enabled = !entity.enabled;
+        let now = Utc::now();
+
+        let mut model: device_integration::ActiveModel = entity.into();
+        model.enabled = Set(new_enabled);
+        model.updated_at = Set(now);
+
+        model
+            .update(db)
             .await
             .map_err(|e| format!("Failed to toggle enabled status: {}", e))?;
-        } // Release lock here
 
-        Self::get_by_id(pool, id).await
+        Self::get_by_id(db, id).await
     }
 
     /// Update last_connected_at timestamp
     #[allow(dead_code)]
-    pub async fn update_last_connected(pool: &DatabasePool, id: i64) -> Result<(), String> {
-        let pool_guard = pool.lock().await;
+    pub async fn update_last_connected(db: &DatabaseConnection, id: i64) -> Result<(), String> {
+        let entity = DeviceIntegrationEntity::find_by_id(id)
+            .one(db)
+            .await
+            .map_err(|e| format!("Failed to fetch device integration: {}", e))?
+            .ok_or_else(|| "Device integration not found".to_string())?;
 
-        sqlx::query(
-            "UPDATE device_integrations SET last_connected_at = ? WHERE id = ?"
-        )
-        .bind(Utc::now().to_rfc3339())
-        .bind(id)
-        .execute(&*pool_guard)
-        .await
-        .map_err(|e| format!("Failed to update last_connected_at: {}", e))?;
+        let now = Utc::now();
+        let mut model: device_integration::ActiveModel = entity.into();
+        model.last_connected_at = Set(Some(now));
+
+        model
+            .update(db)
+            .await
+            .map_err(|e| format!("Failed to update last_connected_at: {}", e))?;
 
         Ok(())
     }

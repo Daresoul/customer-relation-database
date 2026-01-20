@@ -1,15 +1,35 @@
 /**
  * Base API service using Tauri's invoke functionality
+ * Handles automatic case transformation between frontend (camelCase) and backend (snake_case)
  */
 
 import { invoke } from '@tauri-apps/api/tauri';
 import { ApiError, TauriError } from '../types/api';
+import { camelToSnakeObject, snakeToCamelObject } from '../utils/caseTransform';
 
 export class ApiService {
   /**
-   * Wrapper around Tauri's invoke with error handling
+   * Wrapper around Tauri's invoke with error handling and automatic case transformation
+   * - Converts args from camelCase to snake_case before sending
+   * - Converts response from snake_case to camelCase after receiving
    */
   static async invoke<T>(command: string, args?: any): Promise<T> {
+    try {
+      // Transform args from camelCase to snake_case for backend
+      const transformedArgs = args ? camelToSnakeObject(args) : undefined;
+      const result = await invoke<any>(command, transformedArgs);
+      // Transform response from snake_case to camelCase for frontend
+      return snakeToCamelObject(result) as T;
+    } catch (error) {
+      console.error(`Tauri command failed: ${command}`, error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Raw invoke without case transformation - use when you need exact control
+   */
+  static async invokeRaw<T>(command: string, args?: any): Promise<T> {
     try {
       const result = await invoke<T>(command, args);
       return result;

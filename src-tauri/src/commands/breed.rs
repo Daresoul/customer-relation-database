@@ -1,54 +1,48 @@
 use crate::models::breed::{Breed, BreedFilter, CreateBreedInput, UpdateBreedInput};
-use crate::services::breed;
-use crate::database::connection::DatabasePool;
+use crate::services::breed::BreedService;
+use crate::database::SeaOrmPool;
 use tauri::State;
 
 #[tauri::command]
 pub async fn get_breeds(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     filter: BreedFilter,
 ) -> Result<Vec<Breed>, String> {
-    let pool = pool.lock().await;
     let active_only = filter.active_only.unwrap_or(true);
-    breed::get_all(&*pool, filter.species_id, active_only).await
+    BreedService::get_all(&pool, filter.species_id, active_only).await
 }
 
 #[tauri::command]
-pub async fn get_breed(pool: State<'_, DatabasePool>, id: i64) -> Result<Breed, String> {
-    let pool = pool.lock().await;
-    breed::get_by_id(&*pool, id).await
+pub async fn get_breed(pool: State<'_, SeaOrmPool>, id: i64) -> Result<Breed, String> {
+    BreedService::get_by_id(&pool, id).await
 }
 
 #[tauri::command]
 pub async fn create_breed(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     data: CreateBreedInput,
 ) -> Result<Breed, String> {
-    let pool = pool.lock().await;
-    breed::create(&*pool, data).await
+    BreedService::create(&pool, data).await
 }
 
 #[tauri::command]
 pub async fn update_breed(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     id: i64,
     data: UpdateBreedInput,
 ) -> Result<Breed, String> {
-    let pool = pool.lock().await;
-    breed::update(&*pool, id, data).await
+    BreedService::update(&pool, id, data).await
 }
 
 #[tauri::command]
 pub async fn delete_breed(
-    pool: State<'_, DatabasePool>,
+    pool: State<'_, SeaOrmPool>,
     id: i64,
     hard_delete: Option<bool>,
 ) -> Result<(), String> {
-    let pool = pool.lock().await;
-
     if hard_delete.unwrap_or(false) {
-        breed::hard_delete(&*pool, id).await
+        BreedService::hard_delete(&pool, id).await
     } else {
-        breed::soft_delete(&*pool, id).await
+        BreedService::soft_delete(&pool, id).await
     }
 }

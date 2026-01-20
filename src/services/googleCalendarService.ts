@@ -1,89 +1,101 @@
 // T031: Google Calendar service layer
-import { invoke } from '@tauri-apps/api';
+import { ApiService } from './api';
 import type {
   GoogleCalendarSettings,
   OAuthFlowState,
   SyncLog
 } from '../types/googleCalendar';
 
-class GoogleCalendarService {
+export class GoogleCalendarService {
   /**
    * Start OAuth flow - opens browser for user authorization
    */
-  async startOAuthFlow(): Promise<OAuthFlowState> {
-    return await invoke<OAuthFlowState>('start_oauth_flow');
+  static async startOAuthFlow(): Promise<OAuthFlowState> {
+    return ApiService.invoke<OAuthFlowState>('start_oauth_flow');
   }
 
   /**
    * Complete OAuth flow after user authorization
    */
-  async completeOAuthFlow(code: string, state: string): Promise<GoogleCalendarSettings> {
-    return await invoke<GoogleCalendarSettings>('complete_oauth_flow', { code, state });
+  static async completeOAuthFlow(code: string, state: string): Promise<GoogleCalendarSettings> {
+    return ApiService.invoke<GoogleCalendarSettings>('complete_oauth_flow', { code, state });
   }
 
   /**
    * Cancel ongoing OAuth flow
    */
-  async cancelOAuthFlow(): Promise<void> {
-    await invoke('cancel_oauth_flow');
+  static async cancelOAuthFlow(): Promise<void> {
+    return ApiService.invoke('cancel_oauth_flow');
   }
 
   /**
    * Check if OAuth callback was received (returns code and state if available)
    */
-  async checkOAuthCallback(): Promise<[string, string] | null> {
-    return await invoke<[string, string] | null>('check_oauth_callback');
+  static async checkOAuthCallback(): Promise<[string, string] | null> {
+    return ApiService.invoke<[string, string] | null>('check_oauth_callback');
   }
 
   /**
    * Get current Google Calendar settings
    */
-  async getSettings(): Promise<GoogleCalendarSettings> {
-    return await invoke<GoogleCalendarSettings>('get_google_calendar_settings');
+  static async getSettings(): Promise<GoogleCalendarSettings> {
+    return ApiService.invoke<GoogleCalendarSettings>('get_google_calendar_settings');
   }
 
   /**
    * Enable or disable automatic sync
    */
-  async updateSyncEnabled(enabled: boolean): Promise<GoogleCalendarSettings> {
-    return await invoke<GoogleCalendarSettings>('update_sync_enabled', { enabled });
+  static async updateSyncEnabled(enabled: boolean): Promise<GoogleCalendarSettings> {
+    return ApiService.invoke<GoogleCalendarSettings>('update_sync_enabled', { enabled });
   }
 
   /**
    * Disconnect Google Calendar (clears tokens)
    */
-  async disconnect(): Promise<void> {
-    await invoke('disconnect_google_calendar');
+  static async disconnect(): Promise<void> {
+    return ApiService.invoke('disconnect_google_calendar');
   }
 
   /**
    * Revoke access and disconnect
    */
-  async revokeAccess(): Promise<void> {
-    await invoke('revoke_google_access');
+  static async revokeAccess(): Promise<void> {
+    return ApiService.invoke('revoke_google_access');
   }
 
   /**
    * Trigger manual sync of appointments to Google Calendar
    */
-  async triggerSync(): Promise<SyncLog> {
-    return await invoke<SyncLog>('trigger_manual_sync');
+  static async triggerSync(): Promise<SyncLog> {
+    return ApiService.invoke<SyncLog>('trigger_manual_sync');
   }
 
   /**
    * Get sync history
    */
-  async getSyncHistory(limit: number = 10): Promise<SyncLog[]> {
-    return await invoke<SyncLog[]>('get_sync_history', { limit });
+  static async getSyncHistory(limit: number = 10): Promise<SyncLog[]> {
+    return ApiService.invoke<SyncLog[]>('get_sync_history', { limit });
   }
 
   /**
    * Check if sync is currently in progress
    */
-  async checkSyncStatus(): Promise<SyncLog | null> {
-    return await invoke<SyncLog | null>('check_sync_status');
+  static async checkSyncStatus(): Promise<SyncLog | null> {
+    return ApiService.invoke<SyncLog | null>('check_sync_status');
   }
 }
 
-// Export singleton instance
-export const googleCalendarService = new GoogleCalendarService();
+// Export instance wrapper for backward compatibility with hooks
+export const googleCalendarService = {
+  startOAuthFlow: GoogleCalendarService.startOAuthFlow,
+  completeOAuthFlow: GoogleCalendarService.completeOAuthFlow,
+  cancelOAuthFlow: GoogleCalendarService.cancelOAuthFlow,
+  checkOAuthCallback: GoogleCalendarService.checkOAuthCallback,
+  getSettings: GoogleCalendarService.getSettings,
+  updateSyncEnabled: GoogleCalendarService.updateSyncEnabled,
+  disconnect: GoogleCalendarService.disconnect,
+  revokeAccess: GoogleCalendarService.revokeAccess,
+  triggerSync: GoogleCalendarService.triggerSync,
+  getSyncHistory: GoogleCalendarService.getSyncHistory,
+  checkSyncStatus: GoogleCalendarService.checkSyncStatus,
+};
