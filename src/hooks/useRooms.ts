@@ -23,7 +23,7 @@ export const useRoom = (id: number) => {
 
 export const useCreateRoom = () => {
   const { notification } = App.useApp();
-  const { t } = useTranslation('errors');
+  const { t } = useTranslation(['errors','settings']);
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -31,8 +31,8 @@ export const useCreateRoom = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rooms'] });
       notification.success({
-        message: 'Room Created',
-        description: 'Room created successfully',
+        message: t('common:success', { ns: 'common' }),
+        description: t('settings:rooms.created', 'Room created successfully'),
         placement: 'bottomRight',
         duration: 3,
       });
@@ -43,7 +43,7 @@ export const useCreateRoom = () => {
 
 export const useUpdateRoom = () => {
   const { notification } = App.useApp();
-  const { t } = useTranslation('errors');
+  const { t } = useTranslation(['errors','settings']);
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -53,8 +53,8 @@ export const useUpdateRoom = () => {
       queryClient.invalidateQueries({ queryKey: ['rooms'] });
       queryClient.invalidateQueries({ queryKey: ['room'] });
       notification.success({
-        message: 'Room Updated',
-        description: 'Room updated successfully',
+        message: t('common:success', { ns: 'common' }),
+        description: t('settings:rooms.updated', 'Room updated successfully'),
         placement: 'bottomRight',
         duration: 3,
       });
@@ -65,7 +65,7 @@ export const useUpdateRoom = () => {
 
 export const useDeleteRoom = () => {
   const { notification } = App.useApp();
-  const { t } = useTranslation('errors');
+  const { t } = useTranslation(['errors','settings']);
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -73,8 +73,8 @@ export const useDeleteRoom = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rooms'] });
       notification.success({
-        message: 'Room Deleted',
-        description: 'Room deleted successfully',
+        message: t('common:success', { ns: 'common' }),
+        description: t('settings:rooms.deleted', 'Room deleted successfully'),
         placement: 'bottomRight',
         duration: 3,
       });

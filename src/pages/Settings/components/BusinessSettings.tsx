@@ -31,7 +31,7 @@ const BusinessSettings: React.FC<BusinessSettingsProps> = ({ isUpdating }) => {
         <Form.Item
           name="currencyId"
           label={<span className={styles.formLabel}>{t('common:currency')}</span>}
-          extra={<span className={styles.formHint}>Default currency for new procedures</span>}
+          extra={<span className={styles.formHint}>{t('settings:business.currencyHint')}</span>}
         >
           <Select
             size="large"

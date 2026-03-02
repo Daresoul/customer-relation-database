@@ -16,6 +16,8 @@ export interface PendingDeviceFile {
   detectedAt: string;
   // If loaded from "Saved For Later", track the pending entry id so we can mark processed on success
   pendingEntryId?: number;
+  // If known, propagate the original history file_id so backend can auto-mark processed
+  sourceFileId?: string;
 }
 
 // Session grouping for devices that send multiple sequential messages

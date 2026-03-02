@@ -1,0 +1,10 @@
+{
+  "title": "Saved For Later",
+  "patientSerial": "Patient Serial",
+  "fileName": "File Name",
+  "device": "Device",
+  "received": "Received",
+  "loadedIntoImport": "Loaded into import",
+  "failedOpenImport": "Failed to open in import",
+  "searchPlaceholder": "Search by patient serial"
+}

@@ -23,7 +23,7 @@ export const useBreed = (id: number) => {
 
 export const useCreateBreed = () => {
   const { notification } = App.useApp();
-  const { t } = useTranslation('errors');
+  const { t } = useTranslation(['errors','settings']);
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -31,8 +31,8 @@ export const useCreateBreed = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['breeds'] });
       notification.success({
-        message: 'Breed Created',
-        description: 'Breed created successfully',
+        message: t('common:success', { ns: 'common' }),
+        description: t('settings:breeds.createdGeneric', 'Breed created successfully'),
         placement: 'bottomRight',
         duration: 3,
       });
@@ -43,7 +43,7 @@ export const useCreateBreed = () => {
 
 export const useUpdateBreed = () => {
   const { notification } = App.useApp();
-  const { t } = useTranslation('errors');
+  const { t } = useTranslation(['errors','settings']);
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -52,8 +52,8 @@ export const useUpdateBreed = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['breeds'] });
       notification.success({
-        message: 'Breed Updated',
-        description: 'Breed updated successfully',
+        message: t('common:success', { ns: 'common' }),
+        description: t('settings:breeds.updated', 'Breed updated successfully'),
         placement: 'bottomRight',
         duration: 3,
       });
@@ -64,7 +64,7 @@ export const useUpdateBreed = () => {
 
 export const useDeleteBreed = () => {
   const { notification } = App.useApp();
-  const { t } = useTranslation('errors');
+  const { t } = useTranslation(['errors','settings']);
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -73,8 +73,8 @@ export const useDeleteBreed = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['breeds'] });
       notification.success({
-        message: 'Breed Deleted',
-        description: 'Breed deleted successfully',
+        message: t('common:success', { ns: 'common' }),
+        description: t('settings:breeds.deleted', 'Breed deleted successfully'),
         placement: 'bottomRight',
         duration: 3,
       });

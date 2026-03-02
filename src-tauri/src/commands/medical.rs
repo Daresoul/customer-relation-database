@@ -135,9 +135,21 @@ pub async fn upload_medical_attachment(
     // If this file came from file_access_history, update the tracking
     if let Some(file_id) = source_file_id {
         use crate::commands::file_history::update_file_attachment_internal_seaorm;
-        if let Err(e) = update_file_attachment_internal_seaorm(&pool, file_id, medical_record_id).await {
+        if let Err(e) = update_file_attachment_internal_seaorm(&pool, file_id.clone(), medical_record_id).await {
             log::warn!("Failed to update file attachment tracking: {}", e);
             // Don't fail the upload, just log the warning
+        }
+
+        // Also mark any matching "Save for later" entry as processed so it disappears from the list
+        if let Err(e) = pool
+            .execute(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "UPDATE pending_device_entries SET status = 'processed' WHERE file_id = ? AND status = 'pending'",
+                [file_id.into()],
+            ))
+            .await
+        {
+            log::warn!("Failed to mark pending entry processed for attached file: {}", e);
         }
     }
 

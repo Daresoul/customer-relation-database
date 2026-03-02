@@ -303,6 +303,7 @@ const DeviceImportModal: React.FC = () => {
               deviceName: file.deviceName,
               connectionMethod: file.connectionMethod,
               attachmentType: 'test_result',
+              sourceFileId: file.sourceFileId,
             })
             .then((res: any) => ({ status: 'fulfilled' as const, fileName: file.fileName, value: res }))
             .catch((err: any) => ({ status: 'rejected' as const, fileName: file.fileName, reason: err }))

@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { Modal, Form, Input, Select, App } from 'antd';
 import { useCreateBreed } from '../../hooks/useBreeds';
+import { useTranslation } from 'react-i18next';
 import { useSpecies } from '../../hooks/useSpecies';
 import { toTitleCase } from '../../utils/stringUtils';
 
@@ -20,6 +21,7 @@ export const CreateBreedModal: React.FC<CreateBreedModalProps> = ({
   onSuccess,
 }) => {
   const [form] = Form.useForm();
+  const { t } = useTranslation(['settings','forms','entities','common']);
   const { notification } = App.useApp();
   const createBreed = useCreateBreed();
   const { data: speciesList = [], isLoading: isLoadingSpecies } = useSpecies(true);
@@ -31,7 +33,7 @@ export const CreateBreedModal: React.FC<CreateBreedModalProps> = ({
         initialValues.name = initialName;
       }
       if (speciesId) {
-        initialValues.species_id = speciesId;
+        initialValues.speciesId = speciesId;
       }
       form.setFieldsValue(initialValues);
     }
@@ -44,12 +46,12 @@ export const CreateBreedModal: React.FC<CreateBreedModalProps> = ({
 
       await createBreed.mutateAsync({
         name: titleCasedName,
-        species_id: values.species_id,
+        speciesId: values.speciesId,
       });
 
       notification.success({
-        message: 'Success',
-        description: `Breed "${titleCasedName}" created successfully`,
+        message: t('common:success'),
+        description: t('settings:breeds.created', { name: titleCasedName }),
         placement: 'bottomRight',
         duration: 3,
       });
@@ -60,8 +62,8 @@ export const CreateBreedModal: React.FC<CreateBreedModalProps> = ({
     } catch (error) {
       console.error('Failed to create breed:', error);
       notification.error({
-        message: 'Error',
-        description: 'Failed to create breed',
+        message: t('common:error'),
+        description: t('settings:breeds.createFailed'),
         placement: 'bottomRight',
         duration: 5,
       });
@@ -75,21 +77,21 @@ export const CreateBreedModal: React.FC<CreateBreedModalProps> = ({
 
   return (
     <Modal
-      title="Create New Breed"
+      title={t('settings:breeds.addBreed')}
       open={open}
       onOk={handleSubmit}
       onCancel={handleCancel}
       confirmLoading={createBreed.isPending}
-      okText="Create"
+      okText={t('common:create')}
     >
       <Form form={form} layout="vertical">
         <Form.Item
-          name="species_id"
-          label="Species"
-          rules={[{ required: true, message: 'Please select species' }]}
+          name="speciesId"
+          label={t('entities:species')}
+          rules={[{ required: true, message: t('forms:validation.required') }]}
         >
           <Select
-            placeholder="Select species"
+            placeholder={t('settings:breeds.selectSpecies')}
             loading={isLoadingSpecies}
             options={speciesList.map(species => ({
               value: species.id,
@@ -100,13 +102,13 @@ export const CreateBreedModal: React.FC<CreateBreedModalProps> = ({
 
         <Form.Item
           name="name"
-          label="Breed Name"
+          label={t('entities:breed')}
           rules={[
-            { required: true, message: 'Please enter breed name' },
-            { max: 50, message: 'Name cannot exceed 50 characters' },
+            { required: true, message: t('forms:validation.required') },
+            { max: 50, message: t('forms:validation.maxLength', { max: 50 }) },
           ]}
         >
-          <Input placeholder="Enter breed name" autoFocus />
+          <Input placeholder={t('settings:breeds.breedPlaceholder')} autoFocus />
         </Form.Item>
       </Form>
     </Modal>

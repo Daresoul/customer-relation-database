@@ -23,7 +23,7 @@ export const useSpeciesById = (id: number) => {
 
 export const useCreateSpecies = () => {
   const { notification } = App.useApp();
-  const { t } = useTranslation('errors');
+  const { t } = useTranslation(['errors','settings']);
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -31,8 +31,8 @@ export const useCreateSpecies = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['species'] });
       notification.success({
-        message: 'Species Created',
-        description: 'Species created successfully',
+        message: t('common:success', { ns: 'common' }),
+        description: t('settings:species.created', 'Species created successfully'),
         placement: 'bottomRight',
         duration: 3,
       });
@@ -43,7 +43,7 @@ export const useCreateSpecies = () => {
 
 export const useUpdateSpecies = () => {
   const { notification } = App.useApp();
-  const { t } = useTranslation('errors');
+  const { t } = useTranslation(['errors','settings']);
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -52,8 +52,8 @@ export const useUpdateSpecies = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['species'] });
       notification.success({
-        message: 'Species Updated',
-        description: 'Species updated successfully',
+        message: t('common:success', { ns: 'common' }),
+        description: t('settings:species.updated', 'Species updated successfully'),
         placement: 'bottomRight',
         duration: 3,
       });
@@ -64,7 +64,7 @@ export const useUpdateSpecies = () => {
 
 export const useDeleteSpecies = () => {
   const { notification } = App.useApp();
-  const { t } = useTranslation('errors');
+  const { t } = useTranslation(['errors','settings']);
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -73,8 +73,8 @@ export const useDeleteSpecies = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['species'] });
       notification.success({
-        message: 'Species Deleted',
-        description: 'Species deleted successfully',
+        message: t('common:success', { ns: 'common' }),
+        description: t('settings:species.deleted', 'Species deleted successfully'),
         placement: 'bottomRight',
         duration: 3,
       });

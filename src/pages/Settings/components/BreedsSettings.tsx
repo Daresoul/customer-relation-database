@@ -32,7 +32,7 @@ const BreedsSettings: React.FC<BreedsSettingsProps> = ({ isUpdating }) => {
     breedForm.resetFields();
     // Pre-select the species if filtered
     if (selectedSpeciesId) {
-      breedForm.setFieldsValue({ species_id: selectedSpeciesId });
+      breedForm.setFieldsValue({ speciesId: selectedSpeciesId });
     }
     setBreedModalVisible(true);
   };
@@ -41,7 +41,7 @@ const BreedsSettings: React.FC<BreedsSettingsProps> = ({ isUpdating }) => {
     setEditingBreed(breed);
     breedForm.setFieldsValue({
       name: breed.name,
-      species_id: breed.species_id,
+      speciesId: breed.speciesId,
       active: breed.active,
     });
     setBreedModalVisible(true);
@@ -63,7 +63,7 @@ const BreedsSettings: React.FC<BreedsSettingsProps> = ({ isUpdating }) => {
     try {
       const breedData = {
         name: toTitleCase(values.name.trim()),
-        species_id: values.species_id,
+        speciesId: values.speciesId,
         active: values.active !== undefined ? values.active : true,
       };
 
@@ -113,8 +113,8 @@ const BreedsSettings: React.FC<BreedsSettingsProps> = ({ isUpdating }) => {
     },
     {
       title: 'Species',
-      dataIndex: 'species_id',
-      key: 'species_id',
+      dataIndex: 'speciesId',
+      key: 'speciesId',
       render: (speciesId: number) => getSpeciesName(speciesId),
     },
     {
@@ -141,11 +141,11 @@ const BreedsSettings: React.FC<BreedsSettingsProps> = ({ isUpdating }) => {
             size="small"
             onClick={() => handleEditBreed(record)}
           >
-            Edit
+            {t('common:edit')}
           </Button>
           <Popconfirm
-            title="Are you sure you want to delete this breed?"
-            description="This will only deactivate it if patients are using it."
+            title={t('settings:breeds.confirmDeleteTitle', 'Are you sure you want to delete this breed?')}
+            description={t('settings:breeds.confirmDeleteDescription', 'This will only deactivate it if patients are using it.')}
             onConfirm={() => handleDeleteBreed(record.id)}
             okText={t('common:yes')}
             cancelText={t('common:no')}
@@ -156,7 +156,7 @@ const BreedsSettings: React.FC<BreedsSettingsProps> = ({ isUpdating }) => {
               danger
               loading={deleteBreedMutation.isPending}
             >
-              Delete
+              {t('common:delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -169,13 +169,13 @@ const BreedsSettings: React.FC<BreedsSettingsProps> = ({ isUpdating }) => {
       <Card
         title={
           <span className={styles.cardTitle}>
-            <AppstoreOutlined /> Breed Management
+            <AppstoreOutlined /> {t('settings:breeds.title')}
           </span>
         }
         extra={
           <Space>
             <Select
-              placeholder="Filter by species"
+              placeholder={t('settings:breeds.filterBySpecies')}
               allowClear
               style={{ width: 200 }}
               onChange={setSelectedSpeciesId}
@@ -191,7 +191,7 @@ const BreedsSettings: React.FC<BreedsSettingsProps> = ({ isUpdating }) => {
               icon={<PlusOutlined />}
               onClick={handleAddBreed}
             >
-              Add Breed
+              {t('settings:breeds.addBreed')}
             </Button>
           </Space>
         }
@@ -209,7 +209,7 @@ const BreedsSettings: React.FC<BreedsSettingsProps> = ({ isUpdating }) => {
 
       {/* Add/Edit Breed Modal */}
       <Modal
-        title={editingBreed ? 'Edit Breed' : 'Add New Breed'}
+        title={editingBreed ? t('settings:breeds.editBreed') : t('settings:breeds.addBreed')}
         open={breedModalVisible}
         onCancel={() => {
           setBreedModalVisible(false);
@@ -226,12 +226,12 @@ const BreedsSettings: React.FC<BreedsSettingsProps> = ({ isUpdating }) => {
           key={editingBreed?.id || 'new'}
         >
           <Form.Item
-            name="species_id"
-            label="Species"
-            rules={[{ required: true, message: 'Please select species' }]}
+            name="speciesId"
+            label={t('entities:species')}
+            rules={[{ required: true, message: t('forms:validation.required') }]}
           >
             <Select
-              placeholder="Select species"
+              placeholder={t('settings:breeds.selectSpecies')}
               loading={isLoadingSpecies}
               options={speciesList.map(species => ({
                 value: species.id,
@@ -242,10 +242,10 @@ const BreedsSettings: React.FC<BreedsSettingsProps> = ({ isUpdating }) => {
 
           <Form.Item
             name="name"
-            label="Breed Name"
-            rules={[{ required: true, message: 'Please enter breed name' }]}
+            label={t('entities:breed')}
+            rules={[{ required: true, message: t('forms:validation.required') }]}
           >
-            <Input placeholder="e.g., Golden Retriever, Persian" />
+            <Input placeholder={t('settings:breeds.breedPlaceholder')} />
           </Form.Item>
         </Form>
       </Modal>

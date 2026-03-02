@@ -1,0 +1,10 @@
+{
+  "title": "Зачувано за подоцна",
+  "patientSerial": "Сериски број на пациент",
+  "fileName": "Име на датотека",
+  "device": "Уред",
+  "received": "Примено",
+  "loadedIntoImport": "Внесено во увоз",
+  "failedOpenImport": "Неуспешно отворање во увоз",
+  "searchPlaceholder": "Пребарај по серијски број"
+}

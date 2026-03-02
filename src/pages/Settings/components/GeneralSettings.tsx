@@ -52,7 +52,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ isUpdating }) => {
         }
         className={styles.settingsCard}
       >
-        <Form.Item label={<span className={styles.formLabel}>Launch at Login</span>}>
+        <Form.Item label={<span className={styles.formLabel}>{t('settings:general.launchAtLogin')}</span>}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <input
               type="checkbox"
@@ -60,7 +60,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ isUpdating }) => {
               onChange={(e) => onToggleLaunchAtLogin(e.target.checked)}
               disabled={isUpdating}
             />
-            <Text type="secondary">Start the app minimized to tray on system startup</Text>
+            <Text type="secondary">{t('settings:general.launchAtLoginHint')}</Text>
           </div>
         </Form.Item>
 

@@ -4,6 +4,7 @@ import type { PendingDeviceEntryWithFile } from '@/types/fileHistory';
 import { fileHistoryService } from '@/services/fileHistoryService';
 import { invoke } from '@tauri-apps/api/tauri';
 import { useDeviceImport } from '@/contexts/DeviceImportContext';
+import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
 
@@ -12,6 +13,7 @@ const PendingDeviceTable: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
   const { addDeviceFile, openModal, setSuggestedPatient } = useDeviceImport();
+  const { t } = useTranslation(['devices','common']);
   const { message } = App.useApp();
 
   const load = async () => {
@@ -34,30 +36,30 @@ const PendingDeviceTable: React.FC = () => {
 
   const columns = [
     {
-      title: 'Patient Serial',
+      title: t('devices:pending.patientSerial'),
       dataIndex: 'patientSerial',
       key: 'patientSerial',
       render: (v: string) => <Text strong>{v}</Text>,
     },
     {
-      title: 'File Name',
+      title: t('devices:pending.fileName'),
       dataIndex: 'originalName',
       key: 'originalName',
     },
     {
-      title: 'Device',
+      title: t('devices:pending.device'),
       dataIndex: 'deviceType',
       key: 'deviceType',
       render: (_: string, record: PendingDeviceEntryWithFile) => <Tag>{record.deviceName}</Tag>,
     },
     {
-      title: 'Received',
+      title: t('devices:pending.received'),
       dataIndex: 'receivedAt',
       key: 'receivedAt',
       render: (d: string) => new Date(d).toLocaleString(),
     },
     {
-      title: 'Actions',
+      title: t('common:actions'),
       key: 'actions',
       width: 160,
       render: (_: any, rec: PendingDeviceEntryWithFile) => (
@@ -89,19 +91,20 @@ const PendingDeviceTable: React.FC = () => {
                   patientIdentifier: data.patientIdentifier || undefined,
                   detectedAt: data.detectedAt || new Date().toISOString(),
                   pendingEntryId: rec.id,
+                  sourceFileId: rec.fileId,
                 });
                 if (resolvedId) setSuggestedPatient(resolvedId);
                 openModal();
-                message.success('Loaded into import');
+                message.success(t('devices:pending.loadedIntoImport'));
               } catch (e) {
                 console.error(e);
-                message.error('Failed to open in import');
+                message.error(t('devices:pending.failedOpenImport'));
               } finally {
                 setLoading(false);
               }
             }}
           >
-            Open
+            {t('common:open')}
           </Button>
         </Space>
       ),
@@ -109,22 +112,22 @@ const PendingDeviceTable: React.FC = () => {
   ];
 
   return (
-    <Card
-      title="Saved For Later"
-      extra={
-        <Space>
-          <Input.Search
-            allowClear
-            placeholder="Search by patient serial"
-            style={{ width: 280 }}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onSearch={() => load()}
-          />
-          <Button onClick={load}>Refresh</Button>
-        </Space>
-      }
-    >
+      <Card
+        title={t('devices:pending.title')}
+        extra={
+          <Space>
+            <Input.Search
+              allowClear
+              placeholder={t('devices:pending.searchPlaceholder')}
+              style={{ width: 280 }}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onSearch={() => load()}
+            />
+          <Button onClick={load}>{t('common:refresh')}</Button>
+          </Space>
+        }
+      >
       <Table
         rowKey={(r) => r.id}
         columns={columns as any}

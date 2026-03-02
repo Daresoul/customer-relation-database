@@ -122,6 +122,23 @@ impl PdfRenderService {
 
         log::info!("📄 Loading PDFium library for platform: {}", subdir);
 
+        // 0) Optional override via environment variable
+        if let Ok(custom_path) = std::env::var("PDFIUM_PATH") {
+            let custom = std::path::PathBuf::from(&custom_path);
+            log::info!("   Trying PDFIUM_PATH override: {:?}", custom);
+            if custom.exists() {
+                match Pdfium::bind_to_library(&custom) {
+                    Ok(bindings) => {
+                        log::info!("   ✅ Loaded PDFium from PDFIUM_PATH override");
+                        return Ok(Pdfium::new(bindings));
+                    }
+                    Err(e) => log::warn!("   ⚠️  Failed to bind override library: {}", e),
+                }
+            } else {
+                log::warn!("   ⚠️  PDFIUM_PATH does not exist: {:?}", custom);
+            }
+        }
+
         // 1) Look in packaged resources with subdirectory structure (macOS/Linux)
         if let Some(base) = app_handle.path_resolver().resolve_resource(format!("pdfium/{}", subdir)) {
             let lib_path = Pdfium::pdfium_platform_library_name_at_path(&base);
@@ -170,35 +187,60 @@ impl PdfRenderService {
             }
         }
 
-        // 2) Look in dev resources folder (resources/pdfium/<subdir>) relative to CWD
+        // 1c) Look beside the executable (nested and flattened)
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(dir) = exe.parent() {
+                let nested = dir.join("pdfium").join(subdir);
+                let nested_lib = Pdfium::pdfium_platform_library_name_at_path(&nested);
+                log::info!("   Trying beside exe (nested): {:?}", nested_lib);
+                if nested_lib.exists() {
+                    match Pdfium::bind_to_library(&nested_lib) {
+                        Ok(bindings) => {
+                            log::info!("   ✅ Loaded PDFium from exe directory (nested)");
+                            return Ok(Pdfium::new(bindings));
+                        }
+                        Err(e) => log::warn!("   ⚠️  Failed to bind exe-nested library: {}", e),
+                    }
+                }
+
+                #[cfg(windows)]
+                {
+                    let flat = dir.join("pdfium.dll");
+                    log::info!("   Trying beside exe (flattened): {:?}", flat);
+                    if flat.exists() {
+                        match Pdfium::bind_to_library(&flat) {
+                            Ok(bindings) => {
+                                log::info!("   ✅ Loaded PDFium from exe directory (flattened)");
+                                return Ok(Pdfium::new(bindings));
+                            }
+                            Err(e) => log::warn!("   ⚠️  Failed to bind exe-flat library: {}", e),
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2) Dev resources (try multiple bases to avoid CWD=System32 pitfalls)
+        let mut bases: Vec<std::path::PathBuf> = Vec::new();
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(dir) = exe.parent() {
+                bases.push(dir.join("resources").join("pdfium").join(subdir));
+                bases.push(dir.join("src-tauri").join("resources").join("pdfium").join(subdir));
+            }
+        }
         if let Ok(cwd) = std::env::current_dir() {
-            let dev_base = cwd.join("resources").join("pdfium").join(subdir);
-            let lib_path = Pdfium::pdfium_platform_library_name_at_path(&dev_base);
+            bases.push(cwd.join("resources").join("pdfium").join(subdir));
+            bases.push(cwd.join("src-tauri").join("resources").join("pdfium").join(subdir));
+        }
+
+        for base in bases {
+            let lib_path = Pdfium::pdfium_platform_library_name_at_path(&base);
             log::info!("   Trying dev resources: {:?}", lib_path);
             if lib_path.exists() {
                 log::info!("   ✓ Library file exists");
                 match Pdfium::bind_to_library(&lib_path) {
                     Ok(bindings) => {
                         log::info!("   ✅ Successfully loaded PDFium from dev resources");
-                        return Ok(Pdfium::new(bindings));
-                    }
-                    Err(e) => {
-                        log::warn!("   ⚠️  Failed to bind to library: {}", e);
-                    }
-                }
-            } else {
-                log::warn!("   ⚠️  Library file not found");
-            }
-
-            // 3) Look in workspace layout (src-tauri/resources/pdfium/<subdir>)
-            let dev_base2 = cwd.join("src-tauri").join("resources").join("pdfium").join(subdir);
-            let lib_path2 = Pdfium::pdfium_platform_library_name_at_path(&dev_base2);
-            log::info!("   Trying workspace layout: {:?}", lib_path2);
-            if lib_path2.exists() {
-                log::info!("   ✓ Library file exists");
-                match Pdfium::bind_to_library(&lib_path2) {
-                    Ok(bindings) => {
-                        log::info!("   ✅ Successfully loaded PDFium from workspace");
                         return Ok(Pdfium::new(bindings));
                     }
                     Err(e) => {

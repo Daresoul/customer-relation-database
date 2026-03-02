@@ -71,7 +71,42 @@
     }
   },
   "rooms": {
-    "confirmDelete": "Are you sure you want to delete this room?"
+    "confirmDelete": "Are you sure you want to delete this room?",
+    "created": "Room created successfully",
+    "updated": "Room updated successfully",
+    "deleted": "Room deleted successfully"
+  },
+  "general": {
+    "launchAtLogin": "Launch at Login",
+    "launchAtLoginHint": "Start the app minimized to tray on system startup"
+  },
+  "business": {
+    "currencyHint": "Default currency for new procedures"
+  },
+  "species": {
+    "addSpecies": "Add New Species",
+    "editSpecies": "Edit Species",
+    "speciesPlaceholder": "e.g., Dog, Cat, Bird",
+    "color": "Color",
+    "created": "Species created successfully",
+    "updated": "Species updated successfully",
+    "deleted": "Species deleted successfully"
+  },
+  "breeds": {
+    "title": "Breed Management",
+    "addBreed": "Add Breed",
+    "editBreed": "Edit Breed",
+    "filterBySpecies": "Filter by species",
+    "selectSpecies": "Select species",
+    "breedPlaceholder": "e.g., Golden Retriever, Persian",
+    "noBreeds": "No breeds added yet. Click \"Add Breed\" to create one.",
+    "created": "Breed \"{{name}}\" created successfully",
+    "createFailed": "Failed to create breed",
+    "createdGeneric": "Breed created successfully",
+    "updated": "Breed updated successfully",
+    "deleted": "Breed deleted successfully",
+    "confirmDeleteTitle": "Are you sure you want to delete this breed?",
+    "confirmDeleteDescription": "This will only deactivate it if patients are using it."
   },
   "templates": {
     "title": "Record Templates",

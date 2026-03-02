@@ -6,13 +6,12 @@ use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateSettingsInput {
-    #[serde(rename = "language")]
+    // Accept default snake_case keys from frontend ApiService; allow camelCase as alias
     pub language: Option<String>,
-    #[serde(rename = "currencyId")]
+    #[serde(alias = "currencyId")]
     pub currency_id: Option<i64>,
-    #[serde(rename = "theme")]
     pub theme: Option<String>,
-    #[serde(rename = "dateFormat")]
+    #[serde(alias = "dateFormat")]
     pub date_format: Option<String>,
 }
 
