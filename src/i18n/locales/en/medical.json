@@ -159,7 +159,11 @@
     "sessionInProgress": "In Progress...",
     "loadingPatients": "Loading patients...",
     "noPatientsFound": "No patients found",
-    "autoFilledTooltip": "Auto-filled from device data - you can edit if needed"
+    "autoFilledTooltip": "Auto-filled from device data - you can edit if needed",
+    "patientInformation": "Patient Information",
+    "prefillToggle": "Pre‑fill from device",
+    "startBlankToggle": "Start blank",
+    "detectedFromFiles": "Detected from files"
   },
   "autocomplete": {
     "typeToSearch": "Type at least 2 characters to search templates",

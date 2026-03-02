@@ -12,62 +12,62 @@ export type ConnectionType =
 export interface DeviceIntegration {
   id: number;
   name: string;
-  device_type: DeviceType;
-  connection_type: ConnectionType;
+  deviceType: DeviceType;
+  connectionType: ConnectionType;
 
   // File watching settings
-  watch_directory?: string;
-  file_pattern?: string;
+  watchDirectory?: string;
+  filePattern?: string;
 
   // Serial port settings
-  serial_port_name?: string;
-  serial_baud_rate?: number;
+  serialPortName?: string;
+  serialBaudRate?: number;
 
   // HL7 TCP settings
-  tcp_host?: string;
-  tcp_port?: number;
+  tcpHost?: string;
+  tcpPort?: number;
 
   // Status and metadata
   enabled: boolean;
-  last_connected_at?: string;
-  created_at: string;
-  updated_at: string;
-  deleted_at?: string;
+  lastConnectedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string;
 }
 
 export interface CreateDeviceIntegrationInput {
   name: string;
-  device_type: DeviceType;
-  connection_type: ConnectionType;
+  deviceType: DeviceType;
+  connectionType: ConnectionType;
 
   // File watching settings
-  watch_directory?: string;
-  file_pattern?: string;
+  watchDirectory?: string;
+  filePattern?: string;
 
   // Serial port settings
-  serial_port_name?: string;
-  serial_baud_rate?: number;
+  serialPortName?: string;
+  serialBaudRate?: number;
 
   // HL7 TCP settings
-  tcp_host?: string;
-  tcp_port?: number;
+  tcpHost?: string;
+  tcpPort?: number;
 }
 
 export interface UpdateDeviceIntegrationInput {
   name?: string;
-  connection_type?: ConnectionType;
+  connectionType?: ConnectionType;
 
   // File watching settings
-  watch_directory?: string;
-  file_pattern?: string;
+  watchDirectory?: string;
+  filePattern?: string;
 
   // Serial port settings
-  serial_port_name?: string;
-  serial_baud_rate?: number;
+  serialPortName?: string;
+  serialBaudRate?: number;
 
   // HL7 TCP settings
-  tcp_host?: string;
-  tcp_port?: number;
+  tcpHost?: string;
+  tcpPort?: number;
 
   enabled?: boolean;
 }

@@ -154,7 +154,11 @@
     "sessionInProgress": "Во тек...",
     "loadingPatients": "Се вчитуваат пациенти...",
     "noPatientsFound": "Не се пронајдени пациенти",
-    "autoFilledTooltip": "Автоматски пополнето од податоци од уред - можете да уредите ако е потребно"
+    "autoFilledTooltip": "Автоматски пополнето од податоци од уред - можете да уредите ако е потребно",
+    "patientInformation": "Информации за пациент",
+    "prefillToggle": "Пред‑пополнување од уред",
+    "startBlankToggle": "Почни празно",
+    "detectedFromFiles": "Детектирано од датотеки"
   },
   "autocomplete": {
     "typeToSearch": "Внесете најмалку 2 знаци за пребарување на шаблони",

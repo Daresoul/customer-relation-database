@@ -51,8 +51,10 @@ impl FileStorageService {
 
         // Save file to disk
         let file_path = storage_dir.join(&file_id);
-        fs::write(&file_path, &file_data)
-            .map_err(|e| format!("Failed to write file: {}", e))?;
+        if let Err(e) = fs::write(&file_path, &file_data) {
+            log::error!("❌ Failed to write attachment file '{}' (record_id={}): {}", file_name, medical_record_id, e);
+            return Err(format!("Failed to write file: {}", e));
+        }
 
         let file_size = file_data.len() as i64;
         let now = Utc::now();
@@ -81,7 +83,10 @@ impl FileStorageService {
             ]
         ))
         .await
-        .map_err(|e| format!("Failed to save attachment record: {}", e))?;
+        .map_err(|e| {
+            log::error!("❌ Failed to insert attachment record for '{}' (record_id={}): {}", file_name, medical_record_id, e);
+            format!("Failed to save attachment record: {}", e)
+        })?;
 
         let attachment_id = result.last_insert_id() as i64;
 

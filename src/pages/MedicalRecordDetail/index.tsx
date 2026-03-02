@@ -6,9 +6,12 @@ import { useTranslation } from 'react-i18next';
 import PdfInlineViewer from '@/components/PdfInlineViewer';
 import PdfMultiPagePreview from '@/components/PdfMultiPagePreview';
 import RecentDeviceFiles from '@/components/RecentDeviceFiles';
-import { HomeOutlined, ArrowLeftOutlined, EditOutlined, SaveOutlined, CloseOutlined, ReloadOutlined, HistoryOutlined } from '@ant-design/icons';
+import { HomeOutlined, ArrowLeftOutlined, EditOutlined, SaveOutlined, CloseOutlined, ReloadOutlined, HistoryOutlined, PrinterOutlined } from '@ant-design/icons';
 import { useMedicalRecord, useUpdateMedicalRecord, useCurrencies, useUploadAttachment } from '@/hooks/useMedicalRecords';
+import { usePatientDetail } from '@/hooks/usePatient';
 import { MedicalService } from '@/services/medicalService';
+import PrintReportModal from '@/components/PrintReportModal';
+import type { PatientOverrides, PatientInfo } from '@/types/report';
 import type { MedicalAttachment } from '@/types/medical';
 import MedicalRecordForm from '@/components/MedicalRecordModal/MedicalRecordForm';
 // Inline PDF viewer handled by PdfInlineViewer with reliable fallbacks
@@ -246,10 +249,46 @@ export const MedicalRecordDetailPage: React.FC = () => {
   const [regeneratingId, setRegeneratingId] = useState<number | null>(null);
   const [recentFilesDrawerOpen, setRecentFilesDrawerOpen] = useState(false);
   const [refreshRecentFiles, setRefreshRecentFiles] = useState<(() => void) | null>(null);
+  const [printReportModalOpen, setPrintReportModalOpen] = useState(false);
 
   const record = data?.record;
   const history = (data?.history || []) as MedicalRecordHistory[];
   const attachments = (data as any)?.attachments || [];
+
+  // Fetch patient info for print report modal
+  const { data: patientDetail } = usePatientDetail(record?.patientId || 0);
+
+  // Compute patient info for the print report modal
+  const patientInfo = useMemo<PatientInfo>(() => {
+    if (!patientDetail) {
+      return {
+        name: '',
+        owner: '',
+        species: '',
+        gender: '',
+        dateOfBirth: undefined,
+        microchipId: undefined,
+      };
+    }
+
+    // Get owner name from household primary contact or household name
+    let ownerName = '';
+    if (patientDetail.household?.primaryContact) {
+      const pc = patientDetail.household.primaryContact;
+      ownerName = [pc.firstName, pc.lastName].filter(Boolean).join(' ');
+    } else if (patientDetail.household?.householdName) {
+      ownerName = patientDetail.household.householdName;
+    }
+
+    return {
+      name: patientDetail.name || '',
+      owner: ownerName,
+      species: patientDetail.speciesName || patientDetail.species || '',
+      gender: patientDetail.gender || '',
+      dateOfBirth: patientDetail.dateOfBirth,
+      microchipId: patientDetail.microchipId,
+    };
+  }, [patientDetail]);
 
   const sortedHistory = useMemo(() => {
     const seen = new Set<string>();
@@ -796,13 +835,21 @@ export const MedicalRecordDetailPage: React.FC = () => {
               Browse Recent Files
             </Button>
             {hasDeviceDataAttachments && (
-              <Button
-                icon={<ReloadOutlined />}
-                onClick={handleRegeneratePdf}
-                loading={regeneratingId === -1}
-              >
-                {t('medical:actions.regeneratePdf')}
-              </Button>
+              <>
+                <Button
+                  icon={<PrinterOutlined />}
+                  onClick={() => setPrintReportModalOpen(true)}
+                >
+                  {t('medical:actions.printReport', 'Print Report')}
+                </Button>
+                <Button
+                  icon={<ReloadOutlined />}
+                  onClick={handleRegeneratePdf}
+                  loading={regeneratingId === -1}
+                >
+                  {t('medical:actions.regeneratePdf')}
+                </Button>
+              </>
             )}
           </Space>
         }
@@ -962,6 +1009,39 @@ export const MedicalRecordDetailPage: React.FC = () => {
           onRefreshNeeded={(fn) => setRefreshRecentFiles(() => fn)}
         />
       </Drawer>
+
+      {/* Print Report Modal */}
+      <PrintReportModal
+        open={printReportModalOpen}
+        onClose={() => setPrintReportModalOpen(false)}
+        medicalRecordId={recordId}
+        attachments={attachments}
+        patientInfo={patientInfo}
+        onGenerate={async (selectedAttachmentIds, patientOverrides) => {
+          try {
+            console.log('Generating configured report:', { selectedAttachmentIds, patientOverrides });
+            const newAttachment = await MedicalService.generateConfiguredReport(
+              recordId,
+              selectedAttachmentIds,
+              patientOverrides
+            );
+            notification.success({
+              message: 'Report Generated',
+              description: 'PDF report generated successfully',
+              placement: 'bottomRight',
+              duration: 5,
+            });
+            await refetch();
+            // Open the generated PDF
+            if (newAttachment?.id) {
+              MedicalService.openAttachmentExternally(newAttachment.id);
+            }
+          } catch (error: any) {
+            console.error('Failed to generate report:', error);
+            throw error;
+          }
+        }}
+      />
     </Content>
   );
 };

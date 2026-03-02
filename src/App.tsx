@@ -24,6 +24,10 @@ import { DeviceImportProvider } from './contexts/DeviceImportContext';
 import { AppWrapper } from './components/AppWrapper';
 import DeviceImportModal from './components/DeviceImportModal/DeviceImportModal';
 import { useDeviceDataListener } from './hooks/useDeviceDataListener';
+import { listen } from '@tauri-apps/api/event';
+import { invoke } from '@tauri-apps/api/tauri';
+import { useDeviceImport } from './contexts/DeviceImportContext';
+import { useViewContext } from './contexts';
 
 // Import global styles
 import './styles/globals.css';
@@ -45,6 +49,45 @@ function DeviceDataHandler() {
   return null;
 }
 
+// Listen for wake-from-tray events to open UI appropriately
+function WakeFromTrayHandler() {
+  const { openModal } = useDeviceImport();
+  const { setCurrentView } = useViewContext();
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    const setup = async () => {
+      unlisten = await listen<any>('wake-from-tray', (event) => {
+        const payload = event.payload || {};
+        if (payload.cause === 'file') {
+          // Ensure the import modal is visible
+          openModal();
+          // Navigate to main (normal page) and ensure patients view
+          setCurrentView('animal');
+          try { window.history.pushState({}, '', '/'); } catch {}
+        }
+        if (payload.cause === 'manual') {
+          // Reset to default "new" state: patients view on main dashboard
+          setCurrentView('animal');
+          // Navigate to root without carrying prior state
+          try {
+            window.history.pushState({}, '', '/');
+          } catch {}
+        }
+        if (payload.cause === 'scan' && payload.code) {
+          // Navigate to main so dashboard handler can search
+          setCurrentView('animal');
+          try { window.history.pushState({}, '', '/'); } catch {}
+        }
+        // 'scan' is handled by page-level listeners and DeviceImport modal
+        // 'manual' can be used to reset view if desired
+      });
+    };
+    setup();
+    return () => { if (unlisten) unlisten(); };
+  }, [openModal, setCurrentView]);
+  return null;
+}
+
 // Inner component to use hooks for locale
 function AppContent() {
   const { i18n } = useTranslation();
@@ -57,6 +100,21 @@ function AppContent() {
     setLocale(currentLang === 'mk' ? mkMK : enUS);
   }, [i18n.language]);
 
+  // Ensure autostart enabled (can be toggled from Settings later)
+  useEffect(() => {
+    const ensureAutostart = async () => {
+      try {
+        const enabled = await invoke<boolean>('plugin:autostart|is_enabled');
+        if (!enabled) {
+          await invoke('plugin:autostart|enable');
+        }
+      } catch (_) {
+        // plugin may be unavailable in dev; ignore
+      }
+    };
+    ensureAutostart();
+  }, []);
+
   return (
     <ConfigProvider locale={locale}>
       <ThemeProvider>
@@ -64,6 +122,7 @@ function AppContent() {
           <DeviceImportProvider>
             <AntApp notification={{ maxCount: 1 }}>
               <DeviceDataHandler />
+              <WakeFromTrayHandler />
               <DeviceImportModal />
               <Router>
                 <AppWrapper>

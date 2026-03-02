@@ -18,11 +18,11 @@ export const DeviceStatusInline: React.FC = () => {
 
   // Get enabled integrations by type
   const serialPortIntegrations = integrations?.filter(
-    (i) => i.connection_type === 'serial_port' && i.enabled
+    (i) => i.connectionType === 'serial_port' && i.enabled
   ) || [];
 
   const fileWatchIntegrations = integrations?.filter(
-    (i) => i.connection_type === 'file_watch' && i.enabled
+    (i) => i.connectionType === 'file_watch' && i.enabled
   ) || [];
 
   // Show loading state or empty state with settings icon
@@ -103,8 +103,8 @@ export const DeviceStatusInline: React.FC = () => {
               title={
                 <div>
                   <div><strong>{integration.name}</strong></div>
-                  <div>{getDeviceTypeDisplayName(integration.device_type)}</div>
-                  <div>{t('tooltips.port', { port: integration.serial_port_name })}</div>
+                  <div>{getDeviceTypeDisplayName(integration.deviceType as any)}</div>
+                  <div>{t('tooltips.port', { port: integration.serialPortName })}</div>
                   <div>{t('tooltips.status', { status: statusText })}</div>
                 </div>
               }
@@ -133,9 +133,9 @@ export const DeviceStatusInline: React.FC = () => {
               title={
                 <div>
                   <div><strong>{integration.name}</strong></div>
-                  <div>{getDeviceTypeDisplayName(integration.device_type)}</div>
-                  <div>{t('tooltips.directory', { directory: integration.watch_directory })}</div>
-                  <div>{t('tooltips.pattern', { pattern: integration.file_pattern })}</div>
+                  <div>{getDeviceTypeDisplayName(integration.deviceType as any)}</div>
+                  <div>{t('tooltips.directory', { directory: integration.watchDirectory })}</div>
+                  <div>{t('tooltips.pattern', { pattern: integration.filePattern })}</div>
                   <div>{t('tooltips.status', { status: statusText })}</div>
                 </div>
               }

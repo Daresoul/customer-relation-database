@@ -1,0 +1,86 @@
+/* PrintReportModal styles */
+.loadingContainer {
+  text-align: center;
+  padding: 50px 0;
+}
+
+.sectionTitle {
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: #E6E6E6;
+}
+
+.sectionDivider {
+  margin: 24px 0;
+}
+
+.formRow {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.formItem {
+  flex: 1;
+}
+
+.deviceFileList {
+  margin-top: 8px;
+}
+
+.deviceFileItem {
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.deviceFileItem:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.deviceFileInfo {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.deviceFileDetails {
+  flex: 1;
+}
+
+.fileName {
+  font-weight: 500;
+  color: #E6E6E6;
+}
+
+.deviceMeta {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.advancedSection {
+  margin-top: 16px;
+}
+
+.advancedContent {
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 6px;
+}
+
+.emptyMessage {
+  padding: 24px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.footerButtons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 24px;
+}

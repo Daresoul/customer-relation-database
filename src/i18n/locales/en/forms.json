@@ -47,7 +47,8 @@
     "search": "Search...",
     "typeHere": "Type here...",
     "optional": "(Optional)",
-    "example": "e.g., {{example}}"
+    "example": "e.g., {{example}}",
+    "selectField": "Select {{field}}"
   },
   "buttons": {
     "submit": "Submit",

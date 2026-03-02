@@ -14,9 +14,10 @@ mod test_utils;
 mod tests;
 
 use database::{create_pools, get_database_url, run_migrations};
-use tauri::Manager;
+use tauri::{Manager, SystemTray, SystemTrayEvent, CustomMenuItem, SystemTrayMenu, SystemTrayMenuItem};
 use tauri_plugin_log::{LogTarget, Builder};
 use log::LevelFilter;
+use services::device_capture::start_device_capture;
 
 fn main() {
     // Load environment variables from .env file
@@ -35,20 +36,114 @@ fn main() {
         LogTarget::LogDir,   // Only log to file in production
     ];
 
+    // Build system tray with basic menu
+    let show_item = CustomMenuItem::new("show".to_string(), "Show");
+    let hide_item = CustomMenuItem::new("hide".to_string(), "Hide");
+    #[cfg(debug_assertions)]
+    let simulate_scan_item = CustomMenuItem::new("simulate_scan".to_string(), "Simulate Scan");
+    #[cfg(debug_assertions)]
+    let simulate_file_item = CustomMenuItem::new("simulate_file".to_string(), "Simulate File");
+    let quit_item = CustomMenuItem::new("quit".to_string(), "Quit");
+
+    // Build tray menu conditionally
+    let mut tray_menu = SystemTrayMenu::new()
+        .add_item(show_item)
+        .add_item(hide_item);
+    #[cfg(debug_assertions)]
+    {
+        tray_menu = tray_menu
+            .add_item(simulate_scan_item)
+            .add_item(simulate_file_item);
+    }
+    tray_menu = tray_menu
+        .add_native_item(SystemTrayMenuItem::Separator)
+        .add_item(quit_item);
+    let tray = SystemTray::new().with_menu(tray_menu);
+
     tauri::Builder::default()
         .plugin(Builder::default()
             .targets(log_targets)
             .level(LevelFilter::Info)
             .build())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec![]),
+        ))
+        .system_tray(tray)
+        .on_system_tray_event(|app, event| match event {
+            SystemTrayEvent::LeftClick { .. } => {
+                if let Some(window) = app.get_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+                let _ = app.emit_all("wake-from-tray", serde_json::json!({"cause": "manual"}));
+            }
+            SystemTrayEvent::MenuItemClick { id, .. } => {
+                match id.as_str() {
+                    "show" => {
+                        if let Some(window) = app.get_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                        let _ = app.emit_all("wake-from-tray", serde_json::json!({"cause": "manual"}));
+                    }
+                    "hide" => {
+                        if let Some(window) = app.get_window("main") {
+                            let _ = window.hide();
+                        }
+                    }
+                    #[cfg(debug_assertions)]
+                    "simulate_scan" => {
+                        // Emit a simulated scan event and show window
+                        let code = format!("TEST-{}", rand::random::<u16>());
+                        if let Some(window) = app.get_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                        let _ = app.emit_all("wake-from-tray", serde_json::json!({
+                            "cause": "scan",
+                            "code": code
+                        }));
+                    }
+                    #[cfg(debug_assertions)]
+                    "simulate_file" => {
+                        // Emit a simulated file event and show window (will open modal)
+                        if let Some(window) = app.get_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                        let _ = app.emit_all("wake-from-tray", serde_json::json!({
+                            "cause": "file",
+                            "fileName": "simulated_exigo.xml",
+                            "device": "Exigo Eos Vet",
+                            "deviceType": "exigo_eos_vet"
+                        }));
+                    }
+                    "quit" => {
+                        let count = services::device_input::stop_all_listeners();
+                        log::info!("Exiting from tray. Stopped {} listeners.", count);
+                        std::process::exit(0);
+                    }
+                    _ => {}
+                }
+            }
+            _ => {}
+        })
         .on_window_event(|event| match event.event() {
-            tauri::WindowEvent::CloseRequested { .. } => {
-                log::info!("🛑 App shutdown requested, stopping all device listeners");
-                let count = services::device_input::stop_all_listeners();
-                log::info!("✅ Stopped {} listeners for graceful shutdown", count);
+            tauri::WindowEvent::CloseRequested { api, .. } => {
+                // Hide to tray instead of quitting
+                api.prevent_close();
+                let _ = event.window().hide();
             }
             _ => {}
         })
         .setup(|app| {
+            // Start device-level scanner capture (Windows/macOS dev environments)
+            start_device_capture(app.handle());
+            // Start hidden on launch (will be shown from tray or on events)
+            if let Some(window) = app.get_window("main") {
+                let _ = window.hide();
+            }
             // Get database URL
             let db_url = get_database_url(&app.handle())?;
             log::info!("Database URL: {}", db_url);
@@ -196,6 +291,7 @@ fn main() {
             commands::revert_medical_record,
             commands::regenerate_pdf_from_attachment,
             commands::regenerate_pdf_from_medical_record,
+            commands::generate_configured_report,
             // Record template commands
             commands::get_record_templates,
             commands::search_record_templates,
@@ -284,6 +380,11 @@ fn main() {
             commands::update_file_attachment,
             commands::cleanup_old_file_history,
             commands::download_device_file,
+            // Pending device entries (Save for later)
+            commands::save_device_files_for_later,
+            commands::list_pending_device_entries,
+            commands::mark_pending_entry_processed,
+            commands::get_device_data_from_history,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -52,6 +52,7 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, "034_verify_breed_id_nullable", verify_breed_id_nullable).await?;
     run_migration(pool, "035_add_mnchip_pcr_analyzer_device", add_mnchip_pcr_analyzer_device).await?;
     run_migration(pool, "036_rename_mnchip_chemistry_device", rename_mnchip_chemistry_device).await?;
+    run_migration(pool, "037_create_pending_device_entries", create_pending_device_entries_table).await?;
 
     Ok(())
 }
@@ -2299,4 +2300,45 @@ fn rename_mnchip_chemistry_device(pool: &SqlitePool) -> std::pin::Pin<Box<dyn st
 #[deprecated(note = "Use run_migrations instead")]
 pub async fn create_tables(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migrations(pool).await
+}
+// Migration 037: Create pending_device_entries table for "Save for later" workflow
+fn create_pending_device_entries_table(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS pending_device_entries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                file_id TEXT NOT NULL UNIQUE,
+                patient_serial TEXT NOT NULL,
+                patient_identifier TEXT,
+                status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','processed','cancelled')),
+                note TEXT,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (file_id) REFERENCES file_access_history(file_id) ON DELETE CASCADE
+            )
+        "#)
+        .execute(pool)
+        .await?;
+
+        // Indexes
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_pending_device_entries_status ON pending_device_entries(status)")
+            .execute(pool)
+            .await?;
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_pending_device_entries_patient_serial ON pending_device_entries(patient_serial)")
+            .execute(pool)
+            .await?;
+
+        // Trigger to auto-update updated_at
+        sqlx::query(r#"
+            CREATE TRIGGER IF NOT EXISTS update_pending_device_entries_timestamp
+            AFTER UPDATE ON pending_device_entries
+            BEGIN
+                UPDATE pending_device_entries SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+            END;
+        "#)
+        .execute(pool)
+        .await?;
+
+        Ok(())
+    })
 }

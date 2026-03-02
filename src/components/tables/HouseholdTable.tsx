@@ -55,7 +55,6 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
 }) => {
   const { t } = useTranslation(['patients', 'entities', 'common']);
   const [searchText, setSearchText] = useState('');
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   // Filter data based on search
   const filteredData = useMemo(() => {
@@ -403,12 +402,7 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
     );
   };
 
-  const rowSelection: TableProps<HouseholdTableRecord>['rowSelection'] = {
-    selectedRowKeys,
-    onChange: (newSelectedRowKeys) => {
-      setSelectedRowKeys(newSelectedRowKeys);
-    },
-  };
+  // No multi-select row selection since there are no bulk actions
 
   return (
     <div className="household-table-container">
@@ -422,11 +416,7 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
             className={styles.searchInput}
             allowClear
           />
-          {selectedRowKeys.length > 0 && (
-            <Text>
-              {selectedRowKeys.length} household{selectedRowKeys.length > 1 ? 's' : ''} selected
-            </Text>
-          )}
+          {/* No bulk selection count */}
         </Space>
       </div>
 
@@ -435,7 +425,6 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
         dataSource={filteredData}
         rowKey="id"
         loading={loading}
-        rowSelection={rowSelection}
         pagination={{
           defaultPageSize: 10,
           showSizeChanger: true,

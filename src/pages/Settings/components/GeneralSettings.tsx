@@ -4,6 +4,7 @@ import { GlobalOutlined, BgColorsOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors } from '../../../utils/themeStyles';
 import styles from '../Settings.module.css';
+import { invoke } from '@tauri-apps/api/tauri';
 
 const { Text } = Typography;
 const { Option } = Select;
@@ -15,6 +16,31 @@ interface GeneralSettingsProps {
 const GeneralSettings: React.FC<GeneralSettingsProps> = ({ isUpdating }) => {
   const { t } = useTranslation(['common', 'forms']);
   const themeColors = useThemeColors();
+  const [launchAtLogin, setLaunchAtLogin] = React.useState<boolean>(false);
+
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const enabled = await invoke<boolean>('plugin:autostart|is_enabled');
+        setLaunchAtLogin(!!enabled);
+      } catch (_) {
+        setLaunchAtLogin(false);
+      }
+    })();
+  }, []);
+
+  const onToggleLaunchAtLogin = async (checked: boolean) => {
+    setLaunchAtLogin(checked);
+    try {
+      if (checked) {
+        await invoke('plugin:autostart|enable');
+      } else {
+        await invoke('plugin:autostart|disable');
+      }
+    } catch (_) {
+      // ignore
+    }
+  };
 
   return (
     <div>
@@ -26,6 +52,18 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ isUpdating }) => {
         }
         className={styles.settingsCard}
       >
+        <Form.Item label={<span className={styles.formLabel}>Launch at Login</span>}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              type="checkbox"
+              checked={launchAtLogin}
+              onChange={(e) => onToggleLaunchAtLogin(e.target.checked)}
+              disabled={isUpdating}
+            />
+            <Text type="secondary">Start the app minimized to tray on system startup</Text>
+          </div>
+        </Form.Item>
+
         <Form.Item
           name="language"
           label={<span className={styles.formLabel}>{t('common:language')}</span>}

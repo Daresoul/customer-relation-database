@@ -12,6 +12,7 @@ import type {
   SearchMedicalRecordsResponse,
   Currency
 } from '@/types/medical';
+import type { PatientOverrides } from '@/types/report';
 
 /**
  * Medical records service - uses ApiService with automatic case transformation
@@ -23,8 +24,10 @@ export class MedicalService {
     filter?: MedicalRecordFilter,
     pagination?: PaginationParams
   ): Promise<MedicalRecordsResponse> {
-    return ApiService.invoke('get_medical_records', {
+    // Use raw invoke and include both camelCase and snake_case keys to satisfy backend
+    return ApiService.invokeRaw('get_medical_records', {
       patientId,
+      patient_id: patientId,
       filter,
       pagination
     });
@@ -34,23 +37,28 @@ export class MedicalService {
     recordId: number,
     includeHistory = false
   ): Promise<MedicalRecordDetail> {
-    return ApiService.invoke('get_medical_record', {
+    // Use raw and include both camelCase and snake_case keys
+    return ApiService.invokeRaw('get_medical_record', {
       recordId,
-      includeHistory
+      record_id: recordId,
+      includeHistory,
+      include_history: includeHistory,
     });
   }
 
   static async createMedicalRecord(
     input: CreateMedicalRecordInput
   ): Promise<MedicalRecord> {
-    return ApiService.invoke('create_medical_record', { input });
+    // Preserve camelCase fields in nested input DTO
+    return ApiService.invokeRaw('create_medical_record', { input });
   }
 
   static async updateMedicalRecord(
     recordId: number,
     updates: UpdateMedicalRecordInput
   ): Promise<MedicalRecord> {
-    return ApiService.invoke('update_medical_record', {
+    // Preserve camelCase fields in nested updates DTO
+    return ApiService.invokeRaw('update_medical_record', {
       recordId,
       updates
     });
@@ -60,8 +68,9 @@ export class MedicalService {
     recordId: number,
     archive: boolean
   ): Promise<void> {
-    return ApiService.invoke('archive_medical_record', {
+    return ApiService.invokeRaw('archive_medical_record', {
       recordId,
+      record_id: recordId,
       archive
     });
   }
@@ -78,15 +87,23 @@ export class MedicalService {
     const arrayBuffer = await file.arrayBuffer();
     const fileData = new Uint8Array(arrayBuffer);
 
-    return ApiService.invoke('upload_medical_attachment', {
+    return ApiService.invokeRaw('upload_medical_attachment', {
       medicalRecordId,
+      medical_record_id: medicalRecordId,
       fileName: file.name,
+      file_name: file.name,
       fileData: Array.from(fileData),
+      file_data: Array.from(fileData),
       mimeType: file.type,
+      mime_type: file.type,
       deviceType,
+      device_type: deviceType,
       deviceName,
+      device_name: deviceName,
       connectionMethod,
+      connection_method: connectionMethod,
       attachmentType,
+      attachment_type: attachmentType,
       sourceFileId
     });
   }
@@ -94,9 +111,9 @@ export class MedicalService {
   static async downloadAttachment(
     attachmentId: number
   ): Promise<Blob> {
-    const response = await ApiService.invoke<DownloadAttachmentResponse>(
+    const response = await ApiService.invokeRaw<DownloadAttachmentResponse>(
       'download_medical_attachment',
-      { attachmentId }
+      { attachmentId, attachment_id: attachmentId }
     );
     const uint8Array = new Uint8Array(response.fileData);
     return new Blob([uint8Array], { type: response.mimeType });
@@ -107,8 +124,9 @@ export class MedicalService {
     page = 1,
     width = 900,
   ): Promise<string> {
-    return ApiService.invoke('render_medical_attachment_pdf_thumbnail', {
+    return ApiService.invokeRaw('render_medical_attachment_pdf_thumbnail', {
       attachmentId,
+      attachment_id: attachmentId,
       page,
       width,
     });
@@ -119,8 +137,9 @@ export class MedicalService {
     page = 1,
     width = 900,
   ): Promise<string> {
-    return ApiService.invoke('render_medical_attachment_pdf_thumbnail_force', {
+    return ApiService.invokeRaw('render_medical_attachment_pdf_thumbnail_force', {
       attachmentId,
+      attachment_id: attachmentId,
       page,
       width,
     });
@@ -160,14 +179,15 @@ export class MedicalService {
     recordId: number,
     version: number
   ): Promise<MedicalRecord> {
-    return ApiService.invoke('get_medical_record_at_version', {
+    return ApiService.invokeRaw('get_medical_record_at_version', {
       recordId,
+      record_id: recordId,
       version
     });
   }
 
   static async revertMedicalRecord(recordId: number): Promise<MedicalRecord> {
-    return ApiService.invoke('revert_medical_record', { recordId });
+    return ApiService.invokeRaw('revert_medical_record', { recordId, record_id: recordId });
   }
 
   static async downloadAndOpenAttachment(
@@ -214,16 +234,18 @@ export class MedicalService {
 
     await ApiService.invoke('write_medical_attachment_to_path', {
       attachmentId,
-      targetPath
+      attachment_id: attachmentId,
+      targetPath,
+      target_path: targetPath
     });
   }
 
   static async openAttachmentExternally(attachmentId: number): Promise<void> {
-    await ApiService.invoke('open_medical_attachment', { attachmentId });
+    await ApiService.invokeRaw('open_medical_attachment', { attachmentId, attachment_id: attachmentId });
   }
 
   static async printAttachment(attachmentId: number): Promise<void> {
-    await ApiService.invoke('print_medical_attachment', { attachmentId });
+    await ApiService.invokeRaw('print_medical_attachment', { attachmentId, attachment_id: attachmentId });
   }
 
   static validateFile(file: File, maxSizeInMB = 100): string | null {
@@ -258,6 +280,24 @@ export class MedicalService {
   }
 
   static async getDeviceFileById(fileId: string): Promise<DownloadAttachmentResponse> {
-    return ApiService.invoke('download_device_file', { fileId });
+    return ApiService.invokeRaw('download_device_file', { fileId });
+  }
+
+  /**
+   * Generate a configured PDF report with selected attachments and patient overrides
+   */
+  static async generateConfiguredReport(
+    medicalRecordId: number,
+    selectedAttachmentIds: number[],
+    patientOverrides: PatientOverrides
+  ): Promise<MedicalAttachment> {
+    return ApiService.invokeRaw('generate_configured_report', {
+      medicalRecordId,
+      medical_record_id: medicalRecordId,
+      selectedAttachmentIds,
+      selected_attachment_ids: selectedAttachmentIds,
+      patientOverrides,
+      patient_overrides: patientOverrides
+    });
   }
 }

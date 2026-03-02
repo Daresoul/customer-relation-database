@@ -439,7 +439,9 @@ pub async fn populate_database(
                 breed_id,
                 gender,
                 date_of_birth: None,
+                color: None,
                 weight,
+                microchip_id: None,
                 medical_notes: notes,
                 household_id: Some(household_id),
             };

@@ -55,7 +55,6 @@ export const PatientTable: React.FC<PatientTableProps> = ({
   const { t } = useTranslation(['patients', 'entities', 'common']);
   const navigate = useNavigate();
   const [searchText, setSearchText] = useState('');
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   // Fetch species to get colors
   const { data: speciesList = [] } = useSpecies(true);
@@ -288,12 +287,7 @@ export const PatientTable: React.FC<PatientTableProps> = ({
     },
   ];
 
-  const rowSelection: TableProps<PatientWithHousehold>['rowSelection'] = {
-    selectedRowKeys,
-    onChange: (newSelectedRowKeys) => {
-      setSelectedRowKeys(newSelectedRowKeys);
-    },
-  };
+  // No multi-select row selection since there are no bulk actions
 
   return (
     <div className="patient-table-container">
@@ -307,11 +301,7 @@ export const PatientTable: React.FC<PatientTableProps> = ({
             className={styles.searchInput}
             allowClear
           />
-          {selectedRowKeys.length > 0 && (
-            <Text>
-              {t('patients:selectedCount', { count: selectedRowKeys.length })}
-            </Text>
-          )}
+          {/* No bulk selection count */}
         </Space>
       </div>
 
@@ -320,7 +310,6 @@ export const PatientTable: React.FC<PatientTableProps> = ({
         dataSource={filteredData}
         rowKey="id"
         loading={loading}
-        rowSelection={rowSelection}
         pagination={{
           defaultPageSize: 10,
           showSizeChanger: true,

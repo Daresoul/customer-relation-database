@@ -6,6 +6,7 @@ import { invoke } from '@tauri-apps/api';
 import { open } from '@tauri-apps/api/dialog';
 import styles from '../Settings.module.css';
 import RecentDeviceFiles from '../../../components/RecentDeviceFiles';
+import PendingDeviceList from '../../../components/PendingDeviceList';
 import {
   useDeviceIntegrations,
   useCreateDeviceIntegration,
@@ -54,6 +55,18 @@ const DeviceInputSettings: React.FC = () => {
   const { t } = useTranslation(['devices', 'common']);
   const [ports, setPorts] = useState<PortInfo[]>([]);
   const [loading, setLoading] = useState(false);
+  const [pendingOpen, setPendingOpen] = useState(false);
+  const [autoOpenGeneratedReport, setAutoOpenGeneratedReport] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('autoOpenGeneratedReport') === 'true';
+  });
+
+  const handleToggleAutoOpen = (checked: boolean) => {
+    setAutoOpenGeneratedReport(checked);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('autoOpenGeneratedReport', checked ? 'true' : 'false');
+    }
+  };
 
   // Device integrations state
   const [integrationModalVisible, setIntegrationModalVisible] = useState(false);
@@ -70,7 +83,7 @@ const DeviceInputSettings: React.FC = () => {
   // Helper to render connection status indicator
   const renderConnectionStatus = (integration: DeviceIntegration) => {
     // Only show status for serial port connections
-    if (integration.connection_type !== 'serial_port') {
+    if (integration.connectionType !== 'serial_port') {
       return null;
     }
 
@@ -439,24 +452,24 @@ const DeviceInputSettings: React.FC = () => {
     try {
       const integrationData = {
         name: values.name,
-        device_type: values.device_type as DeviceType,
-        connection_type: values.connection_type as ConnectionType,
-        watch_directory: values.watch_directory || undefined,
-        file_pattern: values.file_pattern || undefined,
-        serial_port_name: values.serial_port_name || undefined,
-        serial_baud_rate: values.serial_baud_rate || undefined,
-        tcp_host: values.tcp_host || undefined,
-        tcp_port: values.tcp_port || undefined,
+        deviceType: values.device_type as DeviceType,
+        connectionType: values.connection_type as ConnectionType,
+        watchDirectory: values.watch_directory || undefined,
+        filePattern: values.file_pattern || undefined,
+        serialPortName: values.serial_port_name || undefined,
+        serialBaudRate: values.serial_baud_rate || undefined,
+        tcpHost: values.tcp_host || undefined,
+        tcpPort: values.tcp_port || undefined,
       };
 
       if (editingIntegration) {
         // Stop existing listener before updating (if enabled and config changed)
         const configChanged =
-          editingIntegration.serial_port_name !== values.serial_port_name ||
-          editingIntegration.watch_directory !== values.watch_directory ||
-          editingIntegration.file_pattern !== values.file_pattern ||
-          editingIntegration.tcp_host !== values.tcp_host ||
-          editingIntegration.tcp_port !== values.tcp_port;
+          editingIntegration.serialPortName !== values.serial_port_name ||
+          editingIntegration.watchDirectory !== values.watch_directory ||
+          editingIntegration.filePattern !== values.file_pattern ||
+          editingIntegration.tcpHost !== values.tcp_host ||
+          editingIntegration.tcpPort !== values.tcp_port;
 
         if (editingIntegration.enabled && configChanged) {
           try {
@@ -509,30 +522,30 @@ const DeviceInputSettings: React.FC = () => {
     },
     {
       title: t('table.device'),
-      dataIndex: 'device_type',
-      key: 'device_type',
-      render: (deviceType: DeviceType) => (
-        <Tag color="blue">{getDeviceTypeDisplayName(deviceType)}</Tag>
+      dataIndex: 'deviceType',
+      key: 'deviceType',
+      render: (_: any, record: DeviceIntegration) => (
+        <Tag color="blue">{getDeviceTypeDisplayName(record.deviceType as any)}</Tag>
       ),
     },
     {
       title: t('table.connection'),
       dataIndex: 'connection_type',
       key: 'connection_type',
-      render: (connectionType: ConnectionType) => (
-        <Tag color="green">{getConnectionTypeDisplayName(connectionType)}</Tag>
+      render: (_: any, record: DeviceIntegration) => (
+        <Tag color="green">{getConnectionTypeDisplayName(record.connectionType)}</Tag>
       ),
     },
     {
       title: t('table.configuration'),
       key: 'config',
       render: (_: any, record: DeviceIntegration) => {
-        if (record.connection_type === 'file_watch') {
-          return <Text type="secondary">{record.watch_directory || '-'}</Text>;
-        } else if (record.connection_type === 'serial_port') {
-          return <Text type="secondary">{record.serial_port_name || '-'}</Text>;
-        } else if (record.connection_type === 'hl7_tcp') {
-          return <Text type="secondary">{record.tcp_host ? `${record.tcp_host}:${record.tcp_port}` : '-'}</Text>;
+        if (record.connectionType === 'file_watch') {
+          return <Text type="secondary">{record.watchDirectory || '-'}</Text>;
+        } else if (record.connectionType === 'serial_port') {
+          return <Text type="secondary">{record.serialPortName || '-'}</Text>;
+        } else if (record.connectionType === 'hl7_tcp') {
+          return <Text type="secondary">{record.tcpHost ? `${record.tcpHost}:${record.tcpPort}` : '-'}</Text>;
         }
         return <Text type="secondary">-</Text>;
       },
@@ -659,6 +672,13 @@ const DeviceInputSettings: React.FC = () => {
             </Button>
           }
         >
+          {/* Report behavior */}
+          <div style={{ marginBottom: 12 }}>
+            <Space>
+              <Switch checked={autoOpenGeneratedReport} onChange={handleToggleAutoOpen} />
+              <Text type="secondary">Open generated report automatically after save</Text>
+            </Space>
+          </div>
           <Table
             columns={integrationColumns}
             dataSource={integrations}
@@ -667,6 +687,24 @@ const DeviceInputSettings: React.FC = () => {
             pagination={false}
             size="middle"
           />
+        </Card>
+
+        <Card
+          title={
+            <span className={styles.cardTitle}>
+              <FileTextOutlined /> Saved For Later
+            </span>
+          }
+          className={styles.settingsCard}
+          extra={
+            <Button type="default" onClick={() => setPendingOpen(true)}>
+              Open Saved For Later
+            </Button>
+          }
+        >
+          <Text type="secondary">
+            Device files saved with a patient serial for later processing. Click “Open Saved For Later” to review and load files into the import flow.
+          </Text>
         </Card>
 
         <Card
@@ -882,6 +920,9 @@ const DeviceInputSettings: React.FC = () => {
           )}
         </Form>
       </Modal>
+
+      {/* Saved For Later Drawer */}
+      <PendingDeviceList open={pendingOpen} onClose={() => setPendingOpen(false)} />
     </div>
   );
 };

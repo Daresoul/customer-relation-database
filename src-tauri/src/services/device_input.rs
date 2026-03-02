@@ -1086,6 +1086,22 @@ fn handle_device_data(app_handle: &AppHandle, data: &[u8], device_name: &str, de
                 }
             }
 
+            // Wake on scan ONLY if identifier looks like microchip (15 or 10 digits)
+            if let Some(code) = device_data.patient_identifier.clone() {
+                let is_digits = code.chars().all(|c| c.is_ascii_digit());
+                let len = code.len();
+                if is_digits && (len == 15 || len == 10) {
+                    if let Some(window) = app_handle.get_window("main") {
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                    }
+                    let _ = app_handle.emit_all(
+                        "wake-from-tray",
+                        serde_json::json!({ "cause": "scan", "code": code, "device": device_name, "deviceType": device_type }),
+                    );
+                }
+            }
+
             // Save file and track access (async)
             let app_handle_track = app_handle.clone();
             let file_name = device_data.original_file_name.clone();

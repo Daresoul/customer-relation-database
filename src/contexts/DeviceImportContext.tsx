@@ -14,6 +14,8 @@ export interface PendingDeviceFile {
   patientId?: number;
   patientIdentifier?: string;
   detectedAt: string;
+  // If loaded from "Saved For Later", track the pending entry id so we can mark processed on success
+  pendingEntryId?: number;
 }
 
 // Session grouping for devices that send multiple sequential messages

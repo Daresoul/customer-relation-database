@@ -220,3 +220,16 @@ pub struct UpdateRecordTemplateInput {
     pub price: Option<f64>,
     pub currency_id: Option<i64>,
 }
+
+/// Patient overrides for configurable PDF report generation
+/// All fields are optional - only provided fields override the DB values
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PatientOverrides {
+    pub owner: Option<String>,
+    pub patient_name: Option<String>,
+    pub species: Option<String>,
+    pub gender: Option<String>,
+    pub date_of_birth: Option<String>,
+    pub microchip_id: Option<String>,
+}

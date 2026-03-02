@@ -1,9 +1,5 @@
 import { ApiService } from './api';
-import {
-  DeviceIntegration,
-  CreateDeviceIntegrationInput,
-  UpdateDeviceIntegrationInput
-} from '../types/deviceIntegration';
+import { DeviceIntegration, CreateDeviceIntegrationInput, UpdateDeviceIntegrationInput } from '../types/deviceIntegration';
 
 export class DeviceIntegrationService {
   static async getDeviceIntegrations(): Promise<DeviceIntegration[]> {

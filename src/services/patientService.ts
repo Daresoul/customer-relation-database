@@ -4,6 +4,7 @@
  */
 
 import { ApiService } from './api';
+import { emit } from '@tauri-apps/api/event';
 import {
   Patient,
   PatientWithOwners,
@@ -47,7 +48,14 @@ export class PatientService {
       householdId: input.householdId || null
     };
 
-    return ApiService.invoke<PatientWithOwners>('create_patient', { dto });
+    // Use raw invoke to preserve camelCase DTO expected by backend
+    // Include color and microchipId in DTO now that backend supports them
+    if (input.color !== undefined) (dto as any).color = input.color || null;
+    if (input.microchipId !== undefined) (dto as any).microchipId = input.microchipId || null;
+
+    const created = await ApiService.invokeRaw<PatientWithOwners>('create_patient', { dto });
+    try { await emit('patient-created', created as any); } catch {}
+    return created;
   }
 
   /**
@@ -68,7 +76,8 @@ export class PatientService {
     if (updates.microchipId !== undefined) dto.microchipId = updates.microchipId || null;
     if (updates.isActive !== undefined) dto.isActive = updates.isActive;
 
-    return ApiService.invoke<PatientWithOwners>('update_patient', { id, dto });
+    // Use raw invoke to preserve camelCase DTO expected by backend
+    return ApiService.invokeRaw<PatientWithOwners>('update_patient', { id, dto });
   }
 
   /**

@@ -47,3 +47,25 @@ export interface RecordDeviceFileAccessInput {
   deviceName: string;
   connectionMethod?: string;
 }
+
+// Pending Device Entries (Save for later)
+export interface PendingFileMeta {
+  originalName: string;
+  fileSize?: number;
+}
+
+export interface PendingDeviceEntryWithFile {
+  id: number;
+  fileId: string;
+  patientSerial: string;
+  patientIdentifier?: string | null;
+  status: 'pending' | 'processed' | 'cancelled';
+  createdAt: string;
+  updatedAt: string;
+  // From file history
+  originalName: string;
+  deviceType: string;
+  deviceName: string;
+  connectionMethod?: string | null;
+  receivedAt: string;
+}

@@ -31,7 +31,8 @@ pub use medical::{
     CreateMedicalRecordInput, UpdateMedicalRecordInput,
     MedicalRecordFilter, PaginationParams,
     MedicalRecordsResponse, MedicalRecordDetail,
-    SearchMedicalRecordsResponse, AttachmentData
+    SearchMedicalRecordsResponse, AttachmentData,
+    PatientOverrides
 };
 #[allow(unused_imports)]
 pub use settings::{

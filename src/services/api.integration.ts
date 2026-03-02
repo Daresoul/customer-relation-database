@@ -3,6 +3,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/tauri';
+import { emit } from '@tauri-apps/api/event';
 import { App } from 'antd';
 import type { Patient } from '../types';
 import type { HouseholdTableRecord } from '../types/ui.types';
@@ -72,6 +73,7 @@ export const patientApi = {
       const result = await invoke<Patient>('create_patient', { dto: patient });
       hide();
       showSuccess('Patient Created', `${patient.name} has been successfully added`);
+      try { await emit('patient-created', result as any); } catch {}
       return result;
     } catch (error) {
       hide();

@@ -343,13 +343,30 @@ impl FileWatcherService {
                                                                         file_path,
                                                                         Some(file_size),
                                                                         Some(mime_type_track),
-                                                                        device_type_track,
-                                                                        device_name_track,
+                                                                        device_type_track.clone(),
+                                                                        device_name_track.clone(),
                                                                         Some("file_watch".to_string()),
                                                                     ).await {
                                                                         log::error!("   ❌ Failed to record file access for {}: {}", file_name_track, e);
                                                                     } else {
                                                                         log::info!("   ✅ File access recorded for {}", file_name_track);
+                                                                        // Wake the app window and emit an event so UI can open the import modal
+                                                                        if let Some(window) = app_handle_track.get_window("main") {
+                                                                            let _ = window.show();
+                                                                            let _ = window.set_focus();
+                                                                        }
+                                                                        // Clone strings for JSON payload
+                                                                        let device_name_for_evt = device_name_track.clone();
+                                                                        let device_type_for_evt = device_type_track.clone();
+                                                                        let _ = app_handle_track.emit_all(
+                                                                            "wake-from-tray",
+                                                                            serde_json::json!({
+                                                                                "cause": "file",
+                                                                                "fileName": file_name_track,
+                                                                                "device": device_name_for_evt,
+                                                                                "deviceType": device_type_for_evt
+                                                                            })
+                                                                        );
                                                                     }
                                                                 }
                                                                 Err(e) => {

@@ -16,6 +16,7 @@ pub mod breed;
 pub mod device_input;
 pub mod device_integration;
 pub mod file_history;
+pub mod pending;
 
 pub use patient::*;
 pub use database::*;
@@ -35,3 +36,4 @@ pub use breed::*;
 pub use device_input::*;
 pub use device_integration::*;
 pub use file_history::*;
+pub use pending::*;

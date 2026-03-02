@@ -4,14 +4,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Card, Row, Col, Statistic, Space, Tabs, Avatar, TabsProps, App, InputNumber, Modal } from 'antd';
-import {
-  TeamOutlined,
-  HeartOutlined,
-  CalendarOutlined,
-  RiseOutlined,
-  UserOutlined,
-  HomeOutlined,
-} from '@ant-design/icons';
+import { TeamOutlined, HeartOutlined, CalendarOutlined, RiseOutlined, UserOutlined, HomeOutlined, FileTextOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 // Removed AppLayout - using simpler layout
 import { PatientTable } from '../components/tables/PatientTable';
@@ -19,6 +12,7 @@ import { HouseholdTable } from '../components/tables/HouseholdTable';
 import { PatientSearch } from '../components/search/PatientSearch';
 import { HouseholdSearch } from '../components/search/HouseholdSearch';
 import { Button } from '../components/common/Button';
+import PendingDeviceTable from '../components/PendingDeviceTable';
 import { invoke } from '@tauri-apps/api/tauri';
 import { FormModal } from '../components/common/Modal';
 import { PatientFormWithOwner } from '../components/forms/PatientFormWithOwner';
@@ -28,10 +22,13 @@ import { NoData } from '../components/common/EmptyState';
 import AppointmentsTab from './Appointments/AppointmentsTab';
 import { useViewContext } from '../contexts/ViewContext';
 import api, { setAppInstance } from '../services/api.integration';
+import { PatientService } from '../services';
 import notifications from '../services/notifications';
 import type { Patient, PatientWithHousehold } from '../types';
 import type { HouseholdTableRecord } from '../types/ui.types';
 import { useThemeColors } from '../utils/themeStyles';
+import { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
+import { listen } from '@tauri-apps/api/event';
 import styles from './MainDashboard.module.css';
 
 // Removed TabPane - using items prop instead
@@ -43,6 +40,9 @@ export const MainDashboard: React.FC = () => {
   const app = App.useApp();
   const themeColors = useThemeColors();
   const activeView = currentView === 'animal' ? 'patients' : currentView === 'household' ? 'households' : 'appointments';
+  // Local tab state so we can include custom tabs (like 'saved')
+  const [activeTab, setActiveTab] = useState<string>(activeView);
+  useEffect(() => setActiveTab(activeView), [activeView]);
   const [loading, setLoading] = useState(true);
   const [patients, setPatients] = useState<PatientWithHousehold[]>([]);
   const [households, setHouseholds] = useState<HouseholdTableRecord[]>([]);
@@ -55,6 +55,7 @@ export const MainDashboard: React.FC = () => {
   const [seedOpen, setSeedOpen] = useState(false);
   const [seedCount, setSeedCount] = useState<number>(1000);
   const [seeding, setSeeding] = useState(false);
+  // no drawer now; dedicated tab below
 
   // Statistics
   const [stats, setStats] = useState({
@@ -82,7 +83,7 @@ export const MainDashboard: React.FC = () => {
 
       // Get a reasonable amount of data for display (pagination would be better for large datasets)
       const [patientsResults, householdsResults, statsData] = await Promise.all([
-        api.patient.search('', 1000), // Get first 1000 for display
+        PatientService.getPatients(), // Fetch all patients without search limit
         api.household.search('', 1000), // Get first 1000 for display
         statsPromise
       ]);
@@ -148,27 +149,92 @@ export const MainDashboard: React.FC = () => {
 
   // Handle search - filter the already loaded data
   const handlePatientSearch = async (query: string) => {
-    if (!query || query.trim().length === 0) {
+    const q = (query || '').trim();
+    if (q.length === 0) {
       setFilteredPatients(patients);
       return patients;
     }
-
-    const results = await api.patient.search(query);
-    // Enhance search results with household names
-    const enhancedResults = results.map(patient => {
-      const household = households.find(h => h.id === patient.householdId);
-      return {
-        ...patient,
-        household: household ? {
-          id: household.id,
-          householdName: household.lastName || 'Unnamed',
-          address: household.address
-        } : undefined
-      } as PatientWithHousehold;
-    });
-    setFilteredPatients(enhancedResults);
-    return enhancedResults;
+    // For very short queries, fall back to client-side filter for robustness
+    if (q.length < 2) {
+      const local = patients.filter(p =>
+        (p.name || '').toLowerCase().includes(q.toLowerCase()) ||
+        (p.species || '').toLowerCase().includes(q.toLowerCase()) ||
+        (p.breed || '').toLowerCase().includes(q.toLowerCase()) ||
+        (p.microchipId || '').toLowerCase().includes(q.toLowerCase())
+      );
+      setFilteredPatients(local);
+      return local;
+    }
+    try {
+      const results = await api.patient.search(q);
+      const enhancedResults = results.map(patient => {
+        const household = households.find(h => h.id === patient.householdId);
+        return {
+          ...patient,
+          household: household ? {
+            id: household.id,
+            householdName: household.lastName || 'Unnamed',
+            address: household.address
+          } : undefined
+        } as PatientWithHousehold;
+      });
+      setFilteredPatients(enhancedResults);
+      return enhancedResults;
+    } catch (e) {
+      // Fallback: client-side filter if backend search fails
+      console.warn('Patient search failed, falling back to local filter:', e);
+      const local = patients.filter(p =>
+        (p.name || '').toLowerCase().includes(q.toLowerCase()) ||
+        (p.species || '').toLowerCase().includes(q.toLowerCase()) ||
+        (p.breed || '').toLowerCase().includes(q.toLowerCase()) ||
+        (p.microchipId || '').toLowerCase().includes(q.toLowerCase())
+      );
+      setFilteredPatients(local);
+      return local;
+    }
   };
+
+  // Keyboard-wedge scans on main screen: trigger search by identifier
+  useBarcodeScanner({
+    suffixKey: 'Enter',
+    minLength: 8,
+    interKeyDelay: 12,
+    finalizeTimeout: 100,
+    onScan: (code) => {
+      setActiveTab('patients');
+      setCurrentView('animal');
+      handlePatientSearch(code);
+    }
+  });
+
+  // HID/serial wake events on main screen
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    const setup = async () => {
+      unlisten = await listen<any>('wake-from-tray', (event) => {
+        const payload = event.payload || {};
+        if (payload.cause === 'scan' && payload.code) {
+          setActiveTab('patients');
+          setCurrentView('animal');
+          handlePatientSearch(String(payload.code));
+        }
+      });
+    };
+    setup();
+    return () => { if (unlisten) unlisten(); };
+  }, []);
+
+  // Refresh dashboard list when a patient is created anywhere
+  useEffect(() => {
+    let unlistenCreated: (() => void) | undefined;
+    const setup = async () => {
+      unlistenCreated = await listen('patient-created', async () => {
+        await loadData();
+      });
+    };
+    setup();
+    return () => { if (unlistenCreated) unlistenCreated(); };
+  }, []);
 
   const handleHouseholdSearch = async (query: string) => {
     if (!query || query.trim().length === 0) {
@@ -287,11 +353,13 @@ export const MainDashboard: React.FC = () => {
         {/* Data Tables with integrated search */}
         <Card>
           <Tabs
-            activeKey={activeView}
+            activeKey={activeTab}
             onChange={(key) => {
+              setActiveTab(key);
               if (key === 'patients') setCurrentView('animal');
               else if (key === 'households') setCurrentView('household');
               else if (key === 'appointments') setCurrentView('appointments');
+              // 'saved' is a local-only tab; no view context update needed
             }}
             tabBarExtraContent={
               <Space>
@@ -367,6 +435,16 @@ export const MainDashboard: React.FC = () => {
                   </span>
                 ),
                 children: <AppointmentsTab />,
+              },
+              {
+                key: 'saved',
+                label: (
+                  <span>
+                    <FileTextOutlined />
+                    Saved For Later
+                  </span>
+                ),
+                children: <PendingDeviceTable />,
               },
             ]}
           />

@@ -22,11 +22,11 @@ export const DeviceStatusBar: React.FC = () => {
 
   // Get enabled integrations by type
   const serialPortIntegrations = integrations?.filter(
-    (i) => i.connection_type === 'serial_port' && i.enabled
+    (i) => i.connectionType === 'serial_port' && i.enabled
   ) || [];
 
   const fileWatchIntegrations = integrations?.filter(
-    (i) => i.connection_type === 'file_watch' && i.enabled
+    (i) => i.connectionType === 'file_watch' && i.enabled
   ) || [];
 
   // Don't render if no enabled integrations exist or not on main dashboard
@@ -107,8 +107,8 @@ export const DeviceStatusBar: React.FC = () => {
                 title={
                   <div>
                     <div><strong>{integration.name}</strong></div>
-                    <div>{getDeviceTypeDisplayName(integration.device_type)}</div>
-                    <div>{t('tooltips.port', { port: integration.serial_port_name })}</div>
+                    <div>{getDeviceTypeDisplayName(integration.deviceType as any)}</div>
+                    <div>{t('tooltips.port', { port: integration.serialPortName })}</div>
                     <div>{t('tooltips.status', { status: statusText })}</div>
                   </div>
                 }

@@ -47,7 +47,8 @@
     "search": "Пребарај...",
     "typeHere": "Пишувајте тука...",
     "optional": "(Опционално)",
-    "example": "пр., {{example}}"
+    "example": "пр., {{example}}",
+    "selectField": "Изберете {{field}}"
   },
   "buttons": {
     "submit": "Поднеси",
