@@ -156,37 +156,37 @@ export function validateHouseholdDto(dto: CreateHouseholdWithPeopleDto): string 
   }
 
   // Check that only one person is marked as primary
-  const primaryCount = dto.people.filter(p => p.person.isPrimary).length;
+  const primaryCount = dto.people.filter(p => p.person.is_primary).length;
   if (primaryCount > 1) {
     return "Only one person can be marked as primary";
   }
 
   // Validate each person
   for (const personWithContacts of dto.people) {
-    if (!personWithContacts.person.firstName || personWithContacts.person.firstName.trim() === '') {
+    if (!personWithContacts.person.first_name || personWithContacts.person.first_name.trim() === '') {
       return "First name is required for all people";
     }
-    if (!personWithContacts.person.lastName || personWithContacts.person.lastName.trim() === '') {
+    if (!personWithContacts.person.last_name || personWithContacts.person.last_name.trim() === '') {
       return "Last name is required for all people";
     }
 
     // Validate contacts
     for (const contact of personWithContacts.contacts) {
       const validTypes = ['phone', 'email', 'mobile', 'work_phone'];
-      if (!validTypes.includes(contact.contactType)) {
-        return `Invalid contact type: ${contact.contactType}`;
+      if (!validTypes.includes(contact.contact_type)) {
+        return `Invalid contact type: ${contact.contact_type}`;
       }
 
       // Basic email validation
-      if (contact.contactType === 'email' && !contact.contactValue.includes('@')) {
-        return `Invalid email: ${contact.contactValue}`;
+      if (contact.contact_type === 'email' && !contact.contact_value.includes('@')) {
+        return `Invalid email: ${contact.contact_value}`;
       }
 
       // Basic phone validation (at least 10 digits)
-      if (['phone', 'mobile', 'work_phone'].includes(contact.contactType)) {
-        const digits = contact.contactValue.replace(/\D/g, '');
+      if (['phone', 'mobile', 'work_phone'].includes(contact.contact_type)) {
+        const digits = contact.contact_value.replace(/\D/g, '');
         if (digits.length < 10) {
-          return `Phone number must have at least 10 digits: ${contact.contactValue}`;
+          return `Phone number must have at least 10 digits: ${contact.contact_value}`;
         }
       }
     }

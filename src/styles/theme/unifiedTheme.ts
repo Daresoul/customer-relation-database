@@ -138,7 +138,7 @@ export const createUnifiedTheme = ({
         defaultBorderColor: isDark ? '#303030' : '#d9d9d9',
         defaultColor: isDark ? '#E6E6E6' : '#262626',
         defaultHoverBg: isDark ? '#303030' : '#ffffff',
-        defaultHoverBorderColorr: isDark ? '#404040' : '#40a9ff',
+        defaultHoverBorderColor: isDark ? '#404040' : '#40a9ff',
         defaultHoverColor: isDark ? '#E6E6E6' : '#40a9ff',
         dangerColor: isDark ? '#ff4d4f' : '#ff4d4f',
         dangerShadow: '0 2px 4px rgba(255, 77, 79, 0.2)',

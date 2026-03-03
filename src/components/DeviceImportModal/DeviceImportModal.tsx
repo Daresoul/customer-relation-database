@@ -1,3 +1,9 @@
+/**
+ * DeviceImportModal - Modal for importing device data as medical records
+ *
+ * Refactored to use MedicalRecordFieldGroup for reusable field definitions.
+ */
+
 import React, { useState, useEffect } from 'react';
 import {
   Modal,
@@ -9,14 +15,11 @@ import {
   List,
   Typography,
   Divider,
-  InputNumber,
   App,
   Tag,
   Card,
   Drawer,
   Checkbox,
-  AutoComplete,
-  Spin,
 } from 'antd';
 import {
   SaveOutlined,
@@ -41,11 +44,12 @@ import { MedicalService } from '@/services/medicalService';
 import { fileHistoryService } from '@/services/fileHistoryService';
 import RecentDeviceFiles from '../RecentDeviceFiles';
 import CreatePatientSection from './CreatePatientSection';
+import { MedicalRecordFieldGroup } from '@/components/forms/fieldGroups';
+import type { RecordType, RecordTemplate } from '@/components/forms/fieldGroups';
 import styles from './DeviceImportModal.module.css';
 import { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
 import { listen } from '@tauri-apps/api/event';
 
-const { TextArea } = Input;
 const { Option } = Select;
 const { Text } = Typography;
 
@@ -54,14 +58,13 @@ const DeviceImportModal: React.FC = () => {
   const { notification, modal: modalHook } = App.useApp();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
-  const [recordType, setRecordType] = useState<'procedure' | 'note' | 'test_result'>('test_result');
+  const [recordType, setRecordType] = useState<RecordType>('test_result');
   const [recentFilesDrawerOpen, setRecentFilesDrawerOpen] = useState(false);
   const [createPatientExpanded, setCreatePatientExpanded] = useState(false);
-  const [printAfterSave, setPrintAfterSave] = useState(true); // Default to printing after save
+  const [printAfterSave, setPrintAfterSave] = useState(true);
   const [patientSerial, setPatientSerial] = useState<string>('');
   const [titleSearchTerm, setTitleSearchTerm] = useState<string>('');
   const debouncedSearchTerm = useDebounce(titleSearchTerm, 300);
-  // full patient modal removed per request; keep inline create only
 
   const {
     modalOpen,
@@ -74,33 +77,24 @@ const DeviceImportModal: React.FC = () => {
     getPatientDataConflicts,
   } = useDeviceImport();
 
-  // Get grouped files (sessions + individual files)
   const pendingFiles = getGroupedFiles();
-
   const { patients, refreshPatients, loading: patientsLoading } = usePatients();
-  const { data: currencies } = useCurrencies();
+  const { data: currencies = [] } = useCurrencies();
   const { settings } = useAppSettings();
   const createMutation = useCreateMedicalRecord();
   const uploadMutation = useUploadAttachment();
   const { data: searchedTemplates, isLoading: isSearchingTemplates } = useSearchRecordTemplates(debouncedSearchTerm, recordType);
 
-  // Capture barcode scans without interfering with typing
+  // Capture barcode scans
   useBarcodeScanner({
-    // Configure a prefix if your scanners can be set to one (recommended)
-    // prefix: 'SCN-',
     suffixKey: 'Enter',
     minLength: 8,
     interKeyDelay: 12,
     finalizeTimeout: 100,
     onScan: (code) => {
-      // Only populate serial automatically if it looks like a microchip (15 or legacy 10 digits)
       const isMicrochip = /^(\d{15}|\d{10})$/.test(code);
       if (!isMicrochip) return;
-      // Example behavior in Device Import modal:
-      // - Set the "Save for later" serial field
-      // - If the patient select is empty and code is numeric, try to set it directly
       setPatientSerial(code);
-      // Optionally, auto-select patient if code is numeric ID and exists in list
       const numericId = Number(code);
       if (!Number.isNaN(numericId)) {
         const found = patients.find(p => p.id === numericId);
@@ -117,7 +111,7 @@ const DeviceImportModal: React.FC = () => {
     }
   });
 
-  // Also react to HID/serial scan wake events
+  // React to HID/serial scan wake events
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     const setup = async () => {
@@ -125,7 +119,6 @@ const DeviceImportModal: React.FC = () => {
         const payload = event.payload || {};
         if (payload.cause === 'scan' && payload.code) {
           setPatientSerial(String(payload.code));
-          // Try to auto-select patient if numeric id
           const num = Number(payload.code);
           if (!Number.isNaN(num)) {
             const found = patients.find(p => p.id === num);
@@ -150,12 +143,10 @@ const DeviceImportModal: React.FC = () => {
       defaults.patientId = suggestedPatientId;
     }
 
-    // Only set currency if user changes to procedure type
     if (recordType === 'procedure' && settings?.currencyId) {
       defaults.currencyId = settings.currencyId;
     }
 
-    // Auto-fill name and description from device data
     if (pendingFiles.length > 0) {
       const deviceNames = [...new Set(pendingFiles.map(f => f.deviceName))].join(', ');
       defaults.name = `${deviceNames} - Device Data`;
@@ -170,10 +161,8 @@ const DeviceImportModal: React.FC = () => {
   // Refresh patients list when modal opens
   useEffect(() => {
     if (modalOpen) {
-      // Refresh patients to get latest list (in case new patients were created)
       refreshPatients();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modalOpen]);
 
   // Reset form with defaults when modal opens or relevant data changes
@@ -183,42 +172,28 @@ const DeviceImportModal: React.FC = () => {
       form.resetFields();
       form.setFieldsValue(defaults);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modalOpen, suggestedPatientId, settings?.currencyId, pendingFiles.length]);
 
-  const handleRecordTypeChange = (value: 'procedure' | 'note' | 'test_result') => {
+  const handleRecordTypeChange = (value: RecordType) => {
     setRecordType(value);
-    setTitleSearchTerm(''); // Reset search when type changes
+    setTitleSearchTerm('');
     if (value === 'note' || value === 'test_result') {
-      // Clear financial fields for notes and test results
       form.setFieldValue('price', undefined);
       form.setFieldValue('currencyId', undefined);
     } else if (value === 'procedure') {
-      // Set default currency for procedures
       if (settings?.currencyId) {
         form.setFieldValue('currencyId', settings.currencyId);
       }
     }
   };
 
-  const handleTemplateSelect = (value: string) => {
-    // Find the selected template
-    const template = searchedTemplates?.find(t => t.title === value);
-    if (template) {
-      // Auto-fill form fields from template
-      form.setFieldsValue({
-        name: template.title,
-        description: template.description,
-        price: template.price,
-        currencyId: template.currencyId,
-      });
-    }
+  const handleTemplateSelect = (template: RecordTemplate) => {
+    // Template fields are already set by MedicalRecordFieldGroup
+    // This callback is for any additional logic if needed
   };
 
   const handleRemoveFile = (fileId: string) => {
     removeDeviceFile(fileId);
-
-    // If no files left, close modal
     if (pendingFiles.length === 1) {
       handleCancel();
     }
@@ -245,11 +220,8 @@ const DeviceImportModal: React.FC = () => {
       duration: 4,
     });
     setRecentFilesDrawerOpen(false);
-    // TODO: Implement adding the file to the pending files list
-    // This would require fetching the file from storage and adding it to the DeviceImportContext
   };
 
-  // Save for later: associate pending files with a patient serial for later processing
   const handleSaveForLater = async () => {
     if (!patientSerial || patientSerial.trim().length === 0) {
       notification.warning({ message: t('common:warning'), description: 'Please enter a patient serial to save for later', placement: 'bottomRight' });
@@ -257,14 +229,12 @@ const DeviceImportModal: React.FC = () => {
     }
     try {
       setLoading(true);
-      // Build file metadata array from pending files
       const filesMeta = pendingFiles.map((f) => ({
         originalName: f.fileName,
         fileSize: f.fileData?.length,
       }));
       const savedCount = await fileHistoryService.saveDeviceFilesForLater(patientSerial.trim(), filesMeta, pendingFiles[0]?.patientIdentifier);
       notification.success({ message: t('common:success'), description: `Saved ${savedCount} file(s) for later under serial '${patientSerial}'.`, placement: 'bottomRight' });
-      // Clear and close
       form.resetFields();
       setCreatePatientExpanded(false);
       clearAllFiles();
@@ -278,11 +248,8 @@ const DeviceImportModal: React.FC = () => {
   };
 
   const handlePatientCreated = (patient: Patient) => {
-    // Refresh patients list to include the new patient
     refreshPatients();
-    // Auto-select the newly created patient
     form.setFieldValue('patientId', patient.id);
-    // Collapse the create patient section
     setCreatePatientExpanded(false);
   };
 
@@ -291,7 +258,6 @@ const DeviceImportModal: React.FC = () => {
       const values = await form.validateFields();
       setLoading(true);
 
-      // Create medical record with ALL device data for multi-device PDF generation
       const deviceDataList = pendingFiles.map(file => ({
         deviceTestData: file.testResults,
         deviceType: file.deviceType,
@@ -305,15 +271,12 @@ const DeviceImportModal: React.FC = () => {
         description: values.description,
         price: values.price,
         currencyId: values.currencyId,
-        // Send all device data for multi-device PDF generation
         deviceDataList,
       };
 
       const createdRecord = await createMutation.mutateAsync(input);
 
-      // Upload all device files as attachments
       if (createdRecord && pendingFiles.length > 0) {
-        // Upload each pending file, capturing per-file success/failure
         const tasks = pendingFiles.map((file) =>
           uploadMutation
             .mutateAsync({
@@ -343,7 +306,6 @@ const DeviceImportModal: React.FC = () => {
             duration: 3,
           });
 
-          // Mark any "saved for later" entries as processed now that at least one attachment succeeded
           try {
             const uniquePendingIds = Array.from(new Set(pendingFiles.map(f => f.pendingEntryId).filter(Boolean))) as number[];
             await Promise.all(uniquePendingIds.map(id => fileHistoryService.markPendingEntryProcessed(id)));
@@ -360,11 +322,9 @@ const DeviceImportModal: React.FC = () => {
             placement: 'bottomRight',
             duration: 6,
           });
-          // Log full failures to console for diagnostics
           console.warn('Attachment upload failures:', failures);
         }
 
-        // Generate and open PDF if at least one attachment succeeded
         const attachmentIds = successes.map(s => s.value?.id).filter(Boolean);
         if (printAfterSave && attachmentIds.length > 0) {
           const autoOpenReport = (typeof window !== 'undefined') && localStorage.getItem('autoOpenGeneratedReport') === 'true';
@@ -395,7 +355,6 @@ const DeviceImportModal: React.FC = () => {
             if (pdfAttachment?.id && autoOpenReport) {
               await MedicalService.openAttachmentExternally(pdfAttachment.id);
             }
-            // Offer an immediate re-generate link
             notification.open({
               message: t('medical:deviceImport.pdfReady', 'PDF Ready'),
               description: t('medical:deviceImport.pdfReadyDesc', 'Click to regenerate if needed.'),
@@ -418,7 +377,6 @@ const DeviceImportModal: React.FC = () => {
         }
       }
 
-      // Clear and close
       form.resetFields();
       setCreatePatientExpanded(false);
       clearAllFiles();
@@ -586,99 +544,18 @@ const DeviceImportModal: React.FC = () => {
           onToggleExpand={setCreatePatientExpanded}
         />
 
-
-        <Form.Item
-          name="recordType"
-          label={t('medical:fields.recordType')}
-          rules={[{ required: true, message: t('forms:validation.required') }]}
-        >
-          <Select onChange={handleRecordTypeChange}>
-            <Option value="test_result">{t('medical:recordTypes.testResult')}</Option>
-            <Option value="note">{t('medical:recordTypes.note')}</Option>
-            <Option value="procedure">{t('medical:recordTypes.procedure')}</Option>
-          </Select>
-        </Form.Item>
-
-        <Form.Item
-          name="name"
-          label={
-            recordType === 'procedure'
-              ? t('medical:fields.procedureName')
-              : t('medical:fields.title')
-          }
-          rules={[
-            { required: true, message: t('forms:validation.required') },
-            { max: 200, message: t('forms:validation.maxLength', { max: 200 }) },
-          ]}
-          tooltip={t('medical:deviceImport.autoFilledTooltip')}
-        >
-          <AutoComplete
-            options={searchedTemplates?.map(template => ({
-              value: template.title,
-              label: (
-                <div>
-                  <div style={{ fontWeight: 500 }}>{template.title}</div>
-                  <div style={{ fontSize: '12px', color: '#888' }}>
-                    {template.description && template.description.length > 60
-                      ? template.description.substring(0, 60) + '...'
-                      : template.description || ''}
-                  </div>
-                </div>
-              ),
-            }))}
-            onSearch={setTitleSearchTerm}
-            onSelect={handleTemplateSelect}
-            placeholder={
-              recordType === 'procedure'
-                ? t('medical:placeholders.procedureName')
-                : t('medical:placeholders.noteTitle')
-            }
-            filterOption={false}
-            notFoundContent={
-              isSearchingTemplates ? <Spin size="small" /> :
-              debouncedSearchTerm.length < 2 ? t('medical:autocomplete.typeToSearch') || 'Type at least 2 characters to search' :
-              searchedTemplates?.length === 0 ? t('medical:autocomplete.noTemplatesFound') || 'No templates found' :
-              null
-            }
-          />
-        </Form.Item>
-
-        <Form.Item
-          name="description"
-          label={t('medical:fields.description')}
-          rules={[{ required: true, message: t('forms:validation.required') }]}
-          tooltip={t('medical:deviceImport.autoFilledTooltip')}
-        >
-          <TextArea
-            rows={6}
-            placeholder={t('medical:placeholders.description')}
-            showCount
-            maxLength={5000}
-          />
-        </Form.Item>
-
-        {recordType === 'procedure' && (
-          <Space size="middle" style={{ width: '100%' }}>
-            <Form.Item name="price" label={t('medical:fields.price')} style={{ flex: 1 }}>
-              <InputNumber
-                min={0}
-                precision={2}
-                placeholder="0.00"
-                style={{ width: '100%' }}
-              />
-            </Form.Item>
-
-            <Form.Item name="currencyId" label={t('medical:fields.currency')} style={{ flex: 1 }}>
-              <Select placeholder={t('common:selectPlaceholder')} allowClear>
-                {currencies?.map((currency) => (
-                  <Option key={currency.id} value={currency.id}>
-                    {currency.symbol} {currency.code}
-                  </Option>
-                ))}
-              </Select>
-            </Form.Item>
-          </Space>
-        )}
+        {/* Medical Record Fields using shared component */}
+        <MedicalRecordFieldGroup
+          form={form}
+          recordType={recordType}
+          onRecordTypeChange={handleRecordTypeChange}
+          currencies={currencies}
+          templates={searchedTemplates}
+          isSearchingTemplates={isSearchingTemplates}
+          onTemplateSearch={setTitleSearchTerm}
+          onTemplateSelect={handleTemplateSelect}
+          hideRecordType={false}
+        />
 
         <Form.Item style={{ marginTop: 16, marginBottom: 16 }}>
           <Checkbox
@@ -724,8 +601,6 @@ const DeviceImportModal: React.FC = () => {
           onAddToRecord={handleAddRecentFile}
         />
       </Drawer>
-
-
     </Modal>
   );
 };

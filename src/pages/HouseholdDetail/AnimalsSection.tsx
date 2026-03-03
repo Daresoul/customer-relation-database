@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { Table, Typography, Tag, Empty, Button } from 'antd';
-import { Link } from 'react-router-dom';
+import { Table, Typography, Tag, Empty, Button, Modal, App } from 'antd';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Patient } from '../../types/household';
 import { PlusOutlined } from '@ant-design/icons';
 import PatientFormWithOwner from '../../components/forms/PatientFormWithOwner';
+import { PatientService } from '../../services/patientService';
+import type { CreatePatientInput, UpdatePatientInput } from '../../types';
 import styles from './HouseholdDetail.module.css';
 
 const { Title } = Typography;
@@ -16,7 +18,39 @@ interface AnimalsSectionProps {
 
 export const AnimalsSection: React.FC<AnimalsSectionProps> = ({ patients, householdId }) => {
   const { t } = useTranslation('households');
+  const navigate = useNavigate();
+  const { notification } = App.useApp();
   const [isPatientModalOpen, setIsPatientModalOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleCreatePatient = async (data: CreatePatientInput | UpdatePatientInput) => {
+    setSubmitting(true);
+    try {
+      // Ensure the patient is linked to this household
+      const patientData = {
+        ...data,
+        householdId: householdId,
+      } as CreatePatientInput;
+
+      const newPatient = await PatientService.createPatient(patientData);
+      notification.success({
+        message: t('common:success'),
+        description: t('detail.animals.patientCreated'),
+        placement: 'bottomRight',
+      });
+      setIsPatientModalOpen(false);
+      // Navigate to the new patient's page
+      navigate(`/patients/${newPatient.id}`);
+    } catch (error: any) {
+      notification.error({
+        message: t('common:error'),
+        description: error?.message || t('detail.animals.patientCreateFailed'),
+        placement: 'bottomRight',
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const columns = [
     {
@@ -120,11 +154,20 @@ export const AnimalsSection: React.FC<AnimalsSectionProps> = ({ patients, househ
         </Empty>
       )}
 
-      <PatientFormWithOwner
+      <Modal
+        title={t('detail.animals.registerNewPet')}
         open={isPatientModalOpen}
-        onClose={() => setIsPatientModalOpen(false)}
-        defaultHouseholdId={householdId}
-      />
+        onCancel={() => setIsPatientModalOpen(false)}
+        footer={null}
+        width={800}
+        destroyOnClose
+      >
+        <PatientFormWithOwner
+          onSubmit={handleCreatePatient}
+          onCancel={() => setIsPatientModalOpen(false)}
+          loading={submitting}
+        />
+      </Modal>
     </div>
   );
 };

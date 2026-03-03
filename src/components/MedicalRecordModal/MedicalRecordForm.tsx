@@ -1,6 +1,12 @@
+/**
+ * MedicalRecordForm - Form for creating and editing medical records
+ *
+ * Refactored to use MedicalRecordFieldGroup for reusable field definitions.
+ */
+
 import React, { useState, useEffect } from 'react';
-import { Form, Input, Select, Button, Space, Divider, InputNumber, List, Typography, Upload, Drawer, App, AutoComplete, Spin, Alert } from 'antd';
-import { SaveOutlined, CloseOutlined, UploadOutlined, DeleteOutlined, InboxOutlined, HistoryOutlined } from '@ant-design/icons';
+import { Form, Button, Space, Divider, Typography, Upload, Drawer, App } from 'antd';
+import { SaveOutlined, CloseOutlined, InboxOutlined, HistoryOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import FileUpload from '../FileUpload/FileUpload';
 import FileAttachmentList from '../FileUpload/FileAttachmentList';
@@ -10,12 +16,12 @@ import { useSearchRecordTemplates } from '@/hooks/useRecordTemplates';
 import { useAppSettings } from '@/hooks/useAppSettings';
 import { useDebounce } from '@/hooks/useDebounce';
 import { MedicalService } from '@/services/medicalService';
-import type { MedicalRecord, CreateMedicalRecordInput, UpdateMedicalRecordInput, RecordTemplate, RecordType, DeviceDataInput } from '@/types/medical';
+import { MedicalRecordFieldGroup } from '@/components/forms/fieldGroups';
+import type { MedicalRecord, CreateMedicalRecordInput, UpdateMedicalRecordInput, RecordTemplate, DeviceDataInput } from '@/types/medical';
+import type { RecordType } from '@/components/forms/fieldGroups';
 import type { UploadFile } from 'antd';
 import styles from './MedicalRecordForm.module.css';
 
-const { TextArea } = Input;
-const { Option } = Select;
 const { Text } = Typography;
 const { Dragger } = Upload;
 
@@ -43,17 +49,15 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
   const [form] = Form.useForm();
   const [recordType, setRecordType] = useState<RecordType>(initialValues?.recordType || 'procedure');
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
-  const [fileSourceIds, setFileSourceIds] = useState<Map<string, string>>(new Map()); // Maps file.name -> sourceFileId
-  const [fileDeviceData, setFileDeviceData] = useState<Map<string, DeviceDataInput>>(new Map()); // Maps file.name -> device data for PDF generation
+  const [fileSourceIds, setFileSourceIds] = useState<Map<string, string>>(new Map());
+  const [fileDeviceData, setFileDeviceData] = useState<Map<string, DeviceDataInput>>(new Map());
   const [recentFilesDrawerOpen, setRecentFilesDrawerOpen] = useState(false);
-  const [refreshRecentFiles, setRefreshRecentFiles] = useState<(() => void) | null>(null);
   const [titleSearchTerm, setTitleSearchTerm] = useState<string>('');
   const debouncedSearchTerm = useDebounce(titleSearchTerm, 300);
-  const { data: currencies} = useCurrencies();
+  const { data: currencies = [] } = useCurrencies();
   const { settings } = useAppSettings();
-  const { data: searchedTemplates, isLoading: isSearching, isError: isSearchError, error: searchError } = useSearchRecordTemplates(debouncedSearchTerm, recordType);
+  const { data: searchedTemplates, isLoading: isSearching } = useSearchRecordTemplates(debouncedSearchTerm, recordType);
 
-  // Removed debug log to avoid circular reference issues
   const { data: recordDetail, refetch: refetchRecord } = useMedicalRecord(
     recordId || 0,
     false
@@ -71,13 +75,9 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
       });
       setRecordType(initialValues.recordType);
     }
-  }, [initialValues?.id]); // Only depend on the ID to avoid circular references
-
-  // Removed useEffect that was causing circular reference warning
-  // Default currency is now set in the form's initialValues instead
+  }, [initialValues?.id, form]);
 
   const handleFinish = (values: any) => {
-
     const formData = isEdit
       ? {
           name: values.name,
@@ -108,35 +108,28 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
     onSubmit(formData, !isEdit ? pendingFiles : undefined, !isEdit ? fileSourceIds : undefined, deviceDataList.length > 0 ? deviceDataList : undefined);
   };
 
-  const handleRecordTypeChange = (value: string) => {
+  const handleRecordTypeChange = (value: RecordType) => {
     setRecordType(value);
+    setTitleSearchTerm('');
     if (value === 'note' || value === 'test_result') {
       form.setFieldValue('procedureName', undefined);
       form.setFieldValue('price', undefined);
       form.setFieldValue('currencyId', undefined);
     } else if (value === 'procedure' && settings?.currencyId) {
-      // Set default currency when switching to procedure
       form.setFieldValue('currencyId', settings.currencyId);
     }
   };
 
   const handleAddRecentFile = async (fileId: string, originalName: string) => {
     try {
-      // Fetch the file data from backend using the fileId (includes device metadata)
       const fileData = await MedicalService.getDeviceFileById(fileId);
-
-      // Create a File object from the fetched data
       const file = new File([new Uint8Array(fileData.fileData)], originalName, {
         type: fileData.mimeType || 'application/octet-stream',
       });
 
-      // Add to pending files
       setPendingFiles(prev => [...prev, file]);
-
-      // Track the source file ID for this file
       setFileSourceIds(prev => new Map(prev).set(originalName, fileId));
 
-      // Store device metadata for PDF generation if available
       if (fileData.deviceType && fileData.deviceName) {
         const deviceData: DeviceDataInput = {
           deviceTestData: fileData.testResults || null,
@@ -165,18 +158,9 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
     }
   };
 
-  const handleTemplateSelect = (value: string, option: any) => {
-    // Find the selected template
-    const template = searchedTemplates?.find(t => t.title === value);
-    if (template) {
-      // Auto-fill form fields
-      form.setFieldsValue({
-        name: template.title,
-        description: template.description,
-        price: template.price,
-        currencyId: template.currencyId,
-      });
-    }
+  const handleTemplateSelect = (template: RecordTemplate) => {
+    // Template fields are already set by MedicalRecordFieldGroup
+    // This callback is for any additional logic if needed
   };
 
   return (
@@ -189,109 +173,21 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
         ...(settings?.currencyId ? { currencyId: settings.currencyId } : {})
       }}
     >
-      {!isEdit && (
-        <Form.Item
-          name="recordType"
-          label={t('medical:fields.recordType')}
-          rules={[{ required: true, message: t('forms:validation.required') }]}
-        >
-          <Select onChange={handleRecordTypeChange}>
-            <Option value="note">{t('medical:recordTypes.note')}</Option>
-            <Option value="procedure">{t('medical:recordTypes.procedure')}</Option>
-            <Option value="test_result">{t('medical:recordTypes.testResult')}</Option>
-          </Select>
-        </Form.Item>
-      )}
-
-      <Form.Item
-        name="name"
-        label={recordType === 'procedure' ? t('medical:fields.procedureName') : t('medical:fields.title')}
-        rules={[
-          { required: true, message: t('forms:validation.required') },
-          { max: 200, message: t('forms:validation.maxLength', { max: 200 }) },
-        ]}
-      >
-        <AutoComplete
-          options={searchedTemplates?.map(template => ({
-            value: template.title,
-            label: (
-              <div>
-                <div style={{ fontWeight: 500 }}>{template.title}</div>
-                <div style={{ fontSize: '12px', color: '#888' }}>
-                  {template.description?.length > 60
-                    ? template.description.substring(0, 60) + '...'
-                    : template.description || ''}
-                </div>
-              </div>
-            ),
-          }))}
-          onSearch={setTitleSearchTerm}
-          onSelect={handleTemplateSelect}
-          placeholder={recordType === 'procedure' ? t('medical:placeholders.procedureName') : t('medical:placeholders.noteTitle')}
-          filterOption={false}
-          notFoundContent={
-            isSearching ? <Spin size="small" /> :
-            debouncedSearchTerm.length < 2 ? t('medical:autocomplete.typeToSearch') || 'Type at least 2 characters to search' :
-            searchedTemplates?.length === 0 ? t('medical:autocomplete.noTemplatesFound') || 'No templates found' :
-            null
-          }
-          aria-label={recordType === 'procedure' ? t('medical:fields.procedureName') : t('medical:fields.title')}
-        />
-      </Form.Item>
-
-      {isSearchError && (
-        <Alert
-          message={t('common:error')}
-          description={t('medical:errors.templateSearchFailed') || 'Failed to search templates'}
-          type="error"
-          style={{ marginBottom: 16 }}
-          closable
-        />
-      )}
-
-      <Form.Item
-        name="description"
-        label={t('medical:fields.description')}
-        rules={[{ required: true, message: t('forms:validation.required') }]}
-      >
-        <TextArea
-          rows={6}
-          placeholder={t('medical:placeholders.description')}
-          showCount
-          maxLength={5000}
-        />
-      </Form.Item>
-
-      {recordType === 'procedure' && (
-        <Space size="middle" className={styles.fullWidth}>
-          <Form.Item
-            name="price"
-            label={t('medical:fields.price')}
-            className={styles.dateInput}
-          >
-            <InputNumber
-              min={0}
-              precision={2}
-              placeholder="0.00"
-              className={styles.fullWidth}
-            />
-          </Form.Item>
-
-          <Form.Item
-            name="currencyId"
-            label={t('medical:fields.currency')}
-            className={styles.severityInput}
-          >
-            <Select placeholder={t('common:selectPlaceholder')} allowClear>
-              {currencies?.map(currency => (
-                <Option key={currency.id} value={currency.id}>
-                  {currency.symbol} {currency.code}
-                </Option>
-              ))}
-            </Select>
-          </Form.Item>
-        </Space>
-      )}
+      {/* Medical Record Fields using shared component */}
+      <MedicalRecordFieldGroup
+        form={form}
+        recordType={recordType}
+        onRecordTypeChange={handleRecordTypeChange}
+        currencies={currencies}
+        templates={searchedTemplates}
+        isSearchingTemplates={isSearching}
+        onTemplateSearch={setTitleSearchTerm}
+        onTemplateSelect={handleTemplateSelect}
+        hideRecordType={isEdit}
+        fullWidthClassName={styles.fullWidth}
+        dateInputClassName={styles.dateInput}
+        currencyInputClassName={styles.severityInput}
+      />
 
       <Divider />
 
@@ -334,31 +230,21 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
                 notification.error({ message: "Error", description: error, placement: "bottomRight", duration: 5 });
                 return Upload.LIST_IGNORE;
               }
-              // Don't add to state here, let onChange handle it
               return false;
             }}
-            customRequest={({ file, onSuccess, onError }) => {
-              // Immediately mark as success to trigger proper onChange
+            customRequest={({ onSuccess }) => {
               setTimeout(() => {
                 onSuccess?.(null);
               }, 0);
             }}
-            onChange={({ file, fileList: newFileList }) => {
-
-              // Get all valid files from the fileList
+            onChange={({ fileList: newFileList }) => {
               const validFiles: File[] = [];
-
               newFileList.forEach(file => {
-                // Only include files that have originFileObj and aren't errors
                 if (file.originFileObj && file.status !== 'error') {
                   validFiles.push(file.originFileObj as File);
                 }
               });
-
-              // Update the pending files state
               setPendingFiles(validFiles);
-            }}
-            onDrop={(e) => {
             }}
             fileList={pendingFiles.map((file, index) => ({
               uid: `-${index}-${file.name}-${file.size}`,
