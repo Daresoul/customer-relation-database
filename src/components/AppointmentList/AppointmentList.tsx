@@ -111,7 +111,7 @@ const AppointmentList: React.FC<AppointmentListProps> = ({
     },
     {
       key: 'divider',
-      type: 'divider',
+      type: 'divider' as const,
     },
     {
       key: 'delete',

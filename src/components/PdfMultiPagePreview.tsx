@@ -6,6 +6,10 @@ import styles from './PdfMultiPagePreview.module.css';
 
 const { Text } = Typography;
 
+// Base width for PDF preview - multiplied by device pixel ratio for crisp rendering on HiDPI displays
+const BASE_PREVIEW_WIDTH = 900;
+const getPreviewWidth = () => Math.round(BASE_PREVIEW_WIDTH * (window.devicePixelRatio || 1));
+
 interface Props {
   attachmentId: number;
   initialPageUrl?: string; // optional pre-rendered page 1 URL
@@ -48,7 +52,7 @@ const PdfMultiPagePreview: React.FC<Props> = ({ attachmentId, initialPageUrl }) 
         setPageCount(count);
         // If we don't have page 1 yet, render it
         if (!initialPageUrl) {
-          const path = await MedicalService.renderPdfAttachmentThumbnail(attachmentId, 1, 900);
+          const path = await MedicalService.renderPdfAttachmentThumbnail(attachmentId, 1, getPreviewWidth());
           if (!active) return;
           const url = await toImageUrl(path);
           setPages([{ page: 1, url }]);
@@ -84,9 +88,10 @@ const PdfMultiPagePreview: React.FC<Props> = ({ attachmentId, initialPageUrl }) 
       }
 
       const results = await Promise.all(toFetch.map(async (p) => {
+        const previewWidth = getPreviewWidth();
         const path = forceRegenerate
-          ? await MedicalService.renderPdfAttachmentThumbnailForce(attachmentId, p, 900)
-          : await MedicalService.renderPdfAttachmentThumbnail(attachmentId, p, 900);
+          ? await MedicalService.renderPdfAttachmentThumbnailForce(attachmentId, p, previewWidth)
+          : await MedicalService.renderPdfAttachmentThumbnail(attachmentId, p, previewWidth);
         const url = await toImageUrl(path);
         return { page: p, url };
       }));
@@ -111,8 +116,9 @@ const PdfMultiPagePreview: React.FC<Props> = ({ attachmentId, initialPageUrl }) 
   const regenerateAll = useCallback(async () => {
     setRegenerating(true);
     try {
+      const previewWidth = getPreviewWidth();
       const results = await Promise.all(pages.map(async (p) => {
-        const path = await MedicalService.renderPdfAttachmentThumbnailForce(attachmentId, p.page, 900);
+        const path = await MedicalService.renderPdfAttachmentThumbnailForce(attachmentId, p.page, previewWidth);
         const url = await toImageUrl(path);
         return { page: p.page, url };
       }));

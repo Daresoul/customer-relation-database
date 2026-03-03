@@ -57,6 +57,9 @@ export interface GroupedDeviceFile {
   isSession?: boolean;
   parameterCount?: number;
   sessionInProgress?: boolean;
+  // File history tracking (propagated from PendingDeviceFile)
+  sourceFileId?: string;
+  pendingEntryId?: number;
 }
 
 interface DeviceImportState {
@@ -106,7 +109,7 @@ export const DeviceImportProvider: React.FC<{ children: ReactNode }> = ({ childr
     suggestedPatientId: undefined,
   });
 
-  const sessionTimeoutRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const sessionTimeoutRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const addDeviceFile = useCallback((file: PendingDeviceFile) => {
     setState((prev) => {

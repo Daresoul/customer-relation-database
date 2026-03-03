@@ -2038,7 +2038,7 @@ fn add_mnchip_pcr_analyzer_device(pool: &SqlitePool) -> std::pin::Pin<Box<dyn st
         if main_table_exists.0 == 0 {
             println!("Migration 035: Creating device_integrations table from scratch");
             sqlx::query(r#"
-                CREATE TABLE device_integrations (
+                CREATE TABLE IF NOT EXISTS device_integrations (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL,
                     device_type TEXT NOT NULL CHECK(device_type IN ('exigo_eos_vet', 'healvet_hv_fia_3000', 'mnchip_pointcare_chemistry', 'mnchip_pcr_analyzer')),

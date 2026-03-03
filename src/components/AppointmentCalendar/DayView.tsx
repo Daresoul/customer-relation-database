@@ -80,8 +80,7 @@ const DayView: React.FC<DayViewProps> = ({
                   type="text"
                   size="small"
                   icon={<PlusOutlined />}
-                  className={styles.faded}
-                  className="add-btn"
+                  className={`${styles.faded} add-btn`}
                 >
                   Add appointment
                 </Button>

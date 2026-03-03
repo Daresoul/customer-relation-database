@@ -28,6 +28,7 @@ import TodaysAppointments from '../../components/AppointmentCalendar/TodaysAppoi
 import {
   Appointment,
   AppointmentFilter,
+  AppointmentStatus,
   CalendarView,
 } from '../../types/appointments';
 import {
@@ -89,9 +90,9 @@ const AppointmentsTab: React.FC = () => {
     startDate,
     endDate,
     {
-      include_cancelled: filter.include_cancelled,
+      includeCancelled: filter.includeCancelled,
       status: filter.status,
-      room_id: filter.room_id,
+      roomId: filter.roomId,
     }
   );
 
@@ -102,7 +103,7 @@ const AppointmentsTab: React.FC = () => {
 
 
 
-  const { rooms } = useRooms();
+  const { data: rooms = [] } = useRooms();
 
   const { data: appointmentDetail } = useAppointmentDetail(
     selectedAppointment?.id
@@ -155,7 +156,10 @@ const AppointmentsTab: React.FC = () => {
   const handleDuplicateAppointment = useCallback(
     async (appointment: Appointment) => {
       try {
-        await duplicateAppointment(appointment.id);
+        await duplicateAppointment({
+          appointmentId: appointment.id,
+          targetDate: new Date().toISOString(),
+        });
         notification.success({
         message: t('appointments:messages.duplicatedSuccess'),
         description: t('appointments:messages.duplicatedSuccess'),
@@ -261,7 +265,6 @@ const AppointmentsTab: React.FC = () => {
                 onViewChange={setCalendarView}
                 onSelectAppointment={handleEditAppointment}
                 onCreateAppointment={handleCreateAppointment}
-                filter={filter}
               />
             ),
           },
@@ -285,12 +288,12 @@ const AppointmentsTab: React.FC = () => {
                 if (value && value !== 'all') {
                   setFilter({
                     ...filter,
-                    status: value,
-                    // Clear include_cancelled when selecting a specific status
-                    include_cancelled: value === 'cancelled' ? true : undefined
+                    status: value as AppointmentStatus,
+                    // Clear includeCancelled when selecting a specific status
+                    includeCancelled: value === 'cancelled' ? true : undefined
                   });
                 } else {
-                  const { status, include_cancelled, ...rest } = filter;
+                  const { status, includeCancelled, ...rest } = filter;
                   setFilter(rest);
                 }
               }}
@@ -310,13 +313,13 @@ const AppointmentsTab: React.FC = () => {
               className={styles.fullWidth}
               onChange={(value) => {
                 if (value && value !== 'all') {
-                  setFilter({ ...filter, room_id: value });
+                  setFilter({ ...filter, roomId: value });
                 } else {
-                  const { room_id, ...rest } = filter;
+                  const { roomId, ...rest } = filter;
                   setFilter(rest);
                 }
               }}
-              value={filter.room_id || 'all'}
+              value={filter.roomId || 'all'}
             >
               <Select.Option value="all">{t('appointments:filters.allRooms')}</Select.Option>
               {rooms?.map((room) => (
@@ -330,12 +333,12 @@ const AppointmentsTab: React.FC = () => {
           {/* Include cancelled - Only show when not filtering by cancelled status specifically */}
           {filter.status !== 'cancelled' && (
             <Checkbox
-              checked={filter.include_cancelled || false}
+              checked={filter.includeCancelled || false}
               onChange={(e) => {
                 if (e.target.checked) {
-                  setFilter({ ...filter, include_cancelled: true });
+                  setFilter({ ...filter, includeCancelled: true });
                 } else {
-                  const { include_cancelled, ...rest } = filter;
+                  const { includeCancelled, ...rest } = filter;
                   setFilter(rest);
                 }
               }}

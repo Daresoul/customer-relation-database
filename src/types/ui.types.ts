@@ -158,6 +158,17 @@ export interface PatientTableRecord {
   microchipId?: string;
 }
 
+export interface HouseholdContact {
+  name: string;
+  firstName: string;
+  lastName: string;
+  isPrimary: boolean;
+  role?: string;
+  relationship?: string;
+  phone?: string;
+  email?: string;
+}
+
 export interface HouseholdTableRecord {
   id: number;
   lastName: string;
@@ -167,6 +178,8 @@ export interface HouseholdTableRecord {
   petCount: number;
   address?: string;
   lastActivity?: string;
+  contacts?: HouseholdContact[];
+  notes?: string;
 }
 
 // Search Types

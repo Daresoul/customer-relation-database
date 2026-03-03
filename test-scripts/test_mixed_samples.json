@@ -1,0 +1,43 @@
+{
+  "patient": {
+    "name": "Buddy",
+    "owner": "Jane Doe",
+    "species": "Dog",
+    "microchip_id": "MK123456789",
+    "gender": "MALE",
+    "date_of_birth": "15-03-2022"
+  },
+  "samples": [
+    {
+      "device_type": "exigo_eos_vet",
+      "sample_id": "EXIGO-001",
+      "patient_id": "MK123456789",
+      "detected_at": "2025-12-30T10:00:00Z",
+      "test_results": {
+        "PLT": "250", "PLT_L": "175", "PLT_H": "500",
+        "HGB": "14.5", "HGB_L": "12.0", "HGB_H": "18.0",
+        "WBC": "8.2", "WBC_L": "5.5", "WBC_H": "16.9",
+        "RBC": "6.8", "RBC_L": "5.5", "RBC_H": "8.5"
+      }
+    },
+    {
+      "device_type": "pcr",
+      "sample_id": "PCR-001",
+      "patient_id": "MK123456789",
+      "detected_at": "2025-12-30T11:00:00",
+      "test_results": {
+        "CDV": "NoCt",
+        "CDV_curve": "643#640#642#641#645#648#650#652#655#658#660#663#665#668#670#673#675#678#680#683#685#688#690#693#695#698#700#703#705#708#710#713",
+        "CDV_range": ">36 or NoCt",
+        "CDV_sample_type": "oropharyngeal swab",
+        "CDV_lot": "250850",
+        "CPIV": "28.5",
+        "CPIV_curve": "1500#1520#1545#1580#1630#1700#1800#1950#2200#2600#3200#4100#5400#7200#9500#12000#14000#15200#15800#16200#16400#16500#16550#16580#16600#16610#16620#16625#16628#16630#16632#16634",
+        "CPIV_range": ">36 or NoCt",
+        "CPIV_sample_type": "oropharyngeal swab",
+        "CPIV_lot": "250850"
+      }
+    }
+  ],
+  "output_path": "/tmp/test_mixed_samples.pdf"
+}

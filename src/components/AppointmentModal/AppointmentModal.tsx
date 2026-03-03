@@ -69,7 +69,7 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
   const [conflicts, setConflicts] = useState<Appointment[]>([]);
   const [checkingConflicts, setCheckingConflicts] = useState(false);
 
-  const { rooms: hookRooms } = useRooms({ activeOnly: true });
+  const { data: hookRooms } = useRooms({ activeOnly: true });
   const rooms = propsRooms || hookRooms;
   const { patients } = usePatients();
 

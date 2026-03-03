@@ -17,7 +17,7 @@ import {
   CheckOutlined,
 } from '@ant-design/icons';
 
-export interface ButtonProps extends AntButtonProps {
+export interface ButtonProps extends Omit<AntButtonProps, 'variant'> {
   variant?: 'primary' | 'secondary' | 'success' | 'danger' | 'warning' | 'ghost';
   iconType?: 'plus' | 'edit' | 'delete' | 'save' | 'close' | 'search' | 'download' | 'upload' | 'reload' | 'check';
   fullWidth?: boolean;
@@ -43,7 +43,7 @@ const variantMap: Record<string, Partial<AntButtonProps>> = {
   success: { type: 'primary', style: { backgroundColor: '#52C41A', borderColor: '#52C41A' } },
   danger: { danger: true },
   warning: { type: 'primary', style: { backgroundColor: '#FAAD14', borderColor: '#FAAD14' } },
-  ghost: { type: 'ghost' },
+  ghost: { type: 'default', ghost: true },
 };
 
 export const Button: React.FC<ButtonProps> = ({

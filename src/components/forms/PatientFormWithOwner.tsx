@@ -80,7 +80,7 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
   const [showCreateHousehold, setShowCreateHousehold] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { notification } = App.useApp();
 
   // Fetch species from database
@@ -270,9 +270,7 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
 
       // Submit the patient data
       await onSubmit(formData);
-      if (message) {
-        notification.success({ message: "Success", description: patient ? 'Patient updated successfully!' : 'Patient created successfully!', placement: "bottomRight", duration: 3 });
-      }
+      notification.success({ message: "Success", description: patient ? 'Patient updated successfully!' : 'Patient created successfully!', placement: "bottomRight", duration: 3 });
       form.resetFields();
     } catch (error: any) {
       console.error('Form submission error:', error);
@@ -457,7 +455,7 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
                       <Option key={`household-${household.id}`} value={household.id}>
                         <Space>
                           <HomeOutlined />
-                          <span>{household.lastName || household.household_name || 'Unknown'}</span>
+                          <span>{household.lastName || 'Unknown'}</span>
                           {household.primaryContact && (
                             <span className={styles.householdOption}>({household.primaryContact})</span>
                           )}

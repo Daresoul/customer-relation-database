@@ -214,7 +214,7 @@ const DayViewSimple: React.FC<DayViewSimpleProps> = ({
     }));
 
     // Group overlapping appointments
-    const groups: typeof appointmentsWithLayout[][] = [];
+    const groups: (typeof appointmentsWithLayout[number])[][] = [];
 
     appointmentsWithLayout.forEach(apt => {
       // Find existing group that overlaps with this appointment
@@ -241,7 +241,7 @@ const DayViewSimple: React.FC<DayViewSimpleProps> = ({
     groups.forEach(group => {
       group.sort((a, b) => a.startSlot - b.startSlot);
 
-      const columns: typeof appointmentsWithLayout[] = [];
+      const columns: (typeof appointmentsWithLayout[number] | undefined)[] = [];
 
       group.forEach(apt => {
         // Find the first column where this appointment can fit

@@ -3,7 +3,8 @@ package com.vetclinic.pdf.constants;
 public enum DeviceType {
     EXIGO(1, "EXIGO"),
     POINTCARE(2, "POINTCARE"),
-    HEALVET(3, "HEALVET");
+    HEALVET(3, "HEALVET"),
+    PCR(4, "PCR");
 
     private int deviceId;
     private String deviceName;
@@ -37,6 +38,8 @@ public enum DeviceType {
             return POINTCARE.deviceName;
         } else if (deviceId == HEALVET.deviceId) {
             return HEALVET.deviceName;
+        } else if (deviceId == PCR.deviceId) {
+            return PCR.deviceName;
         }
 
         return null;

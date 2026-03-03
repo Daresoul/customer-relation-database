@@ -1,0 +1,47 @@
+{
+  "patient": {
+    "name": "Max",
+    "owner": "John Smith",
+    "species": "Dog",
+    "microchip_id": "123456789",
+    "gender": "MALE",
+    "date_of_birth": "2020-05-15"
+  },
+  "samples": [{
+    "device_type": "pcr",
+    "sample_id": "0C1231-3-0015",
+    "patient_id": "555",
+    "detected_at": "2025-12-30T13:38:51",
+    "analyzer_info": "0C1231-3-0015",
+    "submit_datetime": "30/12/2025 13:00",
+    "print_datetime": "30/12/2025 14:30",
+    "test_results": {
+      "CDV": "25.79",
+      "CDV_curve": "1616#1622#1628#1635#1642#1650#1660#1672#1688#1710#1745#1800#1890#2050#2350#2900#3800#5200#7500#10500#13500#15000#15500#15800#16000#16100#16200#16250#16280#16300#16320#16340",
+      "CDV_range": ">36 or NoCt",
+      "CDV_sample_type": "oropharyngeal, nasopharyngeal and eye swab",
+      "CDV_lot": "250850",
+      "CPIV": "NoCt",
+      "CPIV_curve": "8500#8520#8540#8560#8580#8600#8620#8640#8660#8680#8700#8720#8740#8760#8780#8800#8820#8840#8860#8880#8900#8920#8940#8960#8980#9000#9020#9040#9060#9080#9100#9120",
+      "CPIV_range": ">36 or NoCt",
+      "CPIV_sample_type": "oropharyngeal, nasopharyngeal and eye swab",
+      "CPIV_lot": "250850",
+      "CAV-2": "32.15",
+      "CAV-2_curve": "3400#3410#3420#3435#3455#3485#3530#3600#3710#3880#4150#4550#5150#6100#7500#9200#10800#11800#12300#12600#12800#12900#12950#13000#13020#13040#13050#13060#13065#13070#13072#13075",
+      "CAV-2_range": ">36 or NoCt",
+      "CAV-2_sample_type": "oropharyngeal, nasopharyngeal and eye swab",
+      "CAV-2_lot": "250850",
+      "Bb": "NoCt",
+      "Bb_curve": "1800#1805#1810#1815#1820#1825#1830#1835#1840#1845#1850#1855#1860#1865#1870#1875#1880#1885#1890#1895#1900#1905#1910#1915#1920#1925#1930#1935#1940#1945#1950#1955",
+      "Bb_range": ">36 or NoCt",
+      "Bb_sample_type": "oropharyngeal, nasopharyngeal and eye swab",
+      "Bb_lot": "250850",
+      "MC": "NoCt",
+      "MC_curve": "2200#2210#2220#2230#2240#2250#2260#2270#2280#2290#2300#2310#2320#2330#2340#2350#2360#2370#2380#2390#2400#2410#2420#2430#2440#2450#2460#2470#2480#2490#2500#2510",
+      "MC_range": ">36 or NoCt",
+      "MC_sample_type": "oropharyngeal, nasopharyngeal and eye swab",
+      "MC_lot": "250850"
+    }
+  }],
+  "output_path": "/tmp/test_pcr_positive.pdf"
+}

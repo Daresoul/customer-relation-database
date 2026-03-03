@@ -418,13 +418,13 @@ const DeviceInputSettings: React.FC = () => {
     fetchPorts(); // Refresh available ports when opening modal
     integrationForm.setFieldsValue({
       name: integration.name,
-      device_type: integration.device_type,
-      connection_type: integration.connection_type,
-      watch_directory: integration.watch_directory,
-      file_pattern: integration.file_pattern,
-      serial_port_name: integration.serial_port_name,
-      tcp_host: integration.tcp_host,
-      tcp_port: integration.tcp_port,
+      device_type: integration.deviceType,
+      connection_type: integration.connectionType,
+      watch_directory: integration.watchDirectory,
+      file_pattern: integration.filePattern,
+      serial_port_name: integration.serialPortName,
+      tcp_host: integration.tcpHost,
+      tcp_port: integration.tcpPort,
       enabled: integration.enabled,
     });
     setIntegrationModalVisible(true);

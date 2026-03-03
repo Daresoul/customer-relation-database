@@ -9,6 +9,7 @@ export interface ThemeColors {
   border: string;
   hover: string;
   selected: string;
+  primary: string;
 }
 
 export const getThemeColors = (theme: 'light' | 'dark'): ThemeColors => {
@@ -22,6 +23,7 @@ export const getThemeColors = (theme: 'light' | 'dark'): ThemeColors => {
       border: '#d9d9d9',
       hover: '#f0f0f0',
       selected: '#e6f4ff',
+      primary: '#1890ff',
     };
   }
 
@@ -35,6 +37,7 @@ export const getThemeColors = (theme: 'light' | 'dark'): ThemeColors => {
     border: '#303030',
     hover: '#2A2A2A',
     selected: '#303030',
+    primary: '#1890ff',
   };
 };
 

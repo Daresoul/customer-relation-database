@@ -49,15 +49,17 @@ impl JavaPdfService {
     ) -> Result<(), String> {
         log::info!("☕ Generating PDF using Java JAR (iText 5) with {} samples...", device_data_list.len());
 
-        // Sort samples in the order Java expects: Exigo, Pointcare, Healvet
+        // Sort samples in the order Java expects: Exigo, Pointcare, Healvet, PCR
+        // PCR samples go last as they are rendered on separate pages
         // This is critical for correct PDF layout (Java PDF code line 273)
         let mut sorted_samples = device_data_list.to_vec();
         sorted_samples.sort_by_key(|device| {
             match device.device_type.as_str() {
-                "exigo_eos_vet" => 0,           // Exigo first
-                "mnchip_pointcare_pcr_v1" => 1, // Pointcare second
-                "healvet_hv_fia_3000" => 2,     // Healvet third
-                _ => 99,                         // Unknown devices last
+                "exigo_eos_vet" => 0,              // Exigo first
+                "mnchip_pointcare_chemistry" => 1, // Pointcare chemistry second
+                "healvet_hv_fia_3000" => 2,        // Healvet third
+                "mnchip_pcr_analyzer" => 3,        // PCR last (separate page)
+                _ => 99,                            // Unknown devices last
             }
         });
 
@@ -258,12 +260,13 @@ impl JavaPdfService {
     }
 
     /// Map detailed device type names to Java-expected format
-    /// Java expects: "exigo_eos_vet", "healvet", or "pointcare"
-    /// We use: "exigo_eos_vet", "healvet_hv_fia_3000", "mnchip_pointcare_pcr_v1"
+    /// Java expects: "exigo_eos_vet", "healvet", "pointcare", or "pcr"
+    /// We use: "exigo_eos_vet", "healvet_hv_fia_3000", "mnchip_pointcare_chemistry", "mnchip_pcr_analyzer"
     fn map_device_type(device_type: &str) -> String {
         match device_type {
             "healvet_hv_fia_3000" => "healvet".to_string(),
-            "mnchip_pointcare_pcr_v1" => "pointcare".to_string(),
+            "mnchip_pointcare_chemistry" => "pointcare".to_string(),
+            "mnchip_pcr_analyzer" => "pcr".to_string(),
             "exigo_eos_vet" => "exigo_eos_vet".to_string(),
             _ => device_type.to_string(), // Pass through unknown types
         }

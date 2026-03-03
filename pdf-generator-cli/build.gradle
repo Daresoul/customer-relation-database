@@ -32,6 +32,9 @@ dependencies {
     // Apache Commons (for StringUtils used in enums)
     implementation 'org.apache.commons:commons-lang3:3.13.0'
 
+    // JFreeChart for PCR amplification curve rendering
+    implementation 'org.jfree:jfreechart:1.5.3'
+
     // Logging
     implementation 'org.slf4j:slf4j-api:2.0.9'
     implementation 'org.slf4j:slf4j-simple:2.0.9'

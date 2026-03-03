@@ -92,6 +92,12 @@ export interface MedicalRecordFilter {
   recordType?: RecordType;
   isArchived?: boolean;
   searchTerm?: string;
+  startDate?: string;
+  endDate?: string;
+  includeArchived?: boolean;
+  hasAttachments?: boolean;
+  hasPrice?: boolean;
+  sortBy?: 'date' | 'type' | 'name';
 }
 
 export interface MedicalRecordsResponse {

@@ -15,6 +15,8 @@ import {
   Card,
   Drawer,
   Checkbox,
+  AutoComplete,
+  Spin,
 } from 'antd';
 import {
   SaveOutlined,
@@ -30,7 +32,9 @@ import { useTranslation } from 'react-i18next';
 import { useDeviceImport } from '@/contexts/DeviceImportContext';
 import { usePatients } from '@/hooks/usePatients';
 import { useCurrencies, useCreateMedicalRecord, useUploadAttachment } from '@/hooks/useMedicalRecords';
+import { useSearchRecordTemplates } from '@/hooks/useRecordTemplates';
 import { useAppSettings } from '@/hooks/useAppSettings';
+import { useDebounce } from '@/hooks/useDebounce';
 import { CreateMedicalRecordInput } from '@/types/medical';
 import { Patient } from '@/types';
 import { MedicalService } from '@/services/medicalService';
@@ -55,6 +59,8 @@ const DeviceImportModal: React.FC = () => {
   const [createPatientExpanded, setCreatePatientExpanded] = useState(false);
   const [printAfterSave, setPrintAfterSave] = useState(true); // Default to printing after save
   const [patientSerial, setPatientSerial] = useState<string>('');
+  const [titleSearchTerm, setTitleSearchTerm] = useState<string>('');
+  const debouncedSearchTerm = useDebounce(titleSearchTerm, 300);
   // full patient modal removed per request; keep inline create only
 
   const {
@@ -76,6 +82,7 @@ const DeviceImportModal: React.FC = () => {
   const { settings } = useAppSettings();
   const createMutation = useCreateMedicalRecord();
   const uploadMutation = useUploadAttachment();
+  const { data: searchedTemplates, isLoading: isSearchingTemplates } = useSearchRecordTemplates(debouncedSearchTerm, recordType);
 
   // Capture barcode scans without interfering with typing
   useBarcodeScanner({
@@ -181,6 +188,7 @@ const DeviceImportModal: React.FC = () => {
 
   const handleRecordTypeChange = (value: 'procedure' | 'note' | 'test_result') => {
     setRecordType(value);
+    setTitleSearchTerm(''); // Reset search when type changes
     if (value === 'note' || value === 'test_result') {
       // Clear financial fields for notes and test results
       form.setFieldValue('price', undefined);
@@ -190,6 +198,20 @@ const DeviceImportModal: React.FC = () => {
       if (settings?.currencyId) {
         form.setFieldValue('currencyId', settings.currencyId);
       }
+    }
+  };
+
+  const handleTemplateSelect = (value: string) => {
+    // Find the selected template
+    const template = searchedTemplates?.find(t => t.title === value);
+    if (template) {
+      // Auto-fill form fields from template
+      form.setFieldsValue({
+        name: template.title,
+        description: template.description,
+        price: template.price,
+        currencyId: template.currencyId,
+      });
     }
   };
 
@@ -590,11 +612,33 @@ const DeviceImportModal: React.FC = () => {
           ]}
           tooltip={t('medical:deviceImport.autoFilledTooltip')}
         >
-          <Input
+          <AutoComplete
+            options={searchedTemplates?.map(template => ({
+              value: template.title,
+              label: (
+                <div>
+                  <div style={{ fontWeight: 500 }}>{template.title}</div>
+                  <div style={{ fontSize: '12px', color: '#888' }}>
+                    {template.description && template.description.length > 60
+                      ? template.description.substring(0, 60) + '...'
+                      : template.description || ''}
+                  </div>
+                </div>
+              ),
+            }))}
+            onSearch={setTitleSearchTerm}
+            onSelect={handleTemplateSelect}
             placeholder={
               recordType === 'procedure'
                 ? t('medical:placeholders.procedureName')
                 : t('medical:placeholders.noteTitle')
+            }
+            filterOption={false}
+            notFoundContent={
+              isSearchingTemplates ? <Spin size="small" /> :
+              debouncedSearchTerm.length < 2 ? t('medical:autocomplete.typeToSearch') || 'Type at least 2 characters to search' :
+              searchedTemplates?.length === 0 ? t('medical:autocomplete.noTemplatesFound') || 'No templates found' :
+              null
             }
           />
         </Form.Item>

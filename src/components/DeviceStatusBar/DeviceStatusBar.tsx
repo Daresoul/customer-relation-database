@@ -137,9 +137,9 @@ export const DeviceStatusBar: React.FC = () => {
                 title={
                   <div>
                     <div><strong>{integration.name}</strong></div>
-                    <div>{getDeviceTypeDisplayName(integration.device_type)}</div>
-                    <div>{t('tooltips.directory', { directory: integration.watch_directory })}</div>
-                    <div>{t('tooltips.pattern', { pattern: integration.file_pattern })}</div>
+                    <div>{getDeviceTypeDisplayName(integration.deviceType as any)}</div>
+                    <div>{t('tooltips.directory', { directory: integration.watchDirectory })}</div>
+                    <div>{t('tooltips.pattern', { pattern: integration.filePattern })}</div>
                     <div>{t('tooltips.status', { status: statusText })}</div>
                   </div>
                 }

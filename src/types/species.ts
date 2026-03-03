@@ -3,6 +3,7 @@ export interface Species {
   name: string;
   active: boolean;
   display_order: number;
+  color?: string;
   created_at: string;
   updated_at: string;
 }

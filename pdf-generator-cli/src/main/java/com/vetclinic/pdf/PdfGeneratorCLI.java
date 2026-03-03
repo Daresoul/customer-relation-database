@@ -6,6 +6,7 @@ import com.vetclinic.pdf.constants.parameters.HealvetParameterEnum;
 import com.vetclinic.pdf.models.Patient;
 import com.vetclinic.pdf.models.parameters.HealvetParameter;
 import com.vetclinic.pdf.models.parameters.Parameter;
+import com.vetclinic.pdf.models.parameters.PcrParameter;
 import com.vetclinic.pdf.models.samples.*;
 import com.vetclinic.pdf.services.PDFReportService;
 
@@ -137,8 +138,10 @@ public class PdfGeneratorCLI {
                     sample = parseExigoSample(sampleJson);
                     break;
                 case "pointcare":
-                case "mnchip_pointcare_pcr_v1":
                     sample = parsePointcareSample(sampleJson);
+                    break;
+                case "pcr":
+                    sample = parsePcrSample(sampleJson);
                     break;
                 case "healvet":
                 case "healvet_hv_fia_3000":
@@ -406,6 +409,103 @@ public class PdfGeneratorCLI {
         }
 
         sample.setParameters(parameters);
+        return sample;
+    }
+
+    /**
+     * Parse a PCR sample from JSON.
+     * Expected format:
+     * {
+     *   "device_type": "pcr",
+     *   "sample_id": "0C1231-3-0015",
+     *   "patient_id": "555",
+     *   "detected_at": "2025-12-30T13:38:51",
+     *   "test_results": {
+     *     "CDV": "NoCt",
+     *     "CDV_curve": "643#640#642#...",
+     *     "CDV_range": ">36 or NoCt",
+     *     "CDV_sample_type": "oral_nasal_ocular swab",
+     *     "CDV_lot": "250850",
+     *     ...
+     *   }
+     * }
+     */
+    private static PcrSample parsePcrSample(JsonObject json) {
+        PcrSample sample = new PcrSample();
+        sample.setSampleId(json.get("sample_id").getAsString());
+        sample.setPatientId(json.get("patient_id").getAsString());
+        sample.setAnalysisDateAndTime(json.get("detected_at").getAsString());
+
+        // Set analyzer info from sample_id if not explicitly provided
+        if (json.has("analyzer_info") && !json.get("analyzer_info").isJsonNull()) {
+            sample.setAnalyzerInfo(json.get("analyzer_info").getAsString());
+        } else {
+            sample.setAnalyzerInfo(sample.getSampleId());
+        }
+
+        // Set timestamps if provided
+        if (json.has("submit_datetime") && !json.get("submit_datetime").isJsonNull()) {
+            sample.setSubmitDateTime(json.get("submit_datetime").getAsString());
+        }
+        if (json.has("print_datetime") && !json.get("print_datetime").isJsonNull()) {
+            sample.setPrintDateTime(json.get("print_datetime").getAsString());
+        }
+        if (json.has("operator") && !json.get("operator").isJsonNull()) {
+            sample.setOperator(json.get("operator").getAsString());
+        }
+        if (json.has("reviewer") && !json.get("reviewer").isJsonNull()) {
+            sample.setReviewer(json.get("reviewer").getAsString());
+        }
+
+        // Parse test results - look for PCR test codes
+        JsonObject testResults = json.getAsJsonObject("test_results");
+
+        // PCR test codes to look for
+        String[] pcrTestCodes = {"CDV", "CPIV", "CAV-2", "Bb", "MC", "IC"};
+
+        for (String testCode : pcrTestCodes) {
+            if (testResults.has(testCode)) {
+                String result = testResults.get(testCode).getAsString();
+
+                PcrTestCode pcrTestCode = PcrTestCode.fromCode(testCode);
+                PcrParameter param = new PcrParameter();
+                param.setTestCode(pcrTestCode);
+                param.setName(testCode);
+                param.setResult(result);
+
+                // Set reference values
+                String rangeKey = testCode + "_range";
+                if (testResults.has(rangeKey) && !testResults.get(rangeKey).isJsonNull()) {
+                    param.setReferentValues(testResults.get(rangeKey).getAsString());
+                } else {
+                    param.setReferentValues(PcrTestCode.getNegativeRange());
+                }
+
+                // Parse curve data
+                String curveKey = testCode + "_curve";
+                if (testResults.has(curveKey) && !testResults.get(curveKey).isJsonNull()) {
+                    param.parseCurveData(testResults.get(curveKey).getAsString());
+                }
+
+                // Set sample type
+                String sampleTypeKey = testCode + "_sample_type";
+                if (testResults.has(sampleTypeKey) && !testResults.get(sampleTypeKey).isJsonNull()) {
+                    param.setSampleType(testResults.get(sampleTypeKey).getAsString());
+                }
+
+                // Set lot number
+                String lotKey = testCode + "_lot";
+                if (testResults.has(lotKey) && !testResults.get(lotKey).isJsonNull()) {
+                    param.setLotNumber(testResults.get(lotKey).getAsString());
+                }
+
+                // Determine indicator based on Ct value
+                param.determineIndicator();
+
+                sample.addPcrParameter(param);
+            }
+        }
+
         return sample;
     }
 }

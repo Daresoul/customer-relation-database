@@ -289,11 +289,13 @@ impl DeviceParserService {
                             };
                             test_results.insert(key, value.to_string());
 
-                            // Set patient_id for filename generation (prefer field 6, fallback to 5)
-                            if idx == 6 && patient_id.is_none() {
-                                patient_id = Some(value.to_string());
-                            } else if idx == 5 && patient_id.is_none() {
-                                patient_id = Some(value.to_string());
+                            // Set patient_id for filename generation
+                            // Priority: field 3 (patient_id) > field 6 (patient_name) > field 5 (species)
+                            match idx {
+                                3 => patient_id = Some(value.to_string()),
+                                6 if patient_id.is_none() => patient_id = Some(value.to_string()),
+                                5 if patient_id.is_none() => patient_id = Some(value.to_string()),
+                                _ => {}
                             }
                         }
                     }
@@ -316,11 +318,18 @@ impl DeviceParserService {
                 "OBX" => {
                     // Observation Result - capture param code and result
                     // Fields: [0]OBX | [1]setId | [2]valueType | [3]identifier | [4]paramCode | [5]result | [6]unit | [7]range | [8]flag
+                    // PCR-specific fields (from MNCHIP_PCR.log):
+                    // [11]sample_type | [12]curve_data | [13]Ct_result | [14]timestamp | [15]cycles | [16]lot_number
                     let param_code = fields.get(4).map(|s| s.trim()).unwrap_or("");
                     let result = fields.get(5).map(|s| s.trim()).unwrap_or("");
                     let unit = fields.get(6).map(|s| s.trim()).unwrap_or("");
                     let range = fields.get(7).map(|s| s.trim()).unwrap_or("");
                     let flag = fields.get(8).map(|s| s.trim()).unwrap_or("");
+
+                    // PCR-specific fields
+                    let sample_type = fields.get(11).map(|s| s.trim()).unwrap_or("");
+                    let curve_data = fields.get(12).map(|s| s.trim()).unwrap_or("");
+                    let lot_number = fields.get(16).map(|s| s.trim()).unwrap_or("");
 
                     if !param_code.is_empty() && !result.is_empty() {
                         test_results.insert(param_code.to_string(), result.to_string());
@@ -334,6 +343,17 @@ impl DeviceParserService {
                         }
                         if !flag.is_empty() {
                             test_results.insert(format!("{}_flag", param_code), flag.to_string());
+                        }
+
+                        // Store PCR-specific fields if present
+                        if !sample_type.is_empty() {
+                            test_results.insert(format!("{}_sample_type", param_code), sample_type.to_string());
+                        }
+                        if !curve_data.is_empty() {
+                            test_results.insert(format!("{}_curve", param_code), curve_data.to_string());
+                        }
+                        if !lot_number.is_empty() {
+                            test_results.insert(format!("{}_lot", param_code), lot_number.to_string());
                         }
                     }
                 }

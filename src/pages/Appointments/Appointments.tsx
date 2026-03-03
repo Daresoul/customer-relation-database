@@ -73,7 +73,7 @@ const Appointments: React.FC = () => {
     isDeleting,
   } = useAppointments(filter);
 
-  const { rooms } = useRooms();
+  const { data: rooms } = useRooms();
 
   const { data: appointmentDetail } = useAppointmentDetail(
     selectedAppointment?.id
@@ -161,8 +161,8 @@ const Appointments: React.FC = () => {
       if (targetDate) {
         try {
           const input: DuplicateAppointmentInput = {
-            appointment_id: appointment.id,
-            target_date: targetDate.toISOString(),
+            appointmentId: appointment.id,
+            targetDate: targetDate.toISOString(),
           };
           await duplicateAppointment(input);
           notification.success({
@@ -286,9 +286,10 @@ const Appointments: React.FC = () => {
               ),
               children: (
                 <AppointmentCalendar
+                  appointments={appointments}
                   onSelectAppointment={handleSelectAppointment}
                   onCreateAppointment={handleCreateAppointment}
-                  selectedRoomId={filter.room_id}
+                  selectedRoomId={filter.roomId}
                   view={calendarView}
                   onViewChange={setCalendarView}
                 />
@@ -407,8 +408,8 @@ const Appointments: React.FC = () => {
                 if (dates) {
                   setFilter({
                     ...filter,
-                    start_date: dates[0]?.toISOString(),
-                    end_date: dates[1]?.toISOString(),
+                    startDate: dates[0]?.toISOString(),
+                    endDate: dates[1]?.toISOString(),
                   });
                 }
               }}
@@ -420,7 +421,7 @@ const Appointments: React.FC = () => {
               className={styles.fullWidth}
               placeholder={t('filters.allRooms')}
               allowClear
-              onChange={(value) => setFilter({ ...filter, room_id: value })}
+              onChange={(value) => setFilter({ ...filter, roomId: value })}
             >
               {rooms.map((room) => (
                 <Option key={room.id} value={room.id}>

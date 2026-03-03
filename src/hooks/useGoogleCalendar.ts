@@ -78,8 +78,8 @@ export function useUpdateSyncEnabled() {
     mutationFn: (enabled: boolean) => googleCalendarService.updateSyncEnabled(enabled),
     onSuccess: (data: GoogleCalendarSettings) => {
       notification.success({
-        message: data.syncEnabled ? 'Sync Enabled' : 'Sync Disabled',
-        description: data.syncEnabled
+        message: data.sync_enabled ? 'Sync Enabled' : 'Sync Disabled',
+        description: data.sync_enabled
           ? 'Google Calendar sync has been enabled'
           : 'Google Calendar sync has been disabled',
         placement: 'bottomRight',
@@ -183,9 +183,9 @@ export function useSyncStatus() {
   return useQuery({
     queryKey: QUERY_KEYS.syncStatus,
     queryFn: () => googleCalendarService.checkSyncStatus(),
-    refetchInterval: (data) => {
+    refetchInterval: (query) => {
       // Poll every 2 seconds if sync is in progress
-      return data?.status === 'in_progress' ? 2000 : false;
+      return query.state.data?.status === 'in_progress' ? 2000 : false;
     },
   });
 }
