@@ -57,3 +57,26 @@
 .formDivider {
   margin: 24px 0;
 }
+
+/* Tabbed Medical Record Fields */
+.tabbedFields {
+  margin-bottom: 16px;
+}
+
+.tabbedFields :global(.ant-tabs-nav) {
+  margin-bottom: 16px;
+}
+
+.tabContent {
+  padding: 8px 0;
+  min-height: 200px;
+}
+
+/* Date and currency input sizing */
+.dateInput {
+  width: 160px;
+}
+
+.severityInput {
+  width: 140px;
+}

@@ -18,3 +18,6 @@ export type {
 
 export { ContactFieldGroup } from './ContactFieldGroup';
 export type { ContactFieldGroupProps, ContactType } from './ContactFieldGroup';
+
+export { TabbedMedicalRecordFields } from './TabbedMedicalRecordFields';
+export type { TabbedMedicalRecordFieldsProps } from './TabbedMedicalRecordFields';

@@ -508,6 +508,7 @@ pub async fn populate_database(
                     device_type: None,
                     device_name: None,
                     device_data_list: None,
+                    prescription_notes: None,
                 };
 
                 match MedicalRecordService::create_medical_record(&app, &sea_orm_pool, input).await {
@@ -567,6 +568,7 @@ pub async fn populate_database(
                     device_type: None,
                     device_name: None,
                     device_data_list: None,
+                    prescription_notes: None,
                 };
 
                 match MedicalRecordService::create_medical_record(&app, &sea_orm_pool, input).await {

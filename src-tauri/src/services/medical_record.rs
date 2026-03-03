@@ -21,7 +21,7 @@ impl MedicalRecordService {
         // Build the query based on filters
         let mut sql = String::from(
             "SELECT id, patient_id, record_type, name, procedure_name, description, \
-             price, currency_id, is_archived, version, created_at, updated_at, \
+             prescription_notes, price, currency_id, is_archived, version, created_at, updated_at, \
              created_by, updated_by \
              FROM medical_records WHERE patient_id = ?"
         );
@@ -97,6 +97,7 @@ impl MedicalRecordService {
                 name: row.try_get("", "name").unwrap_or_default(),
                 procedure_name: row.try_get("", "procedure_name").ok(),
                 description: row.try_get("", "description").unwrap_or_default(),
+                prescription_notes: row.try_get("", "prescription_notes").ok(),
                 price,
                 currency_id: row.try_get("", "currency_id").ok(),
                 is_archived: is_archived_int != 0,
@@ -214,7 +215,7 @@ impl MedicalRecordService {
             .query_one(Statement::from_sql_and_values(
                 DbBackend::Sqlite,
                 "SELECT id, patient_id, record_type, name, procedure_name, description, \
-                 price, currency_id, is_archived, version, created_at, updated_at, \
+                 prescription_notes, price, currency_id, is_archived, version, created_at, updated_at, \
                  created_by, updated_by \
                  FROM medical_records WHERE id = ?",
                 [record_id.into()],
@@ -250,6 +251,7 @@ impl MedicalRecordService {
             name: row.try_get("", "name").unwrap_or_default(),
             procedure_name: row.try_get("", "procedure_name").ok(),
             description: row.try_get("", "description").unwrap_or_default(),
+            prescription_notes: row.try_get("", "prescription_notes").ok(),
             price,
             currency_id: row.try_get("", "currency_id").ok(),
             is_archived: is_archived_int != 0,
@@ -336,14 +338,15 @@ impl MedicalRecordService {
                 DbBackend::Sqlite,
                 "INSERT INTO medical_records \
                  (patient_id, record_type, name, procedure_name, description, \
-                  price, currency_id, is_archived, version, created_at, updated_at) \
-                 VALUES (?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?)",
+                  prescription_notes, price, currency_id, is_archived, version, created_at, updated_at) \
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?)",
                 [
                     input.patient_id.into(),
                     input.record_type.clone().into(),
                     input.name.clone().into(),
                     procedure_name.clone().into(),
                     input.description.clone().into(),
+                    input.prescription_notes.clone().into(),
                     input.price.into(),
                     input.currency_id.into(),
                     now.to_rfc3339().into(),
@@ -362,6 +365,7 @@ impl MedicalRecordService {
             name: input.name,
             procedure_name,
             description: input.description,
+            prescription_notes: input.prescription_notes,
             price: input.price,
             currency_id: input.currency_id,
             is_archived: false,
@@ -379,6 +383,7 @@ impl MedicalRecordService {
             "name": record.name,
             "procedure_name": record.procedure_name,
             "description": record.description,
+            "prescription_notes": record.prescription_notes,
             "price": record.price,
             "currency_id": record.currency_id,
             "is_archived": record.is_archived
@@ -691,7 +696,7 @@ impl MedicalRecordService {
             .query_one(Statement::from_sql_and_values(
                 DbBackend::Sqlite,
                 "SELECT id, patient_id, record_type, name, procedure_name, description, \
-                 price, currency_id, is_archived, version, created_at, updated_at, \
+                 prescription_notes, price, currency_id, is_archived, version, created_at, updated_at, \
                  created_by, updated_by \
                  FROM medical_records WHERE id = ?",
                 [record_id.into()],
@@ -715,6 +720,10 @@ impl MedicalRecordService {
         if let Some(ref description) = updates.description {
             update_parts.push("description = ?");
             params.push(description.clone().into());
+        }
+        if let Some(ref prescription_notes) = updates.prescription_notes {
+            update_parts.push("prescription_notes = ?");
+            params.push(prescription_notes.clone().into());
         }
         // MaybeNull fields - check for Null or Value, not Undefined
         match &updates.price {
@@ -770,7 +779,7 @@ impl MedicalRecordService {
             .query_one(Statement::from_sql_and_values(
                 DbBackend::Sqlite,
                 "SELECT id, patient_id, record_type, name, procedure_name, description, \
-                 price, currency_id, is_archived, version, created_at, updated_at, \
+                 prescription_notes, price, currency_id, is_archived, version, created_at, updated_at, \
                  created_by, updated_by \
                  FROM medical_records WHERE id = ?",
                 [record_id.into()],
@@ -806,6 +815,7 @@ impl MedicalRecordService {
             name: row.try_get("", "name").unwrap_or_default(),
             procedure_name: row.try_get("", "procedure_name").ok(),
             description: row.try_get("", "description").unwrap_or_default(),
+            prescription_notes: row.try_get("", "prescription_notes").ok(),
             price,
             currency_id: row.try_get("", "currency_id").ok(),
             is_archived: is_archived_int != 0,
@@ -830,6 +840,7 @@ impl MedicalRecordService {
             "name": old_row.try_get::<String>("", "name").ok(),
             "procedure_name": old_row.try_get::<String>("", "procedure_name").ok(),
             "description": old_row.try_get::<String>("", "description").ok(),
+            "prescription_notes": old_row.try_get::<String>("", "prescription_notes").ok(),
             "price": old_price,
             "currency_id": old_row.try_get::<i64>("", "currency_id").ok(),
             "is_archived": old_is_archived
@@ -841,6 +852,7 @@ impl MedicalRecordService {
             "name": updated_record.name,
             "procedure_name": updated_record.procedure_name,
             "description": updated_record.description,
+            "prescription_notes": updated_record.prescription_notes,
             "price": updated_record.price,
             "currency_id": updated_record.currency_id,
             "is_archived": updated_record.is_archived
@@ -852,6 +864,7 @@ impl MedicalRecordService {
         if old_snapshot.get("name") != new_snapshot.get("name") { changed_fields.push("name"); }
         if old_snapshot.get("procedure_name") != new_snapshot.get("procedure_name") { changed_fields.push("procedure_name"); }
         if old_snapshot.get("description") != new_snapshot.get("description") { changed_fields.push("description"); }
+        if old_snapshot.get("prescription_notes") != new_snapshot.get("prescription_notes") { changed_fields.push("prescription_notes"); }
         if old_snapshot.get("price") != new_snapshot.get("price") { changed_fields.push("price"); }
         if old_snapshot.get("currency_id") != new_snapshot.get("currency_id") { changed_fields.push("currency_id"); }
         if old_snapshot.get("is_archived") != new_snapshot.get("is_archived") { changed_fields.push("is_archived"); }
@@ -903,7 +916,7 @@ impl MedicalRecordService {
     ) -> Result<Vec<MedicalRecord>, String> {
         let mut sql = String::from(
             "SELECT id, patient_id, record_type, name, procedure_name, description, \
-             price, currency_id, is_archived, version, created_at, updated_at, \
+             prescription_notes, price, currency_id, is_archived, version, created_at, updated_at, \
              created_by, updated_by \
              FROM medical_records \
              WHERE patient_id = ? \
@@ -961,6 +974,7 @@ impl MedicalRecordService {
                 name: row.try_get("", "name").unwrap_or_default(),
                 procedure_name: row.try_get("", "procedure_name").ok(),
                 description: row.try_get("", "description").unwrap_or_default(),
+                prescription_notes: row.try_get("", "prescription_notes").ok(),
                 price,
                 currency_id: row.try_get("", "currency_id").ok(),
                 is_archived: is_archived_int != 0,
@@ -1011,7 +1025,7 @@ impl MedicalRecordService {
             .query_one(Statement::from_sql_and_values(
                 DbBackend::Sqlite,
                 "SELECT id, patient_id, record_type, name, procedure_name, description, \
-                 price, currency_id, is_archived, version, created_at, updated_at, \
+                 prescription_notes, price, currency_id, is_archived, version, created_at, updated_at, \
                  created_by, updated_by \
                  FROM medical_records WHERE id = ?",
                 [record_id.into()],
@@ -1027,6 +1041,7 @@ impl MedicalRecordService {
             name: row.try_get("", "name").unwrap_or_default(),
             procedure_name: row.try_get("", "procedure_name").ok(),
             description: row.try_get("", "description").unwrap_or_default(),
+            prescription_notes: row.try_get("", "prescription_notes").ok(),
             price: row.try_get::<i64>("", "price")
                 .ok()
                 .map(|i| i as f64)
@@ -1067,6 +1082,7 @@ impl MedicalRecordService {
                 if let Some(nm) = v.get("name").and_then(|x| x.as_str()) { base.name = nm.to_string(); }
                 if let Some(pn) = v.get("procedure_name").and_then(|x| x.as_str()) { base.procedure_name = Some(pn.to_string()); }
                 if let Some(desc) = v.get("description").and_then(|x| x.as_str()) { base.description = desc.to_string(); }
+                if let Some(prn) = v.get("prescription_notes").and_then(|x| x.as_str()) { base.prescription_notes = Some(prn.to_string()); }
                 if let Some(pr) = v.get("price").and_then(|x| x.as_f64()) { base.price = Some(pr); }
                 if let Some(cid) = v.get("currency_id").and_then(|x| x.as_i64()) { base.currency_id = Some(cid); }
                 if let Some(ia) = v.get("is_archived").and_then(|x| x.as_bool()) { base.is_archived = ia; }
@@ -1107,6 +1123,7 @@ impl MedicalRecordService {
             name: None,
             procedure_name: None,
             description: None,
+            prescription_notes: None,
             price: MaybeNull::Undefined,
             currency_id: MaybeNull::Undefined,
             is_archived: None,
@@ -1115,6 +1132,7 @@ impl MedicalRecordService {
         if let Some(v) = old_vals.get("name") { updates.name = v.as_str().map(|s| s.to_string()); }
         if let Some(v) = old_vals.get("procedure_name") { updates.procedure_name = v.as_str().map(|s| s.to_string()); }
         if let Some(v) = old_vals.get("description") { updates.description = v.as_str().map(|s| s.to_string()); }
+        if let Some(v) = old_vals.get("prescription_notes") { updates.prescription_notes = v.as_str().map(|s| s.to_string()); }
         if let Some(v) = old_vals.get("price") {
             updates.price = match v.as_f64().or_else(|| v.as_i64().map(|i| i as f64)) {
                 Some(p) => MaybeNull::Value(p),
@@ -1135,6 +1153,7 @@ impl MedicalRecordService {
         if updates.name.is_none()
             && updates.procedure_name.is_none()
             && updates.description.is_none()
+            && updates.prescription_notes.is_none()
             && matches!(updates.price, MaybeNull::Undefined)
             && matches!(updates.currency_id, MaybeNull::Undefined)
             && updates.is_archived.is_none() {

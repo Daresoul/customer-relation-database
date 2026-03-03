@@ -12,6 +12,7 @@ pub struct MedicalRecord {
     pub name: String,
     pub procedure_name: Option<String>,
     pub description: String,
+    pub prescription_notes: Option<String>, // Pharmacy/prescription notes for PDF generation
     pub price: Option<f64>,
     pub currency_id: Option<i64>,
     pub is_archived: bool,
@@ -116,6 +117,7 @@ pub struct CreateMedicalRecordInput {
     pub name: String,
     pub procedure_name: Option<String>,
     pub description: String,
+    pub prescription_notes: Option<String>, // Pharmacy/prescription notes for PDF generation
     pub price: Option<f64>,
     pub currency_id: Option<i64>,
     // Optional device test data for PDF generation (legacy single device)
@@ -134,6 +136,7 @@ pub struct UpdateMedicalRecordInput {
     pub name: Option<String>,
     pub procedure_name: Option<String>,
     pub description: Option<String>,
+    pub prescription_notes: Option<String>, // Pharmacy/prescription notes for PDF generation
     #[serde(default)]
     pub price: MaybeNull<f64>,
     #[serde(default)]

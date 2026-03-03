@@ -16,7 +16,7 @@ import { useSearchRecordTemplates } from '@/hooks/useRecordTemplates';
 import { useAppSettings } from '@/hooks/useAppSettings';
 import { useDebounce } from '@/hooks/useDebounce';
 import { MedicalService } from '@/services/medicalService';
-import { MedicalRecordFieldGroup } from '@/components/forms/fieldGroups';
+import { TabbedMedicalRecordFields } from '@/components/forms/fieldGroups';
 import type { MedicalRecord, CreateMedicalRecordInput, UpdateMedicalRecordInput, RecordTemplate, DeviceDataInput } from '@/types/medical';
 import type { RecordType } from '@/components/forms/fieldGroups';
 import type { UploadFile } from 'antd';
@@ -72,6 +72,7 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
         description: initialValues.description,
         price: initialValues.price,
         currencyId: initialValues.currencyId,
+        prescriptionNotes: initialValues.prescriptionNotes,
       });
       setRecordType(initialValues.recordType);
     }
@@ -84,6 +85,7 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
           description: values.description,
           price: values.price,
           currencyId: values.currencyId,
+          prescriptionNotes: values.prescriptionNotes,
         } as UpdateMedicalRecordInput
       : {
           patientId: patientId,
@@ -92,6 +94,7 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
           description: values.description,
           price: values.price,
           currencyId: values.currencyId,
+          prescriptionNotes: values.prescriptionNotes,
         } as CreateMedicalRecordInput;
 
     // Collect device data from files that have it (for PDF generation)
@@ -173,8 +176,8 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
         ...(settings?.currencyId ? { currencyId: settings.currencyId } : {})
       }}
     >
-      {/* Medical Record Fields using shared component */}
-      <MedicalRecordFieldGroup
+      {/* Medical Record Fields using tabbed component */}
+      <TabbedMedicalRecordFields
         form={form}
         recordType={recordType}
         onRecordTypeChange={handleRecordTypeChange}

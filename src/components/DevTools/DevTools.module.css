@@ -1,0 +1,63 @@
+/* DevTools - Development tools styling */
+
+.devToolsDrawer :global(.ant-drawer-body) {
+  padding: 16px;
+}
+
+.section {
+  margin-bottom: 16px;
+}
+
+.portStatus {
+  margin-top: 12px;
+  margin-bottom: 12px;
+}
+
+.alert {
+  margin-top: 12px;
+}
+
+/* Dev tools button in status bar */
+.devToolsButton {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  color: #faad14;
+  font-size: 12px;
+}
+
+.devToolsButton:hover {
+  background-color: rgba(250, 173, 20, 0.1);
+}
+
+.devToolsIcon {
+  font-size: 14px;
+}
+
+.devToolsLabel {
+  font-weight: 500;
+}
+
+/* Pulsing indicator for active simulation */
+.pulsingDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #52c41a;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.2);
+  }
+}

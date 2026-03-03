@@ -385,6 +385,14 @@ fn main() {
             commands::list_pending_device_entries,
             commands::mark_pending_entry_processed,
             commands::get_device_data_from_history,
+            // Dev tools commands (function in debug builds only)
+            commands::get_virtual_port_status,
+            commands::start_virtual_ports,
+            commands::stop_virtual_ports,
+            commands::send_test_healvet,
+            commands::send_test_pointcare,
+            commands::send_test_pcr,
+            commands::send_test_exigo,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

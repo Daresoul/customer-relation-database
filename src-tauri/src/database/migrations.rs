@@ -53,6 +53,7 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, "035_add_mnchip_pcr_analyzer_device", add_mnchip_pcr_analyzer_device).await?;
     run_migration(pool, "036_rename_mnchip_chemistry_device", rename_mnchip_chemistry_device).await?;
     run_migration(pool, "037_create_pending_device_entries", create_pending_device_entries_table).await?;
+    run_migration(pool, "038_add_prescription_notes", add_prescription_notes_column).await?;
 
     Ok(())
 }
@@ -2338,6 +2339,26 @@ fn create_pending_device_entries_table(pool: &SqlitePool) -> std::pin::Pin<Box<d
         "#)
         .execute(pool)
         .await?;
+
+        Ok(())
+    })
+}
+
+// Migration 038: Add prescription_notes column to medical_records
+fn add_prescription_notes_column(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        // Check if column already exists (in case migration was partially run)
+        let column_exists: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM pragma_table_info('medical_records') WHERE name = 'prescription_notes'"
+        )
+        .fetch_one(pool)
+        .await?;
+
+        if column_exists.0 == 0 {
+            sqlx::query("ALTER TABLE medical_records ADD COLUMN prescription_notes TEXT")
+                .execute(pool)
+                .await?;
+        }
 
         Ok(())
     })

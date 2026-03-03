@@ -793,6 +793,16 @@ export const MedicalRecordDetailPage: React.FC = () => {
                     <Paragraph className={styles.descriptionText}>{descVal as any}</Paragraph>
                   </div>
 
+                  {/* Prescription Notes - only show if there's content */}
+                  {(displayRecord?.prescriptionNotes || record.prescriptionNotes) && (
+                    <div className={styles.marginTop16}>
+                      <Text type="secondary" className={styles.descriptionLabel}>{t('medical:fields.prescriptionNotes')}</Text>
+                      <Paragraph className={styles.descriptionText}>
+                        {displayRecord?.prescriptionNotes || record.prescriptionNotes}
+                      </Paragraph>
+                    </div>
+                  )}
+
                   {/* Attachments now rendered as separate Card below */}
                 </>
               );

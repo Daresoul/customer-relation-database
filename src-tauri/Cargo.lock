@@ -5760,6 +5760,7 @@ dependencies = [
  "log",
  "notify",
  "oauth2",
+ "once_cell",
  "pdfium-render",
  "quick-xml 0.31.0",
  "rand 0.8.5",

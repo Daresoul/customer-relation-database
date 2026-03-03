@@ -98,6 +98,34 @@
   background: var(--hover-bg);
 }
 
+/* Dev Tools Button */
+.devToolsButton {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  color: #faad14;
+  font-size: 12px;
+  border: 1px solid #faad14;
+  margin-left: auto;
+}
+
+.devToolsButton:hover {
+  background-color: rgba(250, 173, 20, 0.15);
+}
+
+.devToolsIcon {
+  font-size: 14px;
+}
+
+.devToolsLabel {
+  font-weight: 600;
+  font-size: 11px;
+}
+
 @media (max-width: 768px) {
   .statusBar {
     padding: 8px 12px;

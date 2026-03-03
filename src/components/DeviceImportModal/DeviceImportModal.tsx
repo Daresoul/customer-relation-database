@@ -44,7 +44,7 @@ import { MedicalService } from '@/services/medicalService';
 import { fileHistoryService } from '@/services/fileHistoryService';
 import RecentDeviceFiles from '../RecentDeviceFiles';
 import CreatePatientSection from './CreatePatientSection';
-import { MedicalRecordFieldGroup } from '@/components/forms/fieldGroups';
+import { TabbedMedicalRecordFields } from '@/components/forms/fieldGroups';
 import type { RecordType, RecordTemplate } from '@/components/forms/fieldGroups';
 import styles from './DeviceImportModal.module.css';
 import { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
@@ -271,6 +271,7 @@ const DeviceImportModal: React.FC = () => {
         description: values.description,
         price: values.price,
         currencyId: values.currencyId,
+        prescriptionNotes: values.prescriptionNotes,
         deviceDataList,
       };
 
@@ -544,8 +545,8 @@ const DeviceImportModal: React.FC = () => {
           onToggleExpand={setCreatePatientExpanded}
         />
 
-        {/* Medical Record Fields using shared component */}
-        <MedicalRecordFieldGroup
+        {/* Medical Record Fields using tabbed component */}
+        <TabbedMedicalRecordFields
           form={form}
           recordType={recordType}
           onRecordTypeChange={handleRecordTypeChange}

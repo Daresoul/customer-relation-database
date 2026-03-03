@@ -10,6 +10,7 @@ export interface MedicalRecord {
   name: string; // This will hold procedureName for procedures, title for notes/test_results
   procedureName?: string; // Deprecated - kept for backward compatibility
   description: string;
+  prescriptionNotes?: string; // Pharmacy/prescription notes for PDF generation
   price?: number;
   currencyId?: number;
   isArchived: boolean;
@@ -69,6 +70,7 @@ export interface CreateMedicalRecordInput {
   name: string; // This will hold procedureName for procedures, title for notes/test_results
   procedureName?: string; // Deprecated - backend ignores this
   description: string;
+  prescriptionNotes?: string; // Pharmacy/prescription notes for PDF generation
   price?: number;
   currencyId?: number;
   // Optional device test data for PDF generation (legacy single device)
@@ -83,6 +85,7 @@ export interface UpdateMedicalRecordInput {
   name?: string;
   procedureName?: string;
   description?: string;
+  prescriptionNotes?: string; // Pharmacy/prescription notes for PDF generation
   price?: number;
   currencyId?: number;
   isArchived?: boolean;

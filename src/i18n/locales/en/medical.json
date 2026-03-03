@@ -25,6 +25,7 @@
     "title": "Title",
     "name": "Name",
     "description": "Description",
+    "prescriptionNotes": "Prescription Notes",
     "price": "Price",
     "date": "Date",
     "cost": "Cost",
@@ -42,6 +43,18 @@
     "updatedAt": "Updated",
     "createdBy": "Created By",
     "updatedBy": "Updated By"
+  },
+  "tabs": {
+    "standard": "Standard",
+    "prescriptions": "Prescriptions",
+    "lineItems": "Line Items"
+  },
+  "prescriptions": {
+    "description": "Enter prescription or pharmacy notes. This will be included in the generated PDF report for the customer."
+  },
+  "lineItems": {
+    "placeholder": "Line items feature coming soon",
+    "placeholderDescription": "This will allow adding itemized charges, products, and services."
   },
   "form": {
     "createTitle": "Create Medical Record",
@@ -107,7 +120,8 @@
   "placeholders": {
     "noteTitle": "Enter note title",
     "procedureName": "Enter procedure name",
-    "description": "Enter detailed description of the procedure or notes"
+    "description": "Enter detailed description of the procedure or notes",
+    "prescriptionNotes": "Enter medication name, dosage, frequency, duration, and any special instructions..."
   },
   "fileAttachments": "File Attachments",
   "noAttachments": "No attachments yet",
