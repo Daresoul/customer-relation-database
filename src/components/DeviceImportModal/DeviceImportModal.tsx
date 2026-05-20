@@ -584,6 +584,7 @@ const DeviceImportModal: React.FC = () => {
             size="large"
             loading={patientsLoading}
             notFoundContent={patientsLoading ? t('medical:deviceImport.loadingPatients') : t('medical:deviceImport.noPatientsFound')}
+            data-testid="device-import-patient-select"
           >
             {patients?.map((patient: any) => (
               <Option key={patient.id} value={patient.id}>
@@ -644,6 +645,7 @@ const DeviceImportModal: React.FC = () => {
               loading={loading}
               icon={<SaveOutlined />}
               onClick={handleSubmit}
+              data-testid="device-import-submit-btn"
             >
               {t('common:buttons.create')}
             </Button>

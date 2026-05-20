@@ -116,7 +116,7 @@ export const MedicalRecordFieldGroup: React.FC<MedicalRecordFieldGroupProps> = (
           label={t('medical:fields.recordType')}
           rules={[{ required: true, message: t('forms:validation.required') }]}
         >
-          <Select onChange={handleRecordTypeChange} disabled={disabled}>
+          <Select onChange={handleRecordTypeChange} disabled={disabled} data-testid="medical-record-type-select">
             <Option value="note">{t('medical:recordTypes.note')}</Option>
             <Option value="procedure">{t('medical:recordTypes.procedure')}</Option>
             <Option value="test_result">{t('medical:recordTypes.testResult')}</Option>
@@ -148,6 +148,7 @@ export const MedicalRecordFieldGroup: React.FC<MedicalRecordFieldGroupProps> = (
             ) : null
           }
           aria-label={getFieldLabel()}
+          data-testid="medical-record-name-input"
         />
       </Form.Item>
 
@@ -163,6 +164,7 @@ export const MedicalRecordFieldGroup: React.FC<MedicalRecordFieldGroupProps> = (
           showCount
           maxLength={5000}
           disabled={disabled}
+          data-testid="medical-record-description-input"
         />
       </Form.Item>
 
