@@ -12,6 +12,8 @@ interface SearchableSelectProps {
   allowClear?: boolean;
   className?: string;
   onCreateNew?: (value: string) => void;
+  // Forwarded to AntD AutoComplete root so E2E tests can target the trigger.
+  'data-testid'?: string;
 }
 
 export const SearchableSelect: React.FC<SearchableSelectProps> = ({
@@ -24,6 +26,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   allowClear = true,
   className,
   onCreateNew,
+  'data-testid': dataTestId,
 }) => {
   const [searchText, setSearchText] = useState('');
 
@@ -97,6 +100,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
       notFoundContent={loading ? <Spin size="small" /> : 'No results found'}
       suffixIcon={loading ? <Spin size="small" /> : <SearchOutlined />}
       style={{ width: '100%' }}
+      data-testid={dataTestId}
     />
   );
 };

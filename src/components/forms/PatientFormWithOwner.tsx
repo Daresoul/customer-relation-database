@@ -378,6 +378,7 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
               icon={<SaveOutlined />}
               loading={submitting}
               disabled={loading}
+              data-testid="submit-patient-btn"
             >
               {patient ? 'Update Patient' : 'Create Patient'}
             </Button>

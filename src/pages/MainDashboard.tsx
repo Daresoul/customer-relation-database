@@ -408,6 +408,7 @@ export const MainDashboard: React.FC = () => {
                     }
                   }}
                   className={activeView === 'appointments' ? styles.viewToggleHidden : styles.viewToggle}
+                  data-testid={activeView === 'patients' ? 'add-patient-btn' : 'add-household-btn'}
                 >
                   {activeView === 'patients' ? t('patients:addPatient') : t('patients:addHousehold')}
                 </Button>

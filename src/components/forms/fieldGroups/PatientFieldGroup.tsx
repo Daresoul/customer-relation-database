@@ -131,6 +131,7 @@ export const PatientFieldGroup: React.FC<PatientFieldGroupProps> = ({
             <Input
               placeholder={t('forms:placeholders.patientName', 'Enter patient name')}
               disabled={disabled}
+              data-testid="patient-name-input"
             />
           </Form.Item>
         </Col>
@@ -150,6 +151,7 @@ export const PatientFieldGroup: React.FC<PatientFieldGroupProps> = ({
               disabled={disabled}
               onChange={handleSpeciesChange}
               onCreateNew={onCreateSpecies}
+              data-testid="patient-species-select"
             />
           </Form.Item>
         </Col>
