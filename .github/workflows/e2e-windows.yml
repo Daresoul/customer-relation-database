@@ -93,6 +93,10 @@ jobs:
         env:
           # Quiet down any noisy plugins
           RUST_LOG: info
+          # Tells the binary to stay visible so WebDriver can attach. See
+          # main.rs `setup()` — the normal startup path hides the window into
+          # the tray, which would kill the WebView2 DevTools connection.
+          TAURI_E2E: '1'
         run: npx wdio run wdio.conf.ts
 
       - name: Upload test artifacts on failure

@@ -152,9 +152,13 @@ fn main() {
         .setup(|app| {
             // Start device-level scanner capture (Windows/macOS dev environments)
             start_device_capture(app.handle());
-            // Start hidden on launch (will be shown from tray or on events)
-            if let Some(window) = app.get_window("main") {
-                let _ = window.hide();
+            // Start hidden on launch (will be shown from tray or on events).
+            // Skipped under E2E so WebDriver can attach to a visible WebView2 —
+            // hiding the window drops the DevTools connection and kills the session.
+            if std::env::var("TAURI_E2E").is_err() {
+                if let Some(window) = app.get_window("main") {
+                    let _ = window.hide();
+                }
             }
             // Get database URL
             let db_url = get_database_url(&app.handle())?;
