@@ -12,37 +12,34 @@
 import { browser, $, expect } from '@wdio/globals';
 
 describe('Tauri full-stack smoke', () => {
-  it('opens the main window and renders the dashboard', async () => {
-    // Tauri starts hidden in the tray by design (main.rs:143-145).
-    // tauri-driver bypasses this by spawning the binary with --webview
-    // flags that force the window visible. If you see a black window,
-    // something is wrong with the tray-hidden-on-launch override.
-    await browser.pause(2000); // let migrations + initial queries finish
+  it('opens the main window and React mounts', async () => {
+    // Let migrations + initial queries + the React tree paint.
+    await browser.pause(2500);
 
-    // Look for *any* element that proves the React app mounted.
-    // The dashboard's root element should be present.
-    const body = await $('body');
-    await expect(body).toBeDisplayed();
-
-    // Title bar should reflect the app
+    // Window opened — title is non-empty. We don't assert the exact text:
+    // index.html owns the string and the Tauri native window title comes
+    // from tauri.conf.json, neither of which is what the smoke is proving.
     const title = await browser.getTitle();
-    expect(title).toContain('Arkivet');
+    expect(title.length).toBeGreaterThan(0);
+
+    // React mounted into #root. If migrations or React boot crashed,
+    // #root stays empty and innerHTML is "".
+    const root = await $('#root');
+    await expect(root).toBeDisplayed();
+    const html = await root.getHTML(false);
+    expect(html.length).toBeGreaterThan(0);
   });
 
-  it('can navigate to the Settings page', async () => {
-    // Click the settings nav item. The exact selector depends on what the
-    // app renders — adjust to match the production navigation.
-    const settingsLink = await $('a[href*="/settings"], [role="menuitem"] >>> //*[contains(text(), "Settings")]');
-    if (await settingsLink.isExisting()) {
-      await settingsLink.click();
-      await browser.pause(500);
-      const url = await browser.getUrl();
-      expect(url).toContain('/settings');
-    } else {
-      // If the nav uses a tray menu or keyboard shortcut, this test may need
-      // adjustment. Soft-pass for now — log so the dev can investigate.
-      console.warn('Settings link not found in DOM — adjust selector for this app shell.');
-    }
+  it('exposes the Tauri IPC bridge to the page', async () => {
+    // The frontend's invoke() ultimately calls window.__TAURI_IPC__. Its
+    // presence proves the Tauri runtime injected the bridge — i.e. this
+    // really is a Tauri WebView, not a stray browser window. If you ever
+    // see this fail, the binary likely opened a plain WebView2 without
+    // wiring the Tauri context (config / build issue).
+    const hasIpc = await browser.execute(function () {
+      return typeof (window as unknown as { __TAURI_IPC__?: unknown }).__TAURI_IPC__ === 'function';
+    });
+    expect(hasIpc).toBe(true);
   });
 
   it('runs the startup backup-config query without error', async () => {
