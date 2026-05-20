@@ -97,8 +97,20 @@ describe('Medical record update round-trip', () => {
     // The same TextArea testid we added for the device-import flow.
     const descrInput = await $('[data-testid="medical-record-description-input"]');
     await descrInput.waitForDisplayed({ timeout: 5_000 });
-    // Clear AntD TextArea then type new value. setValue replaces.
-    await descrInput.setValue(updatedDescription);
+    // Set value programmatically — wdio's setValue() on AntD's
+    // Input.TextArea with `showCount` doesn't reliably replace the
+    // existing value (the form submitted "Initial description" unchanged
+    // even after a clear+sendKeys). Bypass the input pipeline entirely.
+    await browser.execute((value: string) => {
+      const ta = document.querySelector<HTMLTextAreaElement>(
+        '[data-testid="medical-record-description-input"]',
+      );
+      if (!ta) throw new Error('description textarea not found');
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!;
+      setter.call(ta, value);
+      ta.dispatchEvent(new Event('input', { bubbles: true }));
+    }, updatedDescription);
+    await browser.pause(200);
 
     // Save.
     const submitBtn = await $('[data-testid="medical-record-form-submit-btn"]');
