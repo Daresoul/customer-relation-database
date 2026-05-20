@@ -78,10 +78,12 @@ describe('Medical record update round-trip', () => {
   });
 
   it('opens the record, edits the description, saves, and persists the change', async () => {
-    // Navigate to the freshly-created record's detail page.
+    // Navigate to the freshly-created record's detail page. browser.url
+    // triggers a full WebView reload (Tauri serves the SPA) — give it
+    // time for migrations to run + React to remount + the medical-record
+    // query to resolve before looking for the Edit button.
     await browser.url(`tauri://localhost/medical-records/${recordId}`);
-    // React-router needs a beat to mount the route.
-    await browser.pause(800);
+    await browser.pause(3500);
 
     // Click Edit → switches the card into MedicalRecordForm.
     const editBtn = await $('[data-testid="medical-record-edit-btn"]');

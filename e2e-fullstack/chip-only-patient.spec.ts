@@ -56,9 +56,27 @@ describe('Chip-only patient creation (inline modal flow)', () => {
     // Fill ONLY microchip. Name and species are intentionally left blank —
     // the test point is that the form's `namingRequired` rule lets this
     // submission through.
+    //
+    // We can't use setValue() — wdio types char-by-char, and the inline
+    // useBarcodeScanner hook (registered while DeviceImportModal is open)
+    // recognizes 13-char fast typing as a scan burst and preventDefault's
+    // every keypress, leaving the input empty. Instead, set the value
+    // programmatically through the React `value` setter so the scanner
+    // doesn't see keydown events at all.
     const chipInput = await $('[data-testid="create-patient-section-microchip-input"]');
     await chipInput.waitForDisplayed({ timeout: 5_000 });
-    await chipInput.setValue(uniqueChip);
+    await browser.execute((value: string) => {
+      const input = document.querySelector<HTMLInputElement>(
+        '[data-testid="create-patient-section-microchip-input"]',
+      );
+      if (!input) throw new Error('chip input not found in DOM');
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+      setter.call(input, value);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    }, uniqueChip);
+    // Give Form.useWatch a tick to propagate microchipId into namingRequired
+    // before validation reads the rules.
+    await browser.pause(200);
 
     // Submit the inline create form. On success, handlePatientCreated()
     // runs → CreatePatientSection collapses → the expand button returns.
