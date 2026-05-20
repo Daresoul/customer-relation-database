@@ -111,20 +111,29 @@ describe('Device file → patient attach round-trip', () => {
     );
     await patientOption.waitForDisplayed({ timeout: 5_000 });
     await patientOption.click();
+    // Let AntD Select onChange propagate into the Form state before
+    // we submit — without this validateFields() can race and see
+    // patientId as undefined.
+    await browser.pause(400);
 
     // Record name + description are pre-filled by the modal from
     // pendingFiles.deviceName/fileName — no further interaction needed.
     await submitBtn.click();
 
-    // Success notification fires only after create_medical_record AND
-    // upload_attachment both succeed. If either DTO drifts, no notification.
-    const successNotice = await $(
-      '//div[contains(@class, "ant-notification-notice-description") and contains(., "uploaded")]',
+    // Success path: on a successful save the modal navigates to
+    // /medical-records/<id>. The notification.success fires too but
+    // gets torn down by the navigation before we can poll it, so we
+    // assert on the URL change instead (more robust).
+    await browser.waitUntil(
+      async () => {
+        const url = await browser.getUrl();
+        return /\/medical-records\/\d+/.test(url);
+      },
+      {
+        timeout: 20_000,
+        timeoutMsg:
+          'URL did not navigate to /medical-records/<id> within 20s — submit likely failed. Possible causes: CreateMedicalRecordInput contract drift, upload_attachment failure, or form validation error.',
+      },
     );
-    await successNotice.waitForDisplayed({
-      timeout: 20_000,
-      timeoutMsg:
-        'File-upload success notification did not appear within 20s — likely a CreateMedicalRecordInput or UploadAttachment contract drift.',
-    });
   });
 });
