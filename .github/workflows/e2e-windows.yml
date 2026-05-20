@@ -47,6 +47,26 @@ jobs:
         shell: pwsh
         run: npm ci
 
+      - name: Set up JDK for PDF generator
+        # Java 8 target (sourceCompatibility = 1.8 in pdf-generator-cli/build.gradle)
+        # but JDK 17 can build it. Temurin 17 is the current LTS.
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Build PDF generator JAR
+        # Tauri bundles src-tauri/resources/pdf-generator.jar (declared in
+        # tauri.conf.json:resources). The JAR isn't committed — it's built
+        # fresh from pdf-generator-cli/. After build, Gradle drops it at
+        # build/libs/pdf-generator-cli-1.0.0.jar; we copy it to the path
+        # Tauri expects.
+        shell: pwsh
+        working-directory: pdf-generator-cli
+        run: |
+          .\gradlew.bat build --no-daemon
+          Copy-Item build\libs\pdf-generator-cli-1.0.0.jar ..\src-tauri\resources\pdf-generator.jar -Force
+
       - name: Cache Rust build
         uses: actions/cache@v4
         with:
