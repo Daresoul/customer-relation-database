@@ -34,12 +34,16 @@ let tauriDriver: ChildProcess | null = null;
 
 /**
  * Path to the production-built Tauri binary that tauri-driver will launch.
- * Windows: target/release/Arkivet.exe (from src-tauri/tauri.conf.json productName)
- * Linux:   target/release/arkivet
+ *
+ * Note: cargo's output name comes from `[package].name` in src-tauri/Cargo.toml
+ * (= "vet-clinic"), NOT from `productName` in tauri.conf.json. The latter is
+ * only applied as a rename when invoking via the Tauri CLI (`tauri build`),
+ * not via plain `cargo build`. CI uses plain `cargo build --release` for speed,
+ * so the binary lives at target/release/vet-clinic[.exe].
  */
 const tauriBinary = process.platform === 'win32'
-  ? path.resolve(__dirname, 'src-tauri', 'target', 'release', 'Arkivet.exe')
-  : path.resolve(__dirname, 'src-tauri', 'target', 'release', 'arkivet');
+  ? path.resolve(__dirname, 'src-tauri', 'target', 'release', 'vet-clinic.exe')
+  : path.resolve(__dirname, 'src-tauri', 'target', 'release', 'vet-clinic');
 
 export const config: Options.Testrunner = {
   runner: 'local',
