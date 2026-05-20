@@ -20,6 +20,18 @@ use log::LevelFilter;
 use services::device_capture::start_device_capture;
 
 fn main() {
+    // Initialize Sentry FIRST so panics during early setup are still captured.
+    // The guard must live for the whole of main(); when it's dropped Sentry
+    // flushes pending events on a short timeout before the process exits.
+    let _sentry_guard = sentry::init((
+        "https://e563160f60072e45b88d783b3f153172@o4511411837861888.ingest.de.sentry.io/4511411842187344",
+        sentry::ClientOptions {
+            release: sentry::release_name!(),
+            send_default_pii: true,
+            ..Default::default()
+        },
+    ));
+
     // Load environment variables from .env file
     dotenv::dotenv().ok();
 
@@ -190,6 +202,30 @@ fn main() {
                 // Keep file watcher alive for the duration of the app
                 loop {
                     tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+                }
+            });
+
+            // Run startup backup if a destination is configured. Spawned in
+            // a background task so a slow or failing backup never blocks app
+            // boot — the user can also trigger it manually from settings.
+            let sea_orm_pool_for_backup = sea_orm_pool.clone();
+            let app_handle_for_backup = app.handle();
+            tauri::async_runtime::spawn(async move {
+                let Some(app_data) = app_handle_for_backup
+                    .path_resolver()
+                    .app_data_dir()
+                else {
+                    log::warn!("Backup: could not resolve app_data_dir, skipping");
+                    return;
+                };
+                let cfg = services::backup::BackupService::load_config(&app_data);
+                if cfg.directory.is_none() {
+                    log::info!("Backup: no destination configured, skipping startup backup");
+                    return;
+                }
+                match services::backup::BackupService::run_backup(&app_data, &sea_orm_pool_for_backup).await {
+                    Ok(c) => log::info!("Backup: completed at {}", c.last_backup_at.unwrap_or_default()),
+                    Err(e) => log::error!("Backup: failed: {}", e),
                 }
             });
 
@@ -393,6 +429,16 @@ fn main() {
             commands::send_test_pointcare,
             commands::send_test_pcr,
             commands::send_test_exigo,
+            // Line item template commands
+            commands::get_line_item_templates,
+            commands::get_line_item_template,
+            commands::create_line_item_template,
+            commands::update_line_item_template,
+            commands::delete_line_item_template,
+            // Backup commands
+            commands::get_backup_config,
+            commands::set_backup_directory,
+            commands::run_backup_now,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -58,20 +58,106 @@ public class PdfGeneratorCLI {
             Gson gson = new Gson();
             JsonObject json = gson.fromJson(jsonContent, JsonObject.class);
 
-            // Parse patient
-            Patient patient = parsePatient(json.getAsJsonObject("patient"));
+            // Check report type - default to "device" for backwards compatibility
+            String reportType = "device";
+            if (json.has("report_type") && !json.get("report_type").isJsonNull()) {
+                reportType = json.get("report_type").getAsString();
+            }
 
-            // Parse samples (pass patient type for Healvet reference ranges)
-            List<Sample> samples = parseSamples(json.getAsJsonArray("samples"), patient.getPatientType());
-
-            // Get output path
+            PDFReportService service = PDFReportService.getInstance();
             String outputPath = json.get("output_path").getAsString();
 
-            // Generate PDF using existing service
-            PDFReportService service = PDFReportService.getInstance();
-            File pdfFile = service.createPDFReport(patient, samples, outputPath);
+            if ("invoice".equals(reportType)) {
+                // Invoice mode - uses invoice.pdf template with dynamic table
+                String invoiceDate = json.has("date") ? json.get("date").getAsString() : "";
+                String invoiceNumber = json.has("invoice_number") ? json.get("invoice_number").getAsString() : "";
+                String recipient = json.has("recipient") ? json.get("recipient").getAsString() : "";
+                double discountPercent = json.has("discount_percent") ? json.get("discount_percent").getAsDouble() : 0;
+                String currency = json.has("currency") ? json.get("currency").getAsString() : "ден";
 
-            System.out.println("PDF generated successfully: " + outputPath);
+                // Parse line items
+                List<PDFReportService.InvoiceLineItem> lineItems = new ArrayList<>();
+                if (json.has("line_items") && json.get("line_items").isJsonArray()) {
+                    JsonArray itemsArray = json.getAsJsonArray("line_items");
+                    for (JsonElement itemEl : itemsArray) {
+                        JsonObject itemObj = itemEl.getAsJsonObject();
+                        String name = itemObj.has("name") ? itemObj.get("name").getAsString() : "";
+                        int quantity = itemObj.has("quantity") ? itemObj.get("quantity").getAsInt() : 1;
+                        double unitPrice = itemObj.has("unit_price") ? itemObj.get("unit_price").getAsDouble() : 0;
+                        lineItems.add(new PDFReportService.InvoiceLineItem(name, quantity, unitPrice));
+                    }
+                }
+
+                File pdfFile = service.createInvoice(invoiceDate, invoiceNumber, recipient,
+                    lineItems, discountPercent, currency, outputPath);
+                System.out.println("Invoice PDF generated successfully: " + outputPath);
+
+            } else if ("pharmacy_note".equals(reportType)) {
+                // Pharmacy note mode - overlays prescription text on pharmacy_note.pdf template
+                String prescriptionText = json.has("prescription_text") ? json.get("prescription_text").getAsString() : "";
+
+                File pdfFile = service.createPharmacyNote(prescriptionText, outputPath);
+                System.out.println("Pharmacy note PDF generated successfully: " + outputPath);
+
+            } else if ("simple".equals(reportType)) {
+                // Simple report mode - uses template with title and description
+                String title = json.has("title") ? json.get("title").getAsString() : "";
+                String description = json.has("description") ? json.get("description").getAsString() : "";
+
+                // Patient info (all optional)
+                String patientName = null;
+                String ownerName = null;
+                String species = null;
+                String microchipId = null;
+                String gender = null;
+                String dateOfBirth = null;
+
+                if (json.has("patient") && !json.get("patient").isJsonNull()) {
+                    JsonObject patientJson = json.getAsJsonObject("patient");
+                    if (patientJson.has("name") && !patientJson.get("name").isJsonNull()) {
+                        patientName = patientJson.get("name").getAsString();
+                    }
+                    if (patientJson.has("owner") && !patientJson.get("owner").isJsonNull()) {
+                        ownerName = patientJson.get("owner").getAsString();
+                    }
+                    if (patientJson.has("species") && !patientJson.get("species").isJsonNull()) {
+                        species = patientJson.get("species").getAsString();
+                    }
+                    if (patientJson.has("microchip_id") && !patientJson.get("microchip_id").isJsonNull()) {
+                        microchipId = patientJson.get("microchip_id").getAsString();
+                    }
+                    if (patientJson.has("gender") && !patientJson.get("gender").isJsonNull()) {
+                        gender = patientJson.get("gender").getAsString();
+                    }
+                    if (patientJson.has("date_of_birth") && !patientJson.get("date_of_birth").isJsonNull()) {
+                        dateOfBirth = patientJson.get("date_of_birth").getAsString();
+                    }
+                }
+
+                File pdfFile;
+                boolean hasPatientInfo = patientName != null || ownerName != null || species != null ||
+                                         microchipId != null || gender != null || dateOfBirth != null;
+                if (hasPatientInfo) {
+                    pdfFile = service.createSimpleReportWithPatient(title, description,
+                        patientName, ownerName, species, microchipId, gender, dateOfBirth, outputPath);
+                } else {
+                    pdfFile = service.createSimpleReport(title, description, outputPath);
+                }
+                System.out.println("Simple report PDF generated successfully: " + outputPath);
+
+            } else {
+                // Device report mode (default) - existing behavior
+                // Parse patient
+                Patient patient = parsePatient(json.getAsJsonObject("patient"));
+
+                // Parse samples (pass patient type for Healvet reference ranges)
+                List<Sample> samples = parseSamples(json.getAsJsonArray("samples"), patient.getPatientType());
+
+                // Generate PDF using existing service
+                File pdfFile = service.createPDFReport(patient, samples, outputPath);
+
+                System.out.println("Device report PDF generated successfully: " + outputPath);
+            }
 
         } catch (Exception e) {
             System.err.println("Error generating PDF: " + e.getMessage());

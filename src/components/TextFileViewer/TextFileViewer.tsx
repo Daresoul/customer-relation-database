@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, Spin, Typography, Button, Space, message } from 'antd';
 import { CopyOutlined, DownloadOutlined } from '@ant-design/icons';
-import { invoke } from '@tauri-apps/api/tauri';
+import { invoke } from '@/services/invoke';
 import styles from './TextFileViewer.module.css';
 
 const { Text } = Typography;

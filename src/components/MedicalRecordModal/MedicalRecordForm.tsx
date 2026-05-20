@@ -11,13 +11,14 @@ import { useTranslation } from 'react-i18next';
 import FileUpload from '../FileUpload/FileUpload';
 import FileAttachmentList from '../FileUpload/FileAttachmentList';
 import RecentDeviceFiles from '../RecentDeviceFiles';
-import { useCurrencies, useMedicalRecord } from '@/hooks/useMedicalRecords';
+import { useMedicalRecord } from '@/hooks/useMedicalRecords';
 import { useSearchRecordTemplates } from '@/hooks/useRecordTemplates';
 import { useAppSettings } from '@/hooks/useAppSettings';
 import { useDebounce } from '@/hooks/useDebounce';
 import { MedicalService } from '@/services/medicalService';
 import { TabbedMedicalRecordFields } from '@/components/forms/fieldGroups';
 import type { MedicalRecord, CreateMedicalRecordInput, UpdateMedicalRecordInput, RecordTemplate, DeviceDataInput } from '@/types/medical';
+import type { MedicalRecordLineItem, CreateLineItemInput } from '@/types/lineItem';
 import type { RecordType } from '@/components/forms/fieldGroups';
 import type { UploadFile } from 'antd';
 import styles from './MedicalRecordForm.module.css';
@@ -53,8 +54,11 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
   const [fileDeviceData, setFileDeviceData] = useState<Map<string, DeviceDataInput>>(new Map());
   const [recentFilesDrawerOpen, setRecentFilesDrawerOpen] = useState(false);
   const [titleSearchTerm, setTitleSearchTerm] = useState<string>('');
+  // Line items state
+  const [lineItems, setLineItems] = useState<MedicalRecordLineItem[]>(initialValues?.lineItems || []);
+  const [discountPercent, setDiscountPercent] = useState<number | undefined>(initialValues?.discountPercent);
+  const [manualTotal, setManualTotal] = useState<number | undefined>(initialValues?.manualTotal);
   const debouncedSearchTerm = useDebounce(titleSearchTerm, 300);
-  const { data: currencies = [] } = useCurrencies();
   const { settings } = useAppSettings();
   const { data: searchedTemplates, isLoading: isSearching } = useSearchRecordTemplates(debouncedSearchTerm, recordType);
 
@@ -70,31 +74,47 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
         name: initialValues.name,
         procedureName: initialValues.procedureName,
         description: initialValues.description,
-        price: initialValues.price,
-        currencyId: initialValues.currencyId,
         prescriptionNotes: initialValues.prescriptionNotes,
       });
       setRecordType(initialValues.recordType);
+      // Set line items state
+      setLineItems(initialValues.lineItems || []);
+      setDiscountPercent(initialValues.discountPercent);
+      setManualTotal(initialValues.manualTotal);
     }
   }, [initialValues?.id, form]);
 
   const handleFinish = (values: any) => {
+    // Convert MedicalRecordLineItem to CreateLineItemInput for submission
+    const lineItemsInput: CreateLineItemInput[] | undefined = lineItems.length > 0
+      ? lineItems.map(item => ({
+          templateId: item.templateId,
+          name: item.name,
+          description: item.description,
+          unitPrice: item.unitPrice,
+          currencyId: item.currencyId,
+          quantity: item.quantity,
+        }))
+      : undefined;
+
     const formData = isEdit
       ? {
           name: values.name,
           description: values.description,
-          price: values.price,
-          currencyId: values.currencyId,
           prescriptionNotes: values.prescriptionNotes,
+          discountPercent: discountPercent,
+          manualTotal: manualTotal,
+          lineItems: lineItemsInput,
         } as UpdateMedicalRecordInput
       : {
           patientId: patientId,
           recordType: values.recordType,
           name: values.name,
           description: values.description,
-          price: values.price,
-          currencyId: values.currencyId,
           prescriptionNotes: values.prescriptionNotes,
+          discountPercent: discountPercent,
+          manualTotal: manualTotal,
+          lineItems: lineItemsInput,
         } as CreateMedicalRecordInput;
 
     // Collect device data from files that have it (for PDF generation)
@@ -116,10 +136,6 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
     setTitleSearchTerm('');
     if (value === 'note' || value === 'test_result') {
       form.setFieldValue('procedureName', undefined);
-      form.setFieldValue('price', undefined);
-      form.setFieldValue('currencyId', undefined);
-    } else if (value === 'procedure' && settings?.currencyId) {
-      form.setFieldValue('currencyId', settings.currencyId);
     }
   };
 
@@ -173,7 +189,6 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
       onFinish={handleFinish}
       initialValues={{
         recordType: 'procedure',
-        ...(settings?.currencyId ? { currencyId: settings.currencyId } : {})
       }}
     >
       {/* Medical Record Fields using tabbed component */}
@@ -181,15 +196,20 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
         form={form}
         recordType={recordType}
         onRecordTypeChange={handleRecordTypeChange}
-        currencies={currencies}
         templates={searchedTemplates}
         isSearchingTemplates={isSearching}
         onTemplateSearch={setTitleSearchTerm}
         onTemplateSelect={handleTemplateSelect}
         hideRecordType={isEdit}
-        fullWidthClassName={styles.fullWidth}
-        dateInputClassName={styles.dateInput}
-        currencyInputClassName={styles.severityInput}
+        // Line items props
+        lineItems={lineItems}
+        onLineItemsChange={setLineItems}
+        discountPercent={discountPercent}
+        onDiscountChange={setDiscountPercent}
+        manualTotal={manualTotal}
+        onManualTotalChange={setManualTotal}
+        showLineItemsBadge={lineItems.length > 0}
+        lineItemsCount={lineItems.length}
       />
 
       <Divider />

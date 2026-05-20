@@ -53,8 +53,27 @@
     "description": "Enter prescription or pharmacy notes. This will be included in the generated PDF report for the customer."
   },
   "lineItems": {
-    "placeholder": "Line items feature coming soon",
-    "placeholderDescription": "This will allow adding itemized charges, products, and services."
+    "title": "Line Items",
+    "addFromTemplate": "Add from saved templates or create custom items",
+    "addCustom": "Add custom item",
+    "selectTemplate": "Select a line item template...",
+    "noTemplates": "No templates available. Create them in Settings.",
+    "name": "Item",
+    "description": "Description",
+    "unitPrice": "Unit Price",
+    "quantity": "Qty",
+    "subtotal": "Subtotal",
+    "discount": "Discount",
+    "discountPercent": "Discount %",
+    "total": "Total",
+    "manualTotal": "Manual Total",
+    "manualTotalHint": "Or enter a total amount directly:",
+    "noItems": "No line items added",
+    "customItem": "Custom Line Item",
+    "editItem": "Edit Line Item",
+    "fromTemplate": "(from template)",
+    "namePlaceholder": "e.g., Emergency consultation",
+    "descriptionPlaceholder": "Optional description"
   },
   "form": {
     "createTitle": "Create Medical Record",
@@ -177,7 +196,10 @@
     "patientInformation": "Patient Information",
     "prefillToggle": "Pre‑fill from device",
     "startBlankToggle": "Start blank",
-    "detectedFromFiles": "Detected from files"
+    "detectedFromFiles": "Detected from files",
+    "patientMatched": "Patient matched",
+    "noPatientMatch": "No patient found",
+    "noPatientMatchDesc": "Create a new patient — microchip ID has been prefilled."
   },
   "autocomplete": {
     "typeToSearch": "Type at least 2 characters to search templates",

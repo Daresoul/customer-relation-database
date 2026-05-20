@@ -11,6 +11,7 @@ pub mod update_models;
 pub mod species;
 pub mod breed;
 pub mod device_integration;
+pub mod line_item;
 
 // Re-exports for public API - some may be unused internally but available for external use
 #[allow(unused_imports)]
@@ -77,4 +78,9 @@ pub use breed::{
 pub use device_integration::{
     DeviceIntegration, DeviceType, ConnectionType,
     CreateDeviceIntegrationInput, UpdateDeviceIntegrationInput
+};
+#[allow(unused_imports)]
+pub use line_item::{
+    LineItemTemplate, CreateLineItemTemplateInput, UpdateLineItemTemplateInput,
+    MedicalRecordLineItem, CreateLineItemInput
 };

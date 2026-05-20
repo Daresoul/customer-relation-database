@@ -20,7 +20,7 @@ import {
   SaveOutlined,
   CloseOutlined,
 } from '@ant-design/icons';
-import { invoke } from '@tauri-apps/api/tauri';
+import { invoke } from '@/services/invoke';
 import { PatientFieldGroup } from './fieldGroups';
 import { useSpecies } from '../../hooks/useSpecies';
 import { useBreeds } from '../../hooks/useBreeds';

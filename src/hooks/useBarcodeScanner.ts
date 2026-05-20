@@ -6,9 +6,33 @@
  * - Optionally require a prefix/suffix to reduce false positives.
  * - Prevent default only during an active scan so normal typing isn’t affected.
  * - Only runs when this window is focused; won’t capture in other apps.
+ * - If a scan lands inside an editable element, replace its value with the
+ *   normalized form so the field never shows the raw hex from FDX-B readers.
  */
 
 import { useEffect, useRef } from 'react';
+
+/**
+ * Set the value of a React-controlled <input>/<textarea> programmatically so
+ * the framework's onChange handler fires. React listens to the input's value
+ * via a property descriptor it owns; we have to call the native setter and
+ * dispatch an 'input' event to bypass its bookkeeping.
+ */
+function setReactInputValue(input: HTMLInputElement | HTMLTextAreaElement, value: string): void {
+  const proto = input instanceof HTMLTextAreaElement
+    ? HTMLTextAreaElement.prototype
+    : HTMLInputElement.prototype;
+  const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+  if (!setter) return;
+  setter.call(input, value);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function isEditableElement(el: Element | null): el is HTMLInputElement | HTMLTextAreaElement | HTMLElement {
+  if (!el) return false;
+  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return true;
+  return (el as HTMLElement).isContentEditable === true;
+}
 
 export interface UseBarcodeScannerOptions {
   onScan: (code: string) => void;
@@ -18,14 +42,38 @@ export interface UseBarcodeScannerOptions {
   suffixKey?: 'Enter' | 'Tab';
   // Minimum number of characters to consider valid
   minLength?: number;
-  // Maximum inter-key delay (ms) to consider part of a scan
+  // Maximum inter-key delay (ms) to consider part of a scan.
+  // Industry standard: 50ms (use-scan-detection). Covers Honeywell (~10ms) through
+  // Zebra (~80ms) while staying well below human typing speed (200-400ms).
   interKeyDelay?: number;
   // Timeout (ms) to finalize the scan if no keys arrive
   finalizeTimeout?: number;
-  // Only accept these exact lengths (e.g., [15, 10] for microchips)
+  // Only accept these exact lengths (e.g., [15, 12, 10, 9] for microchips).
+  // 15 = ISO 11784 FDX-B passport decimal, 12 = ISO 11784 FDX-B raw 48-bit hex,
+  // 10 = AVID FDX-A, 9 = legacy European.
   allowedLengths?: number[];
-  // If true, require all characters to be digits (common for microchips)
+  // If true, require all characters to be digits (with hex exception for 10- and 12-char codes)
   digitsOnly?: boolean;
+}
+
+/**
+ * Normalize a microchip read to its canonical 15-digit FDX-B passport form.
+ *
+ * Some readers emit the raw 48-bit FDX-B ID as 12 hex characters instead of
+ * the 15-digit decimal printed on the pet passport. We normalize at the
+ * detection boundary so consumers and storage see one consistent format
+ * regardless of how the scanner is configured.
+ *
+ * 12-hex bit layout: top 10 bits = ISO 3166-1 country, bottom 38 bits = animal ID.
+ */
+export function normalizeMicrochip(code: string): string {
+  if (code.length === 12 && /^[0-9A-Fa-f]+$/.test(code)) {
+    const n = BigInt('0x' + code);
+    const country = Number((n >> 38n) & 0x3FFn);
+    const animal = n & ((1n << 38n) - 1n);
+    return country.toString().padStart(3, '0') + animal.toString().padStart(12, '0');
+  }
+  return code;
 }
 
 export function useBarcodeScanner(options: UseBarcodeScannerOptions) {
@@ -36,9 +84,13 @@ export function useBarcodeScanner(options: UseBarcodeScannerOptions) {
     suffixKey = 'Enter',
     // More conservative defaults to avoid false positives
     minLength = 8,
-    interKeyDelay = 12,
+    // 50ms: industry standard (use-scan-detection). Catches Zebra (~80ms) while
+    // staying well below human typing speed (200-400ms).
+    interKeyDelay = 50,
     finalizeTimeout = 100,
-    allowedLengths = [15, 10],
+    // 15 = ISO FDX-B passport decimal, 12 = ISO FDX-B raw hex,
+    // 10 = AVID FDX-A (hex), 9 = legacy European
+    allowedLengths = [15, 12, 10, 9],
     digitsOnly = true,
   } = options;
 
@@ -46,6 +98,8 @@ export function useBarcodeScanner(options: UseBarcodeScannerOptions) {
   const lastTimeRef = useRef<number>(0);
   const isScanningRef = useRef<boolean>(false);
   const timerRef = useRef<number | null>(null);
+  // Dedup: prevent the same code from firing twice within 500ms
+  const lastScanRef = useRef<{ code: string; time: number } | null>(null);
 
   useEffect(() => {
     const reset = () => {
@@ -69,10 +123,45 @@ export function useBarcodeScanner(options: UseBarcodeScannerOptions) {
       const code = prefix ? raw.slice(prefix.length) : raw;
       // Enforce exact lengths
       if (!allowedLengths.includes(code.length)) return;
-      if (digitsOnly && !/^\d+$/.test(code)) return;
-      if (code.length >= minLength) {
-        onScan(code);
+      // Validate character set based on code length
+      if (digitsOnly) {
+        if (code.length === 10 || code.length === 12) {
+          // AVID FDX-A (10) and raw FDX-B (12): hex digits (0-9, A-F)
+          if (!/^[0-9A-Fa-f]+$/.test(code)) return;
+        } else {
+          // ISO 15-digit and legacy 9-digit: digits only
+          if (!/^\d+$/.test(code)) return;
+        }
       }
+      if (code.length < minLength) return;
+      // Normalize: 12-hex FDX-B reads are converted to the 15-digit passport form
+      // so downstream consumers always see a single canonical representation.
+      const normalized = normalizeMicrochip(code);
+      // Dedup: skip if same code scanned within 500ms (dedup against normalized form)
+      const now = Date.now();
+      if (
+        lastScanRef.current &&
+        lastScanRef.current.code === normalized &&
+        now - lastScanRef.current.time < 500
+      ) {
+        return;
+      }
+      lastScanRef.current = { code: normalized, time: now };
+
+      // If the burst landed in an editable element, the raw chars may have
+      // partially leaked into it before scan-detection kicked in. Replace
+      // with the normalized form so the field never shows hex.
+      const active = document.activeElement;
+      if (
+        active &&
+        (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement)
+      ) {
+        setReactInputValue(active, normalized);
+      }
+      // Always notify the consumer so it can run auto-select / prefill / search
+      // logic. Consumers that care about which field was focused can inspect
+      // document.activeElement themselves.
+      onScan(normalized);
     };
 
     const scheduleFinalize = () => {
@@ -87,21 +176,17 @@ export function useBarcodeScanner(options: UseBarcodeScannerOptions) {
       const now = performance.now();
       const isChar = e.key.length === 1 || e.key === '-' || e.key === '.' || e.key === '_' || e.key === '/';
 
-      // If an editable element is focused, let input receive keys normally.
-      const active = (document.activeElement as HTMLElement | null);
-      const isEditable = !!active && (
-        active.tagName === 'INPUT' ||
-        active.tagName === 'TEXTAREA' ||
-        (active as any).isContentEditable === true
-      );
-      if (isEditable) {
-        // Do not intercept or buffer when user is actively typing into a field
-        return;
-      }
+      // If an editable element is focused, let keystrokes flow into it normally
+      // (preventDefault would block the user's typing). We still track timing
+      // and buffer the burst so finalize() can replace the value with the
+      // normalized form if it turns out to be a microchip scan.
+      const editable = isEditableElement(document.activeElement);
 
-      // If we are already in scanning mode, prevent default to avoid polluting inputs
+      // Once we've recognized this as a scan burst, always preventDefault.
+      // For the suffix key this is critical even inside editable elements —
+      // otherwise Enter would submit the surrounding form and trigger
+      // validation before we've had a chance to set the normalized value.
       if (isScanningRef.current) {
-        // Allow Enter/Tab to finalize without inserting
         if (suffixKey && e.key === suffixKey) {
           e.preventDefault();
           finalize();
@@ -111,7 +196,6 @@ export function useBarcodeScanner(options: UseBarcodeScannerOptions) {
           e.preventDefault();
           bufferRef.current += e.key;
           lastTimeRef.current = now;
-          // If suffixKey is required, do not auto-finalize on timeout
           if (!suffixKey) scheduleFinalize();
         }
         return;
@@ -122,7 +206,7 @@ export function useBarcodeScanner(options: UseBarcodeScannerOptions) {
       if (!isChar) {
         // If suffix key is pressed right after characters, treat as finalize
         if (suffixKey && e.key === suffixKey && bufferRef.current.length >= minLength) {
-          e.preventDefault();
+          if (!editable) e.preventDefault();
           finalize();
         }
         return;
@@ -144,7 +228,10 @@ export function useBarcodeScanner(options: UseBarcodeScannerOptions) {
 
       if (longEnough && fastEnough && prefixOk) {
         isScanningRef.current = true;
-        // Prevent this key from hitting the focused input
+        // This key triggered scan detection — prevent it from reaching the
+        // focused input. The first ≤2 chars before we recognized the burst
+        // may have already landed there; finalize() will overwrite with the
+        // normalized value once the scan completes.
         e.preventDefault();
       }
       // If a suffixKey is required, do not auto-finalize via timeout; wait for suffix

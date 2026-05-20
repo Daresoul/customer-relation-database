@@ -1,8 +1,10 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 use crate::models::dto::MaybeNull;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[ts(export, export_to = "../../src/types/generated/")]
 #[serde(rename_all = "snake_case")]
 pub enum DeviceType {
     ExigoEosVet,
@@ -42,7 +44,8 @@ impl DeviceType {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[ts(export, export_to = "../../src/types/generated/")]
 #[serde(rename_all = "snake_case")]
 pub enum ConnectionType {
     FileWatch,
@@ -70,72 +73,79 @@ impl ConnectionType {
 }
 
 // Domain model
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/generated/")]
 pub struct DeviceIntegration {
+    #[ts(type = "number")]
     pub id: i64,
     pub name: String,
     pub device_type: DeviceType,
     pub connection_type: ConnectionType,
 
-    // File watching settings
     pub watch_directory: Option<String>,
     pub file_pattern: Option<String>,
 
-    // Serial port settings
     pub serial_port_name: Option<String>,
+    #[ts(type = "number | null")]
     pub serial_baud_rate: Option<i64>,
 
-    // HL7 TCP settings
     pub tcp_host: Option<String>,
+    #[ts(type = "number | null")]
     pub tcp_port: Option<i64>,
 
-    // Status and metadata
     pub enabled: bool,
+    #[ts(type = "string | null")]
     pub last_connected_at: Option<DateTime<Utc>>,
+    #[ts(type = "string")]
     pub created_at: DateTime<Utc>,
+    #[ts(type = "string")]
     pub updated_at: DateTime<Utc>,
+    #[ts(type = "string | null")]
     pub deleted_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/generated/")]
 pub struct CreateDeviceIntegrationInput {
     pub name: String,
     pub device_type: DeviceType,
     pub connection_type: ConnectionType,
 
-    // File watching settings
     pub watch_directory: Option<String>,
     pub file_pattern: Option<String>,
 
-    // Serial port settings
     pub serial_port_name: Option<String>,
+    #[ts(type = "number | null")]
     pub serial_baud_rate: Option<i64>,
 
-    // HL7 TCP settings
     pub tcp_host: Option<String>,
+    #[ts(type = "number | null")]
     pub tcp_port: Option<i64>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/generated/")]
 pub struct UpdateDeviceIntegrationInput {
     pub name: Option<String>,
     pub connection_type: Option<ConnectionType>,
 
-    // File watching settings - watch_directory uses MaybeNull, file_pattern stays Option (clearable)
     #[serde(default)]
+    #[ts(type = "string | null")]
     pub watch_directory: MaybeNull<String>,
     pub file_pattern: Option<String>,
 
-    // Serial port settings - use MaybeNull (not clearable)
     #[serde(default)]
+    #[ts(type = "string | null")]
     pub serial_port_name: MaybeNull<String>,
     #[serde(default)]
+    #[ts(type = "number | null")]
     pub serial_baud_rate: MaybeNull<i64>,
 
-    // HL7 TCP settings - use MaybeNull (not clearable)
     #[serde(default)]
+    #[ts(type = "string | null")]
     pub tcp_host: MaybeNull<String>,
     #[serde(default)]
+    #[ts(type = "number | null")]
     pub tcp_port: MaybeNull<i64>,
 
     pub enabled: Option<bool>,

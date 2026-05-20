@@ -3,7 +3,9 @@
  * Handles automatic case transformation between frontend (camelCase) and backend (snake_case)
  */
 
-import { invoke } from '@tauri-apps/api/tauri';
+// Import the Sentry-wrapped invoke so command failures are auto-reported.
+// Reporting lives in one place (services/invoke.ts) to avoid double-capture.
+import { invoke } from './invoke';
 import { ApiError, TauriError } from '../types/api';
 import { camelToSnakeObject, snakeToCamelObject } from '../utils/caseTransform';
 

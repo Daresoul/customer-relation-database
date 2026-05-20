@@ -302,10 +302,10 @@ mod hl7_parsing {
 
     #[test]
     fn parse_mnchip_hl7_message() {
-        // PID format: PID|1||id||species|name||gender
-        // Parser extracts patient_identifier from field 6 (name), fallback to field 5 (species)
+        // PID layout: PID|1||<id>||<species>|<name>||<gender>
+        // The parser uses HL7 priority: field 3 (the official patient ID) wins
+        // over field 6 (name) and field 5 (species). See device_parser.rs:293-299.
         // OBX format: OBX|setId|valueType|identifier|paramCode|result|unit|range|flag
-        // param_code is at field[4], result at field[5]
         let hl7 = b"MSH|^~\\&|MNCHIP|VETLAB|APP|CLINIC|20250114103000||ORU^R01|1234|P|2.5\r\
 PID|1||12345|||Max||M\r\
 OBR|1||CBC|||20250114103000\r\
@@ -324,8 +324,12 @@ OBX|3|NM||HGB|14.5|g/dL|12-18|N\r\r";
         let data = result.unwrap();
 
         assert_eq!(data.device_type, "mnchip_pointcare_chemistry");
-        // Field 6 "Max" should be extracted when field 5 is empty
-        assert_eq!(data.patient_identifier, Some("Max".to_string()));
+        // Field 3 ("12345") is the official HL7 PID — it takes precedence over
+        // field 6 ("Max", the pet's name). Both end up in test_results.
+        assert_eq!(data.patient_identifier, Some("12345".to_string()));
+        let map = data.test_results.as_object().unwrap();
+        assert_eq!(map.get("patient_id_internal").map(|v| v.as_str().unwrap()), Some("12345"));
+        assert_eq!(map.get("patient_name").map(|v| v.as_str().unwrap()), Some("Max"));
 
         let results = data.test_results.as_object().unwrap();
         assert_eq!(results.get("WBC").unwrap(), "7.5");

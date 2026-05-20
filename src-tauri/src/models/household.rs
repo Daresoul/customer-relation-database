@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
+use ts_rs::TS;
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow, TS)]
+#[ts(export, export_to = "../../src/types/generated/")]
 pub struct Household {
     pub id: i32,
     pub household_name: Option<String>,
@@ -9,77 +11,92 @@ pub struct Household {
     pub city: Option<String>,
     pub postal_code: Option<String>,
     pub notes: Option<String>,
+    #[ts(type = "string")]
     pub created_at: chrono::NaiveDateTime,
+    #[ts(type = "string")]
     pub updated_at: chrono::NaiveDateTime,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow, TS)]
+#[ts(export, export_to = "../../src/types/generated/")]
 pub struct Person {
     pub id: i32,
     pub household_id: i32,
     pub first_name: String,
     pub last_name: String,
     pub is_primary: bool,
+    #[ts(type = "string")]
     pub created_at: chrono::NaiveDateTime,
+    #[ts(type = "string")]
     pub updated_at: chrono::NaiveDateTime,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow, TS)]
+#[ts(export, export_to = "../../src/types/generated/")]
 pub struct PersonContact {
     pub id: i32,
     pub person_id: i32,
     pub contact_type: String, // 'phone', 'email', 'mobile', 'work_phone'
     pub contact_value: String,
     pub is_primary: bool,
+    #[ts(type = "string")]
     pub created_at: chrono::NaiveDateTime,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow, TS)]
+#[ts(export, export_to = "../../src/types/generated/")]
 pub struct PatientHousehold {
     pub id: i32,
     pub patient_id: i32,
     pub household_id: i32,
     pub relationship_type: String,
     pub is_primary: bool,
+    #[ts(type = "string")]
     pub created_at: chrono::NaiveDateTime,
 }
 
 // DTOs for creation
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/generated/")]
 pub struct CreateHouseholdDto {
     pub household_name: Option<String>,
     pub address: Option<String>,
     pub notes: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/generated/")]
 pub struct CreatePersonDto {
     pub first_name: String,
     pub last_name: String,
     pub is_primary: Option<bool>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/generated/")]
 pub struct CreateContactDto {
     pub contact_type: String,
     pub contact_value: String,
     pub is_primary: Option<bool>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/generated/")]
 pub struct CreatePersonWithContactsDto {
     pub person: CreatePersonDto,
     pub contacts: Vec<CreateContactDto>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/generated/")]
 pub struct CreateHouseholdWithPeopleDto {
     pub household: CreateHouseholdDto,
     pub people: Vec<CreatePersonWithContactsDto>,
 }
 
 // Search results
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/generated/")]
 pub struct PersonWithContacts {
     pub id: i32,
     pub first_name: String,
@@ -88,7 +105,8 @@ pub struct PersonWithContacts {
     pub contacts: Vec<PersonContact>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/generated/")]
 pub struct HouseholdSearchResult {
     pub id: i32,
     pub household_name: Option<String>,
@@ -99,7 +117,8 @@ pub struct HouseholdSearchResult {
     pub snippet: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/generated/")]
 pub struct SearchHouseholdsResponse {
     pub results: Vec<HouseholdSearchResult>,
     pub total: i32,
@@ -107,7 +126,8 @@ pub struct SearchHouseholdsResponse {
 }
 
 // Complete household with all relations
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/generated/")]
 pub struct HouseholdWithPeople {
     pub household: Household,
     pub people: Vec<PersonWithContacts>,
@@ -115,7 +135,8 @@ pub struct HouseholdWithPeople {
 }
 
 // For patient creation with household
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/generated/")]
 pub struct CreatePatientWithHouseholdDto {
     pub household: CreateHouseholdDto,
     pub people: Vec<CreatePersonWithContactsDto>,
@@ -123,7 +144,8 @@ pub struct CreatePatientWithHouseholdDto {
     pub relationship: Option<PatientRelationship>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/types/generated/")]
 pub struct PatientRelationship {
     pub relationship_type: Option<String>,
     pub is_primary: Option<bool>,

@@ -2,7 +2,7 @@
  * Example main dashboard using all Ant Design components
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, Row, Col, Statistic, Space, Tabs, Avatar, TabsProps, App, InputNumber, Modal } from 'antd';
 import { TeamOutlined, HeartOutlined, CalendarOutlined, RiseOutlined, UserOutlined, HomeOutlined, FileTextOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
@@ -13,7 +13,7 @@ import { PatientSearch } from '../components/search/PatientSearch';
 import { HouseholdSearch } from '../components/search/HouseholdSearch';
 import { Button } from '../components/common/Button';
 import PendingDeviceTable from '../components/PendingDeviceTable';
-import { invoke } from '@tauri-apps/api/tauri';
+import { invoke } from '@/services/invoke';
 import { FormModal } from '../components/common/Modal';
 import { PatientFormWithOwner } from '../components/forms/PatientFormWithOwner';
 import { HouseholdForm } from '../components/forms/HouseholdForm';
@@ -27,7 +27,7 @@ import notifications from '../services/notifications';
 import type { Patient, PatientWithHousehold } from '../types';
 import type { HouseholdTableRecord } from '../types/ui.types';
 import { useThemeColors } from '../utils/themeStyles';
-import { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
+import { useBarcodeScanner, normalizeMicrochip } from '@/hooks/useBarcodeScanner';
 import { listen } from '@tauri-apps/api/event';
 import styles from './MainDashboard.module.css';
 
@@ -47,6 +47,7 @@ export const MainDashboard: React.FC = () => {
   const [patients, setPatients] = useState<PatientWithHousehold[]>([]);
   const [households, setHouseholds] = useState<HouseholdTableRecord[]>([]);
   const [filteredPatients, setFilteredPatients] = useState<PatientWithHousehold[]>([]);
+  const [patientSearchText, setPatientSearchText] = useState('');
   const [filteredHouseholds, setFilteredHouseholds] = useState<HouseholdTableRecord[]>([]);
   const [showPatientForm, setShowPatientForm] = useState(false);
   const [showHouseholdForm, setShowHouseholdForm] = useState(false);
@@ -56,6 +57,8 @@ export const MainDashboard: React.FC = () => {
   const [seedCount, setSeedCount] = useState<number>(1000);
   const [seeding, setSeeding] = useState(false);
   // no drawer now; dedicated tab below
+  // Component-level dedup: prevent double-fire from keyboard wedge + HID event for same scan
+  const lastProcessedScanRef = useRef<{ code: string; time: number } | null>(null);
 
   // Statistics
   const [stats, setStats] = useState({
@@ -194,34 +197,57 @@ export const MainDashboard: React.FC = () => {
     }
   };
 
+  // Shared handler for processing a scanned code from any source (keyboard wedge or HID)
+  const handleScanCode = (code: string) => {
+    // Component-level dedup: prevent double-fire from keyboard wedge + HID event
+    const now = Date.now();
+    if (
+      lastProcessedScanRef.current &&
+      lastProcessedScanRef.current.code === code &&
+      now - lastProcessedScanRef.current.time < 500
+    ) {
+      return;
+    }
+    lastProcessedScanRef.current = { code, time: now };
+
+    setActiveTab('patients');
+    setCurrentView('animal');
+    setPatientSearchText(code);
+    handlePatientSearch(code);
+  };
+
   // Keyboard-wedge scans on main screen: trigger search by identifier
   useBarcodeScanner({
     suffixKey: 'Enter',
     minLength: 8,
-    interKeyDelay: 12,
+    interKeyDelay: 50,
     finalizeTimeout: 100,
-    onScan: (code) => {
-      setActiveTab('patients');
-      setCurrentView('animal');
-      handlePatientSearch(code);
-    }
+    onScan: handleScanCode,
   });
 
-  // HID/serial wake events on main screen
+  // HID scan events on main screen (both wake-from-tray and scanner:barcode)
   useEffect(() => {
-    let unlisten: (() => void) | undefined;
+    let unlistenWake: (() => void) | undefined;
+    let unlistenBarcode: (() => void) | undefined;
     const setup = async () => {
-      unlisten = await listen<any>('wake-from-tray', (event) => {
+      unlistenWake = await listen<any>('wake-from-tray', (event) => {
         const payload = event.payload || {};
         if (payload.cause === 'scan' && payload.code) {
-          setActiveTab('patients');
-          setCurrentView('animal');
-          handlePatientSearch(String(payload.code));
+          handleScanCode(String(payload.code));
+        }
+      });
+      unlistenBarcode = await listen<any>('scanner:barcode', (event) => {
+        const payload = event.payload || {};
+        if (payload.code) {
+          handleScanCode(String(payload.code));
         }
       });
     };
     setup();
-    return () => { if (unlisten) unlisten(); };
+    return () => {
+      if (unlistenWake) unlistenWake();
+      if (unlistenBarcode) unlistenBarcode();
+    };
   }, []);
 
   // Refresh dashboard list when a patient is created anywhere
@@ -402,6 +428,19 @@ export const MainDashboard: React.FC = () => {
                     onView={handleViewPatient}
                     onEdit={handleEditPatient}
                     onDelete={handleDeletePatient}
+                    searchText={patientSearchText}
+                    onSearchTextChange={(text) => {
+                      // Normalize FDX-B hex reads to the 15-digit passport form.
+                      // Catches the case where the scanner types into the search box
+                      // directly (hook bails early when an input is focused).
+                      const normalized = normalizeMicrochip(text);
+                      setPatientSearchText(normalized);
+                      // When the user clears the search after a scan, restore the full list
+                      // (scans narrow filteredPatients via the backend; clearing must undo that).
+                      if (normalized === '') {
+                        setFilteredPatients(patients);
+                      }
+                    }}
                   />
                 ) : (
                   <NoData />

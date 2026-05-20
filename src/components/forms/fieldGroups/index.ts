@@ -21,3 +21,6 @@ export type { ContactFieldGroupProps, ContactType } from './ContactFieldGroup';
 
 export { TabbedMedicalRecordFields } from './TabbedMedicalRecordFields';
 export type { TabbedMedicalRecordFieldsProps } from './TabbedMedicalRecordFields';
+
+export { LineItemsFieldGroup } from './LineItemsFieldGroup';
+export type { LineItemsFieldGroupProps } from './LineItemsFieldGroup';

@@ -7,6 +7,7 @@
 import { ApiService } from './api';
 import { checkUpdate, installUpdate, onUpdaterEvent } from '@tauri-apps/api/updater';
 import { relaunch } from '@tauri-apps/api/process';
+import { invoke } from '@/services/invoke';
 import type { UpdatePreferences } from '../types/update';
 
 export const updateService = {
@@ -42,9 +43,19 @@ export const updateService = {
   },
 
   /**
-   * Install update and restart the application
+   * Install update and restart the application.
+   *
+   * Runs a pre-update backup first if a destination is configured. The backup
+   * is best-effort — if it fails (no destination, write error, etc.) we still
+   * proceed with the update so the user is never stranded on a broken version
+   * because backups are misbehaving. Errors are logged for diagnosis.
    */
   async installAndRestart() {
+    try {
+      await invoke('run_backup_now');
+    } catch (err) {
+      console.warn('Pre-update backup failed (continuing with update):', err);
+    }
     await installUpdate();
     await relaunch();
   },

@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { HouseholdSummary } from '../../types/patient';
 import { PatientService } from '../../services/patientService';
-import { invoke } from '@tauri-apps/api/tauri';
+import { invoke } from '@/services/invoke';
 import styles from './PatientDetail.module.css';
 
 const { Title, Text } = Typography;

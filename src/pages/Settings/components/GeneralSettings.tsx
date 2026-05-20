@@ -4,7 +4,7 @@ import { GlobalOutlined, BgColorsOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors } from '../../../utils/themeStyles';
 import styles from '../Settings.module.css';
-import { invoke } from '@tauri-apps/api/tauri';
+import { invoke } from '@/services/invoke';
 
 const { Text } = Typography;
 const { Option } = Select;

@@ -7,7 +7,7 @@ use chrono::Utc;
 use tauri::AppHandle;
 use std::io::Write;
 use std::fs::File;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 // T028: FileStorageService for attachment handling
 pub struct FileStorageService;
@@ -268,31 +268,56 @@ impl FileStorageService {
         Ok(())
     }
 
-    /// Open a file path with the system default application
+    /// Open a file path with the system default application.
+    /// Uses subprocess isolation (process group, Stdio::null) to prevent
+    /// the spawned application from stealing focus from the main window.
     pub fn open_path_with_default_app(path: &str) -> Result<(), String> {
         #[cfg(target_os = "macos")]
         {
-            Command::new("open")
-                .arg(path)
-                .spawn()
+            let mut cmd = Command::new("open");
+            cmd.arg(path)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null());
+            // Isolate child process so it doesn't inherit our window session
+            {
+                use std::os::unix::process::CommandExt;
+                cmd.process_group(0);
+            }
+            cmd.spawn()
                 .map_err(|e| format!("Failed to open file: {}", e))?;
             return Ok(());
         }
 
         #[cfg(target_os = "windows")]
         {
-            Command::new("cmd")
-                .args(["/C", "start", "", path])
-                .spawn()
+            let mut cmd = Command::new("cmd");
+            cmd.args(["/C", "start", "", path])
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null());
+            {
+                use std::os::windows::process::CommandExt;
+                const CREATE_NO_WINDOW: u32 = 0x08000000;
+                cmd.creation_flags(CREATE_NO_WINDOW);
+            }
+            cmd.spawn()
                 .map_err(|e| format!("Failed to open file: {}", e))?;
             return Ok(());
         }
 
         #[cfg(target_os = "linux")]
         {
-            Command::new("xdg-open")
-                .arg(path)
-                .spawn()
+            let mut cmd = Command::new("xdg-open");
+            cmd.arg(path)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null());
+            {
+                use std::os::unix::process::CommandExt;
+                cmd.process_group(0);
+            }
+            cmd.spawn()
                 .map_err(|e| format!("Failed to open file: {}", e))?;
             return Ok(());
         }
@@ -301,11 +326,14 @@ impl FileStorageService {
         Err("Unsupported platform".to_string())
     }
 
-    /// Print a file using the system's native print dialog
+    /// Print a file using the system's native print dialog.
+    /// Uses subprocess isolation to minimize focus disruption.
     pub fn print_file(path: &str) -> Result<(), String> {
         #[cfg(target_os = "macos")]
         {
-            // On macOS, use AppleScript to open the PDF in Preview and trigger the print dialog
+            // On macOS, use AppleScript to open the PDF in Preview and trigger the print dialog.
+            // Note: Preview.app needs to come to front for the print dialog, so we use `activate`.
+            // We isolate the osascript process via process_group(0) to limit focus side-effects.
             let script = format!(
                 r#"
                 set theFile to POSIX file "{}"
@@ -318,9 +346,16 @@ impl FileStorageService {
                 "#,
                 path
             );
-            Command::new("osascript")
-                .args(["-e", &script])
-                .spawn()
+            let mut cmd = Command::new("osascript");
+            cmd.args(["-e", &script])
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null());
+            {
+                use std::os::unix::process::CommandExt;
+                cmd.process_group(0);
+            }
+            cmd.spawn()
                 .map_err(|e| format!("Failed to open print dialog: {}", e))?;
             return Ok(());
         }
@@ -380,9 +415,16 @@ impl FileStorageService {
         {
             // On Linux, try xdg-open with a print-capable application
             // or fall back to lpr if available
-            Command::new("xdg-open")
-                .arg(path)
-                .spawn()
+            let mut cmd = Command::new("xdg-open");
+            cmd.arg(path)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null());
+            {
+                use std::os::unix::process::CommandExt;
+                cmd.process_group(0);
+            }
+            cmd.spawn()
                 .map_err(|e| format!("Failed to open file for printing: {}", e))?;
             return Ok(());
         }

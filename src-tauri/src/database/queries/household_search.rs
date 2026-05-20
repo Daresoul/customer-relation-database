@@ -1,16 +1,23 @@
 use sea_orm::{DatabaseConnection, ConnectionTrait, Statement, DbBackend};
 use crate::models::household::*;
 
-// Sanitize query for FTS5 to prevent syntax errors
+// Sanitize query for FTS5 to prevent syntax errors.
+//
+// FTS5 treats `@`, `.`, `:`, and several other ASCII punctuation chars as
+// query syntax. We can't keep them in the term even though they're common in
+// emails and phone numbers — the FTS5 tokenizer already splits source content
+// on those boundaries when indexing, so a search for "alice" still finds
+// "alice@example.com".
 fn sanitize_fts5_query(query: &str) -> String {
-    // Remove special FTS5 characters and normalize
     let terms: Vec<String> = query
         .chars()
-        .filter(|c| c.is_alphanumeric() || c.is_whitespace() || *c == '-' || *c == '@' || *c == '.')
+        // Replace anything that isn't alphanumeric, whitespace, or `-` with a
+        // space so the splitter handles it as a token boundary.
+        .map(|c| if c.is_alphanumeric() || c.is_whitespace() || c == '-' { c } else { ' ' })
         .collect::<String>()
         .split_whitespace()
         .filter(|s| !s.is_empty())
-        .map(|s| format!("{}*", s)) // Add wildcard for prefix matching
+        .map(|s| format!("{}*", s)) // wildcard for prefix matching
         .collect();
 
     // Join with OR operator, but only if we have multiple terms
@@ -507,8 +514,12 @@ pub async fn rebuild_search_index(db: &DatabaseConnection) -> Result<(), String>
             h.id,
             h.household_name,
             h.address,
-            GROUP_CONCAT(DISTINCT p.first_name || ' ' || p.last_name, ' ') as people_names,
-            GROUP_CONCAT(DISTINCT pc.contact_value, ' ') as contact_values
+            -- SQLite GROUP_CONCAT cannot combine DISTINCT with a custom separator
+            -- ("DISTINCT aggregates must have exactly one argument"). Drop the
+            -- DISTINCT here: duplicate names/contacts within a household are
+            -- very unlikely, and even if present, FTS5 tokenization dedupes.
+            GROUP_CONCAT(p.first_name || ' ' || p.last_name, ' ') as people_names,
+            GROUP_CONCAT(pc.contact_value, ' ') as contact_values
         FROM households h
         LEFT JOIN people p ON p.household_id = h.id
         LEFT JOIN person_contacts pc ON pc.person_id = p.id

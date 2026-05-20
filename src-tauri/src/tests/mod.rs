@@ -21,3 +21,36 @@ pub mod household_tests;
 
 #[cfg(test)]
 pub mod medical_record_tests;
+
+#[cfg(test)]
+pub mod patient_tests;
+
+#[cfg(test)]
+pub mod backup_tests;
+
+#[cfg(test)]
+pub mod medical_record_service_tests;
+
+#[cfg(test)]
+pub mod household_service_tests;
+
+#[cfg(test)]
+pub mod species_breed_currency_tests;
+
+#[cfg(test)]
+pub mod migration_tests;
+
+#[cfg(test)]
+pub mod device_integration_tests;
+
+#[cfg(test)]
+pub mod settings_tests;
+
+#[cfg(test)]
+pub mod line_item_tests;
+
+#[cfg(test)]
+pub mod pending_file_history_tests;
+
+#[cfg(test)]
+pub mod file_storage_tests;

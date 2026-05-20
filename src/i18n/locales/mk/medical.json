@@ -53,8 +53,27 @@
     "description": "Внесете белешки за рецепт или аптека. Ова ќе биде вклучено во генерираниот PDF извештај за клиентот."
   },
   "lineItems": {
-    "placeholder": "Функцијата за ставки ускоро доаѓа",
-    "placeholderDescription": "Ова ќе овозможи додавање на поединечни трошоци, производи и услуги."
+    "title": "Ставки",
+    "addFromTemplate": "Додади од зачувани шаблони или креирај прилагодени ставки",
+    "addCustom": "Додади прилагодена ставка",
+    "selectTemplate": "Избери шаблон за ставка...",
+    "noTemplates": "Нема достапни шаблони. Креирајте ги во Поставки.",
+    "name": "Ставка",
+    "description": "Опис",
+    "unitPrice": "Единечна цена",
+    "quantity": "Кол",
+    "subtotal": "Меѓузбир",
+    "discount": "Попуст",
+    "discountPercent": "Попуст %",
+    "total": "Вкупно",
+    "manualTotal": "Рачен вкупен износ",
+    "manualTotalHint": "Или внесете вкупен износ директно:",
+    "noItems": "Нема додадени ставки",
+    "customItem": "Прилагодена ставка",
+    "editItem": "Измени ставка",
+    "fromTemplate": "(од шаблон)",
+    "namePlaceholder": "пр. Итна консултација",
+    "descriptionPlaceholder": "Незадолжителен опис"
   },
   "form": {
     "createTitle": "Создај медицински запис",
@@ -172,7 +191,10 @@
     "patientInformation": "Информации за пациент",
     "prefillToggle": "Пред‑пополнување од уред",
     "startBlankToggle": "Почни празно",
-    "detectedFromFiles": "Детектирано од датотеки"
+    "detectedFromFiles": "Детектирано од датотеки",
+    "patientMatched": "Пронајден пациент",
+    "noPatientMatch": "Не е пронајден пациент",
+    "noPatientMatchDesc": "Креирајте нов пациент — микрочипот е пополнет однапред."
   },
   "autocomplete": {
     "typeToSearch": "Внесете најмалку 2 знаци за пребарување на шаблони",

@@ -10,3 +10,4 @@ export * from './species';
 export * from './deviceIntegration';
 export * from './report';
 export * from './household';
+export * from './lineItem';

@@ -9,3 +9,10 @@ export { default as useOwners } from './useOwners';
 export { default as useSearch } from './useSearch';
 export { default as useViewState } from './useViewState';
 export { useHouseholds } from './useHouseholds';
+export {
+  useLineItemTemplates,
+  useLineItemTemplateById,
+  useCreateLineItemTemplate,
+  useUpdateLineItemTemplate,
+  useDeleteLineItemTemplate
+} from './useLineItemTemplates';

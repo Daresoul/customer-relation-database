@@ -9,6 +9,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::Manager;
 use serde::{Serialize, Deserialize};
 use crate::services::device_parser::DeviceParserService;
+use crate::services::device_capture::throttled_show_and_focus;
 use crate::services::file_storage::FileStorageService;
 use crate::commands::file_history::record_device_file_access_internal_seaorm;
 
@@ -350,23 +351,29 @@ impl FileWatcherService {
                                                                         log::error!("   ❌ Failed to record file access for {}: {}", file_name_track, e);
                                                                     } else {
                                                                         log::info!("   ✅ File access recorded for {}", file_name_track);
-                                                                        // Wake the app window and emit an event so UI can open the import modal
-                                                                        if let Some(window) = app_handle_track.get_window("main") {
-                                                                            let _ = window.show();
-                                                                            let _ = window.set_focus();
+                                                                        // Wake the app window (only if hidden) and emit an event so UI can open the import modal
+                                                                        let is_hidden = app_handle_track.get_window("main")
+                                                                            .map(|w| !w.is_visible().unwrap_or(true))
+                                                                            .unwrap_or(false);
+
+                                                                        if is_hidden {
+                                                                            throttled_show_and_focus(&app_handle_track);
                                                                         }
                                                                         // Clone strings for JSON payload
                                                                         let device_name_for_evt = device_name_track.clone();
                                                                         let device_type_for_evt = device_type_track.clone();
-                                                                        let _ = app_handle_track.emit_all(
-                                                                            "wake-from-tray",
-                                                                            serde_json::json!({
-                                                                                "cause": "file",
-                                                                                "fileName": file_name_track,
-                                                                                "device": device_name_for_evt,
-                                                                                "deviceType": device_type_for_evt
-                                                                            })
-                                                                        );
+                                                                        // Only emit wake-from-tray if window was hidden
+                                                                        if is_hidden {
+                                                                            let _ = app_handle_track.emit_all(
+                                                                                "wake-from-tray",
+                                                                                serde_json::json!({
+                                                                                    "cause": "file",
+                                                                                    "fileName": file_name_track,
+                                                                                    "device": device_name_for_evt,
+                                                                                    "deviceType": device_type_for_evt
+                                                                                })
+                                                                            );
+                                                                        }
                                                                     }
                                                                 }
                                                                 Err(e) => {

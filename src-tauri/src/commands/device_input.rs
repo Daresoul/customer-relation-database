@@ -159,8 +159,8 @@ fn row_to_patient(row: &sea_orm::QueryResult) -> Result<Patient, String> {
 
     Ok(Patient {
         id: row.try_get("", "id").map_err(|e| format!("Failed to get id: {}", e))?,
-        name: row.try_get("", "name").map_err(|e| format!("Failed to get name: {}", e))?,
-        species_id: row.try_get("", "species_id").unwrap_or(0),
+        name: row.try_get("", "name").ok(),
+        species_id: row.try_get("", "species_id").ok(),
         breed_id: row.try_get("", "breed_id").unwrap_or(None),
         species: row.try_get("", "species").unwrap_or(None),
         breed: row.try_get("", "breed").unwrap_or(None),

@@ -28,7 +28,7 @@ import {
   ThunderboltOutlined,
   ReloadOutlined,
 } from '@ant-design/icons';
-import { invoke } from '@tauri-apps/api/tauri';
+import { invoke } from '@/services/invoke';
 import styles from './DevTools.module.css';
 
 const { Panel } = Collapse;
@@ -330,7 +330,31 @@ export const DevToolsDrawer: React.FC<DevToolsDrawerProps> = ({ open, onClose })
       <Divider />
 
       {/* Device Simulators */}
-      <Collapse defaultActiveKey={['healvet']} ghost>
+      <Collapse defaultActiveKey={['exigo']} ghost>
+        {/* Exigo (File Watch) - First because it doesn't need virtual ports */}
+        <Panel
+          header={
+            <Space>
+              <span>Exigo Eos Vet</span>
+              <Tag color="blue">File Watch</Tag>
+            </Space>
+          }
+          key="exigo"
+        >
+          <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
+            Drops a test XML file in the configured watch directory. No virtual ports needed.
+          </Text>
+
+          <Button
+            type="primary"
+            icon={<SendOutlined />}
+            onClick={handleDropExigoFile}
+            block
+          >
+            Drop Test XML File
+          </Button>
+        </Panel>
+
         {/* Healvet HV-FIA 3000 */}
         <Panel
           header={
@@ -467,30 +491,6 @@ export const DevToolsDrawer: React.FC<DevToolsDrawerProps> = ({ open, onClose })
               Send PCR Result
             </Button>
           </Form>
-        </Panel>
-
-        {/* Exigo (File Watch) */}
-        <Panel
-          header={
-            <Space>
-              <span>Exigo Eos Vet</span>
-              <Tag color="blue">File Watch</Tag>
-            </Space>
-          }
-          key="exigo"
-        >
-          <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
-            Drops a test XML file in the configured watch directory.
-          </Text>
-
-          <Button
-            type="primary"
-            icon={<SendOutlined />}
-            onClick={handleDropExigoFile}
-            block
-          >
-            Drop Test XML File
-          </Button>
         </Panel>
       </Collapse>
     </Drawer>

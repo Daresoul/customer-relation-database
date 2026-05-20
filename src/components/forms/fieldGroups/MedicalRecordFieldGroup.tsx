@@ -11,14 +11,11 @@ import {
   Form,
   Input,
   Select,
-  InputNumber,
-  Space,
   AutoComplete,
   Spin,
 } from 'antd';
 import type { FormInstance } from 'antd';
 import type { RecordType, Currency, RecordTemplate } from '@/types/medical';
-import styles from '../Forms.module.css';
 
 const { TextArea } = Input;
 const { Option } = Select;
@@ -30,7 +27,8 @@ export interface MedicalRecordFieldGroupProps {
   form: FormInstance;
   recordType: RecordType;
   onRecordTypeChange: (type: RecordType) => void;
-  currencies: Currency[];
+  /** @deprecated Price is now handled via Line Items */
+  currencies?: Currency[];
   templates?: RecordTemplate[];
   isSearchingTemplates?: boolean;
   onTemplateSearch?: (term: string) => void;
@@ -38,35 +36,24 @@ export interface MedicalRecordFieldGroupProps {
   disabled?: boolean;
   /** Hide record type select - useful for edit mode */
   hideRecordType?: boolean;
-  /** Custom class names */
-  fullWidthClassName?: string;
-  dateInputClassName?: string;
-  currencyInputClassName?: string;
   /** Title field label override */
   titleLabel?: string;
   /** Title field placeholder override */
   titlePlaceholder?: string;
-  /** Minimum characters before template search triggers */
-  searchMinLength?: number;
 }
 
 export const MedicalRecordFieldGroup: React.FC<MedicalRecordFieldGroupProps> = ({
   form,
   recordType,
   onRecordTypeChange,
-  currencies,
   templates = [],
   isSearchingTemplates = false,
   onTemplateSearch,
   onTemplateSelect,
   disabled = false,
   hideRecordType = false,
-  fullWidthClassName = styles.fullWidth,
-  dateInputClassName = styles.dateInput,
-  currencyInputClassName = styles.severityInput,
   titleLabel,
   titlePlaceholder,
-  searchMinLength = 2,
 }) => {
   const { t } = useTranslation(['medical', 'common', 'forms']);
 
@@ -75,8 +62,6 @@ export const MedicalRecordFieldGroup: React.FC<MedicalRecordFieldGroupProps> = (
     onRecordTypeChange(value);
     if (value === 'note' || value === 'test_result') {
       form.setFieldValue('procedureName', undefined);
-      form.setFieldValue('price', undefined);
-      form.setFieldValue('currencyId', undefined);
     }
   };
 
@@ -87,8 +72,6 @@ export const MedicalRecordFieldGroup: React.FC<MedicalRecordFieldGroupProps> = (
       form.setFieldsValue({
         name: template.title,
         description: template.description,
-        price: template.price,
-        currencyId: template.currencyId,
       });
       onTemplateSelect?.(template);
     }
@@ -183,42 +166,7 @@ export const MedicalRecordFieldGroup: React.FC<MedicalRecordFieldGroupProps> = (
         />
       </Form.Item>
 
-      {/* Price & Currency - Only for procedures */}
-      {recordType === 'procedure' && (
-        <Space size="middle" className={fullWidthClassName}>
-          <Form.Item
-            name="price"
-            label={t('medical:fields.price')}
-            className={dateInputClassName}
-          >
-            <InputNumber
-              min={0}
-              precision={2}
-              placeholder="0.00"
-              className={fullWidthClassName}
-              disabled={disabled}
-            />
-          </Form.Item>
-
-          <Form.Item
-            name="currencyId"
-            label={t('medical:fields.currency')}
-            className={currencyInputClassName}
-          >
-            <Select
-              placeholder={t('common:selectPlaceholder')}
-              allowClear
-              disabled={disabled}
-            >
-              {currencies.map(currency => (
-                <Option key={currency.id} value={currency.id}>
-                  {currency.symbol || ''} {currency.code}
-                </Option>
-              ))}
-            </Select>
-          </Form.Item>
-        </Space>
-      )}
+      {/* Price is now handled via Line Items tab */}
     </>
   );
 };

@@ -11,8 +11,8 @@ impl PatientService {
     fn row_to_patient(row: &QueryResult) -> Result<Patient, String> {
         Ok(Patient {
             id: row.try_get("", "id").map_err(|e| e.to_string())?,
-            name: row.try_get("", "name").map_err(|e| e.to_string())?,
-            species_id: row.try_get("", "species_id").map_err(|e| e.to_string())?,
+            name: row.try_get("", "name").ok(),
+            species_id: row.try_get("", "species_id").ok(),
             breed_id: row.try_get("", "breed_id").ok(),
             species: row.try_get("", "species").ok(),
             breed: row.try_get("", "breed").ok(),
@@ -102,21 +102,38 @@ impl PatientService {
     }
 
     pub async fn create(db: &DatabaseConnection, dto: CreatePatientDto) -> Result<Patient, String> {
-        log::info!("🐾 Creating patient: name={}, species_id={}, breed_id={:?}, gender={:?}",
-            dto.name, dto.species_id, dto.breed_id, dto.gender);
+        // Normalize empty strings to None so the DB stores NULL rather than ""
+        let name = dto.name.as_ref()
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+        let microchip_id = dto.microchip_id.as_ref()
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+
+        // Require at least some way to identify the patient. The frontend
+        // enforces this too, but defend against API misuse.
+        if name.is_none() && microchip_id.is_none() {
+            return Err("Patient must have either a name or a microchip ID".to_string());
+        }
+
+        log::info!("🐾 Creating patient: name={:?}, species_id={:?}, breed_id={:?}, gender={:?}",
+            name, dto.species_id, dto.breed_id, dto.gender);
 
         let now = Utc::now();
 
-        // Insert the patient using SeaORM
+        // Insert the patient using SeaORM. Use the normalized name/microchip
+        // values (empty/whitespace → None) so we don't store "" rows.
         let new_patient = patient::ActiveModel {
-            name: Set(dto.name),
+            name: Set(name),
             species_id: Set(dto.species_id),
             breed_id: Set(dto.breed_id),
             gender: Set(dto.gender),
             date_of_birth: Set(dto.date_of_birth),
             color: Set(dto.color),
             weight: Set(dto.weight),
-            microchip_id: Set(dto.microchip_id),
+            microchip_id: Set(microchip_id),
             medical_notes: Set(dto.medical_notes),
             is_active: Set(true),
             household_id: Set(None),
@@ -175,10 +192,12 @@ impl PatientService {
             params.push(name.into());
         }
 
+        // Migration 041 made species_id nullable so chip-only patients can
+        // exist without a species. Honor MaybeNull::Null as "set to NULL".
         match dto.species_id {
             MaybeNull::Undefined => {},
             MaybeNull::Null => {
-                return Err("species_id cannot be null".to_string());
+                set_clauses.push("species_id = NULL".to_string());
             },
             MaybeNull::Value(v) => {
                 set_clauses.push("species_id = ?".to_string());

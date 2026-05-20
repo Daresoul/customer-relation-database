@@ -196,25 +196,55 @@ impl OAuthService {
         server.await;
     }
 
-    /// Open browser with URL
+    /// Open browser with URL.
+    /// Uses subprocess isolation (process group, Stdio::null) to prevent
+    /// the spawned browser from stealing focus from the main window.
     fn open_browser(url: &str) -> Result<(), String> {
         #[cfg(target_os = "macos")]
-        std::process::Command::new("open")
-            .arg(url)
-            .spawn()
-            .map_err(|e| format!("Failed to open browser: {}", e))?;
+        {
+            let mut cmd = std::process::Command::new("open");
+            cmd.arg(url)
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null());
+            {
+                use std::os::unix::process::CommandExt;
+                cmd.process_group(0);
+            }
+            cmd.spawn()
+                .map_err(|e| format!("Failed to open browser: {}", e))?;
+        }
 
         #[cfg(target_os = "linux")]
-        std::process::Command::new("xdg-open")
-            .arg(url)
-            .spawn()
-            .map_err(|e| format!("Failed to open browser: {}", e))?;
+        {
+            let mut cmd = std::process::Command::new("xdg-open");
+            cmd.arg(url)
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null());
+            {
+                use std::os::unix::process::CommandExt;
+                cmd.process_group(0);
+            }
+            cmd.spawn()
+                .map_err(|e| format!("Failed to open browser: {}", e))?;
+        }
 
         #[cfg(target_os = "windows")]
-        std::process::Command::new("cmd")
-            .args(&["/C", "start", url])
-            .spawn()
-            .map_err(|e| format!("Failed to open browser: {}", e))?;
+        {
+            let mut cmd = std::process::Command::new("cmd");
+            cmd.args(&["/C", "start", url])
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null());
+            {
+                use std::os::windows::process::CommandExt;
+                const CREATE_NO_WINDOW: u32 = 0x08000000;
+                cmd.creation_flags(CREATE_NO_WINDOW);
+            }
+            cmd.spawn()
+                .map_err(|e| format!("Failed to open browser: {}", e))?;
+        }
 
         Ok(())
     }

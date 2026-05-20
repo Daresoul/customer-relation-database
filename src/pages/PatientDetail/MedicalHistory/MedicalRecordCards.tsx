@@ -177,18 +177,31 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
                   {record.name}
                 </Link>
               </Descriptions.Item>
-              {record.price && (
-                <Descriptions.Item label={
-                  <Space>
-                    <DollarOutlined />
-                    <span>{t('fields.price')}</span>
-                  </Space>
-                }>
-                  <Text strong>
-                    {getCurrencySymbol(record.currencyId)} {record.price.toFixed(2)}
-                  </Text>
-                </Descriptions.Item>
-              )}
+              {/* Show line items total if available */}
+              {record.lineItems && record.lineItems.length > 0 && (() => {
+                const subtotal = record.lineItems.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
+                const discountMultiplier = record.discountPercent ? (100 - record.discountPercent) / 100 : 1;
+                const calculatedTotal = subtotal * discountMultiplier;
+                const finalTotal = record.manualTotal ?? calculatedTotal;
+                const currencyId = record.lineItems[0]?.currencyId;
+                return (
+                  <Descriptions.Item label={
+                    <Space>
+                      <DollarOutlined />
+                      <span>{t('fields.total', 'Total')}</span>
+                    </Space>
+                  }>
+                    <Text strong>
+                      {getCurrencySymbol(currencyId)} {finalTotal.toFixed(2)}
+                      {record.lineItems.length > 1 && (
+                        <Text type="secondary" style={{ marginLeft: 8 }}>
+                          ({record.lineItems.length} {t('lineItems.items', 'items')})
+                        </Text>
+                      )}
+                    </Text>
+                  </Descriptions.Item>
+                );
+              })()}
             </>
           )}
 

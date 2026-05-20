@@ -4,7 +4,7 @@
  * Refactored to use MedicalRecordFieldGroup for reusable field definitions.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Modal,
   Form,
@@ -34,12 +34,13 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useDeviceImport } from '@/contexts/DeviceImportContext';
 import { usePatients } from '@/hooks/usePatients';
-import { useCurrencies, useCreateMedicalRecord, useUploadAttachment } from '@/hooks/useMedicalRecords';
+import { useCreateMedicalRecord, useUploadAttachment } from '@/hooks/useMedicalRecords';
 import { useSearchRecordTemplates } from '@/hooks/useRecordTemplates';
 import { useAppSettings } from '@/hooks/useAppSettings';
 import { useDebounce } from '@/hooks/useDebounce';
 import { CreateMedicalRecordInput } from '@/types/medical';
 import { Patient } from '@/types';
+import type { MedicalRecordLineItem, CreateLineItemInput } from '@/types/lineItem';
 import { MedicalService } from '@/services/medicalService';
 import { fileHistoryService } from '@/services/fileHistoryService';
 import RecentDeviceFiles from '../RecentDeviceFiles';
@@ -63,8 +64,16 @@ const DeviceImportModal: React.FC = () => {
   const [createPatientExpanded, setCreatePatientExpanded] = useState(false);
   const [printAfterSave, setPrintAfterSave] = useState(true);
   const [patientSerial, setPatientSerial] = useState<string>('');
+  const [scannedMicrochipId, setScannedMicrochipId] = useState<string>('');
   const [titleSearchTerm, setTitleSearchTerm] = useState<string>('');
   const debouncedSearchTerm = useDebounce(titleSearchTerm, 300);
+  // Component-level dedup: prevent double-fire from keyboard wedge + HID event for same scan
+  const lastProcessedScanRef = useRef<{ code: string; time: number } | null>(null);
+
+  // Line items state
+  const [lineItems, setLineItems] = useState<MedicalRecordLineItem[]>([]);
+  const [discountPercent, setDiscountPercent] = useState<number | undefined>();
+  const [manualTotal, setManualTotal] = useState<number | undefined>();
 
   const {
     modalOpen,
@@ -79,58 +88,89 @@ const DeviceImportModal: React.FC = () => {
 
   const pendingFiles = getGroupedFiles();
   const { patients, refreshPatients, loading: patientsLoading } = usePatients();
-  const { data: currencies = [] } = useCurrencies();
   const { settings } = useAppSettings();
   const createMutation = useCreateMedicalRecord();
   const uploadMutation = useUploadAttachment();
   const { data: searchedTemplates, isLoading: isSearchingTemplates } = useSearchRecordTemplates(debouncedSearchTerm, recordType);
 
-  // Capture barcode scans
-  useBarcodeScanner({
-    suffixKey: 'Enter',
-    minLength: 8,
-    interKeyDelay: 12,
-    finalizeTimeout: 100,
-    onScan: (code) => {
-      const isMicrochip = /^(\d{15}|\d{10})$/.test(code);
-      if (!isMicrochip) return;
-      setPatientSerial(code);
-      const numericId = Number(code);
-      if (!Number.isNaN(numericId)) {
-        const found = patients.find(p => p.id === numericId);
-        if (found) {
-          form.setFieldValue('patientId', found.id);
-        }
-      }
+  // Shared handler for processing a scanned microchip code from any source.
+  // Caller has already validated and normalized to the canonical 15-digit form.
+  const handleScanCode = (code: string) => {
+    // Component-level dedup: prevent double-fire from keyboard wedge + HID event
+    const now = Date.now();
+    if (
+      lastProcessedScanRef.current &&
+      lastProcessedScanRef.current.code === code &&
+      now - lastProcessedScanRef.current.time < 500
+    ) {
+      return;
+    }
+    lastProcessedScanRef.current = { code, time: now };
+
+    setPatientSerial(code);
+
+    // Look up an existing patient by microchip ID. If found, auto-select.
+    // If not, open the create-patient section and prefill the chip ID so the
+    // vet can fill the rest of the form without retyping the number.
+    const matched = patients.find(p => p.microchipId === code);
+    if (matched) {
+      form.setFieldValue('patientId', matched.id);
       notification.success({
-        message: t('medical:deviceImport.scanDetected', 'Scan detected'),
-        description: code,
+        message: t('medical:deviceImport.patientMatched', 'Patient matched'),
+        description: `${matched.name} — ${code}`,
         placement: 'bottomRight',
         duration: 2,
       });
+      return;
     }
+
+    setScannedMicrochipId(code);
+    setCreatePatientExpanded(true);
+    notification.info({
+      message: t('medical:deviceImport.noPatientMatch', 'No patient found'),
+      description: t(
+        'medical:deviceImport.noPatientMatchDesc',
+        'Create a new patient — microchip ID has been prefilled.'
+      ),
+      placement: 'bottomRight',
+      duration: 3,
+    });
+  };
+
+  // Capture barcode scans via keyboard wedge detection
+  useBarcodeScanner({
+    suffixKey: 'Enter',
+    minLength: 8,
+    interKeyDelay: 50,
+    finalizeTimeout: 100,
+    onScan: handleScanCode,
   });
 
-  // React to HID/serial scan wake events
+  // React to HID scan events (both wake-from-tray and scanner:barcode)
   useEffect(() => {
-    let unlisten: (() => void) | undefined;
+    let unlistenWake: (() => void) | undefined;
+    let unlistenBarcode: (() => void) | undefined;
     const setup = async () => {
-      unlisten = await listen<any>('wake-from-tray', (event) => {
+      // wake-from-tray fires when the window was hidden and a scan brought it back
+      unlistenWake = await listen<any>('wake-from-tray', (event) => {
         const payload = event.payload || {};
         if (payload.cause === 'scan' && payload.code) {
-          setPatientSerial(String(payload.code));
-          const num = Number(payload.code);
-          if (!Number.isNaN(num)) {
-            const found = patients.find(p => p.id === num);
-            if (found) {
-              form.setFieldValue('patientId', found.id);
-            }
-          }
+          handleScanCode(String(payload.code));
+        }
+      });
+      // scanner:barcode fires for every HID scan regardless of window visibility
+      unlistenBarcode = await listen<any>('scanner:barcode', (event) => {
+        const payload = event.payload || {};
+        if (payload.code) {
+          handleScanCode(String(payload.code));
         }
       });
     };
     setup();
-    return () => { if (unlisten) unlisten(); };
+    return () => {
+      if (unlistenWake) unlistenWake();
+      if (unlistenBarcode) unlistenBarcode();
+    };
   }, [patients, form]);
 
   // Compute default form values based on device data
@@ -141,10 +181,6 @@ const DeviceImportModal: React.FC = () => {
 
     if (suggestedPatientId) {
       defaults.patientId = suggestedPatientId;
-    }
-
-    if (recordType === 'procedure' && settings?.currencyId) {
-      defaults.currencyId = settings.currencyId;
     }
 
     if (pendingFiles.length > 0) {
@@ -172,19 +208,11 @@ const DeviceImportModal: React.FC = () => {
       form.resetFields();
       form.setFieldsValue(defaults);
     }
-  }, [modalOpen, suggestedPatientId, settings?.currencyId, pendingFiles.length]);
+  }, [modalOpen, suggestedPatientId, pendingFiles.length]);
 
   const handleRecordTypeChange = (value: RecordType) => {
     setRecordType(value);
     setTitleSearchTerm('');
-    if (value === 'note' || value === 'test_result') {
-      form.setFieldValue('price', undefined);
-      form.setFieldValue('currencyId', undefined);
-    } else if (value === 'procedure') {
-      if (settings?.currencyId) {
-        form.setFieldValue('currencyId', settings.currencyId);
-      }
-    }
   };
 
   const handleTemplateSelect = (template: RecordTemplate) => {
@@ -206,6 +234,10 @@ const DeviceImportModal: React.FC = () => {
       onOk: () => {
         form.resetFields();
         setCreatePatientExpanded(false);
+        setScannedMicrochipId('');
+        setLineItems([]);
+        setDiscountPercent(undefined);
+        setManualTotal(undefined);
         clearAllFiles();
         closeModal();
       },
@@ -237,6 +269,9 @@ const DeviceImportModal: React.FC = () => {
       notification.success({ message: t('common:success'), description: `Saved ${savedCount} file(s) for later under serial '${patientSerial}'.`, placement: 'bottomRight' });
       form.resetFields();
       setCreatePatientExpanded(false);
+      setLineItems([]);
+      setDiscountPercent(undefined);
+      setManualTotal(undefined);
       clearAllFiles();
       closeModal();
     } catch (e: any) {
@@ -251,6 +286,7 @@ const DeviceImportModal: React.FC = () => {
     refreshPatients();
     form.setFieldValue('patientId', patient.id);
     setCreatePatientExpanded(false);
+    setScannedMicrochipId('');
   };
 
   const handleSubmit = async () => {
@@ -264,15 +300,28 @@ const DeviceImportModal: React.FC = () => {
         deviceName: file.deviceName,
       }));
 
+      // Convert line items for submission
+      const lineItemsInput: CreateLineItemInput[] | undefined = lineItems.length > 0
+        ? lineItems.map(item => ({
+            templateId: item.templateId,
+            name: item.name,
+            description: item.description,
+            unitPrice: item.unitPrice,
+            currencyId: item.currencyId,
+            quantity: item.quantity,
+          }))
+        : undefined;
+
       const input: CreateMedicalRecordInput = {
         patientId: values.patientId,
         recordType: values.recordType,
         name: values.name,
         description: values.description,
-        price: values.price,
-        currencyId: values.currencyId,
         prescriptionNotes: values.prescriptionNotes,
         deviceDataList,
+        discountPercent: discountPercent,
+        manualTotal: manualTotal,
+        lineItems: lineItemsInput,
       };
 
       const createdRecord = await createMutation.mutateAsync(input);
@@ -380,8 +429,17 @@ const DeviceImportModal: React.FC = () => {
 
       form.resetFields();
       setCreatePatientExpanded(false);
+      setScannedMicrochipId('');
+      setLineItems([]);
+      setDiscountPercent(undefined);
+      setManualTotal(undefined);
       clearAllFiles();
       closeModal();
+
+      // Navigate to the newly created medical record
+      if (createdRecord?.id) {
+        window.location.href = `/medical-records/${createdRecord.id}`;
+      }
     } catch (_error) {
       notification.error({
         message: t('common:error'),
@@ -543,6 +601,7 @@ const DeviceImportModal: React.FC = () => {
           onCancel={() => setCreatePatientExpanded(false)}
           isExpanded={createPatientExpanded}
           onToggleExpand={setCreatePatientExpanded}
+          prefillMicrochipId={scannedMicrochipId}
         />
 
         {/* Medical Record Fields using tabbed component */}
@@ -550,12 +609,19 @@ const DeviceImportModal: React.FC = () => {
           form={form}
           recordType={recordType}
           onRecordTypeChange={handleRecordTypeChange}
-          currencies={currencies}
           templates={searchedTemplates}
           isSearchingTemplates={isSearchingTemplates}
           onTemplateSearch={setTitleSearchTerm}
           onTemplateSelect={handleTemplateSelect}
           hideRecordType={false}
+          lineItems={lineItems}
+          onLineItemsChange={setLineItems}
+          discountPercent={discountPercent}
+          onDiscountChange={setDiscountPercent}
+          manualTotal={manualTotal}
+          onManualTotalChange={setManualTotal}
+          showLineItemsBadge={lineItems.length > 0}
+          lineItemsCount={lineItems.length}
         />
 
         <Form.Item style={{ marginTop: 16, marginBottom: 16 }}>

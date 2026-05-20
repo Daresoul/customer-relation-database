@@ -25,7 +25,7 @@ import { AppWrapper } from './components/AppWrapper';
 import DeviceImportModal from './components/DeviceImportModal/DeviceImportModal';
 import { useDeviceDataListener } from './hooks/useDeviceDataListener';
 import { listen } from '@tauri-apps/api/event';
-import { invoke } from '@tauri-apps/api/tauri';
+import { invoke } from '@/services/invoke';
 import { useDeviceImport } from './contexts/DeviceImportContext';
 import { useViewContext } from './contexts';
 

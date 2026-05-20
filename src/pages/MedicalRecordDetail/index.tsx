@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Layout, Card, Typography, Space, Button, Alert, Spin, Table, Tag, Descriptions, App, Switch, Breadcrumb, Drawer } from 'antd';
-import { invoke, convertFileSrc } from '@tauri-apps/api/tauri';
+import { invoke, convertFileSrc } from '@/services/invoke';
 import { useTranslation } from 'react-i18next';
 import PdfInlineViewer from '@/components/PdfInlineViewer';
 import PdfMultiPagePreview from '@/components/PdfMultiPagePreview';
@@ -16,6 +16,7 @@ import type { MedicalAttachment } from '@/types/medical';
 import MedicalRecordForm from '@/components/MedicalRecordModal/MedicalRecordForm';
 // Inline PDF viewer handled by PdfInlineViewer with reliable fallbacks
 import type { MedicalRecord, MedicalRecordHistory, UpdateMedicalRecordInput } from '@/types/medical';
+import type { MedicalRecordLineItem } from '@/types/lineItem';
 import { DeviceStatusInline } from '@/components/DeviceStatusBar';
 import styles from './MedicalRecordDetailPage.module.css';
 
@@ -755,16 +756,8 @@ export const MedicalRecordDetailPage: React.FC = () => {
               const typeVal = displayRecord?.recordType || record.recordType;
               const nameVal = displayRecord?.name || record.name;
               const procVal = typeVal === 'procedure' ? nameVal : undefined;
-              const priceVal = (typeof displayRecord?.price !== 'undefined') ? displayRecord?.price : record.price;
-              const currencyId = displayRecord?.currencyId || record.currencyId;
               const descVal = displayRecord?.description || record.description;
 
-              // Get currency symbol
-              const getCurrencyDisplay = () => {
-                if (!currencyId || !currencies) return '';
-                const currency = currencies.find(c => c.id === currencyId);
-                return currency ? `${currency.symbol || currency.code} ` : '';
-              };
               return (
                 <>
                   <Descriptions column={2} size="middle">
@@ -775,13 +768,6 @@ export const MedicalRecordDetailPage: React.FC = () => {
                     </Descriptions.Item>
                     {typeVal === 'procedure' && (
                       <Descriptions.Item label={t('medical:fields.procedureName')}>{procVal}</Descriptions.Item>
-                    )}
-                    {typeof priceVal !== 'undefined' && (
-                      <Descriptions.Item label={t('medical:fields.price')}>
-                        <Text strong className={styles.breadcrumbText}>
-                          {getCurrencyDisplay()}{priceVal}
-                        </Text>
-                      </Descriptions.Item>
                     )}
                     <Descriptions.Item label={t('medical:fields.createdAt')}>{new Date(record.createdAt).toLocaleString()}</Descriptions.Item>
                     <Descriptions.Item label={t('medical:fields.updatedAt')}>{new Date(((selectedEntry as any)?.changedAt) || record.updatedAt).toLocaleString()}</Descriptions.Item>
@@ -802,6 +788,102 @@ export const MedicalRecordDetailPage: React.FC = () => {
                       </Paragraph>
                     </div>
                   )}
+
+                  {/* Line Items - only show if there are items */}
+                  {(() => {
+                    const lineItems = displayRecord?.lineItems || record.lineItems;
+                    const discount = displayRecord?.discountPercent ?? record.discountPercent;
+                    const manualTotalVal = displayRecord?.manualTotal ?? record.manualTotal;
+
+                    if (!lineItems || lineItems.length === 0) return null;
+
+                    // Calculate subtotal
+                    const subtotal = lineItems.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
+
+                    // Calculate total with discount
+                    const discountMultiplier = discount ? (100 - discount) / 100 : 1;
+                    const calculatedTotal = subtotal * discountMultiplier;
+                    const finalTotal = manualTotalVal ?? calculatedTotal;
+
+                    // Get currency for display
+                    const firstCurrencyId = lineItems[0]?.currencyId;
+                    const currency = currencies?.find(c => c.id === firstCurrencyId);
+                    const currencySymbol = currency?.symbol || currency?.code || '';
+
+                    return (
+                      <div className={styles.marginTop16}>
+                        <Text type="secondary" className={styles.descriptionLabel}>{t('medical:lineItems.title', 'Line Items')}</Text>
+                        <Table
+                          size="small"
+                          dataSource={lineItems}
+                          rowKey={(item: MedicalRecordLineItem, index) => item.id?.toString() || `item-${index}`}
+                          pagination={false}
+                          style={{ marginTop: 8 }}
+                          columns={[
+                            {
+                              title: t('medical:lineItems.itemName', 'Item'),
+                              dataIndex: 'name',
+                              key: 'name',
+                            },
+                            {
+                              title: t('medical:lineItems.quantity', 'Qty'),
+                              dataIndex: 'quantity',
+                              key: 'quantity',
+                              width: 80,
+                              align: 'center' as const,
+                            },
+                            {
+                              title: t('medical:lineItems.unitPrice', 'Unit Price'),
+                              dataIndex: 'unitPrice',
+                              key: 'unitPrice',
+                              width: 120,
+                              align: 'right' as const,
+                              render: (price: number) => `${currencySymbol}${price.toFixed(2)}`,
+                            },
+                            {
+                              title: t('medical:lineItems.subtotal', 'Subtotal'),
+                              key: 'subtotal',
+                              width: 120,
+                              align: 'right' as const,
+                              render: (_: any, item: MedicalRecordLineItem) => (
+                                <Text strong>{currencySymbol}{(item.unitPrice * item.quantity).toFixed(2)}</Text>
+                              ),
+                            },
+                          ]}
+                          summary={() => (
+                            <Table.Summary>
+                              <Table.Summary.Row>
+                                <Table.Summary.Cell index={0} colSpan={3} align="right">
+                                  <Text type="secondary">{t('medical:lineItems.subtotal', 'Subtotal')}:</Text>
+                                </Table.Summary.Cell>
+                                <Table.Summary.Cell index={1} align="right">
+                                  <Text>{currencySymbol}{subtotal.toFixed(2)}</Text>
+                                </Table.Summary.Cell>
+                              </Table.Summary.Row>
+                              {discount && discount > 0 && (
+                                <Table.Summary.Row>
+                                  <Table.Summary.Cell index={0} colSpan={3} align="right">
+                                    <Text type="secondary">{t('medical:lineItems.discount', 'Discount')} ({discount}%):</Text>
+                                  </Table.Summary.Cell>
+                                  <Table.Summary.Cell index={1} align="right">
+                                    <Text type="danger">-{currencySymbol}{(subtotal - calculatedTotal).toFixed(2)}</Text>
+                                  </Table.Summary.Cell>
+                                </Table.Summary.Row>
+                              )}
+                              <Table.Summary.Row>
+                                <Table.Summary.Cell index={0} colSpan={3} align="right">
+                                  <Text strong>{t('medical:lineItems.total', 'Total')}:</Text>
+                                </Table.Summary.Cell>
+                                <Table.Summary.Cell index={1} align="right">
+                                  <Text strong style={{ fontSize: '1.1em' }}>{currencySymbol}{finalTotal.toFixed(2)}</Text>
+                                </Table.Summary.Cell>
+                              </Table.Summary.Row>
+                            </Table.Summary>
+                          )}
+                        />
+                      </div>
+                    );
+                  })()}
 
                   {/* Attachments now rendered as separate Card below */}
                 </>

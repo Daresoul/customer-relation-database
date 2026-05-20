@@ -90,6 +90,18 @@ impl MedicalRecordService {
             // Fetch attachments for this record
             let attachments = Self::fetch_attachments(db, record_id).await.unwrap_or_default();
 
+            // Handle discount_percent as either integer or float
+            let discount_percent: Option<f64> = row.try_get::<i64>("", "discount_percent")
+                .ok()
+                .map(|i| i as f64)
+                .or_else(|| row.try_get::<f64>("", "discount_percent").ok());
+
+            // Handle manual_total as either integer or float
+            let manual_total: Option<f64> = row.try_get::<i64>("", "manual_total")
+                .ok()
+                .map(|i| i as f64)
+                .or_else(|| row.try_get::<f64>("", "manual_total").ok());
+
             records.push(MedicalRecord {
                 id: record_id,
                 patient_id: row.try_get("", "patient_id").unwrap_or(0),
@@ -100,6 +112,9 @@ impl MedicalRecordService {
                 prescription_notes: row.try_get("", "prescription_notes").ok(),
                 price,
                 currency_id: row.try_get("", "currency_id").ok(),
+                discount_percent,
+                manual_total,
+                invoice_number: row.try_get("", "invoice_number").ok(),
                 is_archived: is_archived_int != 0,
                 version: row.try_get("", "version").unwrap_or(1),
                 created_at,
@@ -107,6 +122,7 @@ impl MedicalRecordService {
                 created_by: row.try_get("", "created_by").ok(),
                 updated_by: row.try_get("", "updated_by").ok(),
                 attachments: if attachments.is_empty() { None } else { Some(attachments) },
+                line_items: None, // Line items are only loaded in get_medical_record detail view
             });
         }
 
@@ -215,7 +231,8 @@ impl MedicalRecordService {
             .query_one(Statement::from_sql_and_values(
                 DbBackend::Sqlite,
                 "SELECT id, patient_id, record_type, name, procedure_name, description, \
-                 prescription_notes, price, currency_id, is_archived, version, created_at, updated_at, \
+                 prescription_notes, price, currency_id, discount_percent, manual_total, \
+                 is_archived, version, created_at, updated_at, \
                  created_by, updated_by \
                  FROM medical_records WHERE id = ?",
                 [record_id.into()],
@@ -244,6 +261,23 @@ impl MedicalRecordService {
             .map(|i| i as f64)
             .or_else(|| row.try_get::<f64>("", "price").ok());
 
+        // Handle discount_percent as either integer or float
+        let discount_percent: Option<f64> = row.try_get::<i64>("", "discount_percent")
+            .ok()
+            .map(|i| i as f64)
+            .or_else(|| row.try_get::<f64>("", "discount_percent").ok());
+
+        // Handle manual_total as either integer or float
+        let manual_total: Option<f64> = row.try_get::<i64>("", "manual_total")
+            .ok()
+            .map(|i| i as f64)
+            .or_else(|| row.try_get::<f64>("", "manual_total").ok());
+
+        // Get line items using the LineItemService
+        let line_items = crate::services::line_item::LineItemService::get_line_items_for_record(db, record_id)
+            .await
+            .unwrap_or_default();
+
         let record = MedicalRecord {
             id: row.try_get("", "id").unwrap_or(0),
             patient_id: row.try_get("", "patient_id").unwrap_or(0),
@@ -254,6 +288,9 @@ impl MedicalRecordService {
             prescription_notes: row.try_get("", "prescription_notes").ok(),
             price,
             currency_id: row.try_get("", "currency_id").ok(),
+            discount_percent,
+            manual_total,
+            invoice_number: row.try_get("", "invoice_number").ok(),
             is_archived: is_archived_int != 0,
             version: row.try_get("", "version").unwrap_or(1),
             created_at,
@@ -261,6 +298,7 @@ impl MedicalRecordService {
             created_by: row.try_get("", "created_by").ok(),
             updated_by: row.try_get("", "updated_by").ok(),
             attachments: None,
+            line_items: if line_items.is_empty() { None } else { Some(line_items) },
         };
 
         // Get attachments using helper
@@ -338,8 +376,9 @@ impl MedicalRecordService {
                 DbBackend::Sqlite,
                 "INSERT INTO medical_records \
                  (patient_id, record_type, name, procedure_name, description, \
-                  prescription_notes, price, currency_id, is_archived, version, created_at, updated_at) \
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?)",
+                  prescription_notes, price, currency_id, discount_percent, manual_total, \
+                  is_archived, version, created_at, updated_at) \
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?)",
                 [
                     input.patient_id.into(),
                     input.record_type.clone().into(),
@@ -349,6 +388,8 @@ impl MedicalRecordService {
                     input.prescription_notes.clone().into(),
                     input.price.into(),
                     input.currency_id.into(),
+                    input.discount_percent.into(),
+                    input.manual_total.into(),
                     now.to_rfc3339().into(),
                     now.to_rfc3339().into(),
                 ],
@@ -357,6 +398,20 @@ impl MedicalRecordService {
             .map_err(|e| format!("Failed to create medical record: {}", e))?;
 
         let id = result.last_insert_id() as i64;
+
+        // Create line items if provided
+        let line_items = if let Some(items) = input.line_items.clone() {
+            if !items.is_empty() {
+                let created_items = crate::services::line_item::LineItemService::create_line_items_for_record(db, id, items)
+                    .await
+                    .map_err(|e| format!("Failed to create line items: {}", e))?;
+                Some(created_items)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
 
         let record = MedicalRecord {
             id,
@@ -368,6 +423,9 @@ impl MedicalRecordService {
             prescription_notes: input.prescription_notes,
             price: input.price,
             currency_id: input.currency_id,
+            discount_percent: input.discount_percent,
+            manual_total: input.manual_total,
+            invoice_number: None,
             is_archived: false,
             version: 1,
             created_at: now,
@@ -375,6 +433,7 @@ impl MedicalRecordService {
             created_by: None,
             updated_by: None,
             attachments: None,
+            line_items,
         };
 
         // Insert initial snapshot into history (version 1)
@@ -386,6 +445,8 @@ impl MedicalRecordService {
             "prescription_notes": record.prescription_notes,
             "price": record.price,
             "currency_id": record.currency_id,
+            "discount_percent": record.discount_percent,
+            "manual_total": record.manual_total,
             "is_archived": record.is_archived
         });
 
@@ -465,7 +526,261 @@ impl MedicalRecordService {
             }
         }
 
+        // Generate simple report PDF with title and description (using template)
+        log::info!("📝 Starting simple report PDF generation for record {}", id);
+        match Self::generate_simple_report_pdf(app_handle, db, id, &record).await {
+            Ok(_) => log::info!("✅ Simple report PDF generated successfully for record {}", id),
+            Err(e) => log::error!("❌ Failed to generate simple report PDF: {}", e),
+        }
+
+        // Generate pharmacy note PDF if prescription notes exist
+        if record.prescription_notes.as_ref().map_or(false, |n| !n.trim().is_empty()) {
+            log::info!("📝 Starting pharmacy note PDF generation for record {}", id);
+            match Self::generate_pharmacy_note_pdf(app_handle, db, id, &record).await {
+                Ok(_) => log::info!("✅ Pharmacy note PDF generated for record {}", id),
+                Err(e) => log::error!("❌ Failed to generate pharmacy note PDF: {}", e),
+            }
+        }
+
+        // Generate invoice PDF if line items exist
+        log::info!("📝 Starting invoice PDF generation for record {}", id);
+        match Self::generate_invoice_pdf(app_handle, db, id, &record).await {
+            Ok(_) => log::info!("✅ Invoice PDF generation completed for record {}", id),
+            Err(e) => log::error!("❌ Failed to generate invoice PDF: {}", e),
+        }
+
         Ok(record)
+    }
+
+    /// Generate a simple report PDF using the template with medical record title and description
+    async fn generate_simple_report_pdf(
+        app_handle: &tauri::AppHandle,
+        db: &DatabaseConnection,
+        medical_record_id: i64,
+        record: &MedicalRecord,
+    ) -> Result<(), String> {
+        use crate::services::java_pdf_service::JavaPdfService;
+
+        // Get patient and owner info for the report
+        let patient_data = Self::get_patient_for_pdf(db, record.patient_id).await?;
+
+        // Create reports directory
+        let reports_dir = std::env::temp_dir().join("simple_reports");
+        std::fs::create_dir_all(&reports_dir)
+            .map_err(|e| format!("Failed to create reports directory: {}", e))?;
+
+        // Generate unique filename
+        let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
+        let safe_name = record.name.replace(" ", "_").replace("/", "_");
+        let pdf_filename = format!("report_{}_{}.pdf", safe_name, timestamp);
+        let pdf_path = reports_dir.join(&pdf_filename);
+
+        // Generate simple report PDF
+        log::info!("📄 Calling Java to generate simple report PDF for record {}...", medical_record_id);
+        JavaPdfService::generate_simple_report(
+            app_handle,
+            pdf_path.to_str().ok_or("Invalid PDF path")?,
+            &record.name,
+            &record.description,
+            Some(&patient_data),
+        )?;
+
+        // Save PDF as attachment
+        Self::save_pdf_attachment(
+            app_handle,
+            db,
+            medical_record_id,
+            &pdf_path,
+            &pdf_filename,
+            "Simple Report",
+            "simple_report",
+            "Template Report",
+            "simple_report",  // Use different type so generate_configured_report won't delete it
+        ).await?;
+
+        log::debug!("Simple report PDF generated and saved as attachment");
+        Ok(())
+    }
+
+    /// Generate a pharmacy note PDF with prescription text overlaid on the template
+    async fn generate_pharmacy_note_pdf(
+        app_handle: &tauri::AppHandle,
+        db: &DatabaseConnection,
+        medical_record_id: i64,
+        record: &MedicalRecord,
+    ) -> Result<(), String> {
+        use crate::services::java_pdf_service::JavaPdfService;
+
+        let prescription_text = match &record.prescription_notes {
+            Some(text) if !text.trim().is_empty() => text.clone(),
+            _ => return Ok(()), // No prescription notes, skip
+        };
+
+        // Create pharmacy notes directory
+        let reports_dir = std::env::temp_dir().join("pharmacy_notes");
+        std::fs::create_dir_all(&reports_dir)
+            .map_err(|e| format!("Failed to create pharmacy notes directory: {}", e))?;
+
+        // Generate unique filename
+        let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
+        let safe_name = record.name.replace(" ", "_").replace("/", "_");
+        let pdf_filename = format!("pharmacy_note_{}_{}.pdf", safe_name, timestamp);
+        let pdf_path = reports_dir.join(&pdf_filename);
+
+        log::info!("📄 Calling Java to generate pharmacy note PDF for record {}...", medical_record_id);
+        JavaPdfService::generate_pharmacy_note(
+            app_handle,
+            pdf_path.to_str().ok_or("Invalid PDF path")?,
+            &prescription_text,
+        )?;
+
+        // Save PDF as attachment
+        Self::save_pdf_attachment(
+            app_handle,
+            db,
+            medical_record_id,
+            &pdf_path,
+            &pdf_filename,
+            "Pharmacy Note",
+            "pharmacy_note",
+            "Pharmacy Note",
+            "pharmacy_note",
+        ).await?;
+
+        log::debug!("Pharmacy note PDF generated and saved as attachment");
+        Ok(())
+    }
+
+    /// Generate an invoice PDF from medical record line items
+    async fn generate_invoice_pdf(
+        app_handle: &tauri::AppHandle,
+        db: &DatabaseConnection,
+        medical_record_id: i64,
+        record: &MedicalRecord,
+    ) -> Result<(), String> {
+        use crate::services::java_pdf_service::{JavaPdfService, InvoiceLineItem};
+        use crate::services::line_item::LineItemService;
+
+        // Get line items for this record
+        let line_items = LineItemService::get_line_items_for_record(db, medical_record_id)
+            .await
+            .unwrap_or_default();
+
+        if line_items.is_empty() {
+            log::debug!("No line items for record {} - skipping invoice generation", medical_record_id);
+            return Ok(());
+        }
+
+        // Get patient/owner info for the recipient (ЗА) field
+        let patient_data = Self::get_patient_for_pdf(db, record.patient_id).await?;
+        let recipient = if patient_data.owner.is_empty() {
+            patient_data.name.clone()
+        } else {
+            patient_data.owner.clone()
+        };
+
+        // Convert line items to invoice format
+        let invoice_items: Vec<InvoiceLineItem> = line_items
+            .iter()
+            .map(|item| InvoiceLineItem {
+                name: item.name.clone(),
+                quantity: item.quantity,
+                unit_price: item.unit_price,
+            })
+            .collect();
+
+        // Format date
+        let date = chrono::Utc::now().format("%d/%m/%Y").to_string();
+
+        // Sequential invoice number: reuse existing or assign next
+        let year = chrono::Utc::now().format("%Y").to_string();
+        let invoice_number = if let Some(ref existing) = record.invoice_number {
+            existing.clone()
+        } else {
+            // Get the highest invoice number for this year
+            let pattern = format!("%/{}", year);
+            let max_row = db.query_one(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "SELECT invoice_number FROM medical_records \
+                 WHERE invoice_number LIKE ? \
+                 ORDER BY CAST(SUBSTR(invoice_number, 1, INSTR(invoice_number, '/') - 1) AS INTEGER) DESC \
+                 LIMIT 1",
+                [pattern.into()],
+            ))
+            .await
+            .map_err(|e| format!("Failed to query max invoice number: {}", e))?;
+
+            let next_num = match max_row {
+                Some(row) => {
+                    let last: Option<String> = row.try_get("", "invoice_number").ok();
+                    match last {
+                        Some(l) => {
+                            let num_str = l.split('/').next().unwrap_or("0");
+                            num_str.parse::<i64>().unwrap_or(0) + 1
+                        }
+                        None => 1,
+                    }
+                }
+                None => 1,
+            };
+
+            let new_invoice_number = format!("{:03}/{}", next_num, year);
+
+            // Store it in the database
+            db.execute(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "UPDATE medical_records SET invoice_number = ? WHERE id = ?",
+                [new_invoice_number.clone().into(), medical_record_id.into()],
+            ))
+            .await
+            .map_err(|e| format!("Failed to store invoice number: {}", e))?;
+
+            log::info!("📝 Assigned invoice number {} to record {}", new_invoice_number, medical_record_id);
+            new_invoice_number
+        };
+
+        // Discount from record
+        let discount = record.discount_percent.unwrap_or(0.0);
+
+        // Currency - default to "ден"
+        let currency = "ден";
+
+        // Create invoice directory
+        let reports_dir = std::env::temp_dir().join("invoices");
+        std::fs::create_dir_all(&reports_dir)
+            .map_err(|e| format!("Failed to create invoices directory: {}", e))?;
+
+        let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
+        let pdf_filename = format!("invoice_{}_{}.pdf", medical_record_id, timestamp);
+        let pdf_path = reports_dir.join(&pdf_filename);
+
+        log::info!("📄 Generating invoice PDF for record {}...", medical_record_id);
+        JavaPdfService::generate_invoice(
+            app_handle,
+            pdf_path.to_str().ok_or("Invalid PDF path")?,
+            &date,
+            &invoice_number,
+            &recipient,
+            &invoice_items,
+            discount,
+            currency,
+        )?;
+
+        // Save PDF as attachment
+        Self::save_pdf_attachment(
+            app_handle,
+            db,
+            medical_record_id,
+            &pdf_path,
+            &pdf_filename,
+            "Invoice",
+            "invoice",
+            "Invoice",
+            "invoice",
+        ).await?;
+
+        log::info!("✅ Invoice PDF generated and saved for record {}", medical_record_id);
+        Ok(())
     }
 
     /// Helper to get patient data for PDF generation
@@ -599,7 +914,8 @@ impl MedicalRecordService {
             &pdf_filename,
             "Device Test Report",
             device_type_str,
-            device_name_str
+            device_name_str,
+            "generated_pdf",  // This can be replaced by generate_configured_report
         ).await?;
 
         log::debug!("PDF report generated and saved as attachment");
@@ -628,6 +944,7 @@ impl MedicalRecordService {
         pdf_type: &str,
         device_type: &str,
         device_name: &str,
+        attachment_type: &str,
     ) -> Result<(), String> {
         use uuid::Uuid;
 
@@ -673,7 +990,7 @@ impl MedicalRecordService {
                 format!("{}_report", device_type).into(),
                 format!("{} Report ({})", device_name, pdf_type).into(),
                 "pdf_generation".into(),
-                "generated_pdf".into(),
+                attachment_type.into(),
             ],
         ))
         .await
@@ -685,6 +1002,7 @@ impl MedicalRecordService {
     }
 
     pub async fn update_medical_record(
+        app_handle: &tauri::AppHandle,
         db: &DatabaseConnection,
         record_id: i64,
         updates: UpdateMedicalRecordInput,
@@ -696,7 +1014,8 @@ impl MedicalRecordService {
             .query_one(Statement::from_sql_and_values(
                 DbBackend::Sqlite,
                 "SELECT id, patient_id, record_type, name, procedure_name, description, \
-                 prescription_notes, price, currency_id, is_archived, version, created_at, updated_at, \
+                 prescription_notes, price, currency_id, discount_percent, manual_total, \
+                 is_archived, version, created_at, updated_at, \
                  created_by, updated_by \
                  FROM medical_records WHERE id = ?",
                 [record_id.into()],
@@ -748,38 +1067,81 @@ impl MedicalRecordService {
                 params.push((*v).into());
             },
         }
+        match &updates.discount_percent {
+            MaybeNull::Undefined => {},
+            MaybeNull::Null => {
+                update_parts.push("discount_percent = ?");
+                params.push(Value::Double(None));
+            },
+            MaybeNull::Value(v) => {
+                update_parts.push("discount_percent = ?");
+                params.push((*v).into());
+            },
+        }
+        match &updates.manual_total {
+            MaybeNull::Undefined => {},
+            MaybeNull::Null => {
+                update_parts.push("manual_total = ?");
+                params.push(Value::Double(None));
+            },
+            MaybeNull::Value(v) => {
+                update_parts.push("manual_total = ?");
+                params.push((*v).into());
+            },
+        }
         if let Some(is_archived) = updates.is_archived {
             update_parts.push("is_archived = ?");
             params.push((if is_archived { 1i32 } else { 0i32 }).into());
         }
 
-        if update_parts.is_empty() {
+        // Check if we have line items to update (this counts as an update even if no other fields change)
+        let has_line_items_update = updates.line_items.is_some();
+
+        if update_parts.is_empty() && !has_line_items_update {
             return Err("No fields to update".to_string());
         }
 
-        update_parts.push("updated_at = ?");
-        params.push(now.to_rfc3339().into());
+        // Only run SQL update if there are record fields to update
+        if !update_parts.is_empty() {
+            update_parts.push("updated_at = ?");
+            params.push(now.to_rfc3339().into());
 
-        update_parts.push("version = version + 1");
+            update_parts.push("version = version + 1");
 
-        // Add record_id at the end for WHERE clause
-        params.push(record_id.into());
+            // Add record_id at the end for WHERE clause
+            params.push(record_id.into());
 
-        let query = format!(
-            "UPDATE medical_records SET {} WHERE id = ?",
-            update_parts.join(", ")
-        );
+            let query = format!(
+                "UPDATE medical_records SET {} WHERE id = ?",
+                update_parts.join(", ")
+            );
 
-        db.execute(Statement::from_sql_and_values(DbBackend::Sqlite, &query, params))
-            .await
-            .map_err(|e| format!("Failed to update medical record: {}", e))?;
+            db.execute(Statement::from_sql_and_values(DbBackend::Sqlite, &query, params))
+                .await
+                .map_err(|e| format!("Failed to update medical record: {}", e))?;
+        }
+
+        // Handle line items replacement if provided
+        let line_items = if let Some(items) = updates.line_items {
+            let replaced_items = crate::services::line_item::LineItemService::replace_line_items_for_record(db, record_id, items)
+                .await
+                .map_err(|e| format!("Failed to update line items: {}", e))?;
+            if replaced_items.is_empty() { None } else { Some(replaced_items) }
+        } else {
+            // Fetch existing line items
+            let existing = crate::services::line_item::LineItemService::get_line_items_for_record(db, record_id)
+                .await
+                .unwrap_or_default();
+            if existing.is_empty() { None } else { Some(existing) }
+        };
 
         // Fetch the updated record
         let row = db
             .query_one(Statement::from_sql_and_values(
                 DbBackend::Sqlite,
                 "SELECT id, patient_id, record_type, name, procedure_name, description, \
-                 prescription_notes, price, currency_id, is_archived, version, created_at, updated_at, \
+                 prescription_notes, price, currency_id, discount_percent, manual_total, \
+                 is_archived, version, created_at, updated_at, \
                  created_by, updated_by \
                  FROM medical_records WHERE id = ?",
                 [record_id.into()],
@@ -808,6 +1170,18 @@ impl MedicalRecordService {
             .map(|i| i as f64)
             .or_else(|| row.try_get::<f64>("", "price").ok());
 
+        // Handle discount_percent as either integer or float
+        let discount_percent: Option<f64> = row.try_get::<i64>("", "discount_percent")
+            .ok()
+            .map(|i| i as f64)
+            .or_else(|| row.try_get::<f64>("", "discount_percent").ok());
+
+        // Handle manual_total as either integer or float
+        let manual_total: Option<f64> = row.try_get::<i64>("", "manual_total")
+            .ok()
+            .map(|i| i as f64)
+            .or_else(|| row.try_get::<f64>("", "manual_total").ok());
+
         let updated_record = MedicalRecord {
             id: row.try_get("", "id").unwrap_or(0),
             patient_id: row.try_get("", "patient_id").unwrap_or(0),
@@ -818,6 +1192,9 @@ impl MedicalRecordService {
             prescription_notes: row.try_get("", "prescription_notes").ok(),
             price,
             currency_id: row.try_get("", "currency_id").ok(),
+            discount_percent,
+            manual_total,
+            invoice_number: row.try_get("", "invoice_number").ok(),
             is_archived: is_archived_int != 0,
             version: row.try_get("", "version").unwrap_or(1),
             created_at,
@@ -825,6 +1202,7 @@ impl MedicalRecordService {
             created_by: row.try_get("", "created_by").ok(),
             updated_by: row.try_get("", "updated_by").ok(),
             attachments: None,
+            line_items,
         };
 
         // Build full snapshot history entry
@@ -835,6 +1213,16 @@ impl MedicalRecordService {
             .ok()
             .map(|i| i as f64)
             .or_else(|| old_row.try_get::<f64>("", "price").ok());
+        // Handle old discount_percent and manual_total as either integer or float
+        let old_discount_percent: Option<f64> = old_row.try_get::<i64>("", "discount_percent")
+            .ok()
+            .map(|i| i as f64)
+            .or_else(|| old_row.try_get::<f64>("", "discount_percent").ok());
+        let old_manual_total: Option<f64> = old_row.try_get::<i64>("", "manual_total")
+            .ok()
+            .map(|i| i as f64)
+            .or_else(|| old_row.try_get::<f64>("", "manual_total").ok());
+
         let old_snapshot = json!({
             "record_type": old_row.try_get::<String>("", "record_type").unwrap_or_default(),
             "name": old_row.try_get::<String>("", "name").ok(),
@@ -843,6 +1231,8 @@ impl MedicalRecordService {
             "prescription_notes": old_row.try_get::<String>("", "prescription_notes").ok(),
             "price": old_price,
             "currency_id": old_row.try_get::<i64>("", "currency_id").ok(),
+            "discount_percent": old_discount_percent,
+            "manual_total": old_manual_total,
             "is_archived": old_is_archived
         });
 
@@ -855,6 +1245,8 @@ impl MedicalRecordService {
             "prescription_notes": updated_record.prescription_notes,
             "price": updated_record.price,
             "currency_id": updated_record.currency_id,
+            "discount_percent": updated_record.discount_percent,
+            "manual_total": updated_record.manual_total,
             "is_archived": updated_record.is_archived
         });
 
@@ -867,6 +1259,8 @@ impl MedicalRecordService {
         if old_snapshot.get("prescription_notes") != new_snapshot.get("prescription_notes") { changed_fields.push("prescription_notes"); }
         if old_snapshot.get("price") != new_snapshot.get("price") { changed_fields.push("price"); }
         if old_snapshot.get("currency_id") != new_snapshot.get("currency_id") { changed_fields.push("currency_id"); }
+        if old_snapshot.get("discount_percent") != new_snapshot.get("discount_percent") { changed_fields.push("discount_percent"); }
+        if old_snapshot.get("manual_total") != new_snapshot.get("manual_total") { changed_fields.push("manual_total"); }
         if old_snapshot.get("is_archived") != new_snapshot.get("is_archived") { changed_fields.push("is_archived"); }
 
         log::debug!("History snapshot insert (update): rec_id={}, version={}, fields={}", record_id, updated_record.version, changed_fields.join(","));
@@ -884,6 +1278,22 @@ impl MedicalRecordService {
                 ],
             ))
             .await;
+
+        // Regenerate invoice PDF on update (line items or discount may have changed)
+        log::info!("📝 Regenerating invoice PDF for updated record {}", record_id);
+        match Self::generate_invoice_pdf(app_handle, db, record_id, &updated_record).await {
+            Ok(_) => log::info!("✅ Invoice PDF regenerated for record {}", record_id),
+            Err(e) => log::error!("❌ Failed to regenerate invoice PDF: {}", e),
+        }
+
+        // Regenerate pharmacy note PDF on update if prescription notes exist
+        if updated_record.prescription_notes.as_ref().map_or(false, |n| !n.trim().is_empty()) {
+            log::info!("📝 Regenerating pharmacy note PDF for updated record {}", record_id);
+            match Self::generate_pharmacy_note_pdf(app_handle, db, record_id, &updated_record).await {
+                Ok(_) => log::info!("✅ Pharmacy note PDF regenerated for record {}", record_id),
+                Err(e) => log::error!("❌ Failed to regenerate pharmacy note PDF: {}", e),
+            }
+        }
 
         Ok(updated_record)
     }
@@ -967,6 +1377,18 @@ impl MedicalRecordService {
                 .map(|i| i as f64)
                 .or_else(|| row.try_get::<f64>("", "price").ok());
 
+            // Handle discount_percent as either integer or float
+            let discount_percent: Option<f64> = row.try_get::<i64>("", "discount_percent")
+                .ok()
+                .map(|i| i as f64)
+                .or_else(|| row.try_get::<f64>("", "discount_percent").ok());
+
+            // Handle manual_total as either integer or float
+            let manual_total: Option<f64> = row.try_get::<i64>("", "manual_total")
+                .ok()
+                .map(|i| i as f64)
+                .or_else(|| row.try_get::<f64>("", "manual_total").ok());
+
             records.push(MedicalRecord {
                 id: row.try_get("", "id").unwrap_or(0),
                 patient_id: row.try_get("", "patient_id").unwrap_or(0),
@@ -977,6 +1399,9 @@ impl MedicalRecordService {
                 prescription_notes: row.try_get("", "prescription_notes").ok(),
                 price,
                 currency_id: row.try_get("", "currency_id").ok(),
+                discount_percent,
+                manual_total,
+                invoice_number: row.try_get("", "invoice_number").ok(),
                 is_archived: is_archived_int != 0,
                 version: row.try_get("", "version").unwrap_or(1),
                 created_at,
@@ -984,6 +1409,7 @@ impl MedicalRecordService {
                 created_by: row.try_get("", "created_by").ok(),
                 updated_by: row.try_get("", "updated_by").ok(),
                 attachments: None,
+                line_items: None,
             });
         }
         Ok(records)
@@ -1047,6 +1473,15 @@ impl MedicalRecordService {
                 .map(|i| i as f64)
                 .or_else(|| row.try_get::<f64>("", "price").ok()),
             currency_id: row.try_get("", "currency_id").ok(),
+            discount_percent: row.try_get::<i64>("", "discount_percent")
+                .ok()
+                .map(|i| i as f64)
+                .or_else(|| row.try_get::<f64>("", "discount_percent").ok()),
+            manual_total: row.try_get::<i64>("", "manual_total")
+                .ok()
+                .map(|i| i as f64)
+                .or_else(|| row.try_get::<f64>("", "manual_total").ok()),
+            invoice_number: row.try_get("", "invoice_number").ok(),
             is_archived: {
                 let v: i64 = row.try_get("", "is_archived").unwrap_or(0);
                 v != 0
@@ -1063,6 +1498,7 @@ impl MedicalRecordService {
             created_by: row.try_get("", "created_by").ok(),
             updated_by: row.try_get("", "updated_by").ok(),
             attachments: None,
+            line_items: None,
         };
 
         // Fetch history snapshot
@@ -1095,6 +1531,7 @@ impl MedicalRecordService {
 
     // Revert a record one step to its previous version using latest history old_values
     pub async fn revert_one_step(
+        app_handle: &tauri::AppHandle,
         db: &DatabaseConnection,
         record_id: i64,
     ) -> Result<MedicalRecord, String> {
@@ -1126,7 +1563,10 @@ impl MedicalRecordService {
             prescription_notes: None,
             price: MaybeNull::Undefined,
             currency_id: MaybeNull::Undefined,
+            discount_percent: MaybeNull::Undefined,
+            manual_total: MaybeNull::Undefined,
             is_archived: None,
+            line_items: None,
         };
 
         if let Some(v) = old_vals.get("name") { updates.name = v.as_str().map(|s| s.to_string()); }
@@ -1147,6 +1587,20 @@ impl MedicalRecordService {
                 None => MaybeNull::Undefined,
             };
         }
+        if let Some(v) = old_vals.get("discount_percent") {
+            updates.discount_percent = match v.as_f64().or_else(|| v.as_i64().map(|i| i as f64)) {
+                Some(p) => MaybeNull::Value(p),
+                None if v.is_null() => MaybeNull::Null,
+                None => MaybeNull::Undefined,
+            };
+        }
+        if let Some(v) = old_vals.get("manual_total") {
+            updates.manual_total = match v.as_f64().or_else(|| v.as_i64().map(|i| i as f64)) {
+                Some(p) => MaybeNull::Value(p),
+                None if v.is_null() => MaybeNull::Null,
+                None => MaybeNull::Undefined,
+            };
+        }
         if let Some(v) = old_vals.get("is_archived") { updates.is_archived = v.as_bool(); }
 
         // If no fields present, abort
@@ -1160,6 +1614,6 @@ impl MedicalRecordService {
             return Err("No revertable fields in previous version".to_string());
         }
 
-        Self::update_medical_record(db, record_id, updates).await
+        Self::update_medical_record(app_handle, db, record_id, updates).await
     }
 }

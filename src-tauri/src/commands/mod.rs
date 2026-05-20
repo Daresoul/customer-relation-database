@@ -18,6 +18,8 @@ pub mod device_integration;
 pub mod file_history;
 pub mod pending;
 pub mod dev_tools;
+pub mod line_item;
+pub mod backup;
 
 pub use patient::*;
 pub use database::*;
@@ -39,3 +41,5 @@ pub use device_integration::*;
 pub use file_history::*;
 pub use pending::*;
 pub use dev_tools::*;
+pub use line_item::*;
+pub use backup::*;

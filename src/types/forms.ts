@@ -3,8 +3,8 @@
  */
 
 export interface CreatePatientInput {
-  name: string;
-  speciesId: number;
+  name?: string;
+  speciesId?: number;
   breedId?: number;
   dateOfBirth?: string;
   color?: string;

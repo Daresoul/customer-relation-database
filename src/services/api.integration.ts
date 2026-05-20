@@ -2,7 +2,7 @@
  * T035: API integration layer with Ant Design notifications
  */
 
-import { invoke } from '@tauri-apps/api/tauri';
+import { invoke } from '@/services/invoke';
 import { emit } from '@tauri-apps/api/event';
 import { App } from 'antd';
 import type { Patient } from '../types';

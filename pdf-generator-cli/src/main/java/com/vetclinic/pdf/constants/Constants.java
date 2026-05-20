@@ -34,6 +34,9 @@ public class Constants {
     public static final String ICON = "assets/images/icon.png";
     public static final String HEMATOLOGY_TITLE = "assets/images/hematology.png";
     public static final String SOCIALS = "assets/images/socials.png";
+    public static final String REPORT_TEMPLATE = "assets/templates/Rapport.pdf";
+    public static final String INVOICE_TEMPLATE = "assets/templates/invoice.pdf";
+    public static final String PHARMACY_NOTE_TEMPLATE = "assets/templates/pharmacy_note.pdf";
     public static final int LOGO_WIDHT = 192;
     public static final int LOGO_HEIGHT = 195;
     public static final int LEFT_DOC_MARGIN = 15;

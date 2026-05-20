@@ -62,6 +62,7 @@ pub async fn create_medical_record(
 // T034: Implement update_medical_record command
 #[tauri::command]
 pub async fn update_medical_record(
+    app_handle: AppHandle,
     pool: State<'_, SeaOrmPool>,
     record_id: i64,
     updates: UpdateMedicalRecordInput,
@@ -78,7 +79,7 @@ pub async fn update_medical_record(
         }
     }
 
-    MedicalRecordService::update_medical_record(&pool, record_id, updates).await
+    MedicalRecordService::update_medical_record(&app_handle, &pool, record_id, updates).await
 }
 
 // T035: Implement archive_medical_record command
@@ -416,10 +417,11 @@ pub async fn get_medical_attachment_pdf_page_count(
 // Revert a medical record one step to previous version
 #[tauri::command]
 pub async fn revert_medical_record(
+    app_handle: AppHandle,
     pool: State<'_, SeaOrmPool>,
     record_id: i64,
 ) -> Result<MedicalRecord, String> {
-    MedicalRecordService::revert_one_step(&pool, record_id).await
+    MedicalRecordService::revert_one_step(&app_handle, &pool, record_id).await
 }
 
 // Get medical record snapshot at a specific version

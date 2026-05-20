@@ -13,9 +13,14 @@ pub struct Model {
     pub name: String,
     pub procedure_name: Option<String>,
     pub description: String,
+    pub prescription_notes: Option<String>,
     #[sea_orm(column_type = "Double")]
     pub price: Option<f64>,
     pub currency_id: Option<i64>,
+    #[sea_orm(column_type = "Double")]
+    pub discount_percent: Option<f64>,
+    #[sea_orm(column_type = "Double")]
+    pub manual_total: Option<f64>,
     pub is_archived: bool,
     pub created_at: ChronoDateTimeUtc,
     pub updated_at: ChronoDateTimeUtc,
@@ -42,6 +47,8 @@ pub enum Relation {
     Attachments,
     #[sea_orm(has_many = "super::medical_record_history::Entity")]
     History,
+    #[sea_orm(has_many = "super::medical_record_line_item::Entity")]
+    LineItems,
 }
 
 impl Related<super::patient::Entity> for Entity {
@@ -65,6 +72,12 @@ impl Related<super::medical_attachment::Entity> for Entity {
 impl Related<super::medical_record_history::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::History.def()
+    }
+}
+
+impl Related<super::medical_record_line_item::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::LineItems.def()
     }
 }
 

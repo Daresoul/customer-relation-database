@@ -12,6 +12,7 @@ use chrono::Utc;
 use rand::Rng;
 use crate::services::device_input::PortType::HIDDevice;
 use crate::services::device_parser::DeviceParserService;
+use crate::services::device_capture::throttled_show_and_focus;
 use crate::services::file_storage::FileStorageService;
 use crate::commands::file_history::record_device_file_access_internal_seaorm;
 use crate::database::SeaOrmPool;
@@ -181,18 +182,21 @@ fn update_connection_status(app_handle: &AppHandle, integration_id: i64, port_na
         next_retry,
     };
 
-    // Store in global state
-    {
+    // Store in global state, only emit to frontend if status actually changed
+    let should_emit = {
         let mut statuses = get_connection_status().lock()
             .expect("CONNECTION_STATUS mutex poisoned - a thread panicked while holding the lock");
-        statuses.insert(format!("{}:{}", integration_id, port_name), connection_status.clone());
-        log::info!("💾 Stored connection status in global state. Total tracked devices: {}", statuses.len());
-    }
+        let key = format!("{}:{}", integration_id, port_name);
+        let changed = statuses.get(&key).map(|prev| prev.status != connection_status.status).unwrap_or(true);
+        statuses.insert(key, connection_status.clone());
+        changed
+    };
 
-    // Emit to frontend
-    match app_handle.emit_all("device-connection-status", &connection_status) {
-        Ok(_) => log::info!("📡 Emitted device-connection-status event to frontend for {} ({})", device_type, port_name),
-        Err(e) => log::error!("❌ Failed to emit device-connection-status event: {}", e),
+    if should_emit {
+        match app_handle.emit_all("device-connection-status", &connection_status) {
+            Ok(_) => log::info!("📡 Emitted device-connection-status event to frontend for {} ({})", device_type, port_name),
+            Err(e) => log::error!("❌ Failed to emit device-connection-status event: {}", e),
+        }
     }
 }
 
@@ -1086,31 +1090,32 @@ fn handle_device_data(app_handle: &AppHandle, data: &[u8], device_name: &str, de
                 }
             }
 
-            // Wake from tray when device data is received
-            // For microchip-like codes (15/10 digits): cause = "scan"
-            // For lab device data: cause = "device_data"
-            if let Some(window) = app_handle.get_window("main") {
-                let _ = window.show();
-                let _ = window.set_focus();
+            // Wake from tray when device data is received (only if window is hidden)
+            let is_hidden = app_handle.get_window("main")
+                .map(|w| !w.is_visible().unwrap_or(true))
+                .unwrap_or(false);
+
+            if is_hidden {
+                throttled_show_and_focus(&app_handle);
+
+                let cause = if let Some(ref code) = device_data.patient_identifier {
+                    let is_digits = code.chars().all(|c| c.is_ascii_digit());
+                    let len = code.len();
+                    if is_digits && (len == 15 || len == 10) { "scan" } else { "device_data" }
+                } else {
+                    "device_data"
+                };
+
+                let _ = app_handle.emit_all(
+                    "wake-from-tray",
+                    serde_json::json!({
+                        "cause": cause,
+                        "code": device_data.patient_identifier.clone().unwrap_or_default(),
+                        "device": device_name,
+                        "deviceType": device_type
+                    }),
+                );
             }
-
-            let cause = if let Some(ref code) = device_data.patient_identifier {
-                let is_digits = code.chars().all(|c| c.is_ascii_digit());
-                let len = code.len();
-                if is_digits && (len == 15 || len == 10) { "scan" } else { "device_data" }
-            } else {
-                "device_data"
-            };
-
-            let _ = app_handle.emit_all(
-                "wake-from-tray",
-                serde_json::json!({
-                    "cause": cause,
-                    "code": device_data.patient_identifier.clone().unwrap_or_default(),
-                    "device": device_name,
-                    "deviceType": device_type
-                }),
-            );
 
             // Save file and track access (async)
             let app_handle_track = app_handle.clone();

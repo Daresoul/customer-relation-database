@@ -9,6 +9,7 @@ import {
   ArrowLeftOutlined,
   BankOutlined,
   CloudDownloadOutlined,
+  CloudUploadOutlined,
   AppstoreOutlined,
   UsbOutlined,
   FileTextOutlined,
@@ -29,12 +30,14 @@ import RoomsSettings from './components/RoomsSettings';
 import SpeciesSettings from './components/SpeciesSettings';
 import DeviceInputSettings from './components/DeviceInputSettings';
 import RecordTemplatesSettings from './components/RecordTemplatesSettings';
+import LineItemsSettings from './components/LineItemsSettings';
+import BackupSettings from './components/BackupSettings';
 import { UpdateSettings } from './UpdateSettings';
 
 const { Content, Sider } = Layout;
 const { Title, Text } = Typography;
 
-type SettingsCategory = 'general' | 'business' | 'appointments' | 'rooms' | 'species' | 'devices' | 'templates' | 'updates';
+type SettingsCategory = 'general' | 'business' | 'appointments' | 'rooms' | 'species' | 'devices' | 'templates' | 'lineItems' | 'backups' | 'updates';
 
 interface MenuItem {
   key: SettingsCategory;
@@ -99,6 +102,18 @@ const SettingsLayout: React.FC = () => {
       icon: <FileTextOutlined />,
       label: t('settings:sections.templates'),
       component: RecordTemplatesSettings,
+    },
+    {
+      key: 'lineItems',
+      icon: <DollarOutlined />,
+      label: t('settings:sections.lineItems'),
+      component: LineItemsSettings,
+    },
+    {
+      key: 'backups',
+      icon: <CloudUploadOutlined />,
+      label: t('settings:sections.backups', 'Backups'),
+      component: BackupSettings,
     },
     {
       key: 'updates',
@@ -221,8 +236,8 @@ const SettingsLayout: React.FC = () => {
 
             {/* Content Area */}
             <Content className={styles.settingsContent}>
-              {/* Rooms, Species, Devices, Templates and Updates tabs don't need the parent form - they manage their own state */}
-              {selectedCategory === 'rooms' || selectedCategory === 'species' || selectedCategory === 'devices' || selectedCategory === 'templates' || selectedCategory === 'updates' ? (
+              {/* Rooms, Species, Devices, Templates, LineItems and Updates tabs don't need the parent form - they manage their own state */}
+              {selectedCategory === 'rooms' || selectedCategory === 'species' || selectedCategory === 'devices' || selectedCategory === 'templates' || selectedCategory === 'lineItems' || selectedCategory === 'backups' || selectedCategory === 'updates' ? (
                 <CurrentComponent isUpdating={isUpdating} />
               ) : (
                 <Form

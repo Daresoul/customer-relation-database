@@ -27,7 +27,7 @@ import {
   HomeOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { invoke } from '@tauri-apps/api/tauri';
+import { invoke } from '@/services/invoke';
 import { Patient, CreatePatientInput, UpdatePatientInput } from '../../types';
 import { useSpecies } from '../../hooks/useSpecies';
 import { useBreeds } from '../../hooks/useBreeds';

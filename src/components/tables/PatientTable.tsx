@@ -43,6 +43,8 @@ interface PatientTableProps extends Partial<BaseTableProps<PatientWithHousehold>
   onView?: (patient: PatientWithHousehold) => void;
   onEdit?: (patient: PatientWithHousehold) => void;
   onDelete?: (patient: PatientWithHousehold) => void;
+  searchText?: string;
+  onSearchTextChange?: (text: string) => void;
 }
 
 export const PatientTable: React.FC<PatientTableProps> = ({
@@ -51,10 +53,18 @@ export const PatientTable: React.FC<PatientTableProps> = ({
   onView,
   onEdit,
   onDelete,
+  searchText: controlledSearchText,
+  onSearchTextChange,
 }) => {
   const { t } = useTranslation(['patients', 'entities', 'common']);
   const navigate = useNavigate();
-  const [searchText, setSearchText] = useState('');
+  const [internalSearchText, setInternalSearchText] = useState('');
+  const isSearchControlled = controlledSearchText !== undefined;
+  const searchText = isSearchControlled ? controlledSearchText : internalSearchText;
+  const setSearchText = (text: string) => {
+    if (!isSearchControlled) setInternalSearchText(text);
+    onSearchTextChange?.(text);
+  };
 
   // Fetch species to get colors
   const { data: speciesList = [] } = useSpecies(true);
@@ -106,18 +116,26 @@ export const PatientTable: React.FC<PatientTableProps> = ({
       width: 150,
       fixed: 'left',
       sorter: (a, b) => (a.name || '').localeCompare(b.name || ''),
-      render: (text, record) => (
-        <Space>
-          <HeartOutlined className={styles.iconPink} />
-          <Button
-            type="link"
-            className={styles.nameButton}
-            onClick={() => navigate(`/patients/${record.id}`)}
-          >
-            {text}
-          </Button>
-        </Space>
-      ),
+      render: (text, record) => {
+        // Use a localized placeholder when the name is NULL so the row stays
+        // clickable. Microchip-only patients show "No name" rather than the
+        // chip number, since that's available in its own column.
+        const hasName = !!text;
+        const display = hasName ? text : t('entities:patient.noName', 'No name');
+        return (
+          <Space>
+            <HeartOutlined className={styles.iconPink} />
+            <Button
+              type="link"
+              className={styles.nameButton}
+              onClick={() => navigate(`/patients/${record.id}`)}
+              style={hasName ? undefined : { fontStyle: 'italic', opacity: 0.65 }}
+            >
+              {display}
+            </Button>
+          </Space>
+        );
+      },
     },
     {
       title: t('patients:tableColumns.species'),

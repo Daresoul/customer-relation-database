@@ -1,0 +1,80 @@
+name: E2E (Windows full-stack)
+
+# Layer 3 of the test pyramid (see docs/arc42-runtime-view.md). Runs the real
+# Tauri binary against a real SQLite DB on the self-hosted Windows runner.
+#
+# Triggers:
+#   - On push to main (so we catch regressions after merges)
+#   - On workflow_dispatch (manual run when investigating a flake)
+#   - NOT on every PR — the runs are slow and the runner is shared. PR-time
+#     coverage comes from Layers 1+2 which run on free cloud runners.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      run_smoke_only:
+        description: 'Run only smoke tests (faster)'
+        required: false
+        default: 'false'
+
+jobs:
+  e2e:
+    name: Tauri E2E on Windows
+    # Self-hosted Windows runner tagged "windows" + "e2e". The runner must
+    # have: VS Build Tools 2022, Rust stable, Node.js LTS, msedgedriver in
+    # PATH, and tauri-driver installed via `cargo install tauri-driver`.
+    # See WINDOWS_RUNNER_SETUP.md.
+    runs-on: [self-hosted, windows, e2e]
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify toolchain present
+        shell: pwsh
+        run: |
+          Write-Host "Node: $(node --version)"
+          Write-Host "npm: $(npm --version)"
+          Write-Host "Rust: $(rustc --version)"
+          Write-Host "Cargo: $(cargo --version)"
+          where.exe tauri-driver
+          where.exe msedgedriver
+
+      - name: Install frontend deps
+        shell: pwsh
+        run: npm ci
+
+      - name: Cache Rust build
+        uses: actions/cache@v4
+        with:
+          path: |
+            src-tauri/target
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+
+      - name: Build Tauri release binary
+        shell: pwsh
+        working-directory: src-tauri
+        run: cargo build --release
+
+      - name: Run full-stack E2E suite
+        shell: pwsh
+        env:
+          # Quiet down any noisy plugins
+          RUST_LOG: info
+        run: npx wdio run wdio.conf.ts
+
+      - name: Upload test artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-failure-artifacts
+          path: |
+            wdio-logs/
+            screenshots/
+            src-tauri/target/release/*.log
+          retention-days: 7

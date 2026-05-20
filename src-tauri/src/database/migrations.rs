@@ -54,6 +54,9 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, "036_rename_mnchip_chemistry_device", rename_mnchip_chemistry_device).await?;
     run_migration(pool, "037_create_pending_device_entries", create_pending_device_entries_table).await?;
     run_migration(pool, "038_add_prescription_notes", add_prescription_notes_column).await?;
+    run_migration(pool, "039_create_line_items", create_line_items_tables).await?;
+    run_migration(pool, "040_add_invoice_number", add_invoice_number_column).await?;
+    run_migration(pool, "041_relax_patient_required_fields", relax_patient_required_fields).await?;
 
     Ok(())
 }
@@ -2359,6 +2362,203 @@ fn add_prescription_notes_column(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std
                 .execute(pool)
                 .await?;
         }
+
+        Ok(())
+    })
+}
+
+// Migration 039: Create line items tables for medical record pricing
+fn create_line_items_tables(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        // Create line_item_templates table (reusable templates managed in Settings)
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS line_item_templates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                description TEXT,
+                default_price REAL NOT NULL,
+                currency_id INTEGER NOT NULL,
+                display_order INTEGER NOT NULL DEFAULT 0,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (currency_id) REFERENCES currencies(id)
+            )
+        "#)
+        .execute(pool)
+        .await?;
+
+        // Create index for active templates lookup
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_line_item_templates_active ON line_item_templates(is_active)")
+            .execute(pool)
+            .await?;
+
+        // Create trigger for updated_at
+        sqlx::query(r#"
+            CREATE TRIGGER IF NOT EXISTS update_line_item_templates_timestamp
+            AFTER UPDATE ON line_item_templates
+            BEGIN
+                UPDATE line_item_templates SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+            END
+        "#)
+        .execute(pool)
+        .await?;
+
+        // Create medical_record_line_items table (per-record items)
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS medical_record_line_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                medical_record_id INTEGER NOT NULL,
+                template_id INTEGER,
+                name TEXT NOT NULL,
+                description TEXT,
+                unit_price REAL NOT NULL,
+                currency_id INTEGER NOT NULL,
+                quantity INTEGER NOT NULL DEFAULT 1,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (medical_record_id) REFERENCES medical_records(id) ON DELETE CASCADE,
+                FOREIGN KEY (template_id) REFERENCES line_item_templates(id) ON DELETE SET NULL,
+                FOREIGN KEY (currency_id) REFERENCES currencies(id)
+            )
+        "#)
+        .execute(pool)
+        .await?;
+
+        // Create index for efficient lookup by medical record
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_medical_record_line_items_record ON medical_record_line_items(medical_record_id)")
+            .execute(pool)
+            .await?;
+
+        // Add discount_percent column to medical_records
+        let discount_col_exists: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM pragma_table_info('medical_records') WHERE name = 'discount_percent'"
+        )
+        .fetch_one(pool)
+        .await?;
+
+        if discount_col_exists.0 == 0 {
+            sqlx::query("ALTER TABLE medical_records ADD COLUMN discount_percent REAL")
+                .execute(pool)
+                .await?;
+        }
+
+        // Add manual_total column to medical_records
+        let manual_total_col_exists: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM pragma_table_info('medical_records') WHERE name = 'manual_total'"
+        )
+        .fetch_one(pool)
+        .await?;
+
+        if manual_total_col_exists.0 == 0 {
+            sqlx::query("ALTER TABLE medical_records ADD COLUMN manual_total REAL")
+                .execute(pool)
+                .await?;
+        }
+
+        Ok(())
+    })
+}
+
+// Migration 040: Add invoice_number column to medical_records for sequential invoice numbering
+fn add_invoice_number_column(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        let column_exists: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM pragma_table_info('medical_records') WHERE name = 'invoice_number'"
+        )
+        .fetch_one(pool)
+        .await?;
+
+        if column_exists.0 == 0 {
+            sqlx::query("ALTER TABLE medical_records ADD COLUMN invoice_number TEXT")
+                .execute(pool)
+                .await?;
+        }
+
+        Ok(())
+    })
+}
+
+/// Drop NOT NULL constraints on patients.name and patients.species_id so a
+/// chip-only patient can be created with no name or species. SQLite has no
+/// direct DROP NOT NULL, so we recreate the table inside a single transaction
+/// with foreign keys disabled — otherwise FK references from medical_records,
+/// appointments, and patient_households make the rename racy.
+fn relax_patient_required_fields(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        // Skip if both columns are already nullable
+        let still_required: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM pragma_table_info('patients') WHERE name IN ('name', 'species_id') AND \"notnull\" = 1"
+        )
+        .fetch_one(pool)
+        .await?;
+        if still_required.0 == 0 {
+            // If a previous run left patients_new lying around (in-progress
+            // recovery from a crash), drop it now that the schema is correct.
+            sqlx::query("DROP TABLE IF EXISTS patients_new").execute(pool).await?;
+            return Ok(());
+        }
+
+        // FK checks must be off during the table-swap or the rename can fail
+        // due to dangling references in other tables. PRAGMA has to be set
+        // outside the transaction.
+        sqlx::query("PRAGMA foreign_keys = OFF").execute(pool).await?;
+
+        let mut tx = pool.begin().await?;
+
+        sqlx::query("DROP TABLE IF EXISTS patients_new").execute(&mut *tx).await?;
+
+        sqlx::query(r#"
+            CREATE TABLE patients_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT CHECK(name IS NULL OR length(name) <= 100),
+                species_id INTEGER,
+                breed_id INTEGER,
+                date_of_birth DATE,
+                color TEXT,
+                gender TEXT CHECK(gender IN ('Male', 'Female', 'Unknown')),
+                weight DECIMAL(6,2) CHECK(weight IS NULL OR weight > 0),
+                microchip_id TEXT CHECK(microchip_id IS NULL OR length(microchip_id) <= 50),
+                medical_notes TEXT CHECK(medical_notes IS NULL OR length(medical_notes) <= 10000),
+                is_active BOOLEAN NOT NULL DEFAULT 1,
+                household_id INTEGER,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (species_id) REFERENCES species(id),
+                FOREIGN KEY (breed_id) REFERENCES breeds(id),
+                FOREIGN KEY (household_id) REFERENCES households(id)
+            )
+        "#).execute(&mut *tx).await?;
+
+        sqlx::query(r#"
+            INSERT INTO patients_new (
+                id, name, species_id, breed_id, date_of_birth, color,
+                gender, weight, microchip_id, medical_notes, is_active,
+                household_id, created_at, updated_at
+            )
+            SELECT
+                id, name, species_id, breed_id, date_of_birth, color,
+                gender, weight, microchip_id, medical_notes, is_active,
+                household_id, created_at, updated_at
+            FROM patients
+        "#).execute(&mut *tx).await?;
+
+        sqlx::query("DROP TABLE patients").execute(&mut *tx).await?;
+        sqlx::query("ALTER TABLE patients_new RENAME TO patients").execute(&mut *tx).await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_patients_species_id ON patients(species_id)").execute(&mut *tx).await?;
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_patients_breed_id ON patients(breed_id)").execute(&mut *tx).await?;
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_patients_household_id ON patients(household_id)").execute(&mut *tx).await?;
+        sqlx::query(r#"
+            CREATE TRIGGER IF NOT EXISTS update_patients_timestamp
+            AFTER UPDATE ON patients
+            BEGIN
+                UPDATE patients SET updated_at = CURRENT_TIMESTAMP
+                WHERE id = NEW.id;
+            END
+        "#).execute(&mut *tx).await?;
+
+        tx.commit().await?;
+        sqlx::query("PRAGMA foreign_keys = ON").execute(pool).await?;
 
         Ok(())
     })

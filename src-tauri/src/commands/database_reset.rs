@@ -434,8 +434,8 @@ pub async fn populate_database(
             };
 
             let dto = CreatePatientDto {
-                name: name.clone(),
-                species_id: *species_id,
+                name: Some(name.clone()),
+                species_id: Some(*species_id),
                 breed_id,
                 gender,
                 date_of_birth: None,
@@ -504,11 +504,14 @@ pub async fn populate_database(
                     description,
                     price,
                     currency_id,
+                    discount_percent: None,
+                    manual_total: None,
                     device_test_data: None,
                     device_type: None,
                     device_name: None,
                     device_data_list: None,
                     prescription_notes: None,
+                    line_items: None,
                 };
 
                 match MedicalRecordService::create_medical_record(&app, &sea_orm_pool, input).await {
@@ -564,11 +567,14 @@ pub async fn populate_database(
                     description,
                     price: None,
                     currency_id: None,
+                    discount_percent: None,
+                    manual_total: None,
                     device_test_data: None,
                     device_type: None,
                     device_name: None,
                     device_data_list: None,
                     prescription_notes: None,
+                    line_items: None,
                 };
 
                 match MedicalRecordService::create_medical_record(&app, &sea_orm_pool, input).await {

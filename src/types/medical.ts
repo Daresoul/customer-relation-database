@@ -1,5 +1,7 @@
 // Medical History Types
 
+import { MedicalRecordLineItem, CreateLineItemInput } from './lineItem';
+
 // Record types: 'procedure' (billable), 'note' (general notes), 'test_result' (device test data)
 export type RecordType = 'procedure' | 'note' | 'test_result';
 
@@ -13,6 +15,10 @@ export interface MedicalRecord {
   prescriptionNotes?: string; // Pharmacy/prescription notes for PDF generation
   price?: number;
   currencyId?: number;
+  // Line items pricing
+  discountPercent?: number;
+  manualTotal?: number;
+  lineItems?: MedicalRecordLineItem[];
   isArchived: boolean;
   createdAt: string;
   updatedAt: string;
@@ -73,6 +79,10 @@ export interface CreateMedicalRecordInput {
   prescriptionNotes?: string; // Pharmacy/prescription notes for PDF generation
   price?: number;
   currencyId?: number;
+  // Line items pricing
+  discountPercent?: number;
+  manualTotal?: number;
+  lineItems?: CreateLineItemInput[];
   // Optional device test data for PDF generation (legacy single device)
   deviceTestData?: any;
   deviceType?: string;
@@ -88,6 +98,10 @@ export interface UpdateMedicalRecordInput {
   prescriptionNotes?: string; // Pharmacy/prescription notes for PDF generation
   price?: number;
   currencyId?: number;
+  // Line items pricing
+  discountPercent?: number;
+  manualTotal?: number;
+  lineItems?: CreateLineItemInput[];
   isArchived?: boolean;
 }
 

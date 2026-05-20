@@ -5,7 +5,55 @@
 use sea_orm::{Database, DatabaseConnection, ConnectionTrait, DbBackend, Statement};
 use chrono::{DateTime, Utc, Duration, TimeZone};
 
-/// Create an in-memory SQLite database with full schema
+/// A fully-migrated test database backed by a unique temp file.
+///
+/// Holds the `TempDir` alongside the connection so the file is auto-deleted
+/// when the test goes out of scope. Each test gets its own DB → safe to run
+/// in parallel.
+pub struct TestDb {
+    pub db: DatabaseConnection,
+    _temp_dir: tempfile::TempDir,
+}
+
+impl std::ops::Deref for TestDb {
+    type Target = DatabaseConnection;
+    fn deref(&self) -> &Self::Target { &self.db }
+}
+
+/// Create a real production-schema SQLite DB for integration tests.
+///
+/// Uses a unique temp file (not `:memory:`) so the SeaORM connection and the
+/// sqlx pool underneath share the same data when we extract the latter to
+/// run the migrations. The file is cleaned up automatically when `TestDb` is
+/// dropped.
+///
+/// Prefer this over `create_test_db()` for anything that hits the data layer
+/// — `create_test_db()`'s hand-rolled schema is missing columns and drifts
+/// from production every time a migration lands.
+pub async fn create_test_db_with_migrations() -> TestDb {
+    let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let db_path = temp_dir.path().join("test.db");
+    let url = format!("sqlite://{}?mode=rwc", db_path.display());
+
+    let db = Database::connect(&url).await.expect("Failed to connect to test DB");
+
+    // Enable FKs *before* migrations so any test schema bug surfaces
+    db.execute_unprepared("PRAGMA foreign_keys = ON").await.expect("FK pragma");
+
+    // Run the real migration sequence via the underlying sqlx pool.
+    let sqlx_pool = db.get_sqlite_connection_pool().clone();
+    crate::database::migrations::run_migrations(&sqlx_pool)
+        .await
+        .expect("Migrations failed in test setup");
+
+    TestDb { db, _temp_dir: temp_dir }
+}
+
+/// Create an in-memory SQLite database with a hand-rolled minimal schema.
+///
+/// **Deprecated for new tests** — kept for the legacy appointments tests that
+/// were written against this fixture. New tests should use
+/// [`create_test_db_with_migrations`] so the schema mirrors production.
 pub async fn create_test_db() -> DatabaseConnection {
     let db = Database::connect("sqlite::memory:")
         .await

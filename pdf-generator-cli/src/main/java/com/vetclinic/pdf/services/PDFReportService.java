@@ -1589,6 +1589,634 @@ public class PDFReportService {
 
     // ==================== END PCR REPORT METHODS ====================
 
+    // ==================== SIMPLE REPORT FROM TEMPLATE ====================
+
+    /**
+     * Create a simple PDF report using the Rapport.pdf template.
+     * Overlays title and description onto the pre-designed template.
+     *
+     * @param title The report title to display after "Извештај:"
+     * @param description The description/content text
+     * @param outputPath The output file path for the generated PDF
+     * @return The generated PDF file
+     */
+    public File createSimpleReport(String title, String description, String outputPath)
+            throws IOException, DocumentException, CreatingDirectoryException {
+
+        // Create parent directory if it doesn't exist
+        File pdfFile = new File(outputPath);
+        File parentDir = pdfFile.getParentFile();
+        if (parentDir != null && !parentDir.exists()) {
+            boolean created = parentDir.mkdirs();
+            if (!created && !parentDir.exists()) {
+                throw new CreatingDirectoryException(parentDir.getAbsolutePath(), "Failed to create parent directory");
+            }
+        }
+
+        // Load the template from resources (works both from JAR and filesystem)
+        java.io.InputStream templateStream = Util.class.getResourceAsStream(Constants.REPORT_TEMPLATE);
+        if (templateStream == null) {
+            throw new IOException("Template not found: " + Constants.REPORT_TEMPLATE);
+        }
+        PdfReader reader = new PdfReader(templateStream);
+        PdfStamper stamper = new PdfStamper(reader, new FileOutputStream(pdfFile));
+
+        // Get the content layer to write on top of the template
+        PdfContentByte canvas = stamper.getOverContent(1);
+
+        // Get page dimensions
+        Rectangle pageSize = reader.getPageSize(1);
+        float pageWidth = pageSize.getWidth();
+        float pageHeight = pageSize.getHeight();
+
+        // Title position - after "Извештај:" label
+        // Positioned in the upper portion of the page, below the header
+        float titleX = 140; // After the "Извештај:" label
+        float titleY = pageHeight - 180; // Below the header area
+
+        // Add title text
+        Font titleFont = FontUtil.getMacedonianFont(14, FontUtil.DEFAULT_FONT_COLOR);
+        ColumnText titleColumn = new ColumnText(canvas);
+        titleColumn.setSimpleColumn(
+            titleX,
+            titleY - 30, // Lower bound
+            pageWidth - 50, // Right margin
+            titleY + 10 // Upper bound
+        );
+        Paragraph titleParagraph = new Paragraph(title, titleFont);
+        titleColumn.addElement(titleParagraph);
+        titleColumn.go();
+
+        // Description position - main content area
+        float descX = 50; // Left margin
+        float descY = titleY - 50; // Below title
+        float descWidth = pageWidth - 100; // Content width with margins
+        float descHeight = descY - 150; // Leave space for footer
+
+        // Add description text
+        Font descFont = FontUtil.getMacedonianFont(11, FontUtil.DEFAULT_FONT_COLOR);
+        ColumnText descColumn = new ColumnText(canvas);
+        descColumn.setSimpleColumn(
+            descX,
+            150, // Bottom margin (leave room for footer)
+            descX + descWidth,
+            descY
+        );
+        Paragraph descParagraph = new Paragraph(description, descFont);
+        descParagraph.setLeading(16); // Line spacing
+        descColumn.addElement(descParagraph);
+        descColumn.go();
+
+        // Add current date at the footer "Датум:" position
+        float dateX = 80;
+        float dateY = 95; // Near bottom of page
+        Font dateFont = FontUtil.getMacedonianFont(10, FontUtil.DEFAULT_FONT_COLOR);
+        ColumnText dateColumn = new ColumnText(canvas);
+        dateColumn.setSimpleColumn(dateX, dateY - 15, dateX + 100, dateY + 5);
+        Paragraph dateParagraph = new Paragraph(Util.getCurrentFormattedDate(), dateFont);
+        dateColumn.addElement(dateParagraph);
+        dateColumn.go();
+
+        // Close stamper and reader
+        stamper.close();
+        reader.close();
+
+        return pdfFile;
+    }
+
+    // ==================== PHARMACY NOTE FROM TEMPLATE ====================
+
+    /**
+     * Create a pharmacy note PDF using the pharmacy_note.pdf template.
+     * Overlays prescription text onto the pre-designed template.
+     * The template already contains header, "Rp.", signature line, and footer.
+     * Only the prescription content text is overlaid dynamically.
+     *
+     * @param prescriptionText The prescription/medication text to overlay
+     * @param outputPath The output file path for the generated PDF
+     * @return The generated PDF file
+     */
+    public File createPharmacyNote(String prescriptionText, String outputPath)
+            throws IOException, DocumentException, CreatingDirectoryException {
+
+        // Create parent directory if it doesn't exist
+        File pdfFile = new File(outputPath);
+        File parentDir = pdfFile.getParentFile();
+        if (parentDir != null && !parentDir.exists()) {
+            boolean created = parentDir.mkdirs();
+            if (!created && !parentDir.exists()) {
+                throw new CreatingDirectoryException(parentDir.getAbsolutePath(), "Failed to create parent directory");
+            }
+        }
+
+        // Load the pharmacy note template from resources
+        java.io.InputStream templateStream = Util.class.getResourceAsStream(Constants.PHARMACY_NOTE_TEMPLATE);
+        if (templateStream == null) {
+            throw new IOException("Template not found: " + Constants.PHARMACY_NOTE_TEMPLATE);
+        }
+        PdfReader reader = new PdfReader(templateStream);
+        PdfStamper stamper = new PdfStamper(reader, new FileOutputStream(pdfFile));
+
+        // Get the content layer to write on top of the template
+        PdfContentByte canvas = stamper.getOverContent(1);
+
+        // Get page dimensions
+        Rectangle pageSize = reader.getPageSize(1);
+        float pageWidth = pageSize.getWidth();
+        float pageHeight = pageSize.getHeight();
+
+        // Prescription text area - positioned below the "Rp." marker
+        // and above the signature/footer area.
+        // Template layout (from top): header ~105pt, Rp. ~130pt, content, signature ~770pt, footer ~780pt
+        // In iText coords (y from bottom):
+        float contentLeft = 180;  // Indented past "Rp."
+        float contentRight = pageWidth - 60;
+        float contentTop = pageHeight - 155;  // Below the "Rp." area
+        float contentBottom = 115;  // Above signature/footer
+
+        Font prescriptionFont = FontUtil.getMacedonianFont(12, FontUtil.DEFAULT_FONT_COLOR);
+        ColumnText contentColumn = new ColumnText(canvas);
+        contentColumn.setSimpleColumn(contentLeft, contentBottom, contentRight, contentTop);
+        Paragraph contentParagraph = new Paragraph(prescriptionText, prescriptionFont);
+        contentParagraph.setLeading(18); // Line spacing for readability
+        contentColumn.addElement(contentParagraph);
+        contentColumn.go();
+
+        // Close stamper and reader
+        stamper.close();
+        reader.close();
+
+        return pdfFile;
+    }
+
+    /**
+     * Create a simple PDF report with full patient information.
+     *
+     * @param title The report title
+     * @param description The description/content text
+     * @param patientName Patient name
+     * @param ownerName Owner name
+     * @param species Species (e.g., "Dog", "Cat")
+     * @param microchipId Microchip/serial number
+     * @param gender Gender
+     * @param dateOfBirth Date of birth
+     * @param outputPath The output file path
+     * @return The generated PDF file
+     */
+    public File createSimpleReportWithPatient(String title, String description,
+                                               String patientName, String ownerName,
+                                               String species, String microchipId,
+                                               String gender, String dateOfBirth,
+                                               String outputPath)
+            throws IOException, DocumentException, CreatingDirectoryException {
+
+        // Create parent directory if it doesn't exist
+        File pdfFile = new File(outputPath);
+        File parentDir = pdfFile.getParentFile();
+        if (parentDir != null && !parentDir.exists()) {
+            boolean created = parentDir.mkdirs();
+            if (!created && !parentDir.exists()) {
+                throw new CreatingDirectoryException(parentDir.getAbsolutePath(), "Failed to create parent directory");
+            }
+        }
+
+        // Load the template from resources (works both from JAR and filesystem)
+        java.io.InputStream templateStream = Util.class.getResourceAsStream(Constants.REPORT_TEMPLATE);
+        if (templateStream == null) {
+            throw new IOException("Template not found: " + Constants.REPORT_TEMPLATE);
+        }
+        PdfReader reader = new PdfReader(templateStream);
+        PdfStamper stamper = new PdfStamper(reader, new FileOutputStream(pdfFile));
+
+        PdfContentByte canvas = stamper.getOverContent(1);
+
+        Rectangle pageSize = reader.getPageSize(1);
+        float pageWidth = pageSize.getWidth();
+        float pageHeight = pageSize.getHeight();
+
+        // Content box boundaries (adjust to fit within template's content area)
+        float leftMargin = 55;
+        float rightMargin = pageWidth - 55;
+
+        // Fixed starting Y position for patient info (aligned with template's content area)
+        float patientInfoStartY = pageHeight - 230;  // Fixed start position - content grows DOWN from here
+
+        // Patient info section FIRST - larger fonts with bold labels
+        float infoY = patientInfoStartY;
+        Font labelFont = FontUtil.getMacedonianFont(12, FontUtil.CYAN_DARK_FONT_COLOR);
+        labelFont.setStyle(Font.BOLD);
+        Font valueFont = FontUtil.getMacedonianFont(12, FontUtil.DEFAULT_FONT_COLOR);
+
+        // Row 1: Patient name and Owner
+        if (patientName != null && !patientName.isEmpty()) {
+            Paragraph p = new Paragraph();
+            p.add(new Chunk("Пациент: ", labelFont));
+            p.add(new Chunk(patientName, valueFont));
+            if (ownerName != null && !ownerName.isEmpty()) {
+                p.add(new Chunk("          Сопственик: ", labelFont));
+                p.add(new Chunk(ownerName, valueFont));
+            }
+            ColumnText col = new ColumnText(canvas);
+            col.setSimpleColumn(leftMargin, infoY - 18, rightMargin, infoY + 2);
+            col.addElement(p);
+            col.go();
+            infoY -= 22;
+        } else if (ownerName != null && !ownerName.isEmpty()) {
+            Paragraph p = new Paragraph();
+            p.add(new Chunk("Сопственик: ", labelFont));
+            p.add(new Chunk(ownerName, valueFont));
+            ColumnText col = new ColumnText(canvas);
+            col.setSimpleColumn(leftMargin, infoY - 18, rightMargin, infoY + 2);
+            col.addElement(p);
+            col.go();
+            infoY -= 22;
+        }
+
+        // Row 2: Species, Gender
+        boolean hasRow2 = (species != null && !species.isEmpty()) || (gender != null && !gender.isEmpty());
+        if (hasRow2) {
+            Paragraph p = new Paragraph();
+            if (species != null && !species.isEmpty()) {
+                p.add(new Chunk("Вид: ", labelFont));
+                p.add(new Chunk(species, valueFont));
+            }
+            if (gender != null && !gender.isEmpty()) {
+                if (species != null && !species.isEmpty()) p.add(new Chunk("          ", valueFont));
+                p.add(new Chunk("Пол: ", labelFont));
+                p.add(new Chunk(gender, valueFont));
+            }
+            ColumnText col = new ColumnText(canvas);
+            col.setSimpleColumn(leftMargin, infoY - 18, rightMargin, infoY + 2);
+            col.addElement(p);
+            col.go();
+            infoY -= 22;
+        }
+
+        // Row 3: Microchip and Date of Birth
+        boolean hasRow3 = (microchipId != null && !microchipId.isEmpty()) || (dateOfBirth != null && !dateOfBirth.isEmpty());
+        if (hasRow3) {
+            Paragraph p = new Paragraph();
+            if (microchipId != null && !microchipId.isEmpty()) {
+                p.add(new Chunk("Микрочип: ", labelFont));
+                p.add(new Chunk(microchipId, valueFont));
+            }
+            if (dateOfBirth != null && !dateOfBirth.isEmpty()) {
+                if (microchipId != null && !microchipId.isEmpty()) p.add(new Chunk("          ", valueFont));
+                p.add(new Chunk("Роден: ", labelFont));
+                p.add(new Chunk(dateOfBirth, valueFont));
+            }
+            ColumnText col = new ColumnText(canvas);
+            col.setSimpleColumn(leftMargin, infoY - 18, rightMargin, infoY + 2);
+            col.addElement(p);
+            col.go();
+            infoY -= 22;
+        }
+
+        // Space before title
+        infoY -= 10;
+
+        // Title - AFTER patient info
+        Font titleFont = FontUtil.getMacedonianFont(16, FontUtil.DEFAULT_FONT_COLOR);
+        titleFont.setStyle(Font.BOLD);
+        ColumnText titleColumn = new ColumnText(canvas);
+        titleColumn.setSimpleColumn(leftMargin, infoY - 25, rightMargin, infoY + 5);
+        Paragraph titleParagraph = new Paragraph(title, titleFont);
+        titleColumn.addElement(titleParagraph);
+        titleColumn.go();
+        infoY -= 30;
+
+        // Description area - fits within content box (after title)
+        float descY = infoY - 5;
+        float descBottom = 130;  // Above footer area
+        Font descFont = FontUtil.getMacedonianFont(11, FontUtil.DEFAULT_FONT_COLOR);
+        ColumnText descColumn = new ColumnText(canvas);
+        descColumn.setSimpleColumn(leftMargin, descBottom, rightMargin, descY);
+        Paragraph descParagraph = new Paragraph(description, descFont);
+        descParagraph.setLeading(15);
+        descColumn.addElement(descParagraph);
+        descColumn.go();
+
+        // Date - positioned next to "Датум:" field in footer (bottom left of template)
+        float dateX = 110;  // After "Датум:" label
+        float dateY = 136;  // Footer line
+        Font dateFont = FontUtil.getMacedonianFont(11, FontUtil.DEFAULT_FONT_COLOR);
+        ColumnText dateColumn = new ColumnText(canvas);
+        dateColumn.setSimpleColumn(dateX, dateY - 12, dateX + 100, dateY + 8);
+        Paragraph dateParagraph = new Paragraph(Util.getCurrentFormattedDate(), dateFont);
+        dateColumn.addElement(dateParagraph);
+        dateColumn.go();
+
+        stamper.close();
+        reader.close();
+
+        return pdfFile;
+    }
+
+    // ==================== END SIMPLE REPORT FROM TEMPLATE ====================
+
+    // ==================== INVOICE FROM TEMPLATE ====================
+
+    /**
+     * Line item data for invoice generation.
+     */
+    public static class InvoiceLineItem {
+        public String name;
+        public int quantity;
+        public double unitPrice;
+
+        public InvoiceLineItem(String name, int quantity, double unitPrice) {
+            this.name = name;
+            this.quantity = quantity;
+            this.unitPrice = unitPrice;
+        }
+
+        public double getTotal() {
+            return quantity * unitPrice;
+        }
+    }
+
+    /**
+     * Create an invoice PDF using the invoice.pdf template.
+     * Overlays dynamic content: date, invoice number, recipient, line items table, and totals.
+     *
+     * @param date The invoice date string
+     * @param invoiceNumber The invoice number
+     * @param recipient The recipient name/company (ЗА field)
+     * @param lineItems List of line items
+     * @param discountPercent Discount percentage (0 if no discount)
+     * @param currency Currency label (e.g., "ден")
+     * @param outputPath The output file path
+     * @return The generated PDF file
+     */
+    public File createInvoice(String date, String invoiceNumber, String recipient,
+                              List<InvoiceLineItem> lineItems, double discountPercent,
+                              String currency, String outputPath)
+            throws IOException, DocumentException, CreatingDirectoryException {
+
+        // Create parent directory if it doesn't exist
+        File pdfFile = new File(outputPath);
+        File parentDir = pdfFile.getParentFile();
+        if (parentDir != null && !parentDir.exists()) {
+            boolean created = parentDir.mkdirs();
+            if (!created && !parentDir.exists()) {
+                throw new CreatingDirectoryException(parentDir.getAbsolutePath(), "Failed to create parent directory");
+            }
+        }
+
+        // Load the invoice template
+        java.io.InputStream templateStream = Util.class.getResourceAsStream(Constants.INVOICE_TEMPLATE);
+        if (templateStream == null) {
+            throw new IOException("Template not found: " + Constants.INVOICE_TEMPLATE);
+        }
+        PdfReader reader = new PdfReader(templateStream);
+        PdfStamper stamper = new PdfStamper(reader, new FileOutputStream(pdfFile));
+
+        PdfContentByte canvas = stamper.getOverContent(1);
+
+        Rectangle pageSize = reader.getPageSize(1);
+        float pageWidth = pageSize.getWidth();
+        float pageHeight = pageSize.getHeight();
+
+        // --- Fill in form field VALUES only (labels already in template) ---
+        // Template label positions (PDF coords from bottom):
+        //   "Датум:" value space at X≈96, Y≈657
+        //   "Фактура бр." value space at X≈117, Y≈637
+        //   "ЗА" value space at X≈516, Y≈664
+        Font fieldFont = FontUtil.getMacedonianFont(10, FontUtil.DEFAULT_FONT_COLOR);
+
+        ColumnText.showTextAligned(canvas, Element.ALIGN_LEFT,
+                new Phrase(date, fieldFont), 96f, 657f, 0);
+        ColumnText.showTextAligned(canvas, Element.ALIGN_LEFT,
+                new Phrase(invoiceNumber, fieldFont), 117f, 637.3f, 0);
+        ColumnText.showTextAligned(canvas, Element.ALIGN_LEFT,
+                new Phrase(recipient, fieldFont), 350f, 650f, 0);
+
+        // --- Draw the table dynamically ---
+        float tableLeft = 42;
+        float tableRight = pageWidth - 42;
+        float tableWidth = tableRight - tableLeft;
+        float tableStartY = 612;
+        float rowHeight = 22f;
+
+        // Column widths (proportional)
+        float colNum = 55;       // РЕД. БРОЈ
+        float colTotal = 80;     // ВКУПНО
+        float colPrice = 80;     // ЕД. ЦЕНА
+        float colQty = 75;       // КОЛИЧИНА
+        float colDesc = tableWidth - colNum - colTotal - colPrice - colQty;  // ОПИС (remainder)
+
+        float[] colX = {
+            tableLeft,
+            tableLeft + colNum,
+            tableLeft + colNum + colDesc,
+            tableLeft + colNum + colDesc + colQty,
+            tableLeft + colNum + colDesc + colQty + colPrice
+        };
+
+        Font headerFont = FontUtil.getMacedonianFont(9, FontUtil.CYAN_DARK_FONT_COLOR);
+        Font cellFont = FontUtil.getMacedonianFont(10, FontUtil.DEFAULT_FONT_COLOR);
+        Font boldFont = FontUtil.getMacedonianFont(10, FontUtil.DEFAULT_FONT_COLOR);
+        boldFont.setStyle(Font.BOLD);
+        Font totalLabelFont = FontUtil.getMacedonianFont(11, FontUtil.CYAN_DARK_FONT_COLOR);
+        totalLabelFont.setStyle(Font.BOLD);
+        Font totalValueFont = FontUtil.getMacedonianFont(11, FontUtil.DEFAULT_FONT_COLOR);
+        totalValueFont.setStyle(Font.BOLD);
+
+        // Light teal for alternating rows (lighter than brand color)
+        BaseColor lightTeal = new BaseColor(220, 245, 243);
+
+        float currentY = tableStartY;
+
+        // --- Header row ---
+        // Header background
+        canvas.saveState();
+        canvas.setColorFill(BaseColor.WHITE);
+        canvas.rectangle(tableLeft, currentY - rowHeight, tableWidth, rowHeight);
+        canvas.fill();
+        canvas.restoreState();
+
+        // Draw thin line under header
+        canvas.saveState();
+        canvas.setColorStroke(Util.CYAN_COLOR);
+        canvas.setLineWidth(0.5f);
+        canvas.moveTo(tableLeft, currentY - rowHeight);
+        canvas.lineTo(tableRight, currentY - rowHeight);
+        canvas.stroke();
+        canvas.restoreState();
+
+        String[] headers = {"РЕД. БРОЈ", "ОПИС", "КОЛИЧИНА", "ЕД. ЦЕНА", "ВКУПНО"};
+        int[] headerAligns = {Element.ALIGN_LEFT, Element.ALIGN_LEFT, Element.ALIGN_CENTER, Element.ALIGN_CENTER, Element.ALIGN_CENTER};
+        float[] headerXLeft = {colX[0] + 4, colX[1] + 4, colX[2], colX[3], colX[4]};
+        float[] headerXRight = {colX[0] + colNum, colX[1] + colDesc, colX[2] + colQty, colX[3] + colPrice, colX[4] + colTotal};
+
+        for (int i = 0; i < headers.length; i++) {
+            ColumnText ct = new ColumnText(canvas);
+            ct.setSimpleColumn(headerXLeft[i], currentY - rowHeight, headerXRight[i], currentY);
+            Paragraph p = new Paragraph(headers[i], headerFont);
+            p.setAlignment(headerAligns[i]);
+            ct.addElement(p);
+            ct.go();
+        }
+
+        currentY -= rowHeight;
+
+        // --- Line item rows ---
+        double subtotal = 0;
+        for (int i = 0; i < lineItems.size(); i++) {
+            InvoiceLineItem item = lineItems.get(i);
+            double rowTotal = item.getTotal();
+            subtotal += rowTotal;
+
+            // Alternating row background
+            if (i % 2 == 0) {
+                canvas.saveState();
+                canvas.setColorFill(lightTeal);
+                canvas.rectangle(tableLeft, currentY - rowHeight, tableWidth, rowHeight);
+                canvas.fill();
+                canvas.restoreState();
+            }
+
+            // Row number
+            ColumnText numCol = new ColumnText(canvas);
+            numCol.setSimpleColumn(colX[0] + 4, currentY - rowHeight, colX[0] + colNum, currentY);
+            numCol.addElement(new Paragraph(String.valueOf(i + 1), cellFont));
+            numCol.go();
+
+            // Description (name)
+            ColumnText descCol = new ColumnText(canvas);
+            descCol.setSimpleColumn(colX[1] + 4, currentY - rowHeight, colX[1] + colDesc - 4, currentY);
+            descCol.addElement(new Paragraph(item.name, cellFont));
+            descCol.go();
+
+            // Quantity
+            ColumnText qtyCol = new ColumnText(canvas);
+            qtyCol.setSimpleColumn(colX[2], currentY - rowHeight, colX[2] + colQty, currentY);
+            Paragraph qtyP = new Paragraph(String.valueOf(item.quantity), cellFont);
+            qtyP.setAlignment(Element.ALIGN_CENTER);
+            qtyCol.addElement(qtyP);
+            qtyCol.go();
+
+            // Unit Price
+            ColumnText priceCol = new ColumnText(canvas);
+            priceCol.setSimpleColumn(colX[3], currentY - rowHeight, colX[3] + colPrice, currentY);
+            Paragraph priceP = new Paragraph(formatAmount(item.unitPrice), cellFont);
+            priceP.setAlignment(Element.ALIGN_CENTER);
+            priceCol.addElement(priceP);
+            priceCol.go();
+
+            // Row Total
+            ColumnText totalCol = new ColumnText(canvas);
+            totalCol.setSimpleColumn(colX[4], currentY - rowHeight, colX[4] + colTotal, currentY);
+            Paragraph totalP = new Paragraph(formatAmount(rowTotal), cellFont);
+            totalP.setAlignment(Element.ALIGN_CENTER);
+            totalCol.addElement(totalP);
+            totalCol.go();
+
+            currentY -= rowHeight;
+        }
+
+        // Draw line under the last row
+        canvas.saveState();
+        canvas.setColorStroke(Util.CYAN_COLOR);
+        canvas.setLineWidth(0.5f);
+        canvas.moveTo(tableLeft, currentY);
+        canvas.lineTo(tableRight, currentY);
+        canvas.stroke();
+        canvas.restoreState();
+
+        // --- Totals section ---
+        float totalsLabelRight = colX[3] + colPrice;
+        float totalsValueLeft = colX[4];
+        float totalsValueRight = colX[4] + colTotal;
+        float totalsY = currentY - 10;
+
+        // Subtotal row
+        ColumnText subtotalLabelCol = new ColumnText(canvas);
+        subtotalLabelCol.setSimpleColumn(totalsLabelRight - 120, totalsY - 18, totalsLabelRight, totalsY);
+        Paragraph subtotalLabelP = new Paragraph("Вкупно:", totalLabelFont);
+        subtotalLabelP.setAlignment(Element.ALIGN_RIGHT);
+        subtotalLabelCol.addElement(subtotalLabelP);
+        subtotalLabelCol.go();
+
+        ColumnText subtotalValCol = new ColumnText(canvas);
+        subtotalValCol.setSimpleColumn(totalsValueLeft, totalsY - 18, totalsValueRight, totalsY);
+        Paragraph subtotalValP = new Paragraph(formatAmount(subtotal) + " " + currency, totalValueFont);
+        subtotalValP.setAlignment(Element.ALIGN_CENTER);
+        subtotalValCol.addElement(subtotalValP);
+        subtotalValCol.go();
+
+        totalsY -= 20;
+
+        // Discount row (only if discount > 0)
+        if (discountPercent > 0) {
+            double discountAmount = subtotal * discountPercent / 100.0;
+
+            ColumnText discLabelCol = new ColumnText(canvas);
+            discLabelCol.setSimpleColumn(totalsLabelRight - 160, totalsY - 18, totalsLabelRight, totalsY);
+            Paragraph discLabelP = new Paragraph("Попуст (" + formatAmount(discountPercent) + "%):", totalLabelFont);
+            discLabelP.setAlignment(Element.ALIGN_RIGHT);
+            discLabelCol.addElement(discLabelP);
+            discLabelCol.go();
+
+            ColumnText discValCol = new ColumnText(canvas);
+            discValCol.setSimpleColumn(totalsValueLeft, totalsY - 18, totalsValueRight, totalsY);
+            Paragraph discValP = new Paragraph("-" + formatAmount(discountAmount) + " " + currency, totalValueFont);
+            discValP.setAlignment(Element.ALIGN_CENTER);
+            discValCol.addElement(discValP);
+            discValCol.go();
+
+            totalsY -= 30;
+
+            // Grand total with discount
+            double grandTotal = subtotal - discountAmount;
+
+            // Draw line above grand total
+            canvas.saveState();
+            canvas.setColorStroke(Util.CYAN_DARK_COLOR);
+            canvas.setLineWidth(1f);
+            canvas.moveTo(totalsLabelRight - 160, totalsY + 5);
+            canvas.lineTo(totalsValueRight, totalsY + 5);
+            canvas.stroke();
+            canvas.restoreState();
+
+            Font grandTotalLabelFont = FontUtil.getMacedonianFont(12, FontUtil.CYAN_DARK_FONT_COLOR);
+            grandTotalLabelFont.setStyle(Font.BOLD);
+            Font grandTotalValueFont = FontUtil.getMacedonianFont(12, FontUtil.DEFAULT_FONT_COLOR);
+            grandTotalValueFont.setStyle(Font.BOLD);
+
+            ColumnText grandLabelCol = new ColumnText(canvas);
+            grandLabelCol.setSimpleColumn(totalsLabelRight - 160, totalsY - 20, totalsLabelRight, totalsY);
+            Paragraph grandLabelP = new Paragraph("За наплата:", grandTotalLabelFont);
+            grandLabelP.setAlignment(Element.ALIGN_RIGHT);
+            grandLabelCol.addElement(grandLabelP);
+            grandLabelCol.go();
+
+            ColumnText grandValCol = new ColumnText(canvas);
+            grandValCol.setSimpleColumn(totalsValueLeft, totalsY - 20, totalsValueRight, totalsY);
+            Paragraph grandValP = new Paragraph(formatAmount(grandTotal) + " " + currency, grandTotalValueFont);
+            grandValP.setAlignment(Element.ALIGN_CENTER);
+            grandValCol.addElement(grandValP);
+            grandValCol.go();
+        }
+
+        stamper.close();
+        reader.close();
+
+        return pdfFile;
+    }
+
+    /**
+     * Format a numeric amount for display (no trailing zeros for whole numbers).
+     */
+    private String formatAmount(double amount) {
+        if (amount == Math.floor(amount) && !Double.isInfinite(amount)) {
+            return String.format("%.0f", amount);
+        }
+        return String.format("%.2f", amount);
+    }
+
+    // ==================== END INVOICE FROM TEMPLATE ====================
+
     public static PDFReportService getInstance() {
         return instance;
     }

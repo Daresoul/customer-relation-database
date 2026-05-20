@@ -42,11 +42,23 @@ dirs = "5.0"
 log = "0.4"
 tauri-plugin-log = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "v1" }
 tauri-plugin-autostart = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "v1" }
+sentry = "0.41"
+# Pin transitive `time` below 0.3.47 — newer versions bumped MSRV to 1.88,
+# but our toolchain is 1.86. Bump along with sentry/rustc when upgrading.
+time = "=0.3.36"
+# Generates TypeScript interfaces from #[derive(TS)] structs. The derive is a
+# no-op at runtime in production; tests under tests/ts_gen.rs invoke
+# `<Type as TS>::export()` to emit .ts files into src/types/generated/.
+ts-rs = { version = "10", features = ["chrono-impl", "serde-compat"] }
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.52", features = ["Win32_UI_Shell", "Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
 dunce = "1.0" # Convert Windows UNC paths to normal paths for Java compatibility
 winreg = "0.52"
+
+[dev-dependencies]
+# Unique temp files/dirs per test — cleans up on drop so parallel tests don't collide.
+tempfile = "3.10"
 
 [features]
 default = ["custom-protocol"]

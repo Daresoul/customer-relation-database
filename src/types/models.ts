@@ -4,8 +4,8 @@
 
 export interface Patient {
   id: number;
-  name: string;
-  species: string;
+  name?: string;
+  species?: string;
   breed?: string;
   dateOfBirth?: string;
   color?: string;

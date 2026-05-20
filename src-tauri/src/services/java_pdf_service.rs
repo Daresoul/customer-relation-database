@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::process::Command;
+use std::process::{Command, Stdio};
 #[allow(unused_imports)]
 use chrono::{DateTime, Utc};
 use serde::{Serialize, Deserialize};
@@ -140,10 +140,7 @@ impl JavaPdfService {
         log::info!("   📂 Output path: {}", output_path);
 
         // Call Java JAR
-        let output = Command::new("java")
-            .arg("-jar")
-            .arg(&jar_path)
-            .arg(&input_json_path)
+        let output = Self::create_java_command(&jar_path, &input_json_path)
             .output()
             .map_err(|e| format!("Failed to execute Java: {}", e))?;
 
@@ -170,6 +167,40 @@ impl JavaPdfService {
 
         log::info!("✅ Java PDF generated successfully");
         Ok(())
+    }
+
+    /// Create a Java command configured to prevent macOS focus-stealing.
+    /// Sets headless mode flags, redirects stdin to null, and on macOS
+    /// creates a new process group to isolate the child process.
+    fn create_java_command(jar_path: &PathBuf, input_json_path: &PathBuf) -> Command {
+        let mut cmd = Command::new("java");
+        cmd.arg("-Djava.awt.headless=true")
+            .arg("-Dapple.awt.UIElement=true")
+            .arg("-Djava.awt.GraphicsEnvironment=sun.java2d.HeadlessGraphicsEnvironment")
+            .arg("-jar")
+            .arg(jar_path)
+            .arg(input_json_path)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+
+        // On macOS/Linux, create a new process group so the child
+        // doesn't inherit the parent's window session
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            cmd.process_group(0);
+        }
+
+        // On Windows, prevent a console window from flashing
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            cmd.creation_flags(CREATE_NO_WINDOW);
+        }
+
+        cmd
     }
 
     /// Get the path to the JAR file
@@ -271,4 +302,237 @@ impl JavaPdfService {
             _ => device_type.to_string(), // Pass through unknown types
         }
     }
+
+    /// Generate a simple PDF report using the template (Rapport.pdf)
+    /// This creates a report with title and description overlaid on the clinic letterhead
+    pub fn generate_simple_report(
+        app_handle: &tauri::AppHandle,
+        output_path: &str,
+        title: &str,
+        description: &str,
+        patient_data: Option<&crate::services::device_pdf_service::PatientData>,
+    ) -> Result<(), String> {
+        log::info!("☕ Generating simple PDF report using Java JAR...");
+
+        // Build JSON input for simple report mode
+        let mut json_obj = serde_json::json!({
+            "report_type": "simple",
+            "title": title,
+            "description": description,
+            "output_path": output_path
+        });
+
+        // Add patient info if provided
+        if let Some(patient) = patient_data {
+            json_obj["patient"] = serde_json::json!({
+                "name": patient.name,
+                "owner": patient.owner,
+                "species": patient.species,
+                "microchip_id": patient.microchip_id,
+                "gender": patient.gender,
+                "date_of_birth": patient.date_of_birth
+            });
+        }
+
+        // Create temp JSON file for input
+        let temp_dir = std::env::temp_dir();
+        let input_json_path = temp_dir.join(format!("simple_report_input_{}.json", Utc::now().timestamp()));
+
+        // Write JSON to temp file
+        let json_str = serde_json::to_string_pretty(&json_obj)
+            .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
+
+        fs::write(&input_json_path, json_str)
+            .map_err(|e| format!("Failed to write temp JSON file: {}", e))?;
+
+        log::debug!("   📄 Simple report input JSON created: {:?}", input_json_path);
+
+        // Get JAR path
+        let jar_path = Self::get_jar_path(app_handle)?;
+
+        log::info!("   ☕ JAR path: {:?}", jar_path);
+        log::info!("   📂 Output path: {}", output_path);
+
+        // Call Java JAR
+        let output = Self::create_java_command(&jar_path, &input_json_path)
+            .output()
+            .map_err(|e| format!("Failed to execute Java: {}", e))?;
+
+        // Clean up temp JSON file
+        let _ = fs::remove_file(&input_json_path);
+
+        // Check if command was successful
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            return Err(format!(
+                "Java JAR failed:\nSTDOUT: {}\nSTDERR: {}",
+                stdout, stderr
+            ));
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        log::info!("   ✅ Java output: {}", stdout);
+
+        // Verify PDF was created
+        if !PathBuf::from(output_path).exists() {
+            return Err(format!("PDF was not created at: {}", output_path));
+        }
+
+        log::info!("✅ Simple report PDF generated successfully");
+        Ok(())
+    }
+
+    /// Generate an invoice PDF using the invoice.pdf template
+    /// Creates an invoice with dynamic line items table, totals, and form fields
+    pub fn generate_invoice(
+        app_handle: &tauri::AppHandle,
+        output_path: &str,
+        date: &str,
+        invoice_number: &str,
+        recipient: &str,
+        line_items: &[InvoiceLineItem],
+        discount_percent: f64,
+        currency: &str,
+    ) -> Result<(), String> {
+        log::info!("☕ Generating invoice PDF using Java JAR...");
+
+        // Build line items JSON array
+        let items_json: Vec<serde_json::Value> = line_items
+            .iter()
+            .map(|item| {
+                serde_json::json!({
+                    "name": item.name,
+                    "quantity": item.quantity,
+                    "unit_price": item.unit_price
+                })
+            })
+            .collect();
+
+        let json_obj = serde_json::json!({
+            "report_type": "invoice",
+            "date": date,
+            "invoice_number": invoice_number,
+            "recipient": recipient,
+            "line_items": items_json,
+            "discount_percent": discount_percent,
+            "currency": currency,
+            "output_path": output_path
+        });
+
+        // Create temp JSON file for input
+        let temp_dir = std::env::temp_dir();
+        let input_json_path = temp_dir.join(format!("invoice_input_{}.json", Utc::now().timestamp()));
+
+        // Write JSON to temp file
+        let json_str = serde_json::to_string_pretty(&json_obj)
+            .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
+
+        fs::write(&input_json_path, &json_str)
+            .map_err(|e| format!("Failed to write temp JSON file: {}", e))?;
+
+        log::debug!("   📄 Invoice input JSON created: {:?}", input_json_path);
+
+        // Get JAR path
+        let jar_path = Self::get_jar_path(app_handle)?;
+
+        log::info!("   ☕ JAR path: {:?}", jar_path);
+        log::info!("   📂 Output path: {}", output_path);
+
+        // Call Java JAR
+        let output = Self::create_java_command(&jar_path, &input_json_path)
+            .output()
+            .map_err(|e| format!("Failed to execute Java: {}", e))?;
+
+        // Clean up temp JSON file
+        let _ = fs::remove_file(&input_json_path);
+
+        // Check if command was successful
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            return Err(format!(
+                "Java JAR failed:\nSTDOUT: {}\nSTDERR: {}",
+                stdout, stderr
+            ));
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        log::info!("   ✅ Java output: {}", stdout);
+
+        // Verify PDF was created
+        if !PathBuf::from(output_path).exists() {
+            return Err(format!("PDF was not created at: {}", output_path));
+        }
+
+        log::info!("✅ Invoice PDF generated successfully");
+        Ok(())
+    }
+
+    /// Generate a pharmacy note PDF using the pharmacy_note.pdf template
+    /// Overlays prescription text onto the pre-designed template
+    pub fn generate_pharmacy_note(
+        app_handle: &tauri::AppHandle,
+        output_path: &str,
+        prescription_text: &str,
+    ) -> Result<(), String> {
+        log::info!("☕ Generating pharmacy note PDF using Java JAR...");
+
+        let json_obj = serde_json::json!({
+            "report_type": "pharmacy_note",
+            "prescription_text": prescription_text,
+            "output_path": output_path
+        });
+
+        // Create temp JSON file for input
+        let temp_dir = std::env::temp_dir();
+        let input_json_path = temp_dir.join(format!("pharmacy_note_input_{}.json", Utc::now().timestamp()));
+
+        let json_str = serde_json::to_string_pretty(&json_obj)
+            .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
+
+        fs::write(&input_json_path, &json_str)
+            .map_err(|e| format!("Failed to write temp JSON file: {}", e))?;
+
+        log::debug!("   📄 Pharmacy note input JSON created: {:?}", input_json_path);
+
+        let jar_path = Self::get_jar_path(app_handle)?;
+
+        log::info!("   ☕ JAR path: {:?}", jar_path);
+        log::info!("   📂 Output path: {}", output_path);
+
+        let output = Self::create_java_command(&jar_path, &input_json_path)
+            .output()
+            .map_err(|e| format!("Failed to execute Java: {}", e))?;
+
+        let _ = fs::remove_file(&input_json_path);
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            return Err(format!(
+                "Java JAR failed:\nSTDOUT: {}\nSTDERR: {}",
+                stdout, stderr
+            ));
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        log::info!("   ✅ Java output: {}", stdout);
+
+        if !PathBuf::from(output_path).exists() {
+            return Err(format!("PDF was not created at: {}", output_path));
+        }
+
+        log::info!("✅ Pharmacy note PDF generated successfully");
+        Ok(())
+    }
+}
+
+/// Line item data for invoice generation
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InvoiceLineItem {
+    pub name: String,
+    pub quantity: i32,
+    pub unit_price: f64,
 }

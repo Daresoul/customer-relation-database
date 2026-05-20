@@ -25,6 +25,7 @@ interface CreatePatientSectionProps {
   onCancel: () => void;
   isExpanded: boolean;
   onToggleExpand: (expanded: boolean) => void;
+  prefillMicrochipId?: string;
 }
 
 type FillMode = 'blank' | 'prefill';
@@ -36,6 +37,7 @@ export const CreatePatientSection: React.FC<CreatePatientSectionProps> = ({
   onCancel,
   isExpanded,
   onToggleExpand,
+  prefillMicrochipId,
 }) => {
   const { t } = useTranslation(['patients', 'forms', 'common']);
   const { token } = theme.useToken();
@@ -49,6 +51,11 @@ export const CreatePatientSection: React.FC<CreatePatientSectionProps> = ({
 
   // Watch selected species for breed filtering
   const selectedSpeciesId = Form.useWatch('speciesId', form);
+
+  // If a microchip is on file, the chip alone identifies the patient — so name
+  // and species become optional. Without a chip, those fields are required.
+  const microchipIdValue = Form.useWatch('microchipId', form);
+  const namingRequired = !microchipIdValue || String(microchipIdValue).trim().length === 0;
 
   // Fetch breeds for selected species
   const { data: breedsData = [], isLoading: isLoadingBreeds } = useBreeds(selectedSpeciesId, true);
@@ -86,6 +93,13 @@ export const CreatePatientSection: React.FC<CreatePatientSectionProps> = ({
       form.resetFields();
     }
   }, [fillMode, hasDeviceData, isLoadingSpecies, extractedData, speciesData]);
+
+  // Sync scanned microchip ID into the form when the parent passes a new one
+  useEffect(() => {
+    if (prefillMicrochipId) {
+      form.setFieldValue('microchipId', prefillMicrochipId);
+    }
+  }, [prefillMicrochipId]);
 
   // Handle form submission
   const handleSubmit = async (values: any) => {
@@ -274,7 +288,7 @@ export const CreatePatientSection: React.FC<CreatePatientSectionProps> = ({
             <Form.Item
               name="name"
               label={t('patients:detail.patientInfo.labels.name', 'Name')}
-              rules={[{ required: true, message: t('forms:validation.required') }]}
+              rules={[{ required: namingRequired, message: t('forms:validation.required') }]}
             >
               <Input placeholder={t('forms:placeholders.enterName', 'Enter name')} />
             </Form.Item>
@@ -284,7 +298,7 @@ export const CreatePatientSection: React.FC<CreatePatientSectionProps> = ({
             <Form.Item
               name="speciesId"
               label={t('patients:detail.patientInfo.labels.species', 'Species')}
-              rules={[{ required: true, message: t('forms:validation.required') }]}
+              rules={[{ required: namingRequired, message: t('forms:validation.required') }]}
             >
               <Select
                 placeholder={t('forms:placeholders.selectField', { field: t('patients:detail.patientInfo.labels.species', 'Species') })}

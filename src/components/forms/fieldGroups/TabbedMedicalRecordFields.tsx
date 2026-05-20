@@ -5,12 +5,12 @@
  * with tabs for:
  * - Standard medical record fields
  * - Pharmacies/Prescriptions
- * - Line Items (placeholder)
+ * - Line Items
  */
 
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Tabs, Form, Input, Typography, Badge, Empty } from 'antd';
+import { Tabs, Form, Input, Typography, Badge } from 'antd';
 import type { FormInstance } from 'antd';
 import {
   FileTextOutlined,
@@ -19,6 +19,8 @@ import {
 } from '@ant-design/icons';
 import { MedicalRecordFieldGroup } from './MedicalRecordFieldGroup';
 import type { MedicalRecordFieldGroupProps } from './MedicalRecordFieldGroup';
+import { LineItemsFieldGroup } from './LineItemsFieldGroup';
+import type { MedicalRecordLineItem } from '../../../types/lineItem';
 import styles from '../Forms.module.css';
 
 const { TextArea } = Input;
@@ -35,33 +37,46 @@ export interface TabbedMedicalRecordFieldsProps extends MedicalRecordFieldGroupP
   showPrescriptionBadge?: boolean;
   /** Whether to show line items indicator badge */
   showLineItemsBadge?: boolean;
-  /** Number of line items (for badge) - placeholder for future */
+  /** Number of line items (for badge) */
   lineItemsCount?: number;
+  /** Current line items */
+  lineItems?: MedicalRecordLineItem[];
+  /** Callback when line items change */
+  onLineItemsChange?: (items: MedicalRecordLineItem[]) => void;
+  /** Current discount percentage */
+  discountPercent?: number;
+  /** Callback when discount changes */
+  onDiscountChange?: (percent: number | undefined) => void;
+  /** Manual total override (when no line items) */
+  manualTotal?: number;
+  /** Callback when manual total changes */
+  onManualTotalChange?: (total: number | undefined) => void;
 }
 
 export const TabbedMedicalRecordFields: React.FC<TabbedMedicalRecordFieldsProps> = ({
   form,
   recordType,
   onRecordTypeChange,
-  currencies,
   templates = [],
   isSearchingTemplates = false,
   onTemplateSearch,
   onTemplateSelect,
   disabled = false,
   hideRecordType = false,
-  fullWidthClassName,
-  dateInputClassName,
-  currencyInputClassName,
   titleLabel,
   titlePlaceholder,
-  searchMinLength,
   defaultActiveTab = 'standard',
   onTabChange,
   prescriptionNotesValue,
   showPrescriptionBadge = false,
   showLineItemsBadge = false,
   lineItemsCount = 0,
+  lineItems = [],
+  onLineItemsChange,
+  discountPercent,
+  onDiscountChange,
+  manualTotal,
+  onManualTotalChange,
 }) => {
   const { t } = useTranslation(['medical', 'common', 'forms']);
   const [activeTab, setActiveTab] = useState(defaultActiveTab);
@@ -89,19 +104,14 @@ export const TabbedMedicalRecordFields: React.FC<TabbedMedicalRecordFieldsProps>
           form={form}
           recordType={recordType}
           onRecordTypeChange={onRecordTypeChange}
-          currencies={currencies}
           templates={templates}
           isSearchingTemplates={isSearchingTemplates}
           onTemplateSearch={onTemplateSearch}
           onTemplateSelect={onTemplateSelect}
           disabled={disabled}
           hideRecordType={hideRecordType}
-          fullWidthClassName={fullWidthClassName}
-          dateInputClassName={dateInputClassName}
-          currencyInputClassName={currencyInputClassName}
           titleLabel={titleLabel}
           titlePlaceholder={titlePlaceholder}
-          searchMinLength={searchMinLength}
         />
       ),
     },
@@ -146,20 +156,15 @@ export const TabbedMedicalRecordFields: React.FC<TabbedMedicalRecordFieldsProps>
         </Badge>
       ),
       children: (
-        <div className={styles.tabContent}>
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description={
-              <span>
-                {t('medical:lineItems.placeholder', 'Line items feature coming soon')}
-                <br />
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  {t('medical:lineItems.placeholderDescription', 'This will allow adding itemized charges, products, and services.')}
-                </Text>
-              </span>
-            }
-          />
-        </div>
+        <LineItemsFieldGroup
+          lineItems={lineItems}
+          onLineItemsChange={onLineItemsChange || (() => {})}
+          discountPercent={discountPercent}
+          onDiscountChange={onDiscountChange}
+          manualTotal={manualTotal}
+          onManualTotalChange={onManualTotalChange}
+          disabled={disabled}
+        />
       ),
     },
   ];

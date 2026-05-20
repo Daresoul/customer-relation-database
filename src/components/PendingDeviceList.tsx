@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Drawer, Input, Table, Tag, Space, Typography, message, Button } from 'antd';
 import type { PendingDeviceEntryWithFile } from '@/types/fileHistory';
 import { fileHistoryService } from '@/services/fileHistoryService';
-import { invoke } from '@tauri-apps/api/tauri';
+import { invoke } from '@/services/invoke';
 import { useDeviceImport } from '@/contexts/DeviceImportContext';
 import { useTranslation } from 'react-i18next';
 

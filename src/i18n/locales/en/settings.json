@@ -7,7 +7,24 @@
     "species": "Species & Breeds",
     "devices": "Device Inputs",
     "templates": "Record Templates",
+    "lineItems": "Line Items",
+    "backups": "Backups",
     "updates": "Updates"
+  },
+  "backups": {
+    "title": "Backups",
+    "description": "The application snapshots the database (one per day, kept for 30 days) and mirrors stored files to the destination you choose. A backup runs automatically each time the app starts.",
+    "destination": "Destination",
+    "notConfigured": "Not configured",
+    "lastRun": "Last backup",
+    "never": "Never",
+    "chooseDir": "Choose destination",
+    "changeDir": "Change destination",
+    "chooseDirTitle": "Choose a backup destination",
+    "runNow": "Backup now",
+    "runSuccess": "Backup completed",
+    "directorySaved": "Backup destination saved",
+    "lastErrorTitle": "Last backup error"
   },
   "updates": {
     "currentVersion": "Current Version",
@@ -116,5 +133,23 @@
     "totalTemplates": "templates",
     "titlePlaceholder": "Enter template title",
     "descriptionPlaceholder": "Enter template description"
+  },
+  "lineItems": {
+    "title": "Line Items",
+    "description": "Manage reusable line item templates for medical records",
+    "addButton": "Add Line Item",
+    "editTitle": "Edit Line Item",
+    "createTitle": "Create Line Item",
+    "name": "Name",
+    "price": "Default Price",
+    "currency": "Currency",
+    "selectCurrency": "Select currency",
+    "descriptionLabel": "Description",
+    "namePlaceholder": "e.g., Consultation, X-Ray, Blood Test",
+    "descriptionPlaceholder": "Optional description of the line item",
+    "created": "Line item created successfully",
+    "updated": "Line item updated successfully",
+    "deleted": "Line item deleted successfully",
+    "confirmDelete": "Are you sure you want to deactivate this line item?"
   }
 }
