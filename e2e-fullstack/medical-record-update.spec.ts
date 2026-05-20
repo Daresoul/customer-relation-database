@@ -78,11 +78,15 @@ describe('Medical record update round-trip', () => {
   });
 
   it('opens the record, edits the description, saves, and persists the change', async () => {
-    // Navigate to the freshly-created record's detail page. browser.url
-    // triggers a full WebView reload (Tauri serves the SPA) — give it
-    // time for migrations to run + React to remount + the medical-record
-    // query to resolve before looking for the Edit button.
-    await browser.url(`tauri://localhost/medical-records/${recordId}`);
+    // Navigate via window.location — same path the production save-handler
+    // uses (`window.location.href = '/medical-records/<id>'`) so we hit the
+    // exact path Tauri's protocol handler is known to serve via SPA fallback.
+    // browser.url('tauri://...') was giving a blank page (Edit btn never
+    // rendered), suggesting the asset protocol doesn't fallback to index.html
+    // for arbitrary deep paths when navigated via WebDriver.
+    await browser.execute((id: number) => {
+      window.location.href = `/medical-records/${id}`;
+    }, recordId);
     await browser.pause(3500);
 
     // Click Edit → switches the card into MedicalRecordForm.
