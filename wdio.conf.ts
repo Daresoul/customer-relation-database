@@ -21,14 +21,20 @@
  */
 
 import type { Options } from '@wdio/types';
-import path from 'path';
-import { spawn, ChildProcess } from 'child_process';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { spawn, ChildProcess } from 'node:child_process';
+
+// `package.json` has `"type": "module"`, so we run as ESM where `__dirname`
+// doesn't exist. Reconstruct it from `import.meta.url`.
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 let tauriDriver: ChildProcess | null = null;
 
 /**
  * Path to the production-built Tauri binary that tauri-driver will launch.
- * Windows: target/release/Arkivet.exe (from src-tauri/Cargo.toml productName)
+ * Windows: target/release/Arkivet.exe (from src-tauri/tauri.conf.json productName)
  * Linux:   target/release/arkivet
  */
 const tauriBinary = process.platform === 'win32'
