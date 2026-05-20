@@ -47,6 +47,13 @@ jobs:
         shell: pwsh
         run: npm ci
 
+      - name: Build frontend
+        # Vite builds the React bundle into `./dist`. Tauri's
+        # `generate_context!()` macro reads tauri.conf.json which points
+        # distDir to "../dist" — so this folder must exist before cargo build.
+        shell: pwsh
+        run: npm run build
+
       - name: Set up JDK for PDF generator
         # Java 8 target (sourceCompatibility = 1.8 in pdf-generator-cli/build.gradle)
         # but JDK 17 can build it. Temurin 17 is the current LTS.
