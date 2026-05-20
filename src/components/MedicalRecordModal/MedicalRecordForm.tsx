@@ -302,6 +302,7 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
             htmlType="submit"
             loading={loading}
             icon={<SaveOutlined />}
+            data-testid="medical-record-form-submit-btn"
           >
             {isEdit ? t('common:buttons.update') : t('common:buttons.create')}
           </Button>

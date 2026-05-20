@@ -735,7 +735,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
         }</Title>}
         extra={
           !isEditing ? (
-            <Button type="primary" icon={<EditOutlined />} onClick={() => setIsEditing(true)}>{t('common:edit')}</Button>
+            <Button type="primary" icon={<EditOutlined />} onClick={() => setIsEditing(true)} data-testid="medical-record-edit-btn">{t('common:edit')}</Button>
           ) : undefined
         }
       >

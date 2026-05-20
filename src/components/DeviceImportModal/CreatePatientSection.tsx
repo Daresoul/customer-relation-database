@@ -189,6 +189,7 @@ export const CreatePatientSection: React.FC<CreatePatientSectionProps> = ({
         icon={<PlusOutlined />}
         onClick={() => onToggleExpand(true)}
         style={{ marginLeft: 8, marginBottom: 12 }}
+        data-testid="create-patient-section-expand-btn"
       >
         {t('patients:addPatient', 'Add Patient')}
       </Button>
@@ -383,7 +384,7 @@ export const CreatePatientSection: React.FC<CreatePatientSectionProps> = ({
           </Col>
           <Col span={12}>
             <Form.Item name="microchipId" label={t('patients:detail.patientInfo.labels.microchipId', 'Microchip ID')}>
-              <Input placeholder={t('forms:placeholders.example', { example: '985112003...' })} />
+              <Input placeholder={t('forms:placeholders.example', { example: '985112003...' })} data-testid="create-patient-section-microchip-input" />
             </Form.Item>
           </Col>
         </Row>
@@ -491,6 +492,7 @@ export const CreatePatientSection: React.FC<CreatePatientSectionProps> = ({
                   // validation errors handled by antd
                 }
               }}
+              data-testid="create-patient-section-submit-btn"
             >
               {t('common:buttons.create', 'Create')}
             </Button>
