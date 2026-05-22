@@ -154,9 +154,11 @@ describe('Medical record update round-trip', () => {
           };
         }).__TAURI__;
         const invoke = tauri?.invoke || tauri?.tauri?.invoke;
+        // get_medical_record returns MedicalRecordDetail = { record, attachments, history }
         return await invoke!('get_medical_record', { recordId: id, includeHistory: false });
       }, recordId);
-      const dbDesc = (dbRecord as { description?: string } | undefined)?.description;
+      const dbDesc = (dbRecord as { record?: { description?: string } } | undefined)?.record
+        ?.description;
       throw new Error(
         `${renderErr.message}\n  → backend description after submit: ${JSON.stringify(dbDesc)}\n` +
           `  → expected: ${JSON.stringify(updatedDescription)}\n` +
