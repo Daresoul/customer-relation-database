@@ -12,6 +12,7 @@ pub mod species;
 pub mod breed;
 pub mod device_integration;
 pub mod line_item;
+pub mod managed_hid_scanner;
 
 // Re-exports for public API - some may be unused internally but available for external use
 #[allow(unused_imports)]
@@ -83,4 +84,8 @@ pub use device_integration::{
 pub use line_item::{
     LineItemTemplate, CreateLineItemTemplateInput, UpdateLineItemTemplateInput,
     MedicalRecordLineItem, CreateLineItemInput
+};
+#[allow(unused_imports)]
+pub use managed_hid_scanner::{
+    ManagedHidScanner, CreateManagedHidScannerInput, UpdateManagedHidScannerInput
 };

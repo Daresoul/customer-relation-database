@@ -20,6 +20,7 @@ pub mod pending;
 pub mod dev_tools;
 pub mod line_item;
 pub mod backup;
+pub mod managed_hid_scanner;
 
 pub use patient::*;
 pub use database::*;
@@ -43,3 +44,4 @@ pub use pending::*;
 pub use dev_tools::*;
 pub use line_item::*;
 pub use backup::*;
+pub use managed_hid_scanner::*;

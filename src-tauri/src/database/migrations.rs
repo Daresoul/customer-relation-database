@@ -57,6 +57,7 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, "039_create_line_items", create_line_items_tables).await?;
     run_migration(pool, "040_add_invoice_number", add_invoice_number_column).await?;
     run_migration(pool, "041_relax_patient_required_fields", relax_patient_required_fields).await?;
+    run_migration(pool, "042_create_managed_hid_scanners", create_managed_hid_scanners_table).await?;
 
     Ok(())
 }
@@ -2559,6 +2560,63 @@ fn relax_patient_required_fields(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std
 
         tx.commit().await?;
         sqlx::query("PRAGMA foreign_keys = ON").execute(pool).await?;
+
+        Ok(())
+    })
+}
+
+// Migration 042: Create managed_hid_scanners table for per-device Raw Input filtering.
+//
+// Each row registers a HID device by its USB VID/PID. The Windows-only
+// raw_input_capture service reads this list on startup and calls
+// RegisterRawInputDevices(RIDEV_NOLEGACY) so the OS routes that device's
+// input *only* to our app — keystrokes never reach focused windows. HID
+// devices not in this table behave normally (still type into focused apps).
+//
+// This is what lets cheap microchip readers (like the W91B) coexist with
+// regular HID-keyboard scanners used for POS / payment flows: the vet's
+// microchip scanner is filtered, their POS scanner isn't.
+//
+// The W91B's HID-mode IDs (vendor 0x0005, product 0xFFFF) are pre-seeded
+// so it works out of the box. Real production VID/PIDs can be added at
+// runtime via the Settings UI.
+fn create_managed_hid_scanners_table(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS managed_hid_scanners (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                vendor_id INTEGER NOT NULL CHECK(vendor_id >= 0 AND vendor_id <= 65535),
+                product_id INTEGER NOT NULL CHECK(product_id >= 0 AND product_id <= 65535),
+                enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0, 1)),
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(vendor_id, product_id)
+            )
+        "#).execute(pool).await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_managed_hid_scanners_enabled ON managed_hid_scanners(enabled)")
+            .execute(pool)
+            .await?;
+
+        sqlx::query(r#"
+            CREATE TRIGGER IF NOT EXISTS update_managed_hid_scanners_timestamp
+            AFTER UPDATE ON managed_hid_scanners
+            BEGIN
+                UPDATE managed_hid_scanners SET updated_at = CURRENT_TIMESTAMP
+                WHERE id = NEW.id;
+            END
+        "#).execute(pool).await?;
+
+        // Seed the W91B microchip reader in HID mode. We observed these IDs
+        // from real hardware via system_profiler on macOS during initial
+        // device-integration testing. On a fresh install the scanner works
+        // immediately; on existing installs the INSERT OR IGNORE skips if
+        // the user has already configured one with the same VID/PID.
+        sqlx::query(r#"
+            INSERT OR IGNORE INTO managed_hid_scanners (name, vendor_id, product_id, enabled)
+            VALUES ('W91B Microchip Reader (HID mode)', 5, 65535, 1)
+        "#).execute(pool).await?;
 
         Ok(())
     })

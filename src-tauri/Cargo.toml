@@ -52,7 +52,20 @@ time = "=0.3.36"
 ts-rs = { version = "10", features = ["chrono-impl", "serde-compat"] }
 
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.52", features = ["Win32_UI_Shell", "Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.52", features = [
+  "Win32_UI_Shell",
+  "Win32_Foundation",
+  "Win32_UI_WindowsAndMessaging",
+  # Raw Input API for per-device HID suppression (managed_hid_scanner / raw_input_capture).
+  # Lets us register specific VID/PID HID devices to deliver their input only to our
+  # app (RIDEV_NOLEGACY) so cheap scanners stop typing into focused windows. Other
+  # HID keyboards / POS scanners are unaffected.
+  "Win32_UI_Input",
+  "Win32_UI_Input_KeyboardAndMouse",
+  "Win32_Devices_HumanInterfaceDevice",
+  "Win32_System_LibraryLoader",
+  "Win32_System_Threading",
+] }
 dunce = "1.0" # Convert Windows UNC paths to normal paths for Java compatibility
 winreg = "0.52"
 

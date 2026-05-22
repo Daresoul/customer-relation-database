@@ -184,6 +184,15 @@ fn main() {
             // Store SeaORM pool in app state (legacy pool only used internally for migrations)
             app.manage(sea_orm_pool.clone());
 
+            // Start the Windows Raw Input capture for managed HID scanners. On
+            // non-Windows targets this is a compile-time no-op. The capture
+            // reads its VID/PID list from the SQLite-backed managed_hid_scanners
+            // table — devices on the list have their input suppressed at the OS
+            // level and re-emitted as `scanner:barcode` events; everything else
+            // is forwarded back to the focused app via SendInput so non-managed
+            // keyboards (POS scanners, etc.) keep working normally.
+            services::raw_input_capture::start_raw_input_capture(app.handle(), sea_orm_pool.clone());
+
             // Start periodic sync scheduler in async runtime (uses SeaORM)
             let sea_orm_pool_for_scheduler = sea_orm_pool.clone();
             tauri::async_runtime::spawn(async move {
@@ -443,6 +452,11 @@ fn main() {
             commands::get_backup_config,
             commands::set_backup_directory,
             commands::run_backup_now,
+            // Managed HID scanner commands (Windows Raw Input filter list)
+            commands::get_managed_hid_scanners,
+            commands::create_managed_hid_scanner,
+            commands::update_managed_hid_scanner,
+            commands::delete_managed_hid_scanner,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

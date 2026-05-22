@@ -118,6 +118,13 @@ fn normalize_microchip(code: &str) -> String {
     code.to_string()
 }
 
+/// Public wrapper around [`normalize_microchip`] for cross-module reuse
+/// (raw_input_capture emits scans through this so HID-mode and Raw-Input-mode
+/// scanners produce byte-identical events to the frontend).
+pub fn normalize_microchip_public(code: &str) -> String {
+    normalize_microchip(code)
+}
+
 fn emit_barcode(app: &AppHandle, device_name: &str, code: &str) {
     if looks_like_microchip(code) {
         let normalized = normalize_microchip(code);

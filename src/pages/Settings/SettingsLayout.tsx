@@ -32,6 +32,7 @@ import DeviceInputSettings from './components/DeviceInputSettings';
 import RecordTemplatesSettings from './components/RecordTemplatesSettings';
 import LineItemsSettings from './components/LineItemsSettings';
 import BackupSettings from './components/BackupSettings';
+import ManagedScannersSettings from './components/ManagedScannersSettings';
 import { UpdateSettings } from './UpdateSettings';
 
 const { Content, Sider } = Layout;
@@ -114,6 +115,12 @@ const SettingsLayout: React.FC = () => {
       icon: <CloudUploadOutlined />,
       label: t('settings:sections.backups', 'Backups'),
       component: BackupSettings,
+    },
+    {
+      key: 'managedScanners',
+      icon: <UsbOutlined />,
+      label: t('settings:sections.managedScanners', 'Managed Scanners'),
+      component: ManagedScannersSettings,
     },
     {
       key: 'updates',
