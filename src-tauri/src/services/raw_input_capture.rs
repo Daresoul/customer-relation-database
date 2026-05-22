@@ -77,10 +77,18 @@ mod windows_impl {
     /// between the first character and the terminator (Enter / CR / LF).
     /// Keyed by `RAWINPUT.header.hDevice` so concurrent scanners don't
     /// interleave.
-    #[derive(Debug, Default)]
+    #[derive(Debug)]
     struct ScanBuffer {
         chars: String,
         last_ts: Instant,
+    }
+    impl Default for ScanBuffer {
+        // Manual impl because `Instant` doesn't derive Default. The initial
+        // timestamp doesn't matter — first keystroke overwrites it before
+        // any staleness check fires.
+        fn default() -> Self {
+            Self { chars: String::new(), last_ts: Instant::now() }
+        }
     }
     static SCAN_BUFFERS: OnceLock<Mutex<HashMap<isize, ScanBuffer>>> = OnceLock::new();
 
