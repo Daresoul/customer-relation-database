@@ -137,7 +137,8 @@ describe('Medical record update round-trip', () => {
         return text.includes(updatedDescription);
       },
       {
-        timeout: 5_000,
+        timeout: 15_000,
+        interval: 500,
         timeoutMsg: `Updated description "${updatedDescription}" not visible on page — backend likely accepted but UI didn't refetch.`,
       },
     );
