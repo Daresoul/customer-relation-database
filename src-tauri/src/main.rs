@@ -191,7 +191,17 @@ fn main() {
             // level and re-emitted as `scanner:barcode` events; everything else
             // is forwarded back to the focused app via SendInput so non-managed
             // keyboards (POS scanners, etc.) keep working normally.
-            services::raw_input_capture::start_raw_input_capture(app.handle(), sea_orm_pool.clone());
+            //
+            // Skipped under E2E (`TAURI_E2E=1`) — Raw Input with RIDEV_NOLEGACY
+            // suppresses keyboard input system-wide and re-injects via SendInput,
+            // which makes the WebDriver session's synthetic events behave
+            // differently and flakes the form-value propagation tests. Production
+            // doesn't set TAURI_E2E so the capture runs normally there.
+            if std::env::var("TAURI_E2E").is_err() {
+                services::raw_input_capture::start_raw_input_capture(app.handle(), sea_orm_pool.clone());
+            } else {
+                log::info!("raw_input_capture: skipped (TAURI_E2E set)");
+            }
 
             // Start periodic sync scheduler in async runtime (uses SeaORM)
             let sea_orm_pool_for_scheduler = sea_orm_pool.clone();
