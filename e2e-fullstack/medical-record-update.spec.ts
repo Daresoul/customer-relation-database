@@ -141,6 +141,31 @@ describe('Medical record update round-trip', () => {
         interval: 500,
         timeoutMsg: `Updated description "${updatedDescription}" not visible on page — backend likely accepted but UI didn't refetch.`,
       },
-    );
+    ).catch(async (renderErr) => {
+      // The visual assertion timed out. Disambiguate whether the backend
+      // actually got the update or whether the form silently submitted the
+      // old value (the second is the AntD-controlled-input gotcha we hit
+      // before with showCount TextAreas).
+      const dbRecord = await browser.execute(async (id: number) => {
+        const tauri = (window as unknown as {
+          __TAURI__?: {
+            invoke?: (cmd: string, args: unknown) => Promise<unknown>;
+            tauri?: { invoke?: (cmd: string, args: unknown) => Promise<unknown> };
+          };
+        }).__TAURI__;
+        const invoke = tauri?.invoke || tauri?.tauri?.invoke;
+        return await invoke!('get_medical_record', { recordId: id, includeHistory: false });
+      }, recordId);
+      const dbDesc = (dbRecord as { description?: string } | undefined)?.description;
+      throw new Error(
+        `${renderErr.message}\n  → backend description after submit: ${JSON.stringify(dbDesc)}\n` +
+          `  → expected: ${JSON.stringify(updatedDescription)}\n` +
+          `  → diagnosis: ${
+            dbDesc === updatedDescription
+              ? 'backend has the new value but UI did not refetch (render issue)'
+              : 'form submitted the old value to backend (controlled-input propagation issue)'
+          }`,
+      );
+    });
   });
 });
