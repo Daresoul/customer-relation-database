@@ -117,7 +117,7 @@ jobs:
       - name: Update version from tag
         run: node .github/scripts/update-version.cjs
         env:
-          GITHUB_REF_NAME: ${{ inputs.version || github.ref_name }}
+          RELEASE_VERSION: ${{ inputs.version || github.ref_name }}
 
       - name: Build and Release
         uses: tauri-apps/tauri-action@v0
