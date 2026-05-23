@@ -187,20 +187,28 @@ fn main() {
             // Start the Windows Raw Input capture for managed HID scanners. On
             // non-Windows targets this is a compile-time no-op. The capture
             // reads its VID/PID list from the SQLite-backed managed_hid_scanners
-            // table — devices on the list have their input suppressed at the OS
-            // level and re-emitted as `scanner:barcode` events; everything else
-            // is forwarded back to the focused app via SendInput so non-managed
-            // keyboards (POS scanners, etc.) keep working normally.
+            // table; managed devices have their input suppressed at the OS
+            // level via WH_KEYBOARD_LL and re-emitted as `scanner:barcode`
+            // events.
             //
-            // Skipped under E2E (`TAURI_E2E=1`) — Raw Input with RIDEV_NOLEGACY
-            // suppresses keyboard input system-wide and re-injects via SendInput,
-            // which makes the WebDriver session's synthetic events behave
-            // differently and flakes the form-value propagation tests. Production
-            // doesn't set TAURI_E2E so the capture runs normally there.
-            if std::env::var("TAURI_E2E").is_err() {
+            // Off by default in v0.5.3 because v0.5.0–v0.5.2 had a regression
+            // where simply registering for Raw Input keyboard events doubled
+            // every keystroke system-wide while the app was running, even for
+            // non-managed keyboards. Until we isolate the cause, the capture
+            // is opt-in via the ARKIVET_RAW_INPUT=1 environment variable. With
+            // it off, hidapi-based scanner capture (`start_device_capture`)
+            // still works for chip readers — they just type into focused
+            // windows as before.
+            //
+            // Always skipped under E2E (`TAURI_E2E=1`) so WebDriver synthetic
+            // events behave predictably.
+            let raw_input_enabled = std::env::var("ARKIVET_RAW_INPUT").ok().as_deref() == Some("1");
+            if raw_input_enabled && std::env::var("TAURI_E2E").is_err() {
                 services::raw_input_capture::start_raw_input_capture(app.handle(), sea_orm_pool.clone());
-            } else {
+            } else if std::env::var("TAURI_E2E").is_ok() {
                 log::info!("raw_input_capture: skipped (TAURI_E2E set)");
+            } else {
+                log::info!("raw_input_capture: disabled by default; set ARKIVET_RAW_INPUT=1 to enable");
             }
 
             // Start periodic sync scheduler in async runtime (uses SeaORM)
