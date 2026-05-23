@@ -127,17 +127,10 @@ describe('Medical record update round-trip', () => {
         'Edit button never reappeared — update_medical_record likely rejected the UpdateMedicalRecordInput (contract drift) or the form failed validation.',
     });
 
-    // Force a fresh fetch by reloading the page. This sidesteps a known
-    // refresh issue in MedicalRecordDetail (refetch after update sometimes
-    // doesn't propagate the new record into the rendered Paragraph) so the
-    // test asserts persistence end-to-end without coupling to React Query's
-    // in-memory refresh path. Tracked as a follow-up bug; reload is the
-    // realistic UX (vet sees the value after navigating back to the record).
-    await browser.execute((id: number) => {
-      window.location.href = `/medical-records/${id}`;
-    }, recordId);
-    await browser.pause(3500); // boot + initial fetch
-
+    // After a successful update the page should refresh in-place — without
+    // a manual reload — and show the new description. This catches the
+    // refresh-after-update bug we fixed in MedicalRecordDetail (the auto-
+    // selected version used to pin to the pre-update value).
     await browser.waitUntil(
       async () => {
         const body = await $('body');
@@ -145,9 +138,9 @@ describe('Medical record update round-trip', () => {
         return text.includes(updatedDescription);
       },
       {
-        timeout: 10_000,
+        timeout: 15_000,
         interval: 500,
-        timeoutMsg: `After reload, updated description "${updatedDescription}" is still not visible on page — backend rejected the UpdateMedicalRecordInput.`,
+        timeoutMsg: `Updated description "${updatedDescription}" not visible in-place after submit — likely the in-memory refetch path regressed (the version-tracking logic in MedicalRecordDetail).`,
       },
     );
   });

@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Layout, Card, Typography, Space, Button, Alert, Spin, Table, Tag, Descriptions, App, Switch, Breadcrumb, Drawer } from 'antd';
 import { invoke, convertFileSrc } from '@/services/invoke';
@@ -345,7 +345,23 @@ export const MedicalRecordDetailPage: React.FC = () => {
 
   const snapshot = useMemo(() => buildSnapshotForVersion(currentTargetVersion), [currentTargetVersion, sortedHistory]);
   const prevSnapshot = useMemo(() => buildSnapshotForVersion(prevVersion), [prevVersion, sortedHistory]);
-  // Auto-select the latest version on first load if none selected
+  // When the record's version increases (= an update just happened and
+  // refetch brought back a new version), clear the manual version selection
+  // so the auto-select effect below re-picks the new latest. Without this,
+  // selectedVersion would stay pinned to the previous latest forever, and
+  // the rendered description would not reflect the just-saved value until
+  // the user reloads. Track via ref to detect monotonic increases.
+  const lastSeenVersion = useRef<number | null>(null);
+  useEffect(() => {
+    if (!record) return;
+    if (lastSeenVersion.current !== null && record.version > lastSeenVersion.current) {
+      setSelectedVersion(null);
+      setSelectedHistory(null);
+    }
+    lastSeenVersion.current = record.version;
+  }, [record?.version]);
+
+  // Auto-select the latest version on first load (or after a reset above)
   useEffect(() => {
     if (!selectedVersion && sortedHistory.length > 0) {
       setSelectedVersion(sortedHistory[0].version);
@@ -363,7 +379,11 @@ export const MedicalRecordDetailPage: React.FC = () => {
     let active = true;
     (async () => {
       if (!record) return;
-      if (!selectedVersion) {
+      // No version pinned, or pinned to the *current* record version → no need
+      // to call the history snapshot IPC; the live `record` already is that
+      // state. Avoids a race where a stale `selectedVersion` from before an
+      // update would fetch the old snapshot even after refetch.
+      if (!selectedVersion || selectedVersion === record.version) {
         setDisplayRecord(record);
         return;
       }
