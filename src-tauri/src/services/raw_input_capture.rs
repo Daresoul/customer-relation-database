@@ -624,6 +624,26 @@ mod windows_impl {
         // Trim trailing null
         let name = String::from_utf16_lossy(&wbuf[..(read as usize).saturating_sub(1)]);
         let parsed = parse_vid_pid(&name);
+
+        // v0.5.6 diagnostic: log the FIRST time we see each new device handle,
+        // showing the raw device path AND the parsed VID/PID. This is the only
+        // way to find out what Raw Input actually sees for Bluetooth HID
+        // devices — hidapi reports the device's claimed HID-descriptor VID/PID
+        // but Raw Input's RIDI_DEVICENAME for BT-routed HID is structured
+        // entirely differently and may have a different VID/PID (or none).
+        //
+        // First-time-only because WM_INPUT fires per-keystroke and we'd
+        // otherwise spam the log every keypress for the lifetime of the
+        // process. The cache insert below de-duplicates.
+        let is_managed_at_parse_time = match parsed {
+            Some(id) => managed_ids().lock().unwrap().iter().any(|m| *m == id),
+            None => false,
+        };
+        log::info!(
+            "raw_input_capture: new device seen | path='{}' parsed_vid_pid={:?} is_managed={}",
+            name, parsed, is_managed_at_parse_time
+        );
+
         device_cache().lock().unwrap().insert(h_device, parsed);
         parsed
     }
