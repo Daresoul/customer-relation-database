@@ -2,22 +2,29 @@
 //!
 //! What this does on Windows:
 //!   1. Creates a hidden, message-only window on a dedicated thread.
-//!   2. Calls `RegisterRawInputDevices` with `RIDEV_NOLEGACY | RIDEV_INPUTSINK`
-//!      for the keyboard usage page, so we receive raw HID keyboard input
-//!      *and* the OS suppresses delivery to focused windows.
+//!   2. Calls `RegisterRawInputDevices` with `RIDEV_INPUTSINK` for the
+//!      keyboard usage page, so we receive raw HID keyboard input even when
+//!      our window is in the background.
 //!   3. For each WM_INPUT message, resolves the source device's USB VID/PID
 //!      via `GetRawInputDeviceInfo(RIDI_DEVICENAME)`. If it matches a row in
 //!      `managed_hid_scanners` (loaded from SQLite at startup), we accumulate
 //!      the character into a per-device buffer and emit a `scanner:barcode`
-//!      event when Enter / CR / LF arrives. If it doesn't match, we *forward*
-//!      the keystrokes to the focused app via `SendInput` so non-managed
-//!      keyboards keep working normally.
+//!      event when Enter / CR / LF arrives. Non-managed devices are ignored.
 //!
-//! Why `RIDEV_NOLEGACY` plus a manual forwarder rather than two registrations:
-//!   You can't `RegisterRawInputDevices` per VID/PID — the API is per usage
-//!   page, all-or-nothing for keyboards. So we register everything, suppress
-//!   everything, and re-inject the non-managed keystrokes. This is the
-//!   standard POS-industry pattern (see Microsoft's PointOfService sample).
+//! On focus stealing — what this does *not* do:
+//!   The earlier design tried to combine `RIDEV_NOLEGACY` with `SendInput`
+//!   re-injection so we could suppress managed-device keystrokes from
+//!   reaching focused apps. That doesn't actually work: `RIDEV_NOLEGACY`
+//!   is per-process — it stops *our* window from receiving WM_KEY messages
+//!   for those devices, but other apps still get them. The re-injection
+//!   then duplicated every keystroke (OS-delivered + ours), which was the
+//!   v0.5.0 double-key bug.
+//!
+//!   Real per-device system-wide HID suppression on Windows requires a
+//!   `WH_KEYBOARD_LL` global hook correlated with Raw Input timing — a
+//!   separate, harder feature. For now we observe HID reports from managed
+//!   scanners and emit our own events; the OS still routes keystrokes to
+//!   the focused app the normal way.
 //!
 //! On non-Windows platforms this whole module is a no-op stub. The hidapi-based
 //! `device_capture` keeps providing scan events on macOS / Linux.
@@ -42,14 +49,10 @@ mod windows_impl {
 
     use windows::core::PCWSTR;
     use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
-    use windows::Win32::UI::Input::KeyboardAndMouse::{
-        SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYBD_EVENT_FLAGS, KEYEVENTF_KEYUP,
-        KEYEVENTF_UNICODE, VIRTUAL_KEY,
-    };
     use windows::Win32::UI::Input::{
         GetRawInputData, GetRawInputDeviceInfoW, RegisterRawInputDevices, HRAWINPUT, RAWINPUT,
         RAWINPUTDEVICE, RAWINPUTHEADER, RAW_INPUT_DEVICE_INFO_COMMAND, RIDEV_INPUTSINK,
-        RIDEV_NOLEGACY, RID_INPUT,
+        RID_INPUT,
     };
     use windows::Win32::UI::WindowsAndMessaging::{
         CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, RegisterClassExW,
@@ -106,14 +109,6 @@ mod windows_impl {
     /// Stash the app handle so the message-loop thread can emit events.
     /// Set once before the message loop spins up.
     static APP_HANDLE: OnceLock<AppHandle> = OnceLock::new();
-
-    /// Sentinel value stamped into `KEYBDINPUT.dwExtraInfo` whenever we
-    /// re-inject a keystroke via `SendInput`. The synthesized event still
-    /// fires WM_INPUT (we registered with `INPUTSINK`), and without this
-    /// flag we'd consume the injection, re-inject again, and loop forever.
-    /// On the receive side we read `RAWKEYBOARD.ExtraInformation`, which is
-    /// the low 32 bits of the same field, and bail early when it matches.
-    const REINJECTION_SENTINEL: usize = 0xCAFEBABE;
 
     /// Entry point. Spawns the message-loop thread and returns immediately.
     pub fn start_raw_input_capture(app: AppHandle, pool: SeaOrmPool) {
@@ -199,13 +194,25 @@ mod windows_impl {
                 return;
             }
 
-            // Register keyboard usage page (1, 6) with INPUTSINK (deliver to us even
-            // when not focused) and NOLEGACY (suppress keyboard-class delivery to
-            // focused windows). NOLEGACY is what gives us the focus-stealing fix.
+            // Register keyboard usage page (1, 6) with INPUTSINK only (deliver
+            // raw HID reports to us even when our window is in the background).
+            //
+            // We do NOT use RIDEV_NOLEGACY. Despite the name, NOLEGACY only
+            // suppresses WM_KEY messages for THIS process — other apps still
+            // receive them normally from the same physical keystroke. Combining
+            // NOLEGACY with SendInput re-injection makes focused apps see every
+            // keystroke twice (the OS-delivered one + our re-injection). True
+            // per-device system-wide suppression requires a WH_KEYBOARD_LL
+            // hook correlated with Raw Input timing — separate feature.
+            //
+            // Without NOLEGACY we still observe HID reports from managed
+            // scanners and emit `scanner:barcode` events for them; the OS
+            // routes keystrokes to the focused app normally (same behavior as
+            // the existing `device_capture.rs` hidapi-poll path).
             let devices = [RAWINPUTDEVICE {
                 usUsagePage: 0x01,
                 usUsage: 0x06,
-                dwFlags: RIDEV_INPUTSINK | RIDEV_NOLEGACY,
+                dwFlags: RIDEV_INPUTSINK,
                 hwndTarget: hwnd,
             }];
             if RegisterRawInputDevices(
@@ -283,13 +290,6 @@ mod windows_impl {
 
         let kb = &raw.data.keyboard;
 
-        // If this WM_INPUT is the echo of our own SendInput re-injection, bail.
-        // Without this the module loops forever (we'd suppress the echo, then
-        // re-inject it, then receive the echo, ...).
-        if (kb.ExtraInformation as usize) == REINJECTION_SENTINEL {
-            return;
-        }
-
         // Skip key-up events; we only emit on key-down.
         const RI_KEY_BREAK: u32 = 0x01;
         if (kb.Flags as u32) & RI_KEY_BREAK != 0 {
@@ -302,10 +302,10 @@ mod windows_impl {
         };
 
         if !is_managed {
-            // Not a managed scanner — but because we registered with NOLEGACY, the
-            // OS suppressed delivery to focused windows too. Re-inject the keystroke
-            // via SendInput so normal keyboards / POS scanners still work.
-            reinject_keystroke(kb.VKey, kb.Flags as u32);
+            // Not a managed scanner. We don't suppress (NOLEGACY removed), so
+            // the OS already delivered this keystroke to the focused window
+            // normally. Nothing more to do — observing it here is purely so
+            // we can identify and ignore non-managed devices.
             return;
         }
 
@@ -412,50 +412,6 @@ mod windows_impl {
             return Some(('0' as u8 + (vk - 0x60) as u8) as char);
         }
         None
-    }
-
-    /// Re-inject a non-managed keystroke into the focused window via SendInput.
-    /// This is what keeps non-managed HID keyboards working — RIDEV_NOLEGACY
-    /// suppresses OS-level delivery, so we have to forward manually.
-    /// The `REINJECTION_SENTINEL` in `dwExtraInfo` marks the synthesized event
-    /// so our own WM_INPUT echo loop ignores it.
-    fn reinject_keystroke(vk: u16, flags: u32) {
-        unsafe {
-            // KEYEVENTF_EXTENDEDKEY = 0x0001 (set when scancode came in with E0 prefix)
-            let extended_bit: u32 = if flags & 0x02 != 0 { 0x0001 } else { 0 };
-
-            let down = INPUT {
-                r#type: INPUT_KEYBOARD,
-                Anonymous: INPUT_0 {
-                    ki: KEYBDINPUT {
-                        wVk: VIRTUAL_KEY(vk),
-                        wScan: 0,
-                        dwFlags: KEYBD_EVENT_FLAGS(extended_bit),
-                        time: 0,
-                        dwExtraInfo: REINJECTION_SENTINEL,
-                    },
-                },
-            };
-            let up = INPUT {
-                r#type: INPUT_KEYBOARD,
-                Anonymous: INPUT_0 {
-                    ki: KEYBDINPUT {
-                        wVk: VIRTUAL_KEY(vk),
-                        wScan: 0,
-                        dwFlags: KEYBD_EVENT_FLAGS(extended_bit | KEYEVENTF_KEYUP.0),
-                        time: 0,
-                        dwExtraInfo: REINJECTION_SENTINEL,
-                    },
-                },
-            };
-
-            let inputs = [down, up];
-            SendInput(&inputs, std::mem::size_of::<INPUT>() as i32);
-
-            // Silence unused warning for KEYEVENTF_UNICODE; we don't use it but
-            // it's the cleanest path if we ever need Unicode injection later.
-            let _ = KEYEVENTF_UNICODE;
-        }
     }
 
     fn emit_scan(code: &str) {

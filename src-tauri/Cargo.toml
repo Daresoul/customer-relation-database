@@ -56,12 +56,11 @@ windows = { version = "0.52", features = [
   "Win32_UI_Shell",
   "Win32_Foundation",
   "Win32_UI_WindowsAndMessaging",
-  # Raw Input API for per-device HID suppression (managed_hid_scanner / raw_input_capture).
-  # Lets us register specific VID/PID HID devices to deliver their input only to our
-  # app (RIDEV_NOLEGACY) so cheap scanners stop typing into focused windows. Other
-  # HID keyboards / POS scanners are unaffected.
+  # Raw Input API for observing managed scanner HID reports. Lets us capture
+  # chip scans from specific VID/PID devices even when the app is in the
+  # background. (Does not suppress focused-window typing — that would need
+  # a WH_KEYBOARD_LL hook, see raw_input_capture.rs docs.)
   "Win32_UI_Input",
-  "Win32_UI_Input_KeyboardAndMouse",
   "Win32_Devices_HumanInterfaceDevice",
   "Win32_System_LibraryLoader",
   "Win32_System_Threading",
