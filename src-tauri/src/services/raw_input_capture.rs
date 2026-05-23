@@ -1783,8 +1783,12 @@ mod windows_impl {
             // a chip scan, none of it should accumulate into any buffer.
             // (If it did, the user typing "5A<Enter>" on a real keyboard
             // would mysteriously become a scan event.)
-            let mut bufs = HashMap::new();
-            let t0 = Instant::now();
+            //
+            // Explicit type annotation: no call to accumulate_scan_char in
+            // this test (that's the whole point) means inference can't
+            // pin K/V from usage. Spell out the same signature
+            // accumulate_scan_char expects.
+            let bufs: HashMap<isize, ScanBuffer> = HashMap::new();
 
             let events = [
                 (0x35u16, 6u16, false),
@@ -1802,9 +1806,9 @@ mod windows_impl {
                     HandlerAction::PassThrough,
                     "non-managed must always pass through"
                 );
-                // Note: NO call to accumulate_scan_char here, since the
-                // production handler only accumulates for SuppressAndChar.
-                let _ = t0; // suppress unused-variable warning
+                // Intentional: NO call to accumulate_scan_char — production
+                // handler only accumulates for SuppressAndChar, and we're
+                // verifying the buffer stays untouched.
             }
 
             assert!(bufs.is_empty(), "non-managed must never touch any buffer");
