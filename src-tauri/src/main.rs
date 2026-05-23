@@ -152,29 +152,19 @@ fn main() {
         .setup(|app| {
             // Start device-level scanner capture (Windows/macOS dev environments).
             //
-            // Gated off by default in v0.5.4 because the v0.5.x doubling
-            // regression persists even with raw_input_capture fully disabled
-            // (v0.5.3 confirmed). The remaining suspect is hidapi's enumeration
-            // loop briefly opening HID handles for HidD_GetProductString /
-            // HidD_GetManufacturerString — this is the only other system-
-            // touching code and existed unchanged since v0.4.0 (which the user
-            // confirms was never tested on a Windows PC, consistent with the
-            // bug having always been present).
-            //
-            // Trade-off while this is off: chip scanners (W91B etc.) stop
-            // emitting `scanner:barcode` events through this path — they
-            // continue to type into focused windows like any HID keyboard
-            // would. Users can still manually type chip IDs. Once we confirm
-            // hidapi is the cause and fix it, v0.5.5 re-enables this by
-            // default.
-            //
-            // Re-enable with: ARKIVET_HID_CAPTURE=1
-            let hid_capture_enabled = std::env::var("ARKIVET_HID_CAPTURE").ok().as_deref() == Some("1");
-            if hid_capture_enabled {
-                log::info!("start_device_capture: ENABLED via ARKIVET_HID_CAPTURE=1");
-                start_device_capture(app.handle());
+            // The hidapi enumeration loop briefly opens HID handles for
+            // HidD_GetProductString / HidD_GetManufacturerString during scan.
+            // On certain Windows + Bluetooth-HID driver combinations this is
+            // suspected to contribute to the v0.5.x keystroke doubling
+            // regression that's still under investigation. If doubling
+            // resurfaces and we need to A/B test, set ARKIVET_HID_CAPTURE=0
+            // to skip this entirely — but it's on by default because chip
+            // scanners rely on it for the `scanner:barcode` event path.
+            let hid_capture_disabled = std::env::var("ARKIVET_HID_CAPTURE").ok().as_deref() == Some("0");
+            if hid_capture_disabled {
+                log::info!("start_device_capture: disabled via ARKIVET_HID_CAPTURE=0");
             } else {
-                log::info!("start_device_capture: disabled by default in v0.5.4 (set ARKIVET_HID_CAPTURE=1 to enable). Investigating doubling regression.");
+                start_device_capture(app.handle());
             }
             // Start hidden on launch (will be shown from tray or on events).
             // Skipped under E2E so WebDriver can attach to a visible WebView2 —
@@ -215,24 +205,17 @@ fn main() {
             // level via WH_KEYBOARD_LL and re-emitted as `scanner:barcode`
             // events.
             //
-            // Off by default in v0.5.3 because v0.5.0–v0.5.2 had a regression
-            // where simply registering for Raw Input keyboard events doubled
-            // every keystroke system-wide while the app was running, even for
-            // non-managed keyboards. Until we isolate the cause, the capture
-            // is opt-in via the ARKIVET_RAW_INPUT=1 environment variable. With
-            // it off, hidapi-based scanner capture (`start_device_capture`)
-            // still works for chip readers — they just type into focused
-            // windows as before.
-            //
-            // Always skipped under E2E (`TAURI_E2E=1`) so WebDriver synthetic
-            // events behave predictably.
-            let raw_input_enabled = std::env::var("ARKIVET_RAW_INPUT").ok().as_deref() == Some("1");
-            if raw_input_enabled && std::env::var("TAURI_E2E").is_err() {
-                services::raw_input_capture::start_raw_input_capture(app.handle(), sea_orm_pool.clone());
-            } else if std::env::var("TAURI_E2E").is_ok() {
+            // Skipped under E2E (`TAURI_E2E=1`) so WebDriver synthetic events
+            // behave predictably. Can also be disabled at runtime with
+            // ARKIVET_RAW_INPUT=0 for A/B testing the v0.5.x doubling
+            // regression that's still under investigation.
+            let raw_input_disabled = std::env::var("ARKIVET_RAW_INPUT").ok().as_deref() == Some("0");
+            if std::env::var("TAURI_E2E").is_ok() {
                 log::info!("raw_input_capture: skipped (TAURI_E2E set)");
+            } else if raw_input_disabled {
+                log::info!("raw_input_capture: disabled via ARKIVET_RAW_INPUT=0");
             } else {
-                log::info!("raw_input_capture: disabled by default; set ARKIVET_RAW_INPUT=1 to enable");
+                services::raw_input_capture::start_raw_input_capture(app.handle(), sea_orm_pool.clone());
             }
 
             // Start periodic sync scheduler in async runtime (uses SeaORM)
