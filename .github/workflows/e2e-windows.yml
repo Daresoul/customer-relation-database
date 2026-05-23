@@ -88,6 +88,15 @@ jobs:
         working-directory: src-tauri
         run: cargo build --release
 
+      - name: Run Rust unit tests
+        # Windows-only modules (raw_input_capture, etc.) have their tests
+        # gated behind `cfg(target_os = "windows")`. Free cloud runners are
+        # all Linux, so this is the only place those tests actually execute.
+        # Run in --release to share the build cache with the step above.
+        shell: pwsh
+        working-directory: src-tauri
+        run: cargo test --release --bin vet-clinic
+
       - name: Run full-stack E2E suite
         shell: pwsh
         env:
