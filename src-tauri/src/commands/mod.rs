@@ -21,6 +21,7 @@ pub mod dev_tools;
 pub mod line_item;
 pub mod backup;
 pub mod managed_hid_scanner;
+pub mod hid_devices;
 
 pub use patient::*;
 pub use database::*;
@@ -45,3 +46,4 @@ pub use dev_tools::*;
 pub use line_item::*;
 pub use backup::*;
 pub use managed_hid_scanner::*;
+pub use hid_devices::*;

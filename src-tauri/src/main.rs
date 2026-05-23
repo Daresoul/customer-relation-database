@@ -475,6 +475,7 @@ fn main() {
             commands::create_managed_hid_scanner,
             commands::update_managed_hid_scanner,
             commands::delete_managed_hid_scanner,
+            commands::list_hid_devices,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

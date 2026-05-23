@@ -13,6 +13,7 @@ pub mod breed;
 pub mod device_integration;
 pub mod line_item;
 pub mod managed_hid_scanner;
+pub mod hid_devices;
 
 // Re-exports for public API - some may be unused internally but available for external use
 #[allow(unused_imports)]

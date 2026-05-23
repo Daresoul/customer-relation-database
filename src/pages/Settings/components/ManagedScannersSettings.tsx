@@ -9,7 +9,7 @@
  * cross-platform parity.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   Card,
   Button,
@@ -25,8 +25,17 @@ import {
   App,
   Tag,
   Alert,
+  Checkbox,
+  Collapse,
+  Tooltip,
 } from 'antd';
-import { PlusOutlined, DeleteOutlined, UsbOutlined } from '@ant-design/icons';
+import {
+  PlusOutlined,
+  DeleteOutlined,
+  UsbOutlined,
+  ReloadOutlined,
+  WifiOutlined,
+} from '@ant-design/icons';
 import { invoke } from '@/services/invoke';
 import { useTranslation } from 'react-i18next';
 
@@ -49,8 +58,36 @@ interface CreateInput {
   enabled?: boolean;
 }
 
+/** Mirrors `models::hid_devices::HidConnectionKind`. */
+type HidConnectionKind = 'usb' | 'bluetooth' | 'bluetoothLe' | 'unknown';
+
+/** Mirrors `models::hid_devices::HidDeviceInfo`. */
+interface HidDeviceInfo {
+  vendorId: number;
+  productId: number;
+  vendorIdHex: string;
+  productIdHex: string;
+  productName: string | null;
+  manufacturer: string | null;
+  serialNumber: string | null;
+  vendorNameFromDb: string | null;
+  usagePage: number;
+  usage: number;
+  interfaceNumber: number;
+  connection: HidConnectionKind;
+  alreadyManaged: boolean;
+  looksLikeKeyboard: boolean;
+  looksLikeScanner: boolean;
+}
+
 const formatHex = (n: number) =>
   '0x' + n.toString(16).padStart(4, '0').toUpperCase();
+
+/** Stable React key for a detection-table row — VID/PID alone aren't unique
+ *  on composite devices (e.g. a chip reader exposing multiple interfaces),
+ *  so we mix in the interface number. */
+const detectRowKey = (d: HidDeviceInfo) =>
+  `${d.vendorIdHex}-${d.productIdHex}-${d.interfaceNumber}-${d.usagePage}-${d.usage}`;
 
 const ManagedScannersSettings: React.FC = () => {
   const { t } = useTranslation(['settings', 'common']);
@@ -79,6 +116,58 @@ const ManagedScannersSettings: React.FC = () => {
   useEffect(() => {
     reload();
   }, []);
+
+  // --- Detection table state ---
+  // The detection table is collapsed by default so the settings page stays
+  // clean. Opening it triggers an initial scan; the Refresh button re-runs
+  // hidapi enumeration on the backend (which runs on a blocking thread so
+  // the UI never stalls). hidapi calls in this command never open any
+  // device for I/O — see `commands::hid_devices` module docs for the rule.
+  const [detected, setDetected] = useState<HidDeviceInfo[]>([]);
+  const [detectLoading, setDetectLoading] = useState(false);
+  const [detectAt, setDetectAt] = useState<Date | null>(null);
+  const [detectError, setDetectError] = useState<string | null>(null);
+  const [showAllHid, setShowAllHid] = useState(false);
+
+  const refreshDetected = useCallback(async () => {
+    setDetectLoading(true);
+    setDetectError(null);
+    try {
+      const data = await invoke<HidDeviceInfo[]>('list_hid_devices');
+      setDetected(data || []);
+      setDetectAt(new Date());
+    } catch (e: any) {
+      setDetectError(String(e));
+      notification.error({
+        message: t('common:error'),
+        description: String(e),
+        placement: 'bottomRight',
+      });
+    } finally {
+      setDetectLoading(false);
+    }
+  }, [notification, t]);
+
+  const handleAddFromDetected = (d: HidDeviceInfo) => {
+    // Pre-fill name with the most informative string available:
+    //   product (HID descriptor) > manufacturer + " device" > vendor name from db
+    const suggestedName =
+      d.productName ||
+      (d.manufacturer ? `${d.manufacturer} HID device` : null) ||
+      d.vendorNameFromDb ||
+      `HID device ${d.vendorIdHex}:${d.productIdHex}`;
+    form.setFieldsValue({
+      name: suggestedName,
+      vendorId: d.vendorId,
+      productId: d.productId,
+      enabled: true,
+    });
+    setAddOpen(true);
+  };
+
+  const visibleDetected = showAllHid
+    ? detected
+    : detected.filter((d) => d.looksLikeKeyboard || d.looksLikeScanner);
 
   const handleAdd = async (values: any) => {
     const input: CreateInput = {
@@ -181,6 +270,213 @@ const ManagedScannersSettings: React.FC = () => {
           style={{ marginBottom: 16 }}
         />
       )}
+
+      <Collapse
+        style={{ marginBottom: 16 }}
+        onChange={(keys) => {
+          // Lazy-load on first expand. If user re-collapses and re-opens
+          // without refreshing, keep the previous result — they can hit
+          // Refresh explicitly if it's stale.
+          const expanded = Array.isArray(keys) ? keys.includes('detect') : keys === 'detect';
+          if (expanded && detected.length === 0 && !detectLoading) {
+            void refreshDetected();
+          }
+        }}
+        items={[
+          {
+            key: 'detect',
+            label: (
+              <Space>
+                <span>
+                  {t(
+                    'settings:managedScanners.detect.title',
+                    'Detect connected HID devices',
+                  )}
+                </span>
+                {detectAt && (
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    {t('settings:managedScanners.detect.lastScanned', 'Last scanned')}:{' '}
+                    {detectAt.toLocaleTimeString()}
+                  </Text>
+                )}
+              </Space>
+            ),
+            children: (
+              <>
+                <Space style={{ marginBottom: 12 }} wrap>
+                  <Button
+                    icon={<ReloadOutlined />}
+                    onClick={refreshDetected}
+                    loading={detectLoading}
+                    data-testid="hid-detect-refresh-btn"
+                  >
+                    {t('settings:managedScanners.detect.refresh', 'Refresh')}
+                  </Button>
+                  <Checkbox
+                    checked={showAllHid}
+                    onChange={(e) => setShowAllHid(e.target.checked)}
+                  >
+                    {t(
+                      'settings:managedScanners.detect.showAll',
+                      'Show all HID devices (not just keyboards/scanners)',
+                    )}
+                  </Checkbox>
+                </Space>
+
+                {detectError && (
+                  <Alert
+                    type="error"
+                    message={detectError}
+                    showIcon
+                    style={{ marginBottom: 12 }}
+                  />
+                )}
+
+                <Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 8 }}>
+                  {t(
+                    'settings:managedScanners.detect.help',
+                    'Lists devices currently attached. Click "Add" on any row to add it to the managed list with VID/PID and name pre-filled. The scan only reads metadata — devices are NOT opened, so other software keeps working normally.',
+                  )}
+                </Paragraph>
+
+                <Table<HidDeviceInfo>
+                  rowKey={detectRowKey}
+                  loading={detectLoading}
+                  dataSource={visibleDetected}
+                  pagination={false}
+                  size="small"
+                  scroll={{ y: 320 }}
+                  columns={[
+                    {
+                      title: t('settings:managedScanners.detect.colName', 'Device'),
+                      key: 'name',
+                      render: (_: unknown, d) => {
+                        const primary =
+                          d.productName ||
+                          d.vendorNameFromDb ||
+                          t('settings:managedScanners.detect.unnamed', '(unnamed)');
+                        const secondary = d.manufacturer ?? d.vendorNameFromDb;
+                        return (
+                          <Space direction="vertical" size={0}>
+                            <Text strong>{primary}</Text>
+                            {secondary && secondary !== primary && (
+                              <Text type="secondary" style={{ fontSize: 11 }}>
+                                {secondary}
+                              </Text>
+                            )}
+                            {d.serialNumber && (
+                              <Text type="secondary" style={{ fontSize: 11 }}>
+                                S/N: {d.serialNumber}
+                              </Text>
+                            )}
+                          </Space>
+                        );
+                      },
+                    },
+                    {
+                      title: t('settings:managedScanners.detect.colVid', 'VID'),
+                      key: 'vid',
+                      width: 110,
+                      render: (_: unknown, d) => (
+                        <Tooltip title={`Decimal: ${d.vendorId}`}>
+                          <Tag>0x{d.vendorIdHex}</Tag>
+                        </Tooltip>
+                      ),
+                    },
+                    {
+                      title: t('settings:managedScanners.detect.colPid', 'PID'),
+                      key: 'pid',
+                      width: 110,
+                      render: (_: unknown, d) => (
+                        <Tooltip title={`Decimal: ${d.productId}`}>
+                          <Tag>0x{d.productIdHex}</Tag>
+                        </Tooltip>
+                      ),
+                    },
+                    {
+                      title: t('settings:managedScanners.detect.colConn', 'Connection'),
+                      key: 'connection',
+                      width: 130,
+                      render: (_: unknown, d) => {
+                        switch (d.connection) {
+                          case 'usb':
+                            return (
+                              <Tag icon={<UsbOutlined />} color="default">
+                                USB
+                              </Tag>
+                            );
+                          case 'bluetooth':
+                            return (
+                              <Tag icon={<WifiOutlined />} color="blue">
+                                Bluetooth
+                              </Tag>
+                            );
+                          case 'bluetoothLe':
+                            return (
+                              <Tag icon={<WifiOutlined />} color="cyan">
+                                Bluetooth LE
+                              </Tag>
+                            );
+                          default:
+                            return <Tag>Unknown</Tag>;
+                        }
+                      },
+                    },
+                    {
+                      title: t('settings:managedScanners.detect.colType', 'Type'),
+                      key: 'type',
+                      width: 130,
+                      render: (_: unknown, d) => (
+                        <Space size={4} wrap>
+                          {d.looksLikeKeyboard && (
+                            <Tag color="geekblue">
+                              {t('settings:managedScanners.detect.kbd', 'Keyboard')}
+                            </Tag>
+                          )}
+                          {d.looksLikeScanner && (
+                            <Tag color="purple">
+                              {t('settings:managedScanners.detect.scanner', 'Scanner')}
+                            </Tag>
+                          )}
+                        </Space>
+                      ),
+                    },
+                    {
+                      title: '',
+                      key: 'action',
+                      width: 110,
+                      render: (_: unknown, d) =>
+                        d.alreadyManaged ? (
+                          <Tag color="green">
+                            {t('settings:managedScanners.detect.managed', 'Managed')}
+                          </Tag>
+                        ) : (
+                          <Button
+                            type="primary"
+                            size="small"
+                            icon={<PlusOutlined />}
+                            onClick={() => handleAddFromDetected(d)}
+                            data-testid={`hid-detect-add-${d.vendorIdHex}-${d.productIdHex}`}
+                          >
+                            {t('settings:managedScanners.detect.add', 'Add')}
+                          </Button>
+                        ),
+                    },
+                  ]}
+                  locale={{
+                    emptyText: detectLoading
+                      ? t('common:loading', 'Loading...')
+                      : t(
+                          'settings:managedScanners.detect.empty',
+                          'No HID devices found. Plug in your scanner and click Refresh.',
+                        ),
+                  }}
+                />
+              </>
+            ),
+          },
+        ]}
+      />
 
       <Table<ManagedHidScanner>
         rowKey="id"
