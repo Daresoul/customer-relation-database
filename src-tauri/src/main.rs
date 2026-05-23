@@ -150,8 +150,32 @@ fn main() {
             _ => {}
         })
         .setup(|app| {
-            // Start device-level scanner capture (Windows/macOS dev environments)
-            start_device_capture(app.handle());
+            // Start device-level scanner capture (Windows/macOS dev environments).
+            //
+            // Gated off by default in v0.5.4 because the v0.5.x doubling
+            // regression persists even with raw_input_capture fully disabled
+            // (v0.5.3 confirmed). The remaining suspect is hidapi's enumeration
+            // loop briefly opening HID handles for HidD_GetProductString /
+            // HidD_GetManufacturerString — this is the only other system-
+            // touching code and existed unchanged since v0.4.0 (which the user
+            // confirms was never tested on a Windows PC, consistent with the
+            // bug having always been present).
+            //
+            // Trade-off while this is off: chip scanners (W91B etc.) stop
+            // emitting `scanner:barcode` events through this path — they
+            // continue to type into focused windows like any HID keyboard
+            // would. Users can still manually type chip IDs. Once we confirm
+            // hidapi is the cause and fix it, v0.5.5 re-enables this by
+            // default.
+            //
+            // Re-enable with: ARKIVET_HID_CAPTURE=1
+            let hid_capture_enabled = std::env::var("ARKIVET_HID_CAPTURE").ok().as_deref() == Some("1");
+            if hid_capture_enabled {
+                log::info!("start_device_capture: ENABLED via ARKIVET_HID_CAPTURE=1");
+                start_device_capture(app.handle());
+            } else {
+                log::info!("start_device_capture: disabled by default in v0.5.4 (set ARKIVET_HID_CAPTURE=1 to enable). Investigating doubling regression.");
+            }
             // Start hidden on launch (will be shown from tray or on events).
             // Skipped under E2E so WebDriver can attach to a visible WebView2 —
             // hiding the window drops the DevTools connection and kills the session.
