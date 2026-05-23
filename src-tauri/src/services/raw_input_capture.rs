@@ -1,30 +1,37 @@
-//! Windows Raw Input capture for managed HID scanners.
+//! Windows Raw Input capture + per-device keystroke suppression for managed
+//! HID scanners.
 //!
 //! What this does on Windows:
 //!   1. Creates a hidden, message-only window on a dedicated thread.
 //!   2. Calls `RegisterRawInputDevices` with `RIDEV_INPUTSINK` for the
-//!      keyboard usage page, so we receive raw HID keyboard input even when
-//!      our window is in the background.
+//!      keyboard usage page, so we receive raw HID keyboard input from every
+//!      keyboard-class device even when our window is in the background.
 //!   3. For each WM_INPUT message, resolves the source device's USB VID/PID
 //!      via `GetRawInputDeviceInfo(RIDI_DEVICENAME)`. If it matches a row in
 //!      `managed_hid_scanners` (loaded from SQLite at startup), we accumulate
 //!      the character into a per-device buffer and emit a `scanner:barcode`
-//!      event when Enter / CR / LF arrives. Non-managed devices are ignored.
+//!      event when Enter / CR / LF arrives.
+//!   4. Installs a `WH_KEYBOARD_LL` low-level keyboard hook on the same
+//!      thread. The hook sees every system-wide keystroke and consults a
+//!      shared queue populated by step 3. If the keystroke corresponds to a
+//!      managed-device WM_INPUT we just processed, the hook returns non-zero
+//!      to swallow the event — no focused window receives it. Non-managed
+//!      keyboards (POS scanners, normal keyboards) pass through untouched.
 //!
-//! On focus stealing — what this does *not* do:
-//!   The earlier design tried to combine `RIDEV_NOLEGACY` with `SendInput`
-//!   re-injection so we could suppress managed-device keystrokes from
-//!   reaching focused apps. That doesn't actually work: `RIDEV_NOLEGACY`
-//!   is per-process — it stops *our* window from receiving WM_KEY messages
-//!   for those devices, but other apps still get them. The re-injection
-//!   then duplicated every keystroke (OS-delivered + ours), which was the
-//!   v0.5.0 double-key bug.
+//! On Raw Input vs hook timing:
+//!   Windows fires `WM_INPUT` *before* the low-level keyboard hook for the
+//!   same physical press (Raw Input lives below the keyboard event queue),
+//!   so the suppression entry is reliably in the queue by the time the hook
+//!   checks. The queue is bounded by age (200ms) and size (64) — overflow
+//!   falls back to pass-through, which is the safe degradation.
 //!
-//!   Real per-device system-wide HID suppression on Windows requires a
-//!   `WH_KEYBOARD_LL` global hook correlated with Raw Input timing — a
-//!   separate, harder feature. For now we observe HID reports from managed
-//!   scanners and emit our own events; the OS still routes keystrokes to
-//!   the focused app the normal way.
+//! On NOLEGACY (and why we don't use it):
+//!   `RIDEV_NOLEGACY` is per-process. It only stops *our* window from
+//!   receiving WM_KEY messages — focused windows still get them. v0.5.0
+//!   combined NOLEGACY with SendInput re-injection and ended up doubling
+//!   every keystroke (OS delivery + our re-inject). The current design
+//!   relies on the global LL hook instead, which is the only way to
+//!   suppress per-device system-wide without driver work.
 //!
 //! On non-Windows platforms this whole module is a no-op stub. The hidapi-based
 //! `device_capture` keeps providing scan events on macOS / Linux.
@@ -55,10 +62,12 @@ mod windows_impl {
         RID_INPUT,
     };
     use windows::Win32::UI::WindowsAndMessaging::{
-        CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, RegisterClassExW,
-        TranslateMessage, CW_USEDEFAULT, HWND_MESSAGE, MSG, WINDOW_EX_STYLE, WINDOW_STYLE,
+        CallNextHookEx, CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW,
+        RegisterClassExW, SetWindowsHookExW, TranslateMessage, UnhookWindowsHookEx, CW_USEDEFAULT,
+        HHOOK, HWND_MESSAGE, KBDLLHOOKSTRUCT, MSG, WH_KEYBOARD_LL, WINDOW_EX_STYLE, WINDOW_STYLE,
         WM_INPUT, WNDCLASSEXW,
     };
+    use std::collections::VecDeque;
 
     /// USB device descriptor parsed out of `RIDI_DEVICENAME`.
     /// Format is `\\?\HID#VID_xxxx&PID_xxxx&...`.
@@ -109,6 +118,41 @@ mod windows_impl {
     /// Stash the app handle so the message-loop thread can emit events.
     /// Set once before the message loop spins up.
     static APP_HANDLE: OnceLock<AppHandle> = OnceLock::new();
+
+    /// One entry per recent keystroke from a managed scanner.
+    ///
+    /// The `WM_INPUT` handler pushes here when it sees a managed device's HID
+    /// report. The `WH_KEYBOARD_LL` low-level keyboard hook pops matching
+    /// entries to decide whether to suppress the corresponding legacy
+    /// `WM_KEY*` event from reaching focused windows.
+    ///
+    /// Windows fires `WM_INPUT` *before* the low-level hook for the same
+    /// physical press (Raw Input lives below the keyboard event queue), so
+    /// the entry is reliably in the queue by the time the hook checks.
+    #[derive(Debug, Clone, Copy)]
+    struct PendingSuppress {
+        vk: u16,
+        scan_code: u16,
+        is_key_up: bool,
+        ts: Instant,
+    }
+
+    /// Bounded queue of recent managed-scanner keystrokes awaiting suppression.
+    /// Pruned by both age (>200ms) and size (cap 64) — bursts longer than that
+    /// shouldn't happen for a barcode scan and overflow falls back to
+    /// pass-through behavior, which is the safe degradation.
+    fn pending_suppress() -> &'static Mutex<VecDeque<PendingSuppress>> {
+        static Q: OnceLock<Mutex<VecDeque<PendingSuppress>>> = OnceLock::new();
+        Q.get_or_init(|| Mutex::new(VecDeque::with_capacity(64)))
+    }
+
+    /// Handle returned by `SetWindowsHookExW`. Kept so `UnhookWindowsHookEx`
+    /// can run on teardown (currently unused — module runs for app lifetime).
+    static HOOK_HANDLE: OnceLock<Mutex<isize>> = OnceLock::new();
+
+    fn hook_handle() -> &'static Mutex<isize> {
+        HOOK_HANDLE.get_or_init(|| Mutex::new(0))
+    }
 
     /// Entry point. Spawns the message-loop thread and returns immediately.
     pub fn start_raw_input_capture(app: AppHandle, pool: SeaOrmPool) {
@@ -194,21 +238,17 @@ mod windows_impl {
                 return;
             }
 
-            // Register keyboard usage page (1, 6) with INPUTSINK only (deliver
-            // raw HID reports to us even when our window is in the background).
+            // Register keyboard usage page (1, 6) with INPUTSINK only.
             //
-            // We do NOT use RIDEV_NOLEGACY. Despite the name, NOLEGACY only
-            // suppresses WM_KEY messages for THIS process — other apps still
-            // receive them normally from the same physical keystroke. Combining
-            // NOLEGACY with SendInput re-injection makes focused apps see every
-            // keystroke twice (the OS-delivered one + our re-injection). True
-            // per-device system-wide suppression requires a WH_KEYBOARD_LL
-            // hook correlated with Raw Input timing — separate feature.
+            // Raw Input is used here purely for *device identification* — it
+            // tells us which physical keyboard generated each keystroke (via
+            // VID/PID), which the legacy WM_KEY pipeline can't.
             //
-            // Without NOLEGACY we still observe HID reports from managed
-            // scanners and emit `scanner:barcode` events for them; the OS
-            // routes keystrokes to the focused app normally (same behavior as
-            // the existing `device_capture.rs` hidapi-poll path).
+            // Per-device system-wide suppression is handled by the
+            // WH_KEYBOARD_LL hook installed below, *not* by RIDEV_NOLEGACY
+            // (which is per-process and would only stop our own window from
+            // seeing WM_KEY events — focused apps would still receive them).
+            // See the module-level doc comment for the longer story.
             let devices = [RAWINPUTDEVICE {
                 usUsagePage: 0x01,
                 usUsage: 0x06,
@@ -225,6 +265,34 @@ mod windows_impl {
                 return;
             }
 
+            // Install a low-level keyboard hook on this same thread. The hook
+            // sees every keystroke system-wide and can suppress them by
+            // returning non-zero. We use it to drop the WM_KEY* events that
+            // correspond to managed-scanner WM_INPUT messages we just
+            // observed — that's how the focus-stealing fix is actually
+            // achieved (Raw Input alone can't suppress per-device system-wide).
+            //
+            // The hook MUST run on a thread with a message loop, which is
+            // why it's installed here and not in `start_raw_input_capture`.
+            let hmod = windows::Win32::System::LibraryLoader::GetModuleHandleW(None)
+                .unwrap_or_default();
+            // HMODULE → HINSTANCE conversion (same underlying handle, different newtype).
+            let hinst: windows::Win32::Foundation::HINSTANCE = hmod.into();
+            match SetWindowsHookExW(WH_KEYBOARD_LL, Some(low_level_kbd_proc), hinst, 0) {
+                Ok(handle) => {
+                    *hook_handle().lock().unwrap() = handle.0;
+                    log::info!("raw_input_capture: WH_KEYBOARD_LL hook installed");
+                }
+                Err(e) => {
+                    log::error!(
+                        "raw_input_capture: SetWindowsHookExW failed: {}. Focus-stealing suppression unavailable.",
+                        e
+                    );
+                    // Continue without the hook — scans still get captured via
+                    // WM_INPUT, just no suppression of focused-window typing.
+                }
+            }
+
             log::info!("raw_input_capture: started, listening on hidden HWND");
 
             let mut msg = MSG::default();
@@ -232,7 +300,88 @@ mod windows_impl {
                 let _ = TranslateMessage(&msg);
                 DispatchMessageW(&msg);
             }
+
+            // Cleanup on graceful exit (never reached today).
+            let h = *hook_handle().lock().unwrap();
+            if h != 0 {
+                let _ = UnhookWindowsHookEx(HHOOK(h));
+            }
         }
+    }
+
+    /// Low-level keyboard hook procedure. Runs on the message-loop thread
+    /// every time *any* keyboard event happens anywhere in Windows. Must be
+    /// fast (default LowLevelHooksTimeout = ~300ms before Windows nukes the
+    /// hook) and panic-free — any unwind here freezes keyboard input until
+    /// the OS times us out.
+    extern "system" fn low_level_kbd_proc(
+        code: i32,
+        wparam: WPARAM,
+        lparam: LPARAM,
+    ) -> LRESULT {
+        // Negative codes mean "must not process, just CallNextHookEx".
+        if code < 0 {
+            return unsafe { CallNextHookEx(HHOOK(0), code, wparam, lparam) };
+        }
+
+        // SAFETY: lparam points at a KBDLLHOOKSTRUCT for the duration of this
+        // callback per Windows API contract.
+        let info = unsafe { &*(lparam.0 as *const KBDLLHOOKSTRUCT) };
+        let vk = info.vkCode as u16;
+        let scan = info.scanCode as u16;
+
+        // wparam is one of WM_KEYDOWN(0x100), WM_KEYUP(0x101), WM_SYSKEYDOWN(0x104),
+        // WM_SYSKEYUP(0x105). Bit 0 set = up.
+        let is_up = (wparam.0 as u32) & 0x01 != 0;
+
+        // Look for a matching managed entry. We only suppress if it matches
+        // the same up/down state — otherwise a real keyboard's down could
+        // accidentally swallow a managed device's pending up.
+        let suppress = {
+            let mut q = pending_suppress().lock().unwrap();
+            // Drop anything older than 200ms — those are stale, the matching
+            // hook callback must have raced past us (very rare).
+            while let Some(front) = q.front() {
+                if front.ts.elapsed() > Duration::from_millis(200) {
+                    q.pop_front();
+                } else {
+                    break;
+                }
+            }
+            // Find the oldest matching entry and consume it.
+            let pos = q.iter().position(|e| {
+                e.vk == vk && e.scan_code == scan && e.is_key_up == is_up
+            });
+            if let Some(idx) = pos {
+                q.remove(idx);
+                true
+            } else {
+                false
+            }
+        };
+
+        if suppress {
+            // Non-zero return value swallows the event — no other app sees it.
+            return LRESULT(1);
+        }
+        unsafe { CallNextHookEx(HHOOK(0), code, wparam, lparam) }
+    }
+
+    /// Push a managed-scanner keystroke so the LL hook can match + suppress it.
+    fn enqueue_suppress(vk: u16, scan_code: u16, is_key_up: bool) {
+        let mut q = pending_suppress().lock().unwrap();
+        if q.len() >= 64 {
+            // Drop the oldest to bound the queue. Overflow = pass-through;
+            // an unsuppressed key occasionally leaking is preferable to
+            // unbounded memory.
+            q.pop_front();
+        }
+        q.push_back(PendingSuppress {
+            vk,
+            scan_code,
+            is_key_up,
+            ts: Instant::now(),
+        });
     }
 
     extern "system" fn window_proc(
@@ -290,11 +439,8 @@ mod windows_impl {
 
         let kb = &raw.data.keyboard;
 
-        // Skip key-up events; we only emit on key-down.
         const RI_KEY_BREAK: u32 = 0x01;
-        if (kb.Flags as u32) & RI_KEY_BREAK != 0 {
-            return;
-        }
+        let is_key_up = (kb.Flags as u32) & RI_KEY_BREAK != 0;
 
         let is_managed = match usb {
             Some(id) => managed_ids().lock().unwrap().iter().any(|m| *m == id),
@@ -302,10 +448,21 @@ mod windows_impl {
         };
 
         if !is_managed {
-            // Not a managed scanner. We don't suppress (NOLEGACY removed), so
-            // the OS already delivered this keystroke to the focused window
-            // normally. Nothing more to do — observing it here is purely so
-            // we can identify and ignore non-managed devices.
+            // Not a managed scanner. We don't enqueue for suppression — the OS
+            // routes this keystroke to the focused window normally, which is
+            // what we want.
+            return;
+        }
+
+        // Managed device — tell the low-level keyboard hook to swallow the
+        // corresponding WM_KEY* event so it doesn't reach focused apps.
+        // Enqueue for BOTH key-down and key-up so the receiving app doesn't
+        // see a phantom "key held" event.
+        enqueue_suppress(kb.VKey, kb.MakeCode, is_key_up);
+
+        // The rest of the handler only emits on key-down (we accumulate the
+        // chip ID as it streams in and flush on Enter / CR / LF).
+        if is_key_up {
             return;
         }
 
