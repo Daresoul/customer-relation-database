@@ -54,20 +54,12 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Rust cache
-        # Same `shared-key: windows-tauri` as e2e-windows.yml so the two
-        # workflows share target/. On a warm runner where E2E just ran, the
-        # release Cargo build is a near-no-op (only the version-bump rebuilds
-        # the bin crate). Previously gated to non-Windows for unclear reasons;
-        # there's no Windows-specific reason to skip — the self-hosted Windows
-        # runner benefits more than any cloud Linux runner because it actually
-        # runs Tauri builds. Save-if=true so every successful release run
-        # updates the cache for the next E2E + release pair.
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: './src-tauri -> target'
-          shared-key: 'windows-tauri'
-          save-if: 'true'
+      # No Rust cache action here — we run on a dedicated self-hosted Windows
+      # runner where target/ + ~/.cargo persist between runs via clean: false.
+      # GitHub's actions cache would instead spend 10-20 min/run uploading a
+      # 1-2 GB tarball over the runner's outbound bandwidth, which on Swatinem
+      # observed worse end-to-end timings than just letting the filesystem
+      # handle it. See e2e-windows.yml head comment for the longer story.
 
       - name: Check if npm install needed
         id: npm-hash
@@ -94,19 +86,9 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Cache Gradle dependencies
-        # Caches ~/.gradle/caches (downloaded deps) + ~/.gradle/wrapper
-        # (the Gradle distribution itself). Build outputs live in
-        # pdf-generator-cli/build/ which persists between runs via
-        # `clean: false` in checkout, so we don't cache those here.
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('pdf-generator-cli/build.gradle', 'pdf-generator-cli/gradle/wrapper/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+      # No Gradle dependency cache — same logic as the Rust cache above.
+      # ~/.gradle persists on the runner via clean: false; uploading it to
+      # GitHub cache costs more than it saves on a single dedicated runner.
 
       - name: Build Java PDF Generator (Unix)
         if: runner.os != 'Windows'

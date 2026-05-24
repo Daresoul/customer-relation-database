@@ -9,15 +9,26 @@ name: E2E (Windows full-stack)
 #   - NOT on every PR — the runs are slow and the runner is shared. PR-time
 #     coverage comes from Layers 1+2 which run on free cloud runners.
 #
-# Caching strategy (matches release.yml — `shared-key: windows-tauri` lets
-# both workflows reuse each other's target/ on warm runners):
-#   - Rust:   Swatinem/rust-cache (smart partial-hit, key = lockfile + rustc)
-#   - Gradle: actions/cache on ~/.gradle/caches + ~/.gradle/wrapper
-#   - npm:    skip `npm ci` if node_modules/.lockfile-hash matches the current
-#             package-lock.json (self-hosted runner preserves node_modules
-#             between runs)
-#   - JAR:    rebuilt only if its source files changed; the persisted
-#             pdf-generator-cli/build dir survives between runs
+# Caching strategy:
+# We run on a single dedicated self-hosted Windows runner with a persistent
+# filesystem. That persistent filesystem IS our cache — `clean: false` in
+# checkout preserves everything between runs, and Cargo / Gradle / npm all
+# handle incremental work naturally against on-disk state.
+#
+# We DO NOT use GitHub's actions/cache or Swatinem/rust-cache here. They're
+# designed for ephemeral cloud runners where there's no persistent disk to
+# carry state forward. On a self-hosted runner they instead spend 10-20 min
+# per run uploading a 1-2 GB target/ tarball to GitHub's cache service over
+# the runner's outbound bandwidth — for nothing, because next run already
+# has the same target/ on disk. See commit history for the brief experiment
+# that proved this.
+#
+#   - Rust:   target/ + ~/.cargo persists via clean: false
+#   - Gradle: pdf-generator-cli/build/ + ~/.gradle persists via clean: false
+#   - npm:    skip `npm ci` if node_modules/.lockfile-hash matches the
+#             current package-lock.json
+#   - JAR:    Gradle incremental compile against persisted build/ — sub-
+#             second no-op when sources unchanged
 
 on:
   push:
@@ -96,19 +107,6 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Cache Gradle dependencies
-        # Caches the Gradle dependency download cache + wrapper distribution.
-        # Doesn't cache the build outputs (those persist via clean: false in
-        # checkout). On a cold runner saves ~60-90s of dep downloads.
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('pdf-generator-cli/build.gradle', 'pdf-generator-cli/gradle/wrapper/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-
       - name: Build PDF generator JAR
         # Tauri bundles src-tauri/resources/pdf-generator.jar (declared in
         # tauri.conf.json:resources). The JAR isn't committed — it's built
@@ -124,22 +122,6 @@ jobs:
         run: |
           .\gradlew.bat build --no-daemon
           Copy-Item build\libs\pdf-generator-cli-1.0.0.jar ..\src-tauri\resources\pdf-generator.jar -Force
-
-      - name: Rust cache
-        # Swatinem/rust-cache is smarter than raw actions/cache for Rust:
-        # caches ~/.cargo/{registry,git} + the right pieces of target/ with
-        # restore-keys fallback (partial cache hits when Cargo.lock changes
-        # only slightly). `shared-key: windows-tauri` is the same value used
-        # in release.yml so the two workflows reuse each other's build
-        # artifacts on the warm runner.
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: 'src-tauri'
-          shared-key: 'windows-tauri'
-          # Save the cache even on this non-default branch's PRs (default
-          # behavior saves only on main; we want every successful run to
-          # update the cache so subsequent runs benefit).
-          save-if: 'true'
 
       - name: Build Tauri release binary
         shell: pwsh
