@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Typography, Empty, Descriptions, Tag, Space, Button, Select, App } from 'antd';
+import { Card, Typography, Empty, Descriptions, Tag, Space, Button, Select, App, Form, Input } from 'antd';
 import { HomeOutlined, UserOutlined, PhoneOutlined, MailOutlined, PlusOutlined, SwapOutlined, DisconnectOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -12,6 +12,8 @@ import styles from './PatientDetail.module.css';
 const { Title, Text } = Typography;
 const { Option } = Select;
 
+type AssignMode = 'idle' | 'selecting' | 'creating';
+
 interface HouseholdSectionProps {
   household?: HouseholdSummary;
   patientId?: number;
@@ -22,36 +24,88 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household, p
   const { t } = useTranslation('patients');
   const { notification } = App.useApp();
   const queryClient = useQueryClient();
-  const [isAssigning, setIsAssigning] = useState(false);
+  const [mode, setMode] = useState<AssignMode>('idle');
   const [selectedHouseholdId, setSelectedHouseholdId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [createForm] = Form.useForm();
 
   // Fetch all households for the select dropdown
   const { data: allHouseholds = [], isLoading: isLoadingHouseholds } = useQuery({
     queryKey: ['all-households'],
     queryFn: () => invoke<any[]>('get_all_households', { limit: 1000 }),
-    enabled: isAssigning,
+    enabled: mode === 'selecting',
   });
+
+  const resetForm = () => {
+    setMode('idle');
+    setSelectedHouseholdId(null);
+    createForm.resetFields();
+  };
+
+  const assignPatientToHousehold = async (householdId: number) => {
+    if (!patientId) return;
+    await PatientService.updatePatientHousehold(patientId, householdId);
+    notification.success({
+      message: t('detail.householdInfo.assignSuccess'),
+      placement: 'bottomRight',
+      duration: 3,
+    });
+    resetForm();
+    queryClient.invalidateQueries({ queryKey: ['patient', patientId] });
+    queryClient.invalidateQueries({ queryKey: ['all-households'] });
+    onHouseholdChanged?.();
+  };
 
   const handleAssignHousehold = async () => {
     if (!selectedHouseholdId || !patientId) return;
 
     setIsLoading(true);
     try {
-      await PatientService.updatePatientHousehold(patientId, selectedHouseholdId);
-      notification.success({
-        message: t('detail.householdInfo.assignSuccess'),
-        placement: 'bottomRight',
-        duration: 3,
-      });
-      setIsAssigning(false);
-      setSelectedHouseholdId(null);
-      // Invalidate patient query to refresh
-      queryClient.invalidateQueries({ queryKey: ['patient', patientId] });
-      onHouseholdChanged?.();
+      await assignPatientToHousehold(selectedHouseholdId);
     } catch (error) {
       notification.error({
         message: t('detail.householdInfo.assignFailed'),
+        description: String(error),
+        placement: 'bottomRight',
+        duration: 5,
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Create a household inline and assign it to the patient in one go.
+  //
+  // Mirrors the PatientFormWithOwner inline-create flow: hits the raw
+  // `create_household` Tauri command (must use raw invoke — see note in
+  // PatientService re: ApiService case-transform breaking multi-arg
+  // commands), then assigns the new household to the current patient.
+  const handleCreateAndAssign = async (values: {
+    householdName: string;
+    contactName?: string;
+    phone?: string;
+    email?: string;
+  }) => {
+    if (!patientId) return;
+
+    setIsLoading(true);
+    try {
+      const newHousehold = await invoke<{ id: number }>('create_household', {
+        lastName: values.householdName.trim(),
+        contacts: (values.contactName || values.phone || values.email)
+          ? [{
+              name: values.contactName?.trim() || values.householdName.trim(),
+              isPrimary: true,
+              email: values.email?.trim() || null,
+              phone: values.phone?.trim() || null,
+            }]
+          : [],
+      });
+
+      await assignPatientToHousehold(newHousehold.id);
+    } catch (error) {
+      notification.error({
+        message: t('detail.householdInfo.createFailed', 'Failed to create household'),
         description: String(error),
         placement: 'bottomRight',
         duration: 5,
@@ -97,7 +151,7 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household, p
           </Title>
         }
       >
-        {isAssigning ? (
+        {mode === 'selecting' && (
           <Space direction="vertical" style={{ width: '100%' }}>
             <Select
               placeholder={t('detail.householdInfo.selectHousehold')}
@@ -114,7 +168,7 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household, p
                 </Option>
               ))}
             </Select>
-            <Space>
+            <Space wrap>
               <Button
                 type="primary"
                 onClick={handleAssignHousehold}
@@ -123,12 +177,67 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household, p
               >
                 {t('detail.householdInfo.assign')}
               </Button>
-              <Button onClick={() => { setIsAssigning(false); setSelectedHouseholdId(null); }}>
+              <Button onClick={() => setMode('creating')} disabled={isLoading}>
+                {t('detail.householdInfo.createNew', 'Create new')}
+              </Button>
+              <Button onClick={resetForm} disabled={isLoading}>
                 {t('common:cancel')}
               </Button>
             </Space>
           </Space>
-        ) : (
+        )}
+
+        {mode === 'creating' && (
+          <Form
+            form={createForm}
+            layout="vertical"
+            onFinish={handleCreateAndAssign}
+            disabled={isLoading}
+          >
+            <Form.Item
+              name="householdName"
+              label={t('detail.householdInfo.householdName')}
+              rules={[
+                { required: true, message: t('detail.householdInfo.householdNameRequired', 'Household name is required') },
+                { max: 100, message: t('detail.householdInfo.householdNameTooLong', 'Household name must be 100 characters or less') },
+              ]}
+            >
+              <Input placeholder={t('detail.householdInfo.householdNamePlaceholder', 'e.g., The Petrov Family')} autoFocus />
+            </Form.Item>
+            <Form.Item
+              name="contactName"
+              label={t('detail.householdInfo.primaryContactName', 'Primary contact (optional)')}
+            >
+              <Input placeholder={t('detail.householdInfo.contactNamePlaceholder', 'e.g., John Petrov')} />
+            </Form.Item>
+            <Form.Item
+              name="phone"
+              label={t('detail.householdInfo.contactPhone', 'Phone (optional)')}
+            >
+              <Input placeholder="+389 70 123 456" />
+            </Form.Item>
+            <Form.Item
+              name="email"
+              label={t('detail.householdInfo.contactEmail', 'Email (optional)')}
+              rules={[{ type: 'email', message: t('forms:validation.email', 'Invalid email') }]}
+            >
+              <Input placeholder="contact@example.com" />
+            </Form.Item>
+            <Space>
+              <Button type="primary" htmlType="submit" loading={isLoading}>
+                {t('detail.householdInfo.createAndAssign', 'Create and assign')}
+              </Button>
+              <Button onClick={() => setMode('selecting')} disabled={isLoading}>
+                {t('common:back')}
+              </Button>
+              <Button onClick={resetForm} disabled={isLoading}>
+                {t('common:cancel')}
+              </Button>
+            </Space>
+          </Form>
+        )}
+
+        {mode === 'idle' && (
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
             description={
@@ -139,9 +248,14 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household, p
             className={styles.emptyHousehold}
           >
             {patientId && (
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => setIsAssigning(true)}>
-                {t('detail.householdInfo.assignHousehold')}
-              </Button>
+              <Space wrap>
+                <Button type="primary" icon={<PlusOutlined />} onClick={() => setMode('selecting')}>
+                  {t('detail.householdInfo.assignHousehold')}
+                </Button>
+                <Button icon={<HomeOutlined />} onClick={() => setMode('creating')}>
+                  {t('detail.householdInfo.createNew', 'Create new')}
+                </Button>
+              </Space>
             )}
           </Empty>
         )}

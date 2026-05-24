@@ -161,7 +161,17 @@
       "assignSuccess": "Household assigned successfully",
       "assignFailed": "Failed to assign household",
       "unlinkSuccess": "Unlinked from household successfully",
-      "unlinkFailed": "Failed to unlink from household"
+      "unlinkFailed": "Failed to unlink from household",
+      "createNew": "Create new",
+      "createFailed": "Failed to create household",
+      "createAndAssign": "Create and assign",
+      "householdNameRequired": "Household name is required",
+      "householdNameTooLong": "Household name must be 100 characters or less",
+      "householdNamePlaceholder": "e.g., The Petrov Family",
+      "primaryContactName": "Primary contact (optional)",
+      "contactNamePlaceholder": "e.g., John Petrov",
+      "contactPhone": "Phone (optional)",
+      "contactEmail": "Email (optional)"
     },
     "medicalHistory": {
       "title": "Medical History",

@@ -97,13 +97,26 @@ export class PatientService {
     });
   }
 
+  // NOTE on `invokeRaw` below:
+  // Tauri 1.x's #[tauri::command] macro renames Rust snake_case args to
+  // camelCase on the wire by default (see tauri-macros wrapper.rs —
+  // ArgumentCase::Camel). ApiService.invoke transforms outgoing args
+  // camelCase → snake_case, which breaks lookup for any command with
+  // multi-word args (patient_id, household_id, …) — Tauri ends up
+  // looking for "patientId" in a payload that now only has "patient_id".
+  //
+  // For commands with single-word args (id, dto, query) the transform
+  // is a no-op and they work either way. For these multi-arg link/owner
+  // commands we must use invokeRaw so the camelCase keys reach Tauri
+  // unchanged.
+
   /**
    * Update a patient's household assignment
    */
   static async updatePatientHousehold(patientId: number, householdId: number | null): Promise<void> {
-    return ApiService.invoke<void>('update_patient_household', {
+    return ApiService.invokeRaw<void>('update_patient_household', {
       patientId,
-      householdId
+      householdId,
     });
   }
 
@@ -116,11 +129,11 @@ export class PatientService {
     relationshipType?: string,
     isPrimary?: boolean
   ): Promise<void> {
-    return ApiService.invoke<void>('link_patient_to_household', {
+    return ApiService.invokeRaw<void>('link_patient_to_household', {
       patientId,
       householdId,
       relationshipType,
-      isPrimary
+      isPrimary,
     });
   }
 
@@ -128,9 +141,9 @@ export class PatientService {
    * Unlink a patient from a household
    */
   static async unlinkPatientFromHousehold(patientId: number, householdId: number): Promise<void> {
-    return ApiService.invoke<void>('unlink_patient_from_household', {
+    return ApiService.invokeRaw<void>('unlink_patient_from_household', {
       patientId,
-      householdId
+      householdId,
     });
   }
 
@@ -143,11 +156,11 @@ export class PatientService {
     isPrimary?: boolean,
     relationshipType?: 'Owner' | 'Guardian' | 'Emergency Contact'
   ): Promise<void> {
-    return ApiService.invoke<void>('add_patient_owner', {
+    return ApiService.invokeRaw<void>('add_patient_owner', {
       patientId,
       ownerId,
       isPrimary,
-      relationshipType
+      relationshipType,
     });
   }
 
@@ -155,9 +168,9 @@ export class PatientService {
    * Remove an owner from a patient
    */
   static async removePatientOwner(patientId: number, ownerId: number): Promise<void> {
-    return ApiService.invoke<void>('remove_patient_owner', {
+    return ApiService.invokeRaw<void>('remove_patient_owner', {
       patientId,
-      ownerId
+      ownerId,
     });
   }
 
@@ -165,9 +178,9 @@ export class PatientService {
    * Set primary owner for a patient
    */
   static async setPrimaryOwner(patientId: number, ownerId: number): Promise<void> {
-    return ApiService.invoke<void>('set_primary_owner', {
+    return ApiService.invokeRaw<void>('set_primary_owner', {
       patientId,
-      ownerId
+      ownerId,
     });
   }
 }
