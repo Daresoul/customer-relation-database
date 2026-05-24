@@ -59,6 +59,28 @@ jobs:
         with:
           clean: false
 
+      - name: Install Rust
+        # Self-healing toolchain step. On a healthy runner where the
+        # active stable is already installed, this is ~5s no-op (rustup
+        # confirms the toolchain matches and exits). On a runner where
+        # rustup's proxy points to a missing / corrupt toolchain — which
+        # happens occasionally from Defender quarantine, partial rustup
+        # updates, or interrupted background processes — this re-installs
+        # the missing pieces and gets CI back to green without needing
+        # to manually RDP into the runner.
+        #
+        # Was: e2e-windows.yml relied entirely on pre-installed Rust per
+        # WINDOWS_RUNNER_SETUP.md, which worked until 2026-05-24 when the
+        # runner's `~\.rustup\toolchains\stable-x86_64-pc-windows-msvc\
+        # bin\rustc.exe` went missing for unclear reasons (the rustup
+        # proxy at `~\.cargo\bin\rustc.exe` was still there, but it
+        # couldn't find the real binary to forward to → "No application
+        # is associated with the specified file" hard-fail).
+        #
+        # The cost is ~5s/run when healthy. The benefit is "CI never gets
+        # stuck waiting on a runner fix again". Easy trade.
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Verify toolchain present
         # Call each tool directly rather than wrapping in
         # `Write-Host "$(tool --version)"`. PowerShell 7's subexpression
