@@ -648,18 +648,66 @@ mod windows_impl {
         parsed
     }
 
-    /// Parse `\\?\HID#VID_05AC&PID_022C&...` style device names. Both vendor
-    /// and product IDs are 4 hex chars; case can vary across Windows versions
-    /// so we match case-insensitively.
+    /// Parse VID and PID out of a Windows HID device path. Handles three
+    /// shapes the OS produces depending on the bus the device is on:
+    ///
+    /// 1. USB HID: `\\?\HID#VID_05AC&PID_022C&MI_00#...`
+    ///    - Markers: `VID_` and `PID_` with underscore separator
+    ///    - This is what the v0.5.x parser already supported.
+    ///
+    /// 2. Bluetooth Classic HID: `\\?\HID#{00001124-0000-1000-8000-00805f9b34fb}_VID&05AC_PID&022C#...`
+    ///    - Markers: `_VID&` and `_PID&` (different separator before hex)
+    ///    - The leading GUID `{00001124-...}` is the HID-over-BT service
+    ///      UUID. Most BT-paired keyboards/scanners route through this.
+    ///
+    /// 3. Bluetooth LE HID: `\\?\HID#{some-BLE-GUID}_VID&05AC_PID&022C#...`
+    ///    - Same `_VID&` / `_PID&` shape as classic; different leading GUID.
+    ///
+    /// The old `find("vid_") + 4` parser missed cases 2 and 3 entirely
+    /// because the actual separator after `VID` is `&` for BT paths, not
+    /// `_`. We now accept either `_` or `&` after the `vid` / `pid` token,
+    /// case-insensitively. 4 hex chars follow.
     fn parse_vid_pid(name: &str) -> Option<UsbId> {
         let lower = name.to_ascii_lowercase();
-        let vid_idx = lower.find("vid_")? + 4;
-        let vid_str: String = lower[vid_idx..].chars().take(4).collect();
-        let pid_idx = lower.find("pid_")? + 4;
-        let pid_str: String = lower[pid_idx..].chars().take(4).collect();
-        let vid = u16::from_str_radix(&vid_str, 16).ok()?;
-        let pid = u16::from_str_radix(&pid_str, 16).ok()?;
+        let vid = find_4_hex_after_marker(&lower, "vid")?;
+        let pid = find_4_hex_after_marker(&lower, "pid")?;
         Some(UsbId { vid, pid })
+    }
+
+    /// Find `marker` followed by a separator (`_` or `&`) and 4 hex digits,
+    /// returning the parsed u16. Tries every occurrence of `marker` in the
+    /// haystack so a stray "vid" inside a GUID can't permanently shadow the
+    /// real one.
+    ///
+    /// Used by `parse_vid_pid` to extract VID/PID from any of the three
+    /// Windows HID device path shapes (USB `VID_xxxx`, BT-Classic `_VID&xxxx`,
+    /// BT-LE `_VID&xxxx`). All three share the "marker + single-char
+    /// separator + 4 hex" structure; only the separator differs.
+    fn find_4_hex_after_marker(haystack: &str, marker: &str) -> Option<u16> {
+        let mut search_from = 0;
+        while let Some(rel) = haystack[search_from..].find(marker) {
+            let after_marker = search_from + rel + marker.len();
+            let mut chars = haystack[after_marker..].chars();
+            // First char must be a separator we expect — '_' for USB,
+            // '&' for BT. Anything else (e.g. another letter making this
+            // an unrelated word like "video") fails this candidate and
+            // we keep searching.
+            match chars.next() {
+                Some('_') | Some('&') => {
+                    let hex: String = chars.take(4).collect();
+                    if hex.len() == 4 {
+                        if let Ok(v) = u16::from_str_radix(&hex, 16) {
+                            return Some(v);
+                        }
+                    }
+                }
+                _ => {}
+            }
+            // This occurrence wasn't followed by a valid separator+hex
+            // group; advance past it and look for the next.
+            search_from = after_marker;
+        }
+        None
     }
 
     /// Best-effort virtual-key → char mapping for the digits / hex / Enter
@@ -1256,19 +1304,18 @@ mod windows_impl {
         }
 
         #[test]
-        fn parses_truncated_vid_pid_uses_what_is_there() {
-            // Documented behavior: we `take(4)` from the position after VID_,
-            // so a short input is interpreted as a short hex value. Not ideal
-            // but harmless — such a string is unlikely to ever match a real
-            // managed scanner's VID/PID, so it just falls through to
-            // pass-through behavior.
+        fn rejects_truncated_vid_pid() {
+            // v0.5.7 tightening: parser now requires EXACTLY 4 hex digits
+            // after the marker+separator. Previously `take(4)` would accept
+            // a shorter remaining string ("PID_02" was parsed as 0x0002).
             //
-            // Locking this in so we notice if a future refactor tightens the
-            // parser (which would be fine, but should be a deliberate change).
-            assert_eq!(
-                parse_vid_pid("VID_05AC&PID_02"),
-                Some(UsbId { vid: 0x05AC, pid: 0x0002 })
-            );
+            // The previous test version locked in that permissive behavior
+            // explicitly so we'd notice a deliberate change — which this
+            // is. Real Windows device paths always have 4-char IDs, so the
+            // permissive path could only ever match by accident. Strict-4
+            // closes that false-positive vector.
+            assert_eq!(parse_vid_pid("VID_05AC&PID_02"), None);
+            assert_eq!(parse_vid_pid("VID_05&PID_022C"), None);
         }
 
         #[test]
@@ -1280,6 +1327,103 @@ mod windows_impl {
                 parse_vid_pid(name),
                 Some(UsbId { vid: 0x05AC, pid: 0x022C })
             );
+        }
+
+        // -------------------------------------------------------------
+        // Bluetooth HID path tests — the bug class that broke v0.5.5
+        // for the SYC Bluetooth scanner. Windows uses a different
+        // separator (`&` instead of `_`) between the VID/PID marker
+        // and the hex digits when the device is paired over Bluetooth
+        // (both Classic and LE). The v0.5.x parser found no match
+        // because it hardcoded `vid_` / `pid_` with underscore.
+        //
+        // Each of these is what the OS actually puts in
+        // RIDI_DEVICENAME for that path-shape — captured from
+        // Microsoft docs and real device-tree dumps. If the user's
+        // v0.5.6 diagnostic log shows a path that doesn't match any
+        // of these shapes, add it as a new test case here so the
+        // regression can't recur silently.
+        // -------------------------------------------------------------
+
+        #[test]
+        fn parses_bluetooth_classic_hid_path() {
+            // The {00001124-...} GUID is the HID Service UUID for
+            // Bluetooth Classic. Most HID-mode BT scanners (including
+            // the SYC Bluetooth that spoofs Apple VID 0x05AC) pair
+            // through this profile.
+            let name = r"\\?\HID#{00001124-0000-1000-8000-00805f9b34fb}_VID&05AC_PID&022C#8&1a2b3c4d&0&0000#{4d1e55b2-f16f-11cf-88cb-001111000030}";
+            assert_eq!(
+                parse_vid_pid(name),
+                Some(UsbId { vid: 0x05AC, pid: 0x022C })
+            );
+        }
+
+        #[test]
+        fn parses_bluetooth_le_hid_path() {
+            // BT LE HID uses a different leading GUID but the same
+            // `_VID&xxxx_PID&xxxx` shape after it.
+            let name = r"\\?\HID#{00001812-0000-1000-8000-00805f9b34fb}_VID&0046_PID&02BE#7&abcdef01&0&0001#{4d1e55b2-f16f-11cf-88cb-001111000030}";
+            assert_eq!(
+                parse_vid_pid(name),
+                Some(UsbId { vid: 0x0046, pid: 0x02BE })
+            );
+        }
+
+        #[test]
+        fn parses_bluetooth_path_with_lowercase_markers() {
+            // Some BT stacks emit lowercase `vid&` / `pid&`. Same parse
+            // result thanks to case-insensitive matching.
+            let name = r"\\?\HID#{00001124-0000-1000-8000-00805f9b34fb}_vid&05ac_pid&022c#xyz";
+            assert_eq!(
+                parse_vid_pid(name),
+                Some(UsbId { vid: 0x05AC, pid: 0x022C })
+            );
+        }
+
+        #[test]
+        fn parses_usb_and_bt_mixed_separators_in_same_string() {
+            // Defensive — if some Windows version produces a hybrid
+            // path with one underscore separator and one ampersand,
+            // both should still parse.
+            let mixed1 = r"\\?\HID#VID_05AC_PID&022C&MI_00";
+            assert_eq!(parse_vid_pid(mixed1), Some(UsbId { vid: 0x05AC, pid: 0x022C }));
+            let mixed2 = r"\\?\HID#VID&05AC&PID_022C&MI_00";
+            assert_eq!(parse_vid_pid(mixed2), Some(UsbId { vid: 0x05AC, pid: 0x022C }));
+        }
+
+        #[test]
+        fn rejects_path_with_marker_but_wrong_separator() {
+            // `VID:05AC` (colon, not _ or &) should NOT match — that's
+            // not a Windows-produced device path format and accepting
+            // it would risk false positives from random strings.
+            assert_eq!(parse_vid_pid(r"VID:05AC PID:022C"), None);
+        }
+
+        #[test]
+        fn rejects_word_video_as_vid_marker() {
+            // The marker-then-separator check makes sure substrings
+            // like "video" don't false-match as `vid` + `o` (where 'o'
+            // isn't a separator we accept). The marker must be `vid`
+            // followed by `_` or `&` exactly.
+            assert_eq!(parse_vid_pid("HID#video&05AC_PID_022C"), None);
+        }
+
+        #[test]
+        fn skips_past_unparseable_first_vid_to_find_real_one() {
+            // If the path contains a "vid" substring that's followed
+            // by a valid separator but unparseable hex (e.g. embedded
+            // in a GUID like {abcde-vid_GGGG-...}), the search advances
+            // past it and finds the real VID/PID further on.
+            //
+            // This case is hypothetical but cheap insurance — the
+            // parser now uses a while-loop over occurrences so a
+            // single bad earlier match can't permanently shadow the
+            // real value.
+            let name = r"\\?\HID#vid_GGGG&PID_022C&MI#real VID_05AC PID_022C";
+            // First "vid_" occurrence parses GGGG which fails
+            // u16::from_str_radix; loop continues to second "vid_"
+            // which parses 05AC. The "real" PID parses 022C.
+            assert_eq!(parse_vid_pid(name), Some(UsbId { vid: 0x05AC, pid: 0x022C }));
         }
 
         // ---------------------------------------------------------------
