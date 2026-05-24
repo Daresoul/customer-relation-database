@@ -170,7 +170,14 @@
       "createFailed": "Failed to create household",
       "createAndAssign": "Create and assign",
       "householdNameRequired": "Household name is required",
-      "householdNameTooLong": "Household name must be 100 characters or less"
+      "householdNameTooLong": "Household name must be 100 characters or less",
+      "primaryContactSection": "Primary Contact (optional)",
+      "addressSection": "Address (optional)",
+      "addressPlaceholder": "Street, city",
+      "contactNameIncomplete": "Primary contact needs both first and last name",
+      "contactNameIncompleteDesc": "Fill in both first and last name, or clear them both.",
+      "contactNameRequired": "Primary contact name required",
+      "contactNameRequiredDesc": "Enter a first and last name for the primary contact, or clear the phone/email fields."
     },
     "medicalHistory": {
       "title": "Medical History",

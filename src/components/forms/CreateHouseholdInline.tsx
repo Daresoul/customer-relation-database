@@ -1,14 +1,21 @@
 import React from 'react';
-import { Form, Input, Button, Space, App, Row, Col } from 'antd';
+import { Form, Input, Button, Space, App, Row, Col, Divider, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@/services/invoke';
+import { HouseholdService } from '../../services/householdService';
+import type {
+  CreateContactDto,
+  CreateHouseholdWithPeopleDto,
+} from '../../types/household';
+
+const { Text } = Typography;
 
 /**
  * Result of a successful household creation.
  *
- * Loosely typed because the create_household command's response shape
- * isn't strongly modeled on the frontend and callers typically only
- * need the id.
+ * Loosely typed because the underlying Tauri commands return either a
+ * bare `Household` or a `HouseholdWithPeople` depending on which path
+ * is taken (see comment in handleSubmit). Callers only need the id.
  */
 export interface CreatedHousehold {
   id: number;
@@ -31,32 +38,41 @@ export interface CreateHouseholdInlineProps {
 
 interface FormValues {
   householdName: string;
-  contactName?: string;
+  firstName?: string;
+  lastName?: string;
   phone?: string;
   email?: string;
+  address?: string;
 }
 
 /**
- * Reusable inline form that creates a household via the `create_household`
- * Tauri command.
+ * Reusable inline form that creates a household.
  *
- * UX is intentionally minimal:
- *   - one required field (Household name)
- *   - three optional contact fields (name, phone, email)
- *   - Cancel returns control without side effects
+ * Condensed version of HouseholdForm — supports the same fields users
+ * typically want when registering a new family in one go (name +
+ * primary contact + address), but skips the multi-contact / patient-
+ * association / notes complexity that only makes sense in the full
+ * standalone Household editor.
  *
- * Use this anywhere you need "create a household right now, then do
- * something with the id" — e.g. the patient detail HouseholdSection
- * empty state. For "create as part of a larger form submission" flows
- * (PatientFormWithOwner, CreatePatientSection), keep the household
- * fields embedded in the parent form and call `create_household`
- * during the parent's submit handler — that flow is intentionally
- * different and not unified here.
+ * Fields:
+ *   Household Name (required)
+ *   First Name | Last Name      ┐  primary contact (optional, but
+ *   Phone      | Email          │   first+last are paired — providing
+ *   Address                     ┘   one requires the other)
  *
- * Implementation note: uses raw `invoke` (not ApiService.invoke) for
- * the same reason as PatientService — Tauri 1.x expects camelCase keys
- * (lastName, contacts) on the wire and ApiService transforms outgoing
- * args camelCase → snake_case, which would break this command.
+ * Two backend paths depending on what was filled:
+ *   - first+last name provided → create_household_with_people, which
+ *     creates the household + primary person + their phone/email
+ *     contacts in one transaction. Required by the DTO's validate()
+ *     rule that every household must have at least one person.
+ *   - only the household name → create_household (the simple command,
+ *     no people). Address is set via update_household afterwards if
+ *     provided, since the simple command doesn't accept address.
+ *
+ * Implementation note: uses raw `invoke` (and HouseholdService which
+ * uses ApiService.invoke) — both are fine here because the args we
+ * send have either single-word top-level keys or DTO-wrapped objects.
+ * See PatientService for the broader case-transform trap.
  */
 export const CreateHouseholdInline: React.FC<CreateHouseholdInlineProps> = ({
   onCreated,
@@ -71,31 +87,108 @@ export const CreateHouseholdInline: React.FC<CreateHouseholdInlineProps> = ({
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const handleSubmit = async (values: FormValues) => {
+    const householdName = values.householdName.trim();
+    const firstName = values.firstName?.trim();
+    const lastName = values.lastName?.trim();
+    const phone = values.phone?.trim();
+    const email = values.email?.trim();
+    const address = values.address?.trim();
+
+    // first/last name are a pair — providing one requires the other.
+    // We accept both empty (no primary contact) but reject lopsided
+    // input rather than silently guessing the missing half from the
+    // household name.
+    const hasFirst = !!firstName;
+    const hasLast = !!lastName;
+    if (hasFirst !== hasLast) {
+      notification.error({
+        message: t('patients:detail.householdInfo.contactNameIncomplete', 'Primary contact needs both first and last name'),
+        description: t(
+          'patients:detail.householdInfo.contactNameIncompleteDesc',
+          'Fill in both first and last name, or clear them both.',
+        ),
+        placement: 'bottomRight',
+        duration: 5,
+      });
+      return;
+    }
+
+    // Phone/email without a name is also disallowed — the contact has
+    // to belong to a person, and inventing a default person from the
+    // household name was the old (confusing) behaviour.
+    const hasContactInfo = !!(phone || email);
+    if (hasContactInfo && (!hasFirst || !hasLast)) {
+      notification.error({
+        message: t('patients:detail.householdInfo.contactNameRequired', 'Primary contact name required'),
+        description: t(
+          'patients:detail.householdInfo.contactNameRequiredDesc',
+          'Enter a first and last name for the primary contact, or clear the phone/email fields.',
+        ),
+        placement: 'bottomRight',
+        duration: 5,
+      });
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      const householdName = values.householdName.trim();
-      const hasContact = !!(values.contactName?.trim() || values.phone?.trim() || values.email?.trim());
+      let newHousehold: CreatedHousehold;
 
-      const newHousehold = await invoke<CreatedHousehold>('create_household', {
-        lastName: householdName,
-        // Only attach a primary contact if the user actually filled at
-        // least one contact field; otherwise create_household creates
-        // a household with no people, which is valid.
-        contacts: hasContact
-          ? [{
-              name: values.contactName?.trim() || householdName,
-              isPrimary: true,
-              email: values.email?.trim() || null,
-              phone: values.phone?.trim() || null,
-            }]
-          : [],
-      });
+      if (hasFirst && hasLast) {
+        // Rich path: household + primary person + their contacts in one transaction.
+        const contacts: CreateContactDto[] = [];
+        if (phone) {
+          contacts.push({ contact_type: 'phone', contact_value: phone, is_primary: true });
+        }
+        if (email) {
+          // Mark email primary only if there's no phone; otherwise phone
+          // wins (matches the existing create_household behaviour).
+          contacts.push({ contact_type: 'email', contact_value: email, is_primary: !phone });
+        }
+
+        const dto: CreateHouseholdWithPeopleDto = {
+          household: {
+            householdName,
+            address: address || undefined,
+          },
+          people: [{
+            person: {
+              first_name: firstName!,
+              last_name: lastName!,
+              is_primary: true,
+            },
+            contacts,
+          }],
+        };
+
+        const result = await HouseholdService.createHouseholdWithPeople(dto);
+        newHousehold = result.household as unknown as CreatedHousehold;
+      } else {
+        // Simple path: just the household, no person. The simple
+        // create_household command doesn't accept address, so set it
+        // via update_household afterwards if the user provided one.
+        newHousehold = await invoke<CreatedHousehold>('create_household', {
+          lastName: householdName,
+          contacts: [],
+        });
+
+        if (address && typeof newHousehold.id === 'number') {
+          try {
+            await HouseholdService.updateHousehold(newHousehold.id, { address });
+          } catch (err) {
+            // The household exists; we'll surface the partial failure
+            // but not fail the whole create — the parent can prompt
+            // the user to edit the address.
+            console.warn('Failed to set address on new household:', err);
+          }
+        }
+      }
 
       await onCreated(newHousehold);
       form.resetFields();
     } catch (error) {
       notification.error({
-        message: t('detail.householdInfo.createFailed', 'Failed to create household'),
+        message: t('patients:detail.householdInfo.createFailed', 'Failed to create household'),
         description: String(error),
         placement: 'bottomRight',
         duration: 5,
@@ -114,11 +207,8 @@ export const CreateHouseholdInline: React.FC<CreateHouseholdInlineProps> = ({
       onFinish={handleSubmit}
       disabled={busy}
     >
-      {/* Two-column layout matches the inline create-household pattern
-          previously embedded in the DeviceImportModal's CreatePatientSection.
-          Stacks to one column on small screens. */}
       <Row gutter={16}>
-        <Col xs={24} sm={12}>
+        <Col xs={24}>
           <Form.Item
             name="householdName"
             label={t('patients:detail.householdInfo.householdName', 'Household Name')}
@@ -133,10 +223,27 @@ export const CreateHouseholdInline: React.FC<CreateHouseholdInlineProps> = ({
             />
           </Form.Item>
         </Col>
+      </Row>
+
+      <Divider orientation="left" plain>
+        <Text type="secondary" style={{ fontSize: 13 }}>
+          {t('patients:detail.householdInfo.primaryContactSection', 'Primary Contact (optional)')}
+        </Text>
+      </Divider>
+
+      <Row gutter={16}>
         <Col xs={24} sm={12}>
           <Form.Item
-            name="contactName"
-            label={t('patients:detail.householdInfo.primaryContact', 'Primary Contact')}
+            name="firstName"
+            label={t('forms:labels.firstName', 'First Name')}
+          >
+            <Input placeholder={t('forms:placeholders.enterName', 'Enter name')} />
+          </Form.Item>
+        </Col>
+        <Col xs={24} sm={12}>
+          <Form.Item
+            name="lastName"
+            label={t('forms:labels.lastName', 'Last Name')}
           >
             <Input placeholder={t('forms:placeholders.enterName', 'Enter name')} />
           </Form.Item>
@@ -146,6 +253,14 @@ export const CreateHouseholdInline: React.FC<CreateHouseholdInlineProps> = ({
       <Row gutter={16}>
         <Col xs={24} sm={12}>
           <Form.Item
+            name="phone"
+            label={t('forms:labels.phone', 'Phone Number')}
+          >
+            <Input placeholder={t('forms:placeholders.enterPhone', 'Enter phone number')} />
+          </Form.Item>
+        </Col>
+        <Col xs={24} sm={12}>
+          <Form.Item
             name="email"
             label={t('forms:labels.email', 'Email')}
             rules={[{ type: 'email', message: t('forms:validation.email', 'Please enter a valid email address') }]}
@@ -153,12 +268,21 @@ export const CreateHouseholdInline: React.FC<CreateHouseholdInlineProps> = ({
             <Input placeholder={t('forms:placeholders.enterEmail', 'Enter email address')} />
           </Form.Item>
         </Col>
-        <Col xs={24} sm={12}>
+      </Row>
+
+      <Divider orientation="left" plain>
+        <Text type="secondary" style={{ fontSize: 13 }}>
+          {t('patients:detail.householdInfo.addressSection', 'Address (optional)')}
+        </Text>
+      </Divider>
+
+      <Row gutter={16}>
+        <Col xs={24}>
           <Form.Item
-            name="phone"
-            label={t('forms:labels.phone', 'Phone Number')}
+            name="address"
+            label={t('patients:detail.householdInfo.address', 'Address')}
           >
-            <Input placeholder={t('forms:placeholders.enterPhone', 'Enter phone number')} />
+            <Input placeholder={t('patients:detail.householdInfo.addressPlaceholder', 'Street, city')} />
           </Form.Item>
         </Col>
       </Row>

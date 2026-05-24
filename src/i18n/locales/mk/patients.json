@@ -170,7 +170,14 @@
       "createFailed": "Неуспешно создавање на домаќинство",
       "createAndAssign": "Создај и додели",
       "householdNameRequired": "Името на домаќинството е задолжително",
-      "householdNameTooLong": "Името може да има најмногу 100 знаци"
+      "householdNameTooLong": "Името може да има најмногу 100 знаци",
+      "primaryContactSection": "Примарен контакт (по избор)",
+      "addressSection": "Адреса (по избор)",
+      "addressPlaceholder": "Улица, град",
+      "contactNameIncomplete": "Примарниот контакт треба и име и презиме",
+      "contactNameIncompleteDesc": "Внесете и име и презиме, или избришете ги двете.",
+      "contactNameRequired": "Потребно е име на примарен контакт",
+      "contactNameRequiredDesc": "Внесете име и презиме за примарниот контакт, или избришете ги полињата за телефон/е-пошта."
     },
     "medicalHistory": {
       "title": "Медицинска историја",
