@@ -52,6 +52,11 @@ export const MainDashboard: React.FC = () => {
   const [showPatientForm, setShowPatientForm] = useState(false);
   const [showHouseholdForm, setShowHouseholdForm] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<PatientWithHousehold | null>(null);
+  // Chip ID captured from a dashboard scan that didn't match any existing
+  // patient — fed into PatientFormWithOwner via the defaultMicrochipId prop
+  // so the vet doesn't have to retype it. Cleared when the form modal
+  // closes (success OR cancel).
+  const [scannedChipForNewPatient, setScannedChipForNewPatient] = useState<string | null>(null);
   const [selectedHousehold, setSelectedHousehold] = useState<HouseholdTableRecord | null>(null);
   const [seedOpen, setSeedOpen] = useState(false);
   const [seedCount, setSeedCount] = useState<number>(1000);
@@ -198,7 +203,7 @@ export const MainDashboard: React.FC = () => {
   };
 
   // Shared handler for processing a scanned code from any source (keyboard wedge or HID)
-  const handleScanCode = (code: string) => {
+  const handleScanCode = async (code: string) => {
     // Component-level dedup: prevent double-fire from keyboard wedge + HID event
     const now = Date.now();
     if (
@@ -213,7 +218,30 @@ export const MainDashboard: React.FC = () => {
     setActiveTab('patients');
     setCurrentView('animal');
     setPatientSearchText(code);
-    handlePatientSearch(code);
+    const results = await handlePatientSearch(code);
+
+    // If the scanned chip didn't match any existing patient, jump
+    // straight into the "create new patient" flow with the chip ID
+    // pre-filled — saves the vet from retyping a 15-digit number.
+    //
+    // Skip if a form modal is already open: the user is likely in the
+    // middle of creating something else and an interruption would
+    // discard their in-progress input. They can still see the empty
+    // search-result list and react manually.
+    if (results.length === 0 && !showPatientForm && !showHouseholdForm) {
+      notification.info({
+        message: t('patients:scanNotFoundTitle', 'No patient found'),
+        description: t(
+          'patients:scanNotFoundDesc',
+          'No patient matches this microchip. Opening "Add new patient" with the chip pre-filled.',
+        ),
+        placement: 'bottomRight',
+        duration: 4,
+      });
+      setSelectedPatient(null);
+      setScannedChipForNewPatient(code);
+      setShowPatientForm(true);
+    }
   };
 
   // Keyboard-wedge scans on main screen: trigger search by identifier
@@ -300,6 +328,8 @@ export const MainDashboard: React.FC = () => {
     }
     setShowPatientForm(false);
     setSelectedPatient(null);
+    // Clear any scan-prefill so subsequent "Add patient" clicks start blank.
+    setScannedChipForNewPatient(null);
     loadData();
   };
 
@@ -498,16 +528,20 @@ export const MainDashboard: React.FC = () => {
         onCancel={() => {
           setShowPatientForm(false);
           setSelectedPatient(null);
+          // Clear the pre-fill so the next "Add patient" click starts blank.
+          setScannedChipForNewPatient(null);
         }}
         footer={null}
         width={800}
       >
         <PatientFormWithOwner
           patient={selectedPatient || undefined}
+          defaultMicrochipId={selectedPatient ? undefined : (scannedChipForNewPatient ?? undefined)}
           onSubmit={handleSavePatient}
           onCancel={() => {
             setShowPatientForm(false);
             setSelectedPatient(null);
+            setScannedChipForNewPatient(null);
           }}
         />
       </FormModal>

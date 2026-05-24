@@ -51,6 +51,16 @@ interface PatientFormWithOwnerProps {
   onSubmit: (data: CreatePatientInput | UpdatePatientInput) => Promise<void>;
   onCancel: () => void;
   loading?: boolean;
+  /**
+   * Pre-fill the microchip ID field for new-patient mode. Used by the
+   * dashboard's "scan a chip that's not in the system" flow — instead of
+   * making the vet re-type the 15-digit chip ID they just scanned, the
+   * dashboard opens this form with the chip already populated.
+   *
+   * Ignored when `patient` is provided (edit mode takes its microchipId
+   * from the existing record).
+   */
+  defaultMicrochipId?: string;
 }
 
 export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
@@ -58,6 +68,7 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
   onSubmit,
   onCancel,
   loading = false,
+  defaultMicrochipId,
 }) => {
   const { t } = useTranslation(['entities', 'forms']);
   const [form] = Form.useForm();
@@ -89,12 +100,20 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
   // Load initial data
   useEffect(() => {
     if (patient) {
+      // Edit mode: existing patient values take precedence.
       form.setFieldsValue({
         ...patient,
         dateOfBirth: patient.dateOfBirth ? dayjs(patient.dateOfBirth) : null,
       });
+    } else if (defaultMicrochipId) {
+      // Create mode with a prefilled chip (dashboard scan-not-found flow).
+      // Only set the microchip field; leave other fields blank so the form
+      // looks like a normal "Add new patient" with the chip already in.
+      form.setFieldsValue({
+        microchipId: defaultMicrochipId,
+      });
     }
-  }, [patient, form]);
+  }, [patient, defaultMicrochipId, form]);
 
   // Search households with debouncing
   const searchHouseholdsRaw = async (query: string) => {
