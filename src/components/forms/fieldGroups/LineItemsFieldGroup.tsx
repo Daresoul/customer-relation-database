@@ -30,8 +30,9 @@ import {
   PlusOutlined,
   DeleteOutlined,
   EditOutlined,
+  SaveOutlined,
 } from '@ant-design/icons';
-import { useLineItemTemplates } from '../../../hooks/useLineItemTemplates';
+import { useLineItemTemplates, useCreateLineItemTemplate } from '../../../hooks/useLineItemTemplates';
 import { useCurrencies } from '../../../hooks/useCurrencies';
 import { useAppSettings } from '../../../hooks/useAppSettings';
 import type { LineItemTemplate, MedicalRecordLineItem, CreateLineItemInput } from '../../../types/lineItem';
@@ -80,6 +81,14 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
   const { data: templates = [], isLoading: templatesLoading } = useLineItemTemplates(true);
   const { data: currencies = [] } = useCurrencies();
   const { settings } = useAppSettings();
+
+  // Mutation used by the "Save as template & add" button — promotes a
+  // custom one-off item into a reusable template in Settings → Factura.
+  // The hook already invalidates the templates query on success and
+  // surfaces a success/error notification, so callers just need to
+  // await mutateAsync and react to thrown errors (keep modal open on
+  // failure so the user can fix the name and retry).
+  const createTemplateMutation = useCreateLineItemTemplate();
 
   const effectiveDefaultCurrencyId = defaultCurrencyId || settings?.currencyId;
 
@@ -162,8 +171,10 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
     setCustomItemModalVisible(true);
   };
 
-  // Handle custom item form submit
-  const handleCustomFormSubmit = (values: any) => {
+  /** Add (or update, in edit mode) a line item from validated form
+   *  values. Does NOT touch the templates table — that's the
+   *  "Save as template & add" path's job. */
+  const applyCustomFormValues = (values: any) => {
     const newItem: MedicalRecordLineItem = {
       templateId: editingItemIndex !== null ? lineItems[editingItemIndex].templateId : undefined,
       name: values.name,
@@ -186,6 +197,43 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
     setCustomItemModalVisible(false);
     customForm.resetFields();
     setEditingItemIndex(null);
+  };
+
+  /** "Add only" — add the item to this medical record, don't save
+   *  as a template. AntD shows inline validation errors on reject. */
+  const handleAddOnly = async () => {
+    try {
+      const values = await customForm.validateFields();
+      applyCustomFormValues(values);
+    } catch {
+      // Validation errors are surfaced inline by AntD; nothing to do.
+    }
+  };
+
+  /** "Save as template & add" — promote the item into a reusable
+   *  Factura template in Settings first, then add to this record.
+   *  If the template save fails (e.g. duplicate name), keep the modal
+   *  open so the user can fix the name or fall back to "Add only". */
+  const handleSaveAndAdd = async () => {
+    let values: any;
+    try {
+      values = await customForm.validateFields();
+    } catch {
+      return; // validation errors shown inline
+    }
+    try {
+      await createTemplateMutation.mutateAsync({
+        name: values.name,
+        description: values.description || undefined,
+        defaultPrice: values.unitPrice,
+        currencyId: values.currencyId,
+      });
+    } catch {
+      // Mutation hook already surfaced an error notification via
+      // createMutationErrorHandler — leave modal open.
+      return;
+    }
+    applyCustomFormValues(values);
   };
 
   // Handle removing item
@@ -433,7 +481,14 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
         </div>
       )}
 
-      {/* Custom Item Modal */}
+      {/* Custom Item Modal.
+          Two action buttons when adding a NEW custom item:
+            - "Add only"           → one-off, lives only on this record
+            - "Save & add"         → also persisted as a template in
+                                     Settings → Factura for reuse
+          In edit mode (editingItemIndex !== null) we collapse this to
+          a single "Save" button — editing an existing line item on
+          this record has no template-save semantics. */}
       <Modal
         title={editingItemIndex !== null
           ? t('medical:lineItems.editItem', 'Edit Line Item')
@@ -441,16 +496,59 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
         }
         open={customItemModalVisible}
         onCancel={() => {
+          if (createTemplateMutation.isPending) return;
           setCustomItemModalVisible(false);
           customForm.resetFields();
           setEditingItemIndex(null);
         }}
-        onOk={() => customForm.submit()}
+        footer={
+          editingItemIndex !== null ? (
+            <Space>
+              <Button
+                onClick={() => {
+                  setCustomItemModalVisible(false);
+                  customForm.resetFields();
+                  setEditingItemIndex(null);
+                }}
+              >
+                {t('common:cancel')}
+              </Button>
+              <Button type="primary" onClick={handleAddOnly}>
+                {t('common:save', 'Save')}
+              </Button>
+            </Space>
+          ) : (
+            <Space wrap>
+              <Button
+                onClick={() => {
+                  setCustomItemModalVisible(false);
+                  customForm.resetFields();
+                }}
+                disabled={createTemplateMutation.isPending}
+              >
+                {t('common:cancel')}
+              </Button>
+              <Button
+                onClick={handleSaveAndAdd}
+                loading={createTemplateMutation.isPending}
+                icon={<SaveOutlined />}
+              >
+                {t('medical:lineItems.saveAsTemplateAndAdd', 'Save as template & add')}
+              </Button>
+              <Button
+                type="primary"
+                onClick={handleAddOnly}
+                disabled={createTemplateMutation.isPending}
+              >
+                {t('medical:lineItems.addOnly', 'Add only')}
+              </Button>
+            </Space>
+          )
+        }
       >
         <Form
           form={customForm}
           layout="vertical"
-          onFinish={handleCustomFormSubmit}
         >
           <Form.Item
             name="name"

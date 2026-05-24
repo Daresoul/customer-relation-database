@@ -72,6 +72,8 @@
     "noItems": "No line items added",
     "customItem": "Custom Line Item",
     "editItem": "Edit Line Item",
+    "addOnly": "Add only",
+    "saveAsTemplateAndAdd": "Save as template & add",
     "fromTemplate": "(from template)",
     "namePlaceholder": "e.g., Emergency consultation",
     "descriptionPlaceholder": "Optional description"

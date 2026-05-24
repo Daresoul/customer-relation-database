@@ -72,6 +72,8 @@
     "noItems": "Нема додадени ставки",
     "customItem": "Прилагодена ставка",
     "editItem": "Измени ставка",
+    "addOnly": "Само додај",
+    "saveAsTemplateAndAdd": "Зачувај како шаблон и додај",
     "fromTemplate": "(од шаблон)",
     "namePlaceholder": "пр. Итна консултација",
     "descriptionPlaceholder": "Незадолжителен опис"
