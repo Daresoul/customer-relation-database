@@ -188,9 +188,39 @@ pub fn start_device_capture(app: AppHandle) {
             Ok(v) => v,
             Err(e) => {
                 log::warn!("HIDAPI not available: {}", e);
+                // Promote to Sentry — hidapi failing means the scanner
+                // capture path can't run at all. Silent failure would
+                // leave clinics wondering why scans aren't appearing.
+                let err_str = format!("{e}");
+                sentry::with_scope(
+                    |scope| {
+                        scope.set_tag("subsystem", "device_capture");
+                        scope.set_tag("failure", "hidapi_init");
+                        scope.set_extra("error", err_str.clone().into());
+                    },
+                    || {
+                        sentry::capture_message(
+                            "device_capture: HidApi::new() failed — \
+                             scanner capture path disabled",
+                            sentry::Level::Warning,
+                        );
+                    },
+                );
                 return;
             }
         };
+
+        // Startup breadcrumb so subsequent Sentry events show whether the
+        // hidapi loop is the active enumerator. The doubling investigation
+        // identified this path as a suspect (it briefly opens HID handles
+        // on every matched scanner) — having this anchor in the trail
+        // makes future bug reports immediately interpretable.
+        sentry::add_breadcrumb(sentry::Breadcrumb {
+            category: Some("device_capture".into()),
+            message: Some("hidapi enumeration loop started".into()),
+            level: sentry::Level::Info,
+            ..Default::default()
+        });
 
         loop {
             // Re-enumerate devices each pass to detect plug/unplug

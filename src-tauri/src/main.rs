@@ -28,9 +28,46 @@ fn main() {
         sentry::ClientOptions {
             release: sentry::release_name!(),
             send_default_pii: true,
+            // Cap breadcrumb trail at 100 entries (matches Sentry default but
+            // explicit so a future raise doesn't silently bloat events).
+            max_breadcrumbs: 100,
             ..Default::default()
         },
     ));
+
+    // Identify this machine in Sentry so we can tell which install reported
+    // an event. Auto-detected from the OS hostname; users can override via
+    // Settings → General if they want a friendlier label like "Reception PC".
+    // Stored as a Sentry tag and also as the user.username so it appears in
+    // the dashboard's user list (we're a single-user app so this is the
+    // closest analog to "which machine").
+    let hostname = std::env::var("COMPUTERNAME")
+        .or_else(|_| std::env::var("HOSTNAME"))
+        .or_else(|_| std::env::var("HOST"))
+        .unwrap_or_else(|_| "unknown".to_string());
+    let os_user = std::env::var("USERNAME")
+        .or_else(|_| std::env::var("USER"))
+        .unwrap_or_else(|_| "unknown".to_string());
+
+    sentry::configure_scope(|scope| {
+        scope.set_tag("machine_name", &hostname);
+        scope.set_tag("os_user", &os_user);
+        scope.set_user(Some(sentry::User {
+            username: Some(format!("{os_user}@{hostname}")),
+            ..Default::default()
+        }));
+    });
+
+    // Startup breadcrumb so any subsequent event has at least one anchor
+    // entry in its trail showing which build / machine produced it.
+    sentry::add_breadcrumb(sentry::Breadcrumb {
+        category: Some("app.lifecycle".into()),
+        message: Some(format!(
+            "Arkivet started on {hostname} (user: {os_user})"
+        )),
+        level: sentry::Level::Info,
+        ..Default::default()
+    });
 
     // Load environment variables from .env file
     dotenv::dotenv().ok();

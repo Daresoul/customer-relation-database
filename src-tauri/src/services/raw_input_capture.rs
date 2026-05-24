@@ -282,11 +282,44 @@ mod windows_impl {
                 Ok(handle) => {
                     *hook_handle().lock().unwrap() = handle.0;
                     log::info!("raw_input_capture: WH_KEYBOARD_LL hook installed");
+                    // Anchor breadcrumb: any subsequent Sentry event will
+                    // show whether the hook was successfully installed.
+                    // Critical for diagnosing "suppression doesn't work"
+                    // reports — if this breadcrumb is missing, the hook
+                    // never started; if present, the hook is running and
+                    // the bug is elsewhere.
+                    sentry::add_breadcrumb(sentry::Breadcrumb {
+                        category: Some("raw_input_capture".into()),
+                        message: Some(
+                            "WH_KEYBOARD_LL hook installed successfully".into(),
+                        ),
+                        level: sentry::Level::Info,
+                        ..Default::default()
+                    });
                 }
                 Err(e) => {
                     log::error!(
                         "raw_input_capture: SetWindowsHookExW failed: {}. Focus-stealing suppression unavailable.",
                         e
+                    );
+                    // Promote hook-install failure to a Sentry event so we
+                    // see it without waiting for the user to also reproduce
+                    // a downstream symptom. Without the hook, suppression
+                    // is fully disabled — that's a real production problem.
+                    let err_str = format!("{e}");
+                    sentry::with_scope(
+                        |scope| {
+                            scope.set_tag("subsystem", "raw_input_capture");
+                            scope.set_tag("failure", "hook_install");
+                            scope.set_extra("error", err_str.clone().into());
+                        },
+                        || {
+                            sentry::capture_message(
+                                "raw_input_capture: SetWindowsHookExW failed — \
+                                 focus-stealing suppression disabled",
+                                sentry::Level::Error,
+                            );
+                        },
                     );
                     // Continue without the hook — scans still get captured via
                     // WM_INPUT, just no suppression of focused-window typing.
@@ -642,6 +675,53 @@ mod windows_impl {
         log::info!(
             "raw_input_capture: new device seen | path='{}' parsed_vid_pid={:?} is_managed={}",
             name, parsed, is_managed_at_parse_time
+        );
+
+        // Also send the diagnostic to Sentry so we can debug field
+        // installations without asking users to paste log lines. Volume
+        // is naturally bounded — at most one event per (process, device
+        // handle), so a session usually emits 2–6 of these total no
+        // matter how much typing/scanning happens. Tagged so we can
+        // filter to just these events in the Sentry UI.
+        //
+        // PII note: the device path can contain a Bluetooth MAC address
+        // for BT-paired devices. The app's existing Sentry init uses
+        // `send_default_pii: true` (set in main.rs), so the user has
+        // already consented to that data flowing to the project's own
+        // Sentry instance. We're not introducing a new PII channel,
+        // just attaching one more field to an already-PII-enabled flow.
+        sentry::with_scope(
+            |scope| {
+                scope.set_tag("subsystem", "raw_input_capture");
+                scope.set_tag("event_type", "new_device_seen");
+                scope.set_tag(
+                    "parsed_ok",
+                    if parsed.is_some() { "true" } else { "false" },
+                );
+                scope.set_tag(
+                    "is_managed",
+                    if is_managed_at_parse_time { "true" } else { "false" },
+                );
+                scope.set_extra("device_path", name.clone().into());
+                scope.set_extra(
+                    "parsed_vid_pid",
+                    match parsed {
+                        Some(id) => format!("VID=0x{:04X} PID=0x{:04X}", id.vid, id.pid),
+                        None => "None (parser found no recognized format)".to_string(),
+                    }
+                    .into(),
+                );
+                scope.set_extra(
+                    "managed_ids_count",
+                    (managed_ids().lock().unwrap().len() as i64).into(),
+                );
+            },
+            || {
+                sentry::capture_message(
+                    "raw_input_capture: new device seen",
+                    sentry::Level::Info,
+                );
+            },
         );
 
         device_cache().lock().unwrap().insert(h_device, parsed);
