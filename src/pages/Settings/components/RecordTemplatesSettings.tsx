@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Table, Button, Space, Modal, Form, Input, Select, InputNumber, Tag, Popconfirm } from 'antd';
+import { Card, Table, Button, Space, Modal, Form, Input, Select, Tag, Popconfirm } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, FileTextOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import {
@@ -8,9 +8,16 @@ import {
   useUpdateRecordTemplate,
   useDeleteRecordTemplate,
 } from '@/hooks/useRecordTemplates';
-import { useCurrencies } from '@/hooks/useMedicalRecords';
 import type { RecordTemplate, RecordType } from '@/types/medical';
 import type { ColumnsType } from 'antd/es/table';
+
+// NOTE: Record templates used to carry a price + currency, but pricing
+// has moved entirely to Factura (per-medical-record line items, each
+// with its own price + currency). The Rust model still has nullable
+// `price` / `currency_id` columns on `record_templates` — we leave
+// them in place for backwards compatibility with existing rows, but
+// the UI no longer reads or writes them. New templates are created
+// with price/currency omitted (the backend stores NULL).
 
 const { TextArea } = Input;
 const { Option } = Select;
@@ -22,7 +29,6 @@ const RecordTemplatesSettings: React.FC = () => {
   const [form] = Form.useForm();
 
   const { data: templates, isLoading } = useRecordTemplates();
-  const { data: currencies } = useCurrencies();
   const createMutation = useCreateRecordTemplate();
   const updateMutation = useUpdateRecordTemplate();
   const deleteMutation = useDeleteRecordTemplate();
@@ -40,8 +46,6 @@ const RecordTemplatesSettings: React.FC = () => {
       recordType: template.recordType,
       title: template.title,
       description: template.description,
-      price: template.price,
-      currencyId: template.currencyId,
     });
     setIsModalOpen(true);
   };
@@ -59,24 +63,21 @@ const RecordTemplatesSettings: React.FC = () => {
       const values = await form.validateFields();
 
       if (editingTemplate) {
-        // Update existing template
+        // Update existing template. price + currencyId are intentionally
+        // omitted — pricing is owned by Factura now.
         await updateMutation.mutateAsync({
           templateId: editingTemplate.id,
           input: {
             title: values.title,
             description: values.description,
-            price: values.price,
-            currencyId: values.currencyId,
           },
         });
       } else {
-        // Create new template
+        // Create new template (price/currency NULL — see Factura).
         await createMutation.mutateAsync({
           recordType: values.recordType,
           title: values.title,
           description: values.description,
-          price: values.price,
-          currencyId: values.currencyId,
         });
       }
 
@@ -97,12 +98,6 @@ const RecordTemplatesSettings: React.FC = () => {
     if (recordType === 'procedure') return { color: 'blue', label: t('medical:recordTypes.procedure') };
     if (recordType === 'test_result') return { color: 'purple', label: t('medical:recordTypes.testResult') };
     return { color: 'green', label: t('medical:recordTypes.note') };
-  };
-
-  const getCurrencyDisplay = (currencyId?: number) => {
-    if (!currencyId || !currencies) return '-';
-    const currency = currencies.find(c => c.id === currencyId);
-    return currency ? `${currency.symbol} ${currency.code}` : '-';
   };
 
   const columns: ColumnsType<RecordTemplate> = [
@@ -133,17 +128,6 @@ const RecordTemplatesSettings: React.FC = () => {
       dataIndex: 'description',
       key: 'description',
       ellipsis: true,
-      width: 300,
-    },
-    {
-      title: t('medical:fields.price'),
-      dataIndex: 'price',
-      key: 'price',
-      width: 120,
-      render: (price?: number, record?: RecordTemplate) => {
-        if (!price) return '-';
-        return `${getCurrencyDisplay(record?.currencyId)}${price.toFixed(2)}`;
-      },
     },
     {
       title: t('common:actionsLabel'),
@@ -258,33 +242,6 @@ const RecordTemplatesSettings: React.FC = () => {
               maxLength={5000}
             />
           </Form.Item>
-
-          <Space style={{ width: '100%' }}>
-            <Form.Item
-              name="price"
-              label={t('medical:fields.price')}
-            >
-              <InputNumber
-                min={0}
-                precision={2}
-                placeholder="0.00"
-                style={{ width: 150 }}
-              />
-            </Form.Item>
-
-            <Form.Item
-              name="currencyId"
-              label={t('medical:fields.currency')}
-            >
-              <Select placeholder={t('common:selectPlaceholder')} allowClear style={{ width: 200 }}>
-                {currencies?.map(currency => (
-                  <Option key={currency.id} value={currency.id}>
-                    {currency.symbol} {currency.code}
-                  </Option>
-                ))}
-              </Select>
-            </Form.Item>
-          </Space>
         </Form>
       </Modal>
     </Card>

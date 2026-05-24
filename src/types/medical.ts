@@ -159,12 +159,21 @@ export interface PaginationParams {
 }
 
 // Record Template Types
+//
+// `price` and `currencyId` are deprecated: pricing now lives entirely
+// in Factura (per-medical-record line items). The fields are kept here
+// (optional) so the type still matches the Rust model that retains the
+// nullable columns for backwards compatibility with existing rows, but
+// the UI no longer reads or writes them — nothing in the app should
+// rely on them.
 export interface RecordTemplate {
   id: number;
   recordType: RecordType;
   title: string;
   description: string;
+  /** @deprecated Pricing moved to Factura line items. */
   price?: number;
+  /** @deprecated Pricing moved to Factura line items. */
   currencyId?: number;
   createdAt: string;
   updatedAt: string;
@@ -174,13 +183,17 @@ export interface CreateRecordTemplateInput {
   recordType: RecordType;
   title: string;
   description: string;
+  /** @deprecated Omit — pricing moved to Factura line items. */
   price?: number;
+  /** @deprecated Omit — pricing moved to Factura line items. */
   currencyId?: number;
 }
 
 export interface UpdateRecordTemplateInput {
   title?: string;
   description?: string;
+  /** @deprecated Omit — pricing moved to Factura line items. */
   price?: number;
+  /** @deprecated Omit — pricing moved to Factura line items. */
   currencyId?: number;
 }
