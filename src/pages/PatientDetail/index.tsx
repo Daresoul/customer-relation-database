@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { Layout, Spin, Alert, Button, Space, Breadcrumb, Tabs, Card } from 'antd';
+import { Layout, Spin, Alert, Button, Space, Breadcrumb, Tabs } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
   ArrowLeftOutlined,
@@ -173,23 +173,20 @@ export const PatientDetail: React.FC = () => {
       children: (
         <div className={styles.tabContent}>
           <PatientInfo patient={patient} />
+          {/* Aggregated diagnoses for this patient — every distinct
+              diagnosis ever applied to any of their medical records.
+              Rendered inline with showLabel so it looks like a meta
+              line right under the patient info; when the patient has
+              no diagnoses yet, DiagnosisTagList returns null and the
+              entire row collapses (no empty-card chrome). */}
+          <div style={{ marginTop: 12, marginBottom: 12 }}>
+            <DiagnosisTagList patientId={patient.id} showLabel />
+          </div>
           <HouseholdSection
               household={patient.household}
               patientId={patient.id}
               onHouseholdChanged={handleHouseholdChanged}
             />
-          {/* Aggregated diagnoses card: every distinct diagnosis ever
-              applied to any of this patient's medical records. Card
-              renders nothing inside if there are none; we still keep
-              the Card frame so the overview layout has a stable
-              footprint and the empty state remains obvious to the
-              user (vs. silently disappearing). */}
-          <Card
-            title={t('medical:fields.diagnoses', 'Diagnoses')}
-            style={{ marginTop: 16 }}
-          >
-            <DiagnosisTagList patientId={patient.id} />
-          </Card>
         </div>
       ),
     },

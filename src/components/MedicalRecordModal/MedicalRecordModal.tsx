@@ -138,6 +138,15 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
           await queryClient.invalidateQueries({
             queryKey: DIAGNOSES_KEYS.forRecord(savedRecordId),
           });
+          // Also invalidate the patient-level aggregation — the
+          // overview tab's `<DiagnosisTagList patientId={...} />`
+          // is a DISTINCT join across every medical record for the
+          // patient, so any record's tag-set change can shift that
+          // set. Without this invalidation the overview card stayed
+          // empty / stale after creating the first tagged record.
+          await queryClient.invalidateQueries({
+            queryKey: DIAGNOSES_KEYS.forPatient(patientId),
+          });
         } catch (tagErr) {
           console.error('Failed to save diagnosis tags:', tagErr);
           notification.warning({

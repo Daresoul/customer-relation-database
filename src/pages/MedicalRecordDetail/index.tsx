@@ -1083,15 +1083,14 @@ export const MedicalRecordDetailPage: React.FC = () => {
         )}
       </Card>
 
-      {/* Diagnoses applied to this record. DiagnosisTagList renders
-          nothing (no chrome) when there are no diagnoses, so the
-          surrounding Card is conditionally hidden too. */}
-      <Card
-        title={t('medical:fields.diagnoses', 'Diagnoses')}
-        className={styles.marginTop16}
-      >
-        <DiagnosisTagList recordId={record.id} />
-      </Card>
+      {/* Diagnoses applied to this record. Rendered inline (no Card
+          wrapper) so when the record has no diagnoses the whole row
+          disappears — DiagnosisTagList returns null in that case and
+          there's no empty-card chrome left behind. `showLabel` keeps
+          the row self-explanatory ("Diagnoses: <tags>") when present. */}
+      <div className={styles.marginTop16}>
+        <DiagnosisTagList recordId={record.id} showLabel />
+      </div>
 
       {/* Attachments split into two cards so the user can find generated
           documents and raw device data separately:
