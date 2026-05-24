@@ -55,10 +55,19 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Rust cache
-        if: runner.os != 'Windows'
-        uses: swatinem/rust-cache@v2
+        # Same `shared-key: windows-tauri` as e2e-windows.yml so the two
+        # workflows share target/. On a warm runner where E2E just ran, the
+        # release Cargo build is a near-no-op (only the version-bump rebuilds
+        # the bin crate). Previously gated to non-Windows for unclear reasons;
+        # there's no Windows-specific reason to skip — the self-hosted Windows
+        # runner benefits more than any cloud Linux runner because it actually
+        # runs Tauri builds. Save-if=true so every successful release run
+        # updates the cache for the next E2E + release pair.
+        uses: Swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
+          shared-key: 'windows-tauri'
+          save-if: 'true'
 
       - name: Check if npm install needed
         id: npm-hash
@@ -85,19 +94,37 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      - name: Cache Gradle dependencies
+        # Caches ~/.gradle/caches (downloaded deps) + ~/.gradle/wrapper
+        # (the Gradle distribution itself). Build outputs live in
+        # pdf-generator-cli/build/ which persists between runs via
+        # `clean: false` in checkout, so we don't cache those here.
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('pdf-generator-cli/build.gradle', 'pdf-generator-cli/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
       - name: Build Java PDF Generator (Unix)
         if: runner.os != 'Windows'
+        # Dropped `clean` — Gradle's incremental compiler is the whole point.
+        # When sources haven't changed this is a sub-second no-op; with `clean`
+        # it was a forced ~60-90s rebuild on every run.
         run: |
           cd pdf-generator-cli
           chmod +x gradlew
-          ./gradlew clean build
+          ./gradlew build
           cd ..
 
       - name: Build Java PDF Generator (Windows)
         if: runner.os == 'Windows'
+        # See Unix step — `clean` removed for incremental compile.
         run: |
           cd pdf-generator-cli
-          ./gradlew.bat clean build
+          ./gradlew.bat build
           cd ..
 
       - name: Copy JAR to Tauri resources (Unix)

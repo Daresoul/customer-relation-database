@@ -8,6 +8,16 @@ name: E2E (Windows full-stack)
 #   - On workflow_dispatch (manual run when investigating a flake)
 #   - NOT on every PR — the runs are slow and the runner is shared. PR-time
 #     coverage comes from Layers 1+2 which run on free cloud runners.
+#
+# Caching strategy (matches release.yml — `shared-key: windows-tauri` lets
+# both workflows reuse each other's target/ on warm runners):
+#   - Rust:   Swatinem/rust-cache (smart partial-hit, key = lockfile + rustc)
+#   - Gradle: actions/cache on ~/.gradle/caches + ~/.gradle/wrapper
+#   - npm:    skip `npm ci` if node_modules/.lockfile-hash matches the current
+#             package-lock.json (self-hosted runner preserves node_modules
+#             between runs)
+#   - JAR:    rebuilt only if its source files changed; the persisted
+#             pdf-generator-cli/build dir survives between runs
 
 on:
   push:
@@ -32,6 +42,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        # Don't clean — preserve node_modules/, src-tauri/target/,
+        # pdf-generator-cli/build/ between runs. Saves 5-15 min/run on
+        # the warm runner.
+        with:
+          clean: false
 
       - name: Verify toolchain present
         shell: pwsh
@@ -43,9 +58,28 @@ jobs:
           where.exe tauri-driver
           where.exe msedgedriver
 
+      - name: Check if npm install needed
+        # Skip `npm ci` (~30-60s) when package-lock.json hasn't changed since
+        # the last successful install. Same pattern as release.yml.
+        id: npm-hash
+        shell: bash
+        run: |
+          HASH=$(sha256sum package-lock.json | cut -d' ' -f1)
+          if [ -f "node_modules/.lockfile-hash" ] && [ "$(cat node_modules/.lockfile-hash)" = "$HASH" ]; then
+            echo "Dependencies unchanged, skipping npm ci"
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "Dependencies changed, will run npm ci"
+            echo "skip=false" >> $GITHUB_OUTPUT
+            echo "$HASH" > /tmp/lockfile-hash
+          fi
+
       - name: Install frontend deps
+        if: steps.npm-hash.outputs.skip != 'true'
         shell: pwsh
-        run: npm ci
+        run: |
+          npm ci
+          Copy-Item /tmp/lockfile-hash node_modules\.lockfile-hash -Force
 
       - name: Build frontend
         # Vite builds the React bundle into `./dist`. Tauri's
@@ -62,26 +96,50 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      - name: Cache Gradle dependencies
+        # Caches the Gradle dependency download cache + wrapper distribution.
+        # Doesn't cache the build outputs (those persist via clean: false in
+        # checkout). On a cold runner saves ~60-90s of dep downloads.
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('pdf-generator-cli/build.gradle', 'pdf-generator-cli/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
       - name: Build PDF generator JAR
         # Tauri bundles src-tauri/resources/pdf-generator.jar (declared in
         # tauri.conf.json:resources). The JAR isn't committed — it's built
         # fresh from pdf-generator-cli/. After build, Gradle drops it at
         # build/libs/pdf-generator-cli-1.0.0.jar; we copy it to the path
         # Tauri expects.
+        #
+        # `--no-daemon` because the runner is shared with other jobs and a
+        # lingering daemon can hold file locks; the warm Gradle cache makes
+        # this fast anyway (~10-20s) even without daemon reuse.
         shell: pwsh
         working-directory: pdf-generator-cli
         run: |
           .\gradlew.bat build --no-daemon
           Copy-Item build\libs\pdf-generator-cli-1.0.0.jar ..\src-tauri\resources\pdf-generator.jar -Force
 
-      - name: Cache Rust build
-        uses: actions/cache@v4
+      - name: Rust cache
+        # Swatinem/rust-cache is smarter than raw actions/cache for Rust:
+        # caches ~/.cargo/{registry,git} + the right pieces of target/ with
+        # restore-keys fallback (partial cache hits when Cargo.lock changes
+        # only slightly). `shared-key: windows-tauri` is the same value used
+        # in release.yml so the two workflows reuse each other's build
+        # artifacts on the warm runner.
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            src-tauri/target
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+          workspaces: 'src-tauri'
+          shared-key: 'windows-tauri'
+          # Save the cache even on this non-default branch's PRs (default
+          # behavior saves only on main; we want every successful run to
+          # update the cache so subsequent runs benefit).
+          save-if: 'true'
 
       - name: Build Tauri release binary
         shell: pwsh
@@ -92,7 +150,9 @@ jobs:
         # Windows-only modules (raw_input_capture, etc.) have their tests
         # gated behind `cfg(target_os = "windows")`. Free cloud runners are
         # all Linux, so this is the only place those tests actually execute.
-        # Run in --release to share the build cache with the step above.
+        # Run in --release to reuse the build cache from the step above —
+        # debug + release build separately, so mismatched profiles double the
+        # compile time.
         shell: pwsh
         working-directory: src-tauri
         run: cargo test --release --bin vet-clinic
