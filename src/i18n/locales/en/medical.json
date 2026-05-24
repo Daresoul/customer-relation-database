@@ -119,7 +119,8 @@
     "restoreFailed": "Failed to restore record",
     "downloadFailed": "Failed to download attachment",
     "archiveInfo": "Archived records will be hidden from the main view but can be restored later.",
-    "diagnosesPartialSave": "Diagnoses not saved"
+    "diagnosesPartialSave": "Diagnoses not saved",
+    "validationFailed": "Please fill in the required fields highlighted in red."
   },
   "filters": {
     "all": "All Records",

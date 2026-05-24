@@ -88,6 +88,10 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
   // existing medical record schema).
   const [availableDiagnoses, setAvailableDiagnoses] = useState<Diagnosis[]>([]);
   const [selectedDiagnosisIds, setSelectedDiagnosisIds] = useState<number[]>([]);
+  // Validation error field names from the most recent submit attempt.
+  // Passed down to TabbedMedicalRecordFields so it can flag the tabs
+  // that contain failing fields and auto-switch to the first one.
+  const [errorFields, setErrorFields] = useState<string[]>([]);
   const debouncedSearchTerm = useDebounce(titleSearchTerm, 300);
   const { settings } = useAppSettings();
   const { data: searchedTemplates, isLoading: isSearching } = useSearchRecordTemplates(debouncedSearchTerm, recordType);
@@ -285,7 +289,38 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
     <Form
       form={form}
       layout="vertical"
-      onFinish={handleFinish}
+      onFinish={(values) => {
+        // Reset error indicators on success path so a previously
+        // failed submit doesn't leave stale red dots on the tabs.
+        if (errorFields.length > 0) setErrorFields([]);
+        handleFinish(values);
+      }}
+      onFinishFailed={({ errorFields: errs }) => {
+        // AntD only renders the inline error on the field itself — if
+        // that field is on a hidden tab the user sees nothing happen
+        // when they click Create. Surface a notification AND record
+        // which fields failed so TabbedMedicalRecordFields can switch
+        // to the right tab and flag it.
+        const names = errs.map((e) => e.name.join('.'));
+        setErrorFields(names);
+        notification.error({
+          message: t('common:error'),
+          description: t(
+            'medical:messages.validationFailed',
+            'Please fill in the required fields highlighted in red.',
+          ),
+          placement: 'bottomRight',
+          duration: 4,
+        });
+      }}
+      // Clear error indicators as soon as the user starts fixing
+      // the offending field — no need to wait for the next submit.
+      onValuesChange={(changed) => {
+        if (errorFields.length === 0) return;
+        const changedNames = Object.keys(changed);
+        const remaining = errorFields.filter((f) => !changedNames.includes(f));
+        if (remaining.length !== errorFields.length) setErrorFields(remaining);
+      }}
       initialValues={{
         recordType: 'procedure',
       }}
@@ -309,6 +344,7 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
         onManualTotalChange={setManualTotal}
         showLineItemsBadge={lineItems.length > 0}
         lineItemsCount={lineItems.length}
+        errorFields={errorFields}
       />
 
       <Divider />

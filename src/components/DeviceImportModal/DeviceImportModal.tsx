@@ -74,6 +74,11 @@ const DeviceImportModal: React.FC = () => {
   const [lineItems, setLineItems] = useState<MedicalRecordLineItem[]>([]);
   const [discountPercent, setDiscountPercent] = useState<number | undefined>();
   const [manualTotal, setManualTotal] = useState<number | undefined>();
+  // Validation error field names from the most recent submit attempt.
+  // Passed down to TabbedMedicalRecordFields so it can surface which
+  // tab needs attention. Cleared on successful submit and as the user
+  // edits the offending field.
+  const [errorFields, setErrorFields] = useState<string[]>([]);
 
   const {
     modalOpen,
@@ -290,8 +295,35 @@ const DeviceImportModal: React.FC = () => {
   };
 
   const handleSubmit = async () => {
+    let values: any;
     try {
-      const values = await form.validateFields();
+      values = await form.validateFields();
+    } catch (err: any) {
+      // AntD rejects with { errorFields: [{ name: ['fieldName'], errors: [...] }] }
+      // on validation failure. Capture the field names so the tabbed
+      // component can flag the right tab and switch to it — otherwise
+      // the user clicks Create on (say) Line Items, the validation
+      // error is on Description over in Standard, and nothing visible
+      // happens.
+      if (err?.errorFields && Array.isArray(err.errorFields)) {
+        const names = err.errorFields.map((e: any) =>
+          Array.isArray(e.name) ? e.name.join('.') : String(e.name),
+        );
+        setErrorFields(names);
+        notification.error({
+          message: t('common:error'),
+          description: t(
+            'medical:messages.validationFailed',
+            'Please fill in the required fields highlighted in red.',
+          ),
+          placement: 'bottomRight',
+          duration: 4,
+        });
+      }
+      return;
+    }
+    if (errorFields.length > 0) setErrorFields([]);
+    try {
       setLoading(true);
 
       const deviceDataList = pendingFiles.map(file => ({
@@ -570,6 +602,15 @@ const DeviceImportModal: React.FC = () => {
       <Form
         form={form}
         layout="vertical"
+        // Drop a field from errorFields the moment the user starts
+        // editing it — keeps the red tab-indicator from sticking
+        // around after the offending field is fixed.
+        onValuesChange={(changed) => {
+          if (errorFields.length === 0) return;
+          const changedNames = Object.keys(changed);
+          const remaining = errorFields.filter((f) => !changedNames.includes(f));
+          if (remaining.length !== errorFields.length) setErrorFields(remaining);
+        }}
       >
         <Form.Item
           name="patientId"
@@ -623,6 +664,7 @@ const DeviceImportModal: React.FC = () => {
           onManualTotalChange={setManualTotal}
           showLineItemsBadge={lineItems.length > 0}
           lineItemsCount={lineItems.length}
+          errorFields={errorFields}
         />
 
         <Form.Item style={{ marginTop: 16, marginBottom: 16 }}>

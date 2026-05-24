@@ -8,7 +8,7 @@
  * - Line Items
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Tabs, Form, Input, Typography, Badge } from 'antd';
 import type { FormInstance } from 'antd';
@@ -16,12 +16,48 @@ import {
   FileTextOutlined,
   MedicineBoxOutlined,
   UnorderedListOutlined,
+  ExclamationCircleFilled,
 } from '@ant-design/icons';
 import { MedicalRecordFieldGroup } from './MedicalRecordFieldGroup';
 import type { MedicalRecordFieldGroupProps } from './MedicalRecordFieldGroup';
 import { LineItemsFieldGroup } from './LineItemsFieldGroup';
 import type { MedicalRecordLineItem } from '../../../types/lineItem';
 import styles from '../Forms.module.css';
+
+/**
+ * Maps each form field name to the tab it lives on. Used to map
+ * validateFields() error reports back to the tab that needs
+ * surfacing — otherwise the user clicks Create on (say) the Line
+ * Items tab, validation fails on a required Description field that
+ * lives on the Standard tab, and nothing visible happens because
+ * AntD's inline error is on a hidden tab.
+ *
+ * Keep in sync with the fields rendered by each tab below.
+ */
+type TabKey = 'standard' | 'prescriptions' | 'lineItems';
+const FIELD_TO_TAB: Readonly<Record<string, TabKey>> = {
+  recordType: 'standard',
+  name: 'standard',
+  description: 'standard',
+  prescriptionNotes: 'prescriptions',
+};
+
+/** Order tabs are visited for "switch to the first one with errors". */
+const TAB_ORDER: TabKey[] = ['standard', 'prescriptions', 'lineItems'];
+
+/**
+ * Compute which tabs currently have validation errors.
+ * Exported so the parent can pre-check before deciding to call
+ * onFinishFailed (rarely needed, but useful for tests).
+ */
+export function tabsWithErrors(errorFields: readonly string[]): Set<TabKey> {
+  const result = new Set<TabKey>();
+  for (const f of errorFields) {
+    const tab = FIELD_TO_TAB[f];
+    if (tab) result.add(tab);
+  }
+  return result;
+}
 
 const { TextArea } = Input;
 const { Text } = Typography;
@@ -51,6 +87,14 @@ export interface TabbedMedicalRecordFieldsProps extends MedicalRecordFieldGroupP
   manualTotal?: number;
   /** Callback when manual total changes */
   onManualTotalChange?: (total: number | undefined) => void;
+  /**
+   * Field names that failed validation on the most recent submit
+   * attempt. When this changes from empty to non-empty, the component
+   * auto-switches to the first tab containing an error and shows a
+   * red dot on every tab that has at least one. Pass an empty array
+   * (or omit) to clear the indicators.
+   */
+  errorFields?: readonly string[];
 }
 
 export const TabbedMedicalRecordFields: React.FC<TabbedMedicalRecordFieldsProps> = ({
@@ -77,6 +121,7 @@ export const TabbedMedicalRecordFields: React.FC<TabbedMedicalRecordFieldsProps>
   onDiscountChange,
   manualTotal,
   onManualTotalChange,
+  errorFields,
 }) => {
   const { t } = useTranslation(['medical', 'common', 'forms']);
   const [activeTab, setActiveTab] = useState(defaultActiveTab);
@@ -85,19 +130,53 @@ export const TabbedMedicalRecordFields: React.FC<TabbedMedicalRecordFieldsProps>
   const prescriptionNotes = Form.useWatch('prescriptionNotes', form);
   const hasPrescriptionContent = prescriptionNotes && prescriptionNotes.trim().length > 0;
 
+  // Set of tabs that currently have validation errors. Recomputed
+  // every render — cheap because the input list is short.
+  const errored = tabsWithErrors(errorFields ?? []);
+
+  // Auto-switch to the first tab containing an error whenever the
+  // error set changes. If the currently-active tab is already in the
+  // error set we leave it alone (don't yank the user away from the
+  // field they're editing). Joining the array into a string makes the
+  // dependency stable across array identity changes.
+  const errorKey = (errorFields ?? []).join('|');
+  useEffect(() => {
+    if (!errorFields || errorFields.length === 0) return;
+    if (errored.has(activeTab as TabKey)) return;
+    const first = TAB_ORDER.find((t) => errored.has(t));
+    if (first && first !== activeTab) {
+      setActiveTab(first);
+      onTabChange?.(first);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [errorKey]);
+
   const handleTabChange = (key: string) => {
     setActiveTab(key);
     onTabChange?.(key);
   };
 
+  /** Wrap a tab label so a red exclamation icon prefixes the label
+   *  when that tab has any validation errors. */
+  const labelWithError = (key: TabKey, label: React.ReactNode) => {
+    if (!errored.has(key)) return label;
+    return (
+      <span style={{ color: 'var(--ant-color-error, #ff4d4f)' }}>
+        <ExclamationCircleFilled style={{ marginRight: 4 }} />
+        {label}
+      </span>
+    );
+  };
+
   const tabItems = [
     {
       key: 'standard',
-      label: (
+      label: labelWithError(
+        'standard',
         <span>
           <FileTextOutlined />
           {t('medical:tabs.standard', 'Standard')}
-        </span>
+        </span>,
       ),
       children: (
         <MedicalRecordFieldGroup
@@ -117,13 +196,14 @@ export const TabbedMedicalRecordFields: React.FC<TabbedMedicalRecordFieldsProps>
     },
     {
       key: 'prescriptions',
-      label: (
+      label: labelWithError(
+        'prescriptions',
         <Badge dot={showPrescriptionBadge || hasPrescriptionContent} offset={[6, 0]}>
           <span>
             <MedicineBoxOutlined />
             {t('medical:tabs.prescriptions', 'Prescriptions')}
           </span>
-        </Badge>
+        </Badge>,
       ),
       children: (
         <div className={styles.tabContent}>
@@ -147,13 +227,14 @@ export const TabbedMedicalRecordFields: React.FC<TabbedMedicalRecordFieldsProps>
     },
     {
       key: 'lineItems',
-      label: (
+      label: labelWithError(
+        'lineItems',
         <Badge count={showLineItemsBadge ? lineItemsCount : 0} offset={[6, 0]}>
           <span>
             <UnorderedListOutlined />
             {t('medical:tabs.lineItems', 'Line Items')}
           </span>
-        </Badge>
+        </Badge>,
       ),
       children: (
         <LineItemsFieldGroup
