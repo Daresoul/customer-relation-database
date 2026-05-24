@@ -9,10 +9,7 @@ import { Form, Button, Space, Divider, Typography, Upload, Drawer, App, Select, 
 import { SaveOutlined, CloseOutlined, InboxOutlined, HistoryOutlined, TagsOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@/services/invoke';
-import FileUpload from '../FileUpload/FileUpload';
-import FileAttachmentList from '../FileUpload/FileAttachmentList';
 import RecentDeviceFiles from '../RecentDeviceFiles';
-import { useMedicalRecord } from '@/hooks/useMedicalRecords';
 import { useSearchRecordTemplates } from '@/hooks/useRecordTemplates';
 import { useAppSettings } from '@/hooks/useAppSettings';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -95,11 +92,6 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
   const debouncedSearchTerm = useDebounce(titleSearchTerm, 300);
   const { settings } = useAppSettings();
   const { data: searchedTemplates, isLoading: isSearching } = useSearchRecordTemplates(debouncedSearchTerm, recordType);
-
-  const { data: recordDetail, refetch: refetchRecord } = useMedicalRecord(
-    recordId || 0,
-    false
-  );
 
   useEffect(() => {
     if (initialValues) {
@@ -411,28 +403,14 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
               />
             </Form.Item>
 
-            <Divider />
-
-            {/* File Attachments Section */}
-            {isEdit && recordId && (
-              <div className={styles.filesSection}>
-                <h4>{t('medical:fileAttachments')}</h4>
-                {recordDetail?.attachments && recordDetail.attachments.length > 0 ? (
-                  <FileAttachmentList
-                    attachments={recordDetail.attachments}
-                    onDelete={() => refetchRecord()}
-                  />
-                ) : (
-                  <Text type="secondary">{t('medical:noAttachments')}</Text>
-                )}
-                <div className={styles.medicationList}>
-                  <FileUpload
-                    medicalRecordId={recordId}
-                    onUploadSuccess={() => refetchRecord()}
-                  />
-                </div>
-              </div>
-            )}
+            {/* File Attachments Section.
+                Only shown in create mode — attachments on an existing
+                record are managed from the medical record detail page
+                (where the Attachments card has its own upload, preview,
+                regenerate, etc.). Mixing attachment edits into this
+                modal duplicated UI and confused users about where the
+                source of truth was. */}
+            {!isEdit && <Divider />}
 
             {!isEdit && (
               <div className={styles.filesSection}>

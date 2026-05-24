@@ -30,6 +30,7 @@ export const DIAGNOSES_KEYS = {
   all: ['diagnoses'] as const,
   list: (activeOnly: boolean) => ['diagnoses', 'list', activeOnly] as const,
   forRecord: (recordId: number) => ['diagnoses', 'record', recordId] as const,
+  forPatient: (patientId: number) => ['diagnoses', 'patient', patientId] as const,
 };
 
 /** All diagnoses in the master list. Filters to active by default —
@@ -41,6 +42,22 @@ export function useDiagnoses(activeOnly = true) {
     // Diagnoses don't change often once configured; 30s staleness is
     // friendly to the user (no flicker on tab switches) without going
     // stale enough to confuse anyone editing the list right now.
+    staleTime: 30_000,
+  });
+}
+
+/** Every distinct diagnosis that's ever been applied to any of this
+ *  patient's medical records. Used by the patient overview to show
+ *  a "history at a glance" tag list. Includes inactive diagnoses so
+ *  retired conditions stay visible. */
+export function useDiagnosesForPatient(patientId: number | null | undefined) {
+  return useQuery({
+    queryKey: DIAGNOSES_KEYS.forPatient(patientId ?? 0),
+    queryFn: () =>
+      invoke<Diagnosis[]>('get_diagnoses_for_patient', {
+        patientId,
+      }),
+    enabled: patientId != null && patientId > 0,
     staleTime: 30_000,
   });
 }

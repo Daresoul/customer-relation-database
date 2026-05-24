@@ -579,6 +579,7 @@ fn main() {
             commands::delete_diagnosis,
             commands::get_diagnoses_for_record,
             commands::set_diagnoses_for_record,
+            commands::get_diagnoses_for_patient,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

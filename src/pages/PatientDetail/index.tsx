@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { Layout, Spin, Alert, Button, Space, Breadcrumb, Tabs } from 'antd';
+import { Layout, Spin, Alert, Button, Space, Breadcrumb, Tabs, Card } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
   ArrowLeftOutlined,
@@ -16,6 +16,7 @@ import { usePatientDetail, useDeleteConfirmation } from '../../hooks/usePatient'
 import { PatientInfo } from './PatientInfo';
 import { MedicalSection } from './MedicalSection';
 import { HouseholdSection } from './HouseholdSection';
+import DiagnosisTagList from '../../components/DiagnosisTagList';
 import MedicalHistorySection from './MedicalHistory/MedicalHistorySection';
 import { Link } from 'react-router-dom';
 import { useThemeColors } from '../../utils/themeStyles';
@@ -25,7 +26,7 @@ import styles from './PatientDetail.module.css';
 const { Content } = Layout;
 
 export const PatientDetail: React.FC = () => {
-  const { t } = useTranslation(['patients', 'common', 'navigation']);
+  const { t } = useTranslation(['patients', 'common', 'navigation', 'medical']);
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -177,6 +178,18 @@ export const PatientDetail: React.FC = () => {
               patientId={patient.id}
               onHouseholdChanged={handleHouseholdChanged}
             />
+          {/* Aggregated diagnoses card: every distinct diagnosis ever
+              applied to any of this patient's medical records. Card
+              renders nothing inside if there are none; we still keep
+              the Card frame so the overview layout has a stable
+              footprint and the empty state remains obvious to the
+              user (vs. silently disappearing). */}
+          <Card
+            title={t('medical:fields.diagnoses', 'Diagnoses')}
+            style={{ marginTop: 16 }}
+          >
+            <DiagnosisTagList patientId={patient.id} />
+          </Card>
         </div>
       ),
     },

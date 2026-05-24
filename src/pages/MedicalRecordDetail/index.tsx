@@ -14,6 +14,7 @@ import PrintReportModal from '@/components/PrintReportModal';
 import type { PatientOverrides, PatientInfo } from '@/types/report';
 import type { MedicalAttachment } from '@/types/medical';
 import MedicalRecordForm from '@/components/MedicalRecordModal/MedicalRecordForm';
+import DiagnosisTagList from '@/components/DiagnosisTagList';
 // Inline PDF viewer handled by PdfInlineViewer with reliable fallbacks
 import type { MedicalRecord, MedicalRecordHistory, UpdateMedicalRecordInput } from '@/types/medical';
 import type { MedicalRecordLineItem } from '@/types/lineItem';
@@ -255,6 +256,27 @@ export const MedicalRecordDetailPage: React.FC = () => {
   const record = data?.record;
   const history = (data?.history || []) as MedicalRecordHistory[];
   const attachments = (data as any)?.attachments || [];
+
+  // Split attachments into two groups so the user can find documents
+  // and raw device data separately:
+  //   - documents:   generated PDFs (simple report, pharmacy note,
+  //                  invoice, configured combined report) AND any
+  //                  files the user manually uploaded (everything
+  //                  that isn't a `test_result` from the device
+  //                  watcher).
+  //   - deviceData:  raw test-result files captured by the device
+  //                  watcher (XML, HL7, etc.) — the source data that
+  //                  the generated PDFs were built from.
+  // Both groups render in the same kind of table so behaviour is
+  // consistent; they just sit in two separate cards.
+  const documentAttachments = useMemo(
+    () => attachments.filter((a: any) => a.attachmentType !== 'test_result'),
+    [attachments],
+  );
+  const deviceDataAttachments = useMemo(
+    () => attachments.filter((a: any) => a.attachmentType === 'test_result'),
+    [attachments],
+  );
 
   // Fetch patient info for print report modal
   const { data: patientDetail } = usePatientDetail(record?.patientId || 0);
@@ -679,6 +701,134 @@ export const MedicalRecordDetailPage: React.FC = () => {
     );
   }
 
+  /**
+   * Render an Attachments table with the standard preview /
+   * download / open-externally behaviour. Used twice below — once
+   * for documents (generated PDFs + uploads) and once for raw
+   * device data (test_result attachments) — so the table config
+   * lives here in one place. Both calls share the expanded-row /
+   * preview state by attachment id.
+   */
+  const renderAttachmentsTable = (dataSource: any[], emptyText: string) => (
+    <Table
+      size="small"
+      rowKey={(r: any) => String(r.id)}
+      dataSource={dataSource}
+      pagination={false}
+      locale={{ emptyText }}
+      onRow={(record: any) => ({
+        onClick: () => {
+          if (isPreviewable(record.mimeType, record.originalName)) {
+            const open = expandedRowKeys.includes(String(record.id));
+            onExpand(!open, record);
+          }
+        },
+        style: isPreviewable(record.mimeType, record.originalName) ? { cursor: 'pointer' } : {}
+      })}
+      expandable={{
+        expandedRowKeys,
+        onExpand,
+        showExpandColumn: false,
+        expandedRowRender: (row: any) => {
+          const key = String(row.id);
+          const url = previewUrls[key];
+          const pblob = previewBlobs[key];
+          const mime = (row.mimeType || '').toLowerCase();
+          const isPdf = mime === 'application/pdf' || String(row.originalName).toLowerCase().endsWith('.pdf');
+          const isTauri = typeof (window as any).__TAURI__ !== 'undefined';
+          if (!isPreviewable(mime, row.originalName)) {
+            return <Text type="secondary">{t('medical:detail.previewNotAvailable')}</Text>;
+          }
+          if (isPdf) {
+            if (isTauri) {
+              if (previewKinds[key] === 'pdfium' && url) {
+                return <PdfMultiPagePreview attachmentId={row.id} initialPageUrl={url} />;
+              }
+              if (pblob) {
+                return <PdfInlineViewer blob={pblob} fileName={row.originalName} attachmentId={row.id} />;
+              }
+              return <Text type="secondary">{t('medical:detail.loadingPreview')}</Text>;
+            } else {
+              if (url) return <iframe src={url} title={row.originalName} className={styles.iframe} />;
+              if (!pblob) return <Text type="secondary">{t('medical:detail.loadingPreview')}</Text>;
+              return <PdfInlineViewer blob={pblob} fileName={row.originalName} attachmentId={row.id} />;
+            }
+          }
+          if (!url) {
+            return <Text type="secondary">{t('medical:detail.loadingPreview')}</Text>;
+          }
+          if (mime.startsWith('image/')) {
+            return <img src={url} alt={row.originalName} className={styles.image} />;
+          }
+          const isJson = mime === 'application/json' || String(row.originalName).toLowerCase().endsWith('.json');
+          const isXml = mime.includes('xml') || String(row.originalName).toLowerCase().endsWith('.xml');
+          if (isJson || isXml) {
+            return <JsonXmlPreview blob={pblob} fileName={row.originalName} mimeType={mime} isJson={isJson} isXml={isXml} />;
+          }
+          if (mime.startsWith('text/')) {
+            return <iframe src={url} title={row.originalName} className={styles.iframe} />;
+          }
+          return <Text type="secondary">{t('medical:detail.previewNotAvailable')}</Text>;
+        }
+      }}
+      columns={[
+        {
+          title: t('medical:detail.file'),
+          dataIndex: 'originalName',
+          key: 'originalName',
+          render: (v: string, row: any) => (
+            <span className={styles.attachmentLink} style={{
+              textDecoration: isPreviewable(row.mimeType, row.originalName) ? 'underline' : 'none'
+            }}>
+              {v}
+            </span>
+          )
+        },
+        {
+          title: t('medical:detail.size'),
+          dataIndex: 'fileSize',
+          key: 'fileSize',
+          width: 140,
+          render: (size?: number) => MedicalService.formatFileSize(size)
+        },
+        {
+          title: t('medical:detail.uploaded'),
+          dataIndex: 'uploadedAt',
+          key: 'uploadedAt',
+          width: 200,
+          render: (v: string) => new Date(v).toLocaleString()
+        },
+        {
+          title: t('common:actions.actions') || t('common:actionsLabel'),
+          key: 'actions',
+          width: 250,
+          render: (_: any, row: any) => (
+            <Space>
+              <Button
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  MedicalService.openAttachmentExternally(row.id);
+                }}
+              >
+                {t('medical:detail.openInApp')}
+              </Button>
+              <Button
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  MedicalService.saveAttachmentAs(row.id, row.originalName);
+                }}
+              >
+                {t('common:download')}
+              </Button>
+            </Space>
+          )
+        }
+      ] as any}
+    />
+  );
+
   return (
     <Content className={styles.contentMinHeight}>
       {(() => {/* compute display values */})()}
@@ -933,9 +1083,39 @@ export const MedicalRecordDetailPage: React.FC = () => {
         )}
       </Card>
 
-      {/* Attachments Card */}
+      {/* Diagnoses applied to this record. DiagnosisTagList renders
+          nothing (no chrome) when there are no diagnoses, so the
+          surrounding Card is conditionally hidden too. */}
       <Card
-        title={t('medical:fields.attachments')}
+        title={t('medical:fields.diagnoses', 'Diagnoses')}
+        className={styles.marginTop16}
+      >
+        <DiagnosisTagList recordId={record.id} />
+      </Card>
+
+      {/* Attachments split into two cards so the user can find generated
+          documents and raw device data separately:
+            - Documents: generated PDFs + user-uploaded files (anything
+                         that's not a `test_result` attachment_type)
+            - Device Data: raw test_result files captured by the
+                         device watcher (XML, HL7, …)
+          Both tables share the same row rendering, preview behaviour,
+          and shared expanded-row state (keyed by attachment id which
+          is unique across both groups). Print Report + Regenerate
+          buttons live on the Device Data card since both actions
+          consume raw test-result inputs. */}
+      <Card
+        title={t('medical:fields.documents', 'Documents')}
+        className={styles.marginTop16}
+      >
+        {renderAttachmentsTable(
+          documentAttachments,
+          t('medical:detail.noDocuments', 'No documents yet'),
+        )}
+      </Card>
+
+      <Card
+        title={t('medical:fields.deviceData', 'Device Data')}
         className={styles.marginTop16}
         extra={
           <Space>
@@ -944,7 +1124,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
               icon={<HistoryOutlined />}
               onClick={() => setRecentFilesDrawerOpen(true)}
             >
-              Browse Recent Files
+              {t('medical:actions.browseRecentFiles', 'Browse Recent Files')}
             </Button>
             {hasDeviceDataAttachments && (
               <>
@@ -966,131 +1146,10 @@ export const MedicalRecordDetailPage: React.FC = () => {
           </Space>
         }
       >
-        <Table
-          size="small"
-          rowKey={(r: any) => String(r.id)}
-          dataSource={attachments}
-          pagination={false}
-          locale={{
-            emptyText: t('medical:detail.noAttachments') || t('common:noData')
-          }}
-          onRow={(record: any) => ({
-            onClick: () => {
-              if (isPreviewable(record.mimeType, record.originalName)) {
-                const open = expandedRowKeys.includes(String(record.id));
-                onExpand(!open, record);
-              }
-            },
-            style: isPreviewable(record.mimeType, record.originalName) ? { cursor: 'pointer' } : {}
-          })}
-          expandable={{
-            expandedRowKeys,
-            onExpand,
-            showExpandColumn: false,
-            expandedRowRender: (row: any) => {
-              const key = String(row.id);
-              const url = previewUrls[key];
-              const pblob = previewBlobs[key];
-              const mime = (row.mimeType || '').toLowerCase();
-              const isPdf = mime === 'application/pdf' || String(row.originalName).toLowerCase().endsWith('.pdf');
-              const isTauri = typeof (window as any).__TAURI__ !== 'undefined';
-              if (!isPreviewable(mime, row.originalName)) {
-                return <Text type="secondary">{t('medical:detail.previewNotAvailable')}</Text>;
-              }
-              // PDF branch first
-              if (isPdf) {
-                if (isTauri) {
-                  // In Tauri prefer PDFium multi-page preview if available
-                  if (previewKinds[key] === 'pdfium' && url) {
-                    return <PdfMultiPagePreview attachmentId={row.id} initialPageUrl={url} />;
-                  }
-                  // Otherwise fall back to pdf.js inline viewer using the Blob
-                  if (pblob) {
-                    return <PdfInlineViewer blob={pblob} fileName={row.originalName} attachmentId={row.id} />;
-                  }
-                  return <Text type="secondary">{t('medical:detail.loadingPreview')}</Text>;
-                } else {
-                  // In browsers, prefer native PDF viewer for reliability
-                  if (url) return <iframe src={url} title={row.originalName} className={styles.iframe} />;
-                  if (!pblob) return <Text type="secondary">{t('medical:detail.loadingPreview')}</Text>;
-                  return <PdfInlineViewer blob={pblob} fileName={row.originalName} attachmentId={row.id} />;
-                }
-              }
-              if (!url) {
-                return <Text type="secondary">{t('medical:detail.loadingPreview')}</Text>;
-              }
-              if (mime.startsWith('image/')) {
-                return <img src={url} alt={row.originalName} className={styles.image} />;
-              }
-              // Handle JSON/XML files with prettification
-              const isJson = mime === 'application/json' || String(row.originalName).toLowerCase().endsWith('.json');
-              const isXml = mime.includes('xml') || String(row.originalName).toLowerCase().endsWith('.xml');
-              if (isJson || isXml) {
-                return <JsonXmlPreview blob={pblob} fileName={row.originalName} mimeType={mime} isJson={isJson} isXml={isXml} />;
-              }
-              if (mime.startsWith('text/')) {
-                return <iframe src={url} title={row.originalName} className={styles.iframe} />;
-              }
-              return <Text type="secondary">{t('medical:detail.previewNotAvailable')}</Text>;
-            }
-          }}
-          columns={[
-            {
-              title: t('medical:detail.file'),
-              dataIndex: 'originalName',
-              key: 'originalName',
-              render: (v: string, row: any) => (
-                <span className={styles.attachmentLink} style={{
-                  
-                  textDecoration: isPreviewable(row.mimeType, row.originalName) ? 'underline' : 'none'
-                }}>
-                  {v}
-                </span>
-              )
-            },
-            {
-              title: t('medical:detail.size'),
-              dataIndex: 'fileSize',
-              key: 'fileSize',
-              width: 140,
-              render: (size?: number) => MedicalService.formatFileSize(size)
-            },
-            {
-              title: t('medical:detail.uploaded'),
-              dataIndex: 'uploadedAt',
-              key: 'uploadedAt',
-              width: 200,
-              render: (v: string) => new Date(v).toLocaleString()
-            },
-            {
-              title: t('common:actions.actions') || t('common:actionsLabel'),
-              key: 'actions',
-              width: 250,
-              render: (_: any, row: any) => (
-                <Space>
-                  <Button
-                    size="small"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      MedicalService.openAttachmentExternally(row.id);
-                    }}
-                  >
-                    {t('medical:detail.openInApp')}
-                  </Button>
-                  <Button
-                    size="small"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      MedicalService.saveAttachmentAs(row.id, row.originalName);
-                    }}
-                  >
-                    {t('common:download')}
-                  </Button>
-                </Space>
-              )
-            }
-          ] as any}
-        />
+        {renderAttachmentsTable(
+          deviceDataAttachments,
+          t('medical:detail.noDeviceData', 'No device data attached'),
+        )}
       </Card>
 
       <Card title={t('medical:detail.versionHistory')} className={styles.marginTop16}>

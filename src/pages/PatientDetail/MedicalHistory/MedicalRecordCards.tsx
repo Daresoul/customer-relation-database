@@ -219,15 +219,26 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
             )}
           </Descriptions.Item>
 
-          {record.attachments && record.attachments.length > 0 && (
-            <Descriptions.Item label={
-              <Space>
-                <PaperClipOutlined />
-                <span>{t('fields.attachments')}</span>
-              </Space>
-            }>
-              <Space wrap>
-                {record.attachments.map(attachment => {
+          {/* Only show generated PDFs (and user-uploaded files) in the
+              medical-history card — raw device data (XML/HL7) lives
+              behind the medical-record detail page and would just
+              clutter the patient summary view. Same `attachmentType
+              !== 'test_result'` filter the detail page uses to split
+              documents from device data. */}
+          {(() => {
+            const visibleAttachments = (record.attachments || []).filter(
+              (a: any) => a.attachmentType !== 'test_result',
+            );
+            if (visibleAttachments.length === 0) return null;
+            return (
+              <Descriptions.Item label={
+                <Space>
+                  <PaperClipOutlined />
+                  <span>{t('fields.attachments')}</span>
+                </Space>
+              }>
+                <Space wrap>
+                  {visibleAttachments.map(attachment => {
                   const isPdf = attachment.mimeType?.toLowerCase() === 'application/pdf' ||
                                 attachment.originalName?.toLowerCase().endsWith('.pdf');
 
@@ -261,12 +272,13 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
                           ({(attachment.fileSize / 1024).toFixed(1)} KB)
                         </Text>
                       )}
-                    </Button>
-                  );
-                })}
-              </Space>
-            </Descriptions.Item>
-          )}
+                      </Button>
+                    );
+                  })}
+                </Space>
+              </Descriptions.Item>
+            );
+          })()}
 
           <Descriptions.Item label={t('fields.updatedAt')}>
             <Text type="secondary">{new Date(record.updatedAt).toLocaleString()}</Text>

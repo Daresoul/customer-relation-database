@@ -43,7 +43,9 @@
     "createdAt": "Создаден",
     "updatedAt": "Ажуриран",
     "createdBy": "Создаден од",
-    "updatedBy": "Ажуриран од"
+    "updatedBy": "Ажуриран од",
+    "documents": "Документи",
+    "deviceData": "Податоци од уред"
   },
   "tabs": {
     "standard": "Стандард",
@@ -103,7 +105,9 @@
     "viewHistory": "Види историја",
     "revert": "Врати на верзија",
     "retry": "Обиди се повторно",
-    "regeneratePdf": "Регенерирај PDF"
+    "regeneratePdf": "Регенерирај PDF",
+    "printReport": "Печати извештај",
+    "browseRecentFiles": "Прелистај скорашни датотеки"
   },
   "messages": {
     "createSuccess": "Медицинскиот запис е успешно создаден",
@@ -179,7 +183,9 @@
     "openInApp": "Отвори во апликација",
     "versionHistory": "Историја на верзии",
     "noHistory": "Сè уште нема историја",
-    "noAttachments": "Нема прикачувања"
+    "noAttachments": "Нема прикачувања",
+    "noDocuments": "Сè уште нема документи",
+    "noDeviceData": "Нема прикачени податоци од уред"
   },
   "deviceImport": {
     "title": "Увези податоци од уред во медицински запис",

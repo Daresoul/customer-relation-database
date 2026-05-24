@@ -14,11 +14,19 @@ import React from 'react';
 import { Space, Tag, Tooltip } from 'antd';
 import { TagsOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { useDiagnosesForRecord } from '@/hooks/useDiagnoses';
+import { useDiagnosesForRecord, useDiagnosesForPatient } from '@/hooks/useDiagnoses';
 
 interface DiagnosisTagListProps {
-  /** Medical record whose diagnoses we should display. */
-  recordId: number;
+  /**
+   * Medical record whose diagnoses we should display.
+   * Pass either `recordId` OR `patientId` — `recordId` shows the
+   * diagnoses applied to that single record, `patientId` shows the
+   * deduplicated union of every diagnosis ever applied to any of
+   * the patient's records.
+   */
+  recordId?: number;
+  /** Patient whose aggregated diagnosis history we should display. */
+  patientId?: number;
   /**
    * Max tags to render inline. Remaining are summarized as "+N more"
    * with a tooltip that lists the rest. Omit for "show everything".
@@ -39,12 +47,18 @@ const DEFAULT_TAG_COLOR = '#2f54eb';
 
 const DiagnosisTagList: React.FC<DiagnosisTagListProps> = ({
   recordId,
+  patientId,
   maxVisible,
   size = 'default',
   showLabel = false,
 }) => {
   const { t } = useTranslation(['medical']);
-  const { data, isLoading } = useDiagnosesForRecord(recordId);
+  // Exactly one of recordId / patientId is expected; the unused hook
+  // gets `undefined` and skips its fetch via the `enabled` flag in
+  // useDiagnosesForRecord / useDiagnosesForPatient.
+  const recordQuery = useDiagnosesForRecord(recordId);
+  const patientQuery = useDiagnosesForPatient(patientId);
+  const { data, isLoading } = recordId != null ? recordQuery : patientQuery;
 
   // While loading we render nothing — the tags are decorative info
   // and a flickering spinner per card would be visually noisy. The

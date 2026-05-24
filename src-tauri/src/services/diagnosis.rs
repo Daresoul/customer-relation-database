@@ -245,6 +245,35 @@ impl DiagnosisService {
     // medical_record_diagnoses junction-table helpers
     // ---------------------------------------------------------------
 
+    /// Return every distinct diagnosis ever applied to any of the
+    /// patient's medical records, ordered by name. Used by the
+    /// patient detail overview tab to show a "history at a glance"
+    /// tag list — recurring diagnoses appear only once.
+    ///
+    /// Includes inactive diagnoses (just like list_for_record) so
+    /// historical conditions aren't hidden when the user later
+    /// retires a tag from the picker.
+    pub async fn list_for_patient(
+        pool: &SeaOrmPool,
+        patient_id: i64,
+    ) -> Result<Vec<Diagnosis>, String> {
+        let rows = pool
+            .query_all(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "SELECT DISTINCT d.id, d.name, d.description, d.color, d.is_active, d.created_at, d.updated_at \
+                 FROM diagnoses d \
+                 INNER JOIN medical_record_diagnoses mrd ON mrd.diagnosis_id = d.id \
+                 INNER JOIN medical_records mr ON mr.id = mrd.medical_record_id \
+                 WHERE mr.patient_id = ? \
+                 ORDER BY d.name COLLATE NOCASE ASC",
+                vec![patient_id.into()],
+            ))
+            .await
+            .map_err(|e| format!("list_diagnoses_for_patient: {}", e))?;
+
+        rows.iter().map(row_to_model).collect()
+    }
+
     /// Return every diagnosis attached to the given medical record.
     /// Includes inactive diagnoses so historical records still show
     /// their full original tag set.

@@ -8,6 +8,7 @@
 //!   - delete_diagnosis(id, hard_delete?)   → ()
 //!   - get_diagnoses_for_record(record_id)  → Vec<Diagnosis>
 //!   - set_diagnoses_for_record(record_id, diagnosis_ids) → ()
+//!   - get_diagnoses_for_patient(patient_id) → Vec<Diagnosis> (deduped)
 //!
 //! The two record-scoped commands let the medical-record form load and
 //! save its tag set independently of the rest of the record's fields,
@@ -79,4 +80,12 @@ pub async fn set_diagnoses_for_record(
     diagnosis_ids: Vec<i64>,
 ) -> Result<(), String> {
     DiagnosisService::set_for_record(&pool, medical_record_id, &diagnosis_ids).await
+}
+
+#[tauri::command]
+pub async fn get_diagnoses_for_patient(
+    pool: State<'_, SeaOrmPool>,
+    patient_id: i64,
+) -> Result<Vec<Diagnosis>, String> {
+    DiagnosisService::list_for_patient(&pool, patient_id).await
 }
