@@ -325,7 +325,11 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
         recordType: 'procedure',
       }}
     >
-      {/* Medical Record Fields using tabbed component */}
+      {/* Medical Record Fields using tabbed component.
+          Diagnoses + File Attachments are rendered INSIDE the Standard
+          tab via the standardTabExtras prop so they don't visually
+          compete with the Prescriptions / Factura tabs — each tab is
+          self-contained. */}
       <TabbedMedicalRecordFields
         form={form}
         recordType={recordType}
@@ -345,149 +349,153 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
         showLineItemsBadge={lineItems.length > 0}
         lineItemsCount={lineItems.length}
         errorFields={errorFields}
-      />
+        standardTabExtras={
+          <>
+            <Divider />
 
-      <Divider />
-
-      {/* Diagnoses (tag-style multi-select).
-          Each diagnosis is a row in the `diagnoses` table managed via
-          Settings → Diagnoses. The Select rendering uses each
-          diagnosis's color hint so the in-form tags match how the
-          record displays elsewhere. */}
-      <Form.Item
-        label={
-          <Space>
-            <TagsOutlined />
-            <span>{t('medical:fields.diagnoses', 'Diagnoses')}</span>
-          </Space>
-        }
-        // Not in `name=` because we manage the selection state outside
-        // the AntD Form (we need to pass it to the parent in a separate
-        // onSubmit parameter, not in formData).
-        extra={t(
-          'medical:diagnosesHint',
-          'Tag this record with one or more diagnoses. Manage the list in Settings → Diagnoses.',
-        )}
-      >
-        <Select
-          mode="multiple"
-          value={selectedDiagnosisIds}
-          onChange={setSelectedDiagnosisIds}
-          placeholder={t(
-            'medical:placeholders.selectDiagnoses',
-            'Select one or more diagnoses…',
-          )}
-          allowClear
-          style={{ width: '100%' }}
-          // Search by label (the diagnosis name) — option's `value` is
-          // the numeric id, so default substring filterOption matches
-          // the id text which isn't what users want.
-          filterOption={(input, option) => {
-            const label = (option?.label as string) || '';
-            return label.toLowerCase().includes(input.toLowerCase());
-          }}
-          tagRender={({ value, label, closable, onClose }) => {
-            const d = availableDiagnoses.find((x) => x.id === value);
-            return (
-              <Tag
-                color={d?.color || 'blue'}
-                closable={closable}
-                onClose={onClose}
-                style={{ marginInlineEnd: 4 }}
-              >
-                {label}
-              </Tag>
-            );
-          }}
-          options={availableDiagnoses.map((d) => ({
-            value: d.id,
-            label: d.name,
-          }))}
-        />
-      </Form.Item>
-
-      <Divider />
-
-      {/* File Attachments Section */}
-      {isEdit && recordId && (
-        <div className={styles.filesSection}>
-          <h4>{t('medical:fileAttachments')}</h4>
-          {recordDetail?.attachments && recordDetail.attachments.length > 0 ? (
-            <FileAttachmentList
-              attachments={recordDetail.attachments}
-              onDelete={() => refetchRecord()}
-            />
-          ) : (
-            <Text type="secondary">{t('medical:noAttachments')}</Text>
-          )}
-          <div className={styles.medicationList}>
-            <FileUpload
-              medicalRecordId={recordId}
-              onUploadSuccess={() => refetchRecord()}
-            />
-          </div>
-        </div>
-      )}
-
-      {!isEdit && (
-        <div className={styles.filesSection}>
-          <h4>{t('medical:fileAttachments')}</h4>
-          <Button
-            type="link"
-            icon={<HistoryOutlined />}
-            onClick={() => setRecentFilesDrawerOpen(true)}
-            style={{ marginBottom: 8, paddingLeft: 0 }}
-          >
-            Browse Recent Device Files
-          </Button>
-          <Dragger
-            beforeUpload={(file) => {
-              const error = MedicalService.validateFile(file);
-              if (error) {
-                notification.error({ message: "Error", description: error, placement: "bottomRight", duration: 5 });
-                return Upload.LIST_IGNORE;
+            {/* Diagnoses (tag-style multi-select).
+                Each diagnosis is a row in the `diagnoses` table managed
+                via Settings → Diagnoses. The Select rendering uses each
+                diagnosis's color hint so the in-form tags match how
+                the record displays elsewhere. */}
+            <Form.Item
+              label={
+                <Space>
+                  <TagsOutlined />
+                  <span>{t('medical:fields.diagnoses', 'Diagnoses')}</span>
+                </Space>
               }
-              return false;
-            }}
-            customRequest={({ onSuccess }) => {
-              setTimeout(() => {
-                onSuccess?.(null);
-              }, 0);
-            }}
-            onChange={({ fileList: newFileList }) => {
-              const validFiles: File[] = [];
-              newFileList.forEach(file => {
-                if (file.originFileObj && file.status !== 'error') {
-                  validFiles.push(file.originFileObj as File);
-                }
-              });
-              setPendingFiles(validFiles);
-            }}
-            fileList={pendingFiles.map((file, index) => ({
-              uid: `-${index}-${file.name}-${file.size}`,
-              name: file.name,
-              size: file.size,
-              type: file.type,
-              status: 'done',
-              originFileObj: file,
-            } as UploadFile))}
-            multiple
-            accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.jpg,.jpeg,.png,.gif,.bmp"
-            style={{ marginBottom: pendingFiles.length > 0 ? 8 : 0 }}
-          >
-            <p className="ant-upload-drag-icon">
-              <InboxOutlined className={styles.uploadIcon} />
-            </p>
-            <p className="ant-upload-text">{t('medical:form.dropFile')}</p>
-            <p className="ant-upload-hint">{t('medical:form.supportedFormats')}</p>
-          </Dragger>
-          {pendingFiles.length > 0 && (
-            <Text type="secondary" className={styles.uploadHint}>
-              {t('medical:fileUploadPending', { count: pendingFiles.length })}
-            </Text>
-          )}
-        </div>
-      )}
+              // Not in `name=` because we manage the selection state
+              // outside the AntD Form (we need to pass it to the parent
+              // in a separate onSubmit parameter, not in formData).
+              extra={t(
+                'medical:diagnosesHint',
+                'Tag this record with one or more diagnoses. Manage the list in Settings → Diagnoses.',
+              )}
+            >
+              <Select
+                mode="multiple"
+                value={selectedDiagnosisIds}
+                onChange={setSelectedDiagnosisIds}
+                placeholder={t(
+                  'medical:placeholders.selectDiagnoses',
+                  'Select one or more diagnoses…',
+                )}
+                allowClear
+                style={{ width: '100%' }}
+                // Search by label (the diagnosis name) — option's
+                // `value` is the numeric id, so default substring
+                // filterOption matches the id text which isn't what
+                // users want.
+                filterOption={(input, option) => {
+                  const label = (option?.label as string) || '';
+                  return label.toLowerCase().includes(input.toLowerCase());
+                }}
+                tagRender={({ value, label, closable, onClose }) => {
+                  const d = availableDiagnoses.find((x) => x.id === value);
+                  return (
+                    <Tag
+                      color={d?.color || 'blue'}
+                      closable={closable}
+                      onClose={onClose}
+                      style={{ marginInlineEnd: 4 }}
+                    >
+                      {label}
+                    </Tag>
+                  );
+                }}
+                options={availableDiagnoses.map((d) => ({
+                  value: d.id,
+                  label: d.name,
+                }))}
+              />
+            </Form.Item>
+
+            <Divider />
+
+            {/* File Attachments Section */}
+            {isEdit && recordId && (
+              <div className={styles.filesSection}>
+                <h4>{t('medical:fileAttachments')}</h4>
+                {recordDetail?.attachments && recordDetail.attachments.length > 0 ? (
+                  <FileAttachmentList
+                    attachments={recordDetail.attachments}
+                    onDelete={() => refetchRecord()}
+                  />
+                ) : (
+                  <Text type="secondary">{t('medical:noAttachments')}</Text>
+                )}
+                <div className={styles.medicationList}>
+                  <FileUpload
+                    medicalRecordId={recordId}
+                    onUploadSuccess={() => refetchRecord()}
+                  />
+                </div>
+              </div>
+            )}
+
+            {!isEdit && (
+              <div className={styles.filesSection}>
+                <h4>{t('medical:fileAttachments')}</h4>
+                <Button
+                  type="link"
+                  icon={<HistoryOutlined />}
+                  onClick={() => setRecentFilesDrawerOpen(true)}
+                  style={{ marginBottom: 8, paddingLeft: 0 }}
+                >
+                  Browse Recent Device Files
+                </Button>
+                <Dragger
+                  beforeUpload={(file) => {
+                    const error = MedicalService.validateFile(file);
+                    if (error) {
+                      notification.error({ message: "Error", description: error, placement: "bottomRight", duration: 5 });
+                      return Upload.LIST_IGNORE;
+                    }
+                    return false;
+                  }}
+                  customRequest={({ onSuccess }) => {
+                    setTimeout(() => {
+                      onSuccess?.(null);
+                    }, 0);
+                  }}
+                  onChange={({ fileList: newFileList }) => {
+                    const validFiles: File[] = [];
+                    newFileList.forEach(file => {
+                      if (file.originFileObj && file.status !== 'error') {
+                        validFiles.push(file.originFileObj as File);
+                      }
+                    });
+                    setPendingFiles(validFiles);
+                  }}
+                  fileList={pendingFiles.map((file, index) => ({
+                    uid: `-${index}-${file.name}-${file.size}`,
+                    name: file.name,
+                    size: file.size,
+                    type: file.type,
+                    status: 'done',
+                    originFileObj: file,
+                  } as UploadFile))}
+                  multiple
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.jpg,.jpeg,.png,.gif,.bmp"
+                  style={{ marginBottom: pendingFiles.length > 0 ? 8 : 0 }}
+                >
+                  <p className="ant-upload-drag-icon">
+                    <InboxOutlined className={styles.uploadIcon} />
+                  </p>
+                  <p className="ant-upload-text">{t('medical:form.dropFile')}</p>
+                  <p className="ant-upload-hint">{t('medical:form.supportedFormats')}</p>
+                </Dragger>
+                {pendingFiles.length > 0 && (
+                  <Text type="secondary" className={styles.uploadHint}>
+                    {t('medical:fileUploadPending', { count: pendingFiles.length })}
+                  </Text>
+                )}
+              </div>
+            )}
+          </>
+        }
+      />
 
       <Form.Item className={styles.submitButton}>
         <Space>

@@ -95,6 +95,17 @@ export interface TabbedMedicalRecordFieldsProps extends MedicalRecordFieldGroupP
    * (or omit) to clear the indicators.
    */
   errorFields?: readonly string[];
+  /**
+   * Extra content to render inside the Standard tab, after the
+   * MedicalRecordFieldGroup fields. Used by MedicalRecordForm to keep
+   * Diagnoses + File Attachments scoped to the Standard tab so they
+   * don't visually compete with the Prescriptions / Factura tabs (the
+   * user expects each tab to render only its own concerns).
+   *
+   * The DeviceImportModal caller doesn't pass anything here and gets
+   * a plain Standard tab.
+   */
+  standardTabExtras?: React.ReactNode;
 }
 
 export const TabbedMedicalRecordFields: React.FC<TabbedMedicalRecordFieldsProps> = ({
@@ -122,6 +133,7 @@ export const TabbedMedicalRecordFields: React.FC<TabbedMedicalRecordFieldsProps>
   manualTotal,
   onManualTotalChange,
   errorFields,
+  standardTabExtras,
 }) => {
   const { t } = useTranslation(['medical', 'common', 'forms']);
   const [activeTab, setActiveTab] = useState(defaultActiveTab);
@@ -179,19 +191,22 @@ export const TabbedMedicalRecordFields: React.FC<TabbedMedicalRecordFieldsProps>
         </span>,
       ),
       children: (
-        <MedicalRecordFieldGroup
-          form={form}
-          recordType={recordType}
-          onRecordTypeChange={onRecordTypeChange}
-          templates={templates}
-          isSearchingTemplates={isSearchingTemplates}
-          onTemplateSearch={onTemplateSearch}
-          onTemplateSelect={onTemplateSelect}
-          disabled={disabled}
-          hideRecordType={hideRecordType}
-          titleLabel={titleLabel}
-          titlePlaceholder={titlePlaceholder}
-        />
+        <>
+          <MedicalRecordFieldGroup
+            form={form}
+            recordType={recordType}
+            onRecordTypeChange={onRecordTypeChange}
+            templates={templates}
+            isSearchingTemplates={isSearchingTemplates}
+            onTemplateSearch={onTemplateSearch}
+            onTemplateSelect={onTemplateSelect}
+            disabled={disabled}
+            hideRecordType={hideRecordType}
+            titleLabel={titleLabel}
+            titlePlaceholder={titlePlaceholder}
+          />
+          {standardTabExtras}
+        </>
       ),
     },
     {
