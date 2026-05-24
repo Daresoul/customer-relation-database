@@ -161,6 +161,8 @@ mod household_validation {
             household: CreateHouseholdDto {
                 household_name: Some("Test Family".to_string()),
                 address: None,
+                city: None,
+                postal_code: None,
                 notes: None,
             },
             people: vec![

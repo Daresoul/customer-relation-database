@@ -40,6 +40,8 @@ fn dto(name: &str, people: Vec<CreatePersonWithContactsDto>) -> CreateHouseholdW
         household: CreateHouseholdDto {
             household_name: Some(name.to_string()),
             address: None,
+            city: None,
+            postal_code: None,
             notes: None,
         },
         people,
@@ -195,6 +197,8 @@ async fn create_with_contacts_persists_them() {
             household: CreateHouseholdDto {
                 household_name: Some("Contactful".to_string()),
                 address: Some("123 Main St".to_string()),
+                city: None,
+                postal_code: None,
                 notes: None,
             },
             people: vec![CreatePersonWithContactsDto {
@@ -236,6 +240,8 @@ async fn create_household_with_nullable_fields_omitted() {
             household: CreateHouseholdDto {
                 household_name: None,
                 address: None,
+                city: None,
+                postal_code: None,
                 notes: None,
             },
             people: vec![person("X", "Y", true)],
@@ -308,8 +314,10 @@ async fn update_household_name_persists() {
         &test_db,
         created.household.id as i32,
         Some("Renamed".to_string()),
-        None,
-        None,
+        None, // address unchanged
+        None, // city unchanged
+        None, // postal_code unchanged
+        None, // notes unchanged
     )
     .await
     .unwrap();
@@ -329,6 +337,8 @@ async fn update_household_none_preserves_existing_via_coalesce() {
             household: CreateHouseholdDto {
                 household_name: Some("Keep me".to_string()),
                 address: Some("Keep me too".to_string()),
+                city: None,
+                postal_code: None,
                 notes: None,
             },
             people: vec![person("A", "B", true)],
@@ -337,9 +347,17 @@ async fn update_household_none_preserves_existing_via_coalesce() {
     .await
     .unwrap();
 
-    q::update_household(&test_db, created.household.id as i32, None, None, Some("Added notes".to_string()))
-        .await
-        .unwrap();
+    q::update_household(
+        &test_db,
+        created.household.id as i32,
+        None, // household_name unchanged
+        None, // address unchanged
+        None, // city unchanged
+        None, // postal_code unchanged
+        Some("Added notes".to_string()),
+    )
+    .await
+    .unwrap();
 
     let fetched = q::get_household_with_people(&test_db, created.household.id as i32).await.unwrap().expect("Some(household)");
     assert_eq!(fetched.household.household_name.as_deref(), Some("Keep me"));
@@ -375,6 +393,8 @@ async fn delete_household_cascades_to_people_and_contacts() {
             household: CreateHouseholdDto {
                 household_name: Some("Cascade".to_string()),
                 address: None,
+                city: None,
+                postal_code: None,
                 notes: None,
             },
             people: vec![CreatePersonWithContactsDto {
