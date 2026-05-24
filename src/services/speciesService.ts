@@ -3,7 +3,7 @@ import { Species, CreateSpeciesInput, UpdateSpeciesInput } from '../types/specie
 
 export class SpeciesService {
   static async getSpecies(activeOnly?: boolean): Promise<Species[]> {
-    return ApiService.invoke<Species[]>('get_species', { activeOnly });
+    return ApiService.invokeRaw<Species[]>('get_species', { activeOnly });
   }
 
   static async getSpeciesById(id: number): Promise<Species> {
@@ -19,6 +19,6 @@ export class SpeciesService {
   }
 
   static async deleteSpecies(id: number, hardDelete?: boolean): Promise<void> {
-    return ApiService.invoke<void>('delete_species', { id, hardDelete });
+    return ApiService.invokeRaw<void>('delete_species', { id, hardDelete });
   }
 }

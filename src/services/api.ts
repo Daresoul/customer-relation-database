@@ -14,6 +14,30 @@ export class ApiService {
    * Wrapper around Tauri's invoke with error handling and automatic case transformation
    * - Converts args from camelCase to snake_case before sending
    * - Converts response from snake_case to camelCase after receiving
+   *
+   * ⚠️ WARNING: the outgoing camelCase → snake_case transformation breaks
+   * multi-word top-level args. Tauri 1.x's `#[tauri::command]` macro renames
+   * Rust snake_case args to camelCase on the wire by default — so a Rust
+   * arg `patient_id: i64` is looked up in the payload as `patientId`. This
+   * method converts `patientId` to `patient_id`, and Tauri's lookup fails
+   * with "missing required key patientId".
+   *
+   * Safe uses (work because ApiService.invoke):
+   *   - Single-word args: `{ id }`, `{ query }`, `{ enabled }` — no
+   *     transformation applies, both sides see the same key.
+   *   - DTO-wrapped args with snake_case DTOs (no serde rename):
+   *     `{ input: { patientId, startTime } }` → inner gets snake-cased,
+   *     which matches the DTO. Outer key (`input`) is single-word.
+   *
+   * Unsafe uses (use invokeRaw instead):
+   *   - Bare multi-word args: `{ patientId, householdId }`
+   *   - DTO-wrapped args with camelCase DTOs (serde rename_all =
+   *     "camelCase"): the inner camelCase fields would get snake-cased
+   *     and break the DTO deserialization.
+   *
+   * When in doubt, use `invokeRaw`. The proper long-term fix is to drop
+   * the outgoing transformation entirely and add `rename_all = "camelCase"`
+   * to the remaining snake_case Rust DTOs.
    */
   static async invoke<T>(command: string, args?: any): Promise<T> {
     try {

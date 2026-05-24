@@ -30,7 +30,7 @@ export const updateService = {
    * Record an update check with optional notified version
    */
   async recordCheck(notifiedVersion?: string): Promise<void> {
-    return ApiService.invoke('record_update_check', {
+    return ApiService.invokeRaw('record_update_check', {
       notifiedVersion: notifiedVersion || null,
     });
   },

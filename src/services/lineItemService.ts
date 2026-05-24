@@ -11,7 +11,7 @@ export class LineItemService {
    * @param activeOnly - If true, only return active templates (default: true)
    */
   static async getTemplates(activeOnly?: boolean): Promise<LineItemTemplate[]> {
-    return ApiService.invoke<LineItemTemplate[]>('get_line_item_templates', { activeOnly });
+    return ApiService.invokeRaw<LineItemTemplate[]>('get_line_item_templates', { activeOnly });
   }
 
   /**

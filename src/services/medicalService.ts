@@ -148,15 +148,15 @@ export class MedicalService {
   static async getPdfAttachmentPageCount(
     attachmentId: number,
   ): Promise<number> {
-    return ApiService.invoke('get_medical_attachment_pdf_page_count', {
-      attachmentId
+    return ApiService.invokeRaw('get_medical_attachment_pdf_page_count', {
+      attachmentId,
     });
   }
 
   static async deleteAttachment(
     attachmentId: number
   ): Promise<void> {
-    return ApiService.invoke('delete_medical_attachment', { attachmentId });
+    return ApiService.invokeRaw('delete_medical_attachment', { attachmentId });
   }
 
   static async searchMedicalRecords(
@@ -164,7 +164,7 @@ export class MedicalService {
     searchTerm: string,
     includeArchived = false
   ): Promise<MedicalRecord[]> {
-    const response = await ApiService.invoke<SearchMedicalRecordsResponse>(
+    const response = await ApiService.invokeRaw<SearchMedicalRecordsResponse>(
       'search_medical_records',
       { patientId, searchTerm, includeArchived }
     );
@@ -232,16 +232,18 @@ export class MedicalService {
       targetPath = targetPath + extension;
     }
 
-    await ApiService.invoke('write_medical_attachment_to_path', {
+    // Tauri expects camelCase keys (see PatientService for full
+    // explanation of why ApiService.invoke breaks multi-arg commands).
+    // We were sending both shapes as a workaround; switch to invokeRaw
+    // and send just camelCase.
+    await ApiService.invokeRaw('write_medical_attachment_to_path', {
       attachmentId,
-      attachment_id: attachmentId,
       targetPath,
-      target_path: targetPath
     });
   }
 
   static async openAttachmentExternally(attachmentId: number): Promise<void> {
-    await ApiService.invokeRaw('open_medical_attachment', { attachmentId, attachment_id: attachmentId });
+    await ApiService.invokeRaw('open_medical_attachment', { attachmentId });
   }
 
   static async printAttachment(attachmentId: number): Promise<void> {

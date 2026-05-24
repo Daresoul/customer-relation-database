@@ -99,11 +99,15 @@ export class HouseholdService {
 
   /**
    * Get household with all people and contacts
+   *
+   * Uses invokeRaw so the `householdId` key reaches Tauri unchanged —
+   * see PatientService for a fuller explanation of the case-transform
+   * trap.
    */
   static async getHouseholdWithPeople(
     householdId: number
   ): Promise<HouseholdWithPeople | null> {
-    const result = await ApiService.invoke<HouseholdWithPeople | null>('get_household_with_people', {
+    const result = await ApiService.invokeRaw<HouseholdWithPeople | null>('get_household_with_people', {
       householdId,
     });
 
@@ -121,7 +125,7 @@ export class HouseholdService {
       notes?: string;
     }
   ): Promise<void> {
-    await ApiService.invoke('update_household', {
+    await ApiService.invokeRaw('update_household', {
       householdId,
       householdName: updates.householdName || null,
       address: updates.address || null,
@@ -133,7 +137,7 @@ export class HouseholdService {
    * Delete household (will cascade delete people and contacts)
    */
   static async deleteHousehold(householdId: number): Promise<void> {
-    await ApiService.invoke('delete_household', { householdId });
+    await ApiService.invokeRaw('delete_household', { householdId });
   }
 
   /**

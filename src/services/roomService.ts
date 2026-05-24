@@ -26,9 +26,9 @@ export class RoomService {
     roomId: number,
     checkTime: string
   ): Promise<RoomAvailability> {
-    return ApiService.invoke<RoomAvailability>('get_room_availability', {
+    return ApiService.invokeRaw<RoomAvailability>('get_room_availability', {
       roomId,
-      checkTime
+      checkTime,
     });
   }
 }

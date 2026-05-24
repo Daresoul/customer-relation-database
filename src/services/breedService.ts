@@ -23,6 +23,6 @@ export class BreedService {
   }
 
   static async deleteBreed(id: number, hardDelete: boolean = false): Promise<void> {
-    return ApiService.invoke('delete_breed', { id, hardDelete });
+    return ApiService.invokeRaw('delete_breed', { id, hardDelete });
   }
 }
