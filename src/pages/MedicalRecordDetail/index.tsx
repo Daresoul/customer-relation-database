@@ -15,6 +15,8 @@ import type { PatientOverrides, PatientInfo } from '@/types/report';
 import type { MedicalAttachment } from '@/types/medical';
 import MedicalRecordForm from '@/components/MedicalRecordModal/MedicalRecordForm';
 import DiagnosisTagList from '@/components/DiagnosisTagList';
+import { DIAGNOSES_KEYS } from '@/hooks/useDiagnoses';
+import { useQueryClient } from '@tanstack/react-query';
 // Inline PDF viewer handled by PdfInlineViewer with reliable fallbacks
 import type { MedicalRecord, MedicalRecordHistory, UpdateMedicalRecordInput } from '@/types/medical';
 import type { MedicalRecordLineItem } from '@/types/lineItem';
@@ -241,6 +243,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
 
   const { data, isLoading, isError, error, refetch } = useMedicalRecord(recordId, true);
   const updateMutation = useUpdateMedicalRecord();
+  const queryClient = useQueryClient();
   const uploadMutation = useUploadAttachment();
   const { data: currencies } = useCurrencies();
   const [isEditing, setIsEditing] = useState(false);
@@ -1064,9 +1067,55 @@ export const MedicalRecordDetailPage: React.FC = () => {
         ) : (
           <MedicalRecordForm
             initialValues={record}
-            onSubmit={async (values: UpdateMedicalRecordInput) => {
+            // MedicalRecordForm calls onSubmit with 5 args:
+            //   (formData, files, fileSourceIds, deviceDataList, diagnosisIds)
+            // We only care about the form values and the diagnosis ids
+            // here — files / fileSourceIds / deviceDataList are
+            // create-mode concerns (the form hides them in edit). But
+            // we MUST receive diagnosisIds and forward them to
+            // set_diagnoses_for_record, otherwise edits made through
+            // this page silently drop the user's diagnosis selection
+            // (the MedicalRecordModal path handled it; this page used
+            // to ignore the extra args).
+            onSubmit={async (
+              values: UpdateMedicalRecordInput,
+              _files?: File[],
+              _fileSourceIds?: Map<string, string>,
+              _deviceDataList?: unknown[],
+              diagnosisIds?: number[],
+            ) => {
               try {
                 await updateMutation.mutateAsync({ recordId: record.id, updates: values });
+
+                if (diagnosisIds !== undefined) {
+                  try {
+                    await invoke('set_diagnoses_for_record', {
+                      medicalRecordId: record.id,
+                      diagnosisIds,
+                    });
+                    // Refresh the per-record + per-patient tag caches
+                    // so the inline DiagnosisTagList below the edit
+                    // form re-renders with the new selection.
+                    await queryClient.invalidateQueries({
+                      queryKey: DIAGNOSES_KEYS.forRecord(record.id),
+                    });
+                    await queryClient.invalidateQueries({
+                      queryKey: DIAGNOSES_KEYS.forPatient(record.patientId),
+                    });
+                  } catch (tagErr) {
+                    console.error('Failed to save diagnosis tags:', tagErr);
+                    notification.error({
+                      message: t(
+                        'medical:messages.diagnosesPartialSave',
+                        'Diagnoses not saved',
+                      ),
+                      description: String(tagErr),
+                      placement: 'bottomRight',
+                      duration: 8,
+                    });
+                  }
+                }
+
                 setIsEditing(false);
                 setSelectedVersion(null);
                 await refetch();
