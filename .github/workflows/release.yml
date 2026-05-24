@@ -152,6 +152,15 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+          # Enable incremental compilation in release mode. Cargo disables it
+          # by default for --release; on a frequently-rebuilt runner this
+          # forces re-codegen of every untouched module per build. With
+          # incremental on, only files actually changed by the version-bump
+          # (Cargo.toml -> the bin crate) need rebuilding — deps stay
+          # incremental-cached in target/release/incremental/. Same env var
+          # is set in e2e-windows.yml so both workflows produce compatible
+          # incremental artifacts via the shared target/ cache.
+          CARGO_INCREMENTAL: '1'
         with:
           tagName: ${{ inputs.version || github.ref_name }}
           releaseName: 'Veterinary Clinic Manager ${{ inputs.version || github.ref_name }}'

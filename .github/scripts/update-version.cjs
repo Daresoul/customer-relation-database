@@ -17,14 +17,33 @@ if (!/^\d+\.\d+\.\d+/.test(version)) {
     process.exit(1);
 }
 
-// Update tauri.conf.json
-const tauriConf = JSON.parse(fs.readFileSync('src-tauri/tauri.conf.json', 'utf8'));
-tauriConf.package.version = version;
-fs.writeFileSync('src-tauri/tauri.conf.json', JSON.stringify(tauriConf, null, 2) + '\n');
+// Update tauri.conf.json — only write if the version actually changed.
+// Touching the file with identical content still bumps mtime, which makes
+// Tauri re-run codegen and Cargo invalidate the bin crate's cached
+// compilation. Both files combined cost ~30-60s of unnecessary rebuild
+// per release.
+const tauriPath = 'src-tauri/tauri.conf.json';
+const tauriConf = JSON.parse(fs.readFileSync(tauriPath, 'utf8'));
+if (tauriConf.package.version !== version) {
+    tauriConf.package.version = version;
+    fs.writeFileSync(tauriPath, JSON.stringify(tauriConf, null, 2) + '\n');
+    console.log(`Updated ${tauriPath} to ${version}`);
+} else {
+    console.log(`${tauriPath} already at ${version}, skipping write`);
+}
 
-// Update Cargo.toml
-let cargo = fs.readFileSync('src-tauri/Cargo.toml', 'utf8');
-cargo = cargo.replace(/^version = "[^"]*"/m, `version = "${version}"`);
-fs.writeFileSync('src-tauri/Cargo.toml', cargo);
-
-console.log(`Updated version to ${version}`);
+// Update Cargo.toml — same logic. Content-comparison guards against
+// mtime bumps that would force `cargo build --release` to re-link the
+// bin crate even when sources are otherwise unchanged.
+const cargoPath = 'src-tauri/Cargo.toml';
+const cargoBefore = fs.readFileSync(cargoPath, 'utf8');
+const cargoAfter = cargoBefore.replace(
+    /^version = "[^"]*"/m,
+    `version = "${version}"`,
+);
+if (cargoAfter !== cargoBefore) {
+    fs.writeFileSync(cargoPath, cargoAfter);
+    console.log(`Updated ${cargoPath} to ${version}`);
+} else {
+    console.log(`${cargoPath} already at ${version}, skipping write`);
+}

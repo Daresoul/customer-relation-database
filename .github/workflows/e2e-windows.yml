@@ -144,6 +144,17 @@ jobs:
       - name: Build Tauri release binary
         shell: pwsh
         working-directory: src-tauri
+        env:
+          # `--release` builds normally disable incremental compilation
+          # (Cargo default). On a frequently-rebuilt CI runner where each
+          # commit changes only a handful of source files, incremental
+          # compilation in release mode saves the bulk of the time it
+          # would otherwise spend re-codegen'ing untouched modules.
+          # Trade-off: slightly larger build artifacts in `target/release/
+          # incremental/` and marginally slower optimizer (LLVM still
+          # optimizes per-cgu). For a Tauri E2E test binary, that's a fine
+          # cost.
+          CARGO_INCREMENTAL: '1'
         run: cargo build --release
 
       - name: Run Rust unit tests
@@ -155,6 +166,8 @@ jobs:
         # compile time.
         shell: pwsh
         working-directory: src-tauri
+        env:
+          CARGO_INCREMENTAL: '1'
         run: cargo test --release --bin vet-clinic
 
       - name: Run full-stack E2E suite
