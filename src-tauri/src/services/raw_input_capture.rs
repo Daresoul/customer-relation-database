@@ -749,21 +749,33 @@ mod windows_impl {
     /// case-insensitively. 4 hex chars follow.
     fn parse_vid_pid(name: &str) -> Option<UsbId> {
         let lower = name.to_ascii_lowercase();
-        let vid = find_4_hex_after_marker(&lower, "vid")?;
-        let pid = find_4_hex_after_marker(&lower, "pid")?;
+        let vid = find_hex_id_after_marker(&lower, "vid")?;
+        let pid = find_hex_id_after_marker(&lower, "pid")?;
         Some(UsbId { vid, pid })
     }
 
-    /// Find `marker` followed by a separator (`_` or `&`) and 4 hex digits,
-    /// returning the parsed u16. Tries every occurrence of `marker` in the
-    /// haystack so a stray "vid" inside a GUID can't permanently shadow the
-    /// real one.
+    /// Find `marker` followed by a separator (`_` or `&`) and 4–8 hex
+    /// digits, returning the parsed VID/PID as `u16`.
     ///
-    /// Used by `parse_vid_pid` to extract VID/PID from any of the three
-    /// Windows HID device path shapes (USB `VID_xxxx`, BT-Classic `_VID&xxxx`,
-    /// BT-LE `_VID&xxxx`). All three share the "marker + single-char
-    /// separator + 4 hex" structure; only the separator differs.
-    fn find_4_hex_after_marker(haystack: &str, marker: &str) -> Option<u16> {
+    /// Path-shape encyclopedia (all captured from real Windows installs):
+    ///
+    ///   USB:        `VID_05AC&PID_022C` — 4 hex chars per ID. Separator `_`.
+    ///   BT Classic: `_VID&000005ac_PID&022c` — **8 hex chars for VID**,
+    ///               typically 4 for PID. Separator `&`.
+    ///   BT LE:      `_VID&xxxxxxxx_PID&yyyy` — same as Classic.
+    ///
+    /// Why 8 chars for BT: Microsoft encodes the Bluetooth SIG's "Device
+    /// Identification Profile" fields in the path. The DI profile splits
+    /// the 4-byte field as `[VendorIDSource:1byte][VendorID:2bytes][1byte]`
+    /// (exact byte layout varies). For us, **the actual USB-style VID is
+    /// the lower 16 bits** — `0x000005AC` → `0x05AC`. So we parse as u32
+    /// and mask to u16. Same logic works for the 4-char USB case because
+    /// `0x05AC` as u32 is still `0x05AC` when masked.
+    ///
+    /// We accept up to 8 hex chars then stop at the first non-hex
+    /// character. Tries every occurrence of `marker` in the haystack so a
+    /// stray "vid" inside a GUID can't permanently shadow the real one.
+    fn find_hex_id_after_marker(haystack: &str, marker: &str) -> Option<u16> {
         let mut search_from = 0;
         while let Some(rel) = haystack[search_from..].find(marker) {
             let after_marker = search_from + rel + marker.len();
@@ -774,10 +786,19 @@ mod windows_impl {
             // we keep searching.
             match chars.next() {
                 Some('_') | Some('&') => {
-                    let hex: String = chars.take(4).collect();
-                    if hex.len() == 4 {
-                        if let Ok(v) = u16::from_str_radix(&hex, 16) {
-                            return Some(v);
+                    // Take up to 8 hex chars, stop at first non-hex.
+                    // 4-char USB shape → all 4 collected, parses as u32
+                    // then masked to u16 (no-op for values ≤ 0xFFFF).
+                    // 8-char BT shape → all 8 collected, parses as u32
+                    // then masked to u16 (extracts the lower 16 bits =
+                    // the real VID/PID).
+                    let hex: String = chars
+                        .take(8)
+                        .take_while(|c| c.is_ascii_hexdigit())
+                        .collect();
+                    if hex.len() >= 4 {
+                        if let Ok(v) = u32::from_str_radix(&hex, 16) {
+                            return Some(v as u16);
                         }
                     }
                 }
@@ -1426,12 +1447,28 @@ mod windows_impl {
         // -------------------------------------------------------------
 
         #[test]
-        fn parses_bluetooth_classic_hid_path() {
-            // The {00001124-...} GUID is the HID Service UUID for
-            // Bluetooth Classic. Most HID-mode BT scanners (including
-            // the SYC Bluetooth that spoofs Apple VID 0x05AC) pair
-            // through this profile.
-            let name = r"\\?\HID#{00001124-0000-1000-8000-00805f9b34fb}_VID&05AC_PID&022C#8&1a2b3c4d&0&0000#{4d1e55b2-f16f-11cf-88cb-001111000030}";
+        fn parses_bluetooth_classic_hid_path_real_world() {
+            // CAPTURED FROM USER'S WINDOWS 11 INSTALL — v0.5.9 diagnostic log:
+            //   path='\\?\HID#{00001124-0000-1000-8000-00805f9b34fb}_VID&000005ac_PID&022c&Col01#...'
+            //
+            // Note the VID portion `000005ac` is 8 hex chars, NOT 4.
+            // Microsoft's Bluetooth driver stack docs explicitly say:
+            //   "The eight digits following VID& correspond to the vendor ID code"
+            //   (learn.microsoft.com/.../installing-a-bluetooth-device)
+            //
+            // The lower 16 bits of that 4-byte field is the actual USB-style
+            // VID (0x05AC = Apple Magic Keyboard spoof, common on cheap BT
+            // microchip scanners). Upper 16 bits encode VendorIDSource per
+            // the Bluetooth Device Identification Profile spec — but real
+            // devices sometimes set it to 0x0000 (e.g., the SYC) instead of
+            // the spec-defined 0x0001 (BT SIG) / 0x0002 (USB-IF). We don't
+            // care about the upper bytes; we just mask to u16 and take what
+            // the lower bytes say.
+            //
+            // The v0.5.7 attempted fix only took 4 hex chars and got
+            // vid=0x0000 — that's why suppression silently didn't work for
+            // the SYC scanner despite the managed-list entry being correct.
+            let name = r"\\?\HID#{00001124-0000-1000-8000-00805f9b34fb}_VID&000005ac_PID&022c&Col01#a&2a6c4988&3&0000#{884b96c3-56ef-11d1-bc8c-00a0c91405dd}";
             assert_eq!(
                 parse_vid_pid(name),
                 Some(UsbId { vid: 0x05AC, pid: 0x022C })
@@ -1439,21 +1476,55 @@ mod windows_impl {
         }
 
         #[test]
-        fn parses_bluetooth_le_hid_path() {
-            // BT LE HID uses a different leading GUID but the same
-            // `_VID&xxxx_PID&xxxx` shape after it.
-            let name = r"\\?\HID#{00001812-0000-1000-8000-00805f9b34fb}_VID&0046_PID&02BE#7&abcdef01&0&0001#{4d1e55b2-f16f-11cf-88cb-001111000030}";
-            assert_eq!(
-                parse_vid_pid(name),
-                Some(UsbId { vid: 0x0046, pid: 0x02BE })
-            );
+        fn parses_bluetooth_classic_other_real_world_examples() {
+            // Additional real-world BTHENUM-shape paths from Microsoft docs +
+            // public bug reports. Each one's VID/PID was hand-verified
+            // against the device it came from.
+            // Source: learn.microsoft.com/en-us/answers/questions/2531261
+            //         and h30434.www3.hp.com Bluetooth Peripheral threads.
+
+            // BTHENUM Audio profile (`{0000110e-...}` is Audio Sink UUID).
+            // Upper 16 bits = 0x0001 (VendorIDSource = BT SIG), lower 16 = 0x001D.
+            let name1 = r"BTHENUM\{0000110e-0000-1000-8000-00805f9b34fb}_VID&0001001d_PID&1200";
+            assert_eq!(parse_vid_pid(name1), Some(UsbId { vid: 0x001D, pid: 0x1200 }));
+
+            // BTHENUM MAP/SMS profile.
+            let name2 = r"BTHENUM\{00001132-0000-1000-8000-00805f9b34fb}_VID&00010075_PID&0100";
+            assert_eq!(parse_vid_pid(name2), Some(UsbId { vid: 0x0075, pid: 0x0100 }));
+
+            // BTHENUM with vendor-defined service UUID (not BT-SIG standard).
+            let name3 = r"BTHENUM\{1ddce62a-ecb1-4455-8153-0743c87aec9f}_VID&00010082_PID&004b";
+            assert_eq!(parse_vid_pid(name3), Some(UsbId { vid: 0x0082, pid: 0x004B }));
+        }
+
+        #[test]
+        fn parses_bluetooth_le_hid_path_real_world() {
+            // BTHLEDEVICE has yet ANOTHER encoding — 6 hex chars for VID
+            // (1 byte VendorIDSource + 2 bytes VID), 4 hex chars for PID.
+            // Examples from the wild use `_Dev_VID&` (with "Dev" prefix)
+            // rather than `_VID&` like BTHENUM does, but our case-insensitive
+            // `find("vid")` matches both because we anchor on the "vid"
+            // substring + separator, not the surrounding tokens.
+            //
+            // Source: BTHLEDEVICE driver install logs.
+
+            // Real example — Logitech HID over BLE.
+            //   Path:   ...VID&02046d_PID&b019_REV&0006
+            //   Bytes:  source=0x02 (USB-IF), VID=0x046D (Logitech), PID=0xB019
+            let name1 = r"BTHLEDevice\{00001812-0000-1000-8000-00805f9b34fb}_Dev_VID&02046d_PID&b019_REV&0006";
+            assert_eq!(parse_vid_pid(name1), Some(UsbId { vid: 0x046D, pid: 0xB019 }));
+
+            // Another real example — different vendor.
+            let name2 = r"BTHLEDevice\{00001812-0000-1000-8000-00805F9B34FB}_DEV_VID&02248A_PID&8266_REV&0001";
+            assert_eq!(parse_vid_pid(name2), Some(UsbId { vid: 0x248A, pid: 0x8266 }));
         }
 
         #[test]
         fn parses_bluetooth_path_with_lowercase_markers() {
-            // Some BT stacks emit lowercase `vid&` / `pid&`. Same parse
-            // result thanks to case-insensitive matching.
-            let name = r"\\?\HID#{00001124-0000-1000-8000-00805f9b34fb}_vid&05ac_pid&022c#xyz";
+            // The user's actual captured path is lowercase (`_vid&` /
+            // `_pid&`) — Windows is inconsistent about case across versions
+            // and stacks. Our case-insensitive matching handles both.
+            let name = r"\\?\HID#{00001124-0000-1000-8000-00805f9b34fb}_vid&000005ac_pid&022c#xyz";
             assert_eq!(
                 parse_vid_pid(name),
                 Some(UsbId { vid: 0x05AC, pid: 0x022C })
