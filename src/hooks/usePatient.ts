@@ -65,32 +65,50 @@ export function usePatientDetail(patientId: number) {
             return patientDetail;
           }
 
-          const household = {
-            ...householdData.household,
-            people: householdData.people
-          };
+          // The Rust Household struct doesn't use serde(rename_all = "camelCase"),
+          // so the wire format here is snake_case (household_name, postal_code,
+          // is_primary, contact_type, contact_value, etc.). When the call goes
+          // through ApiService.invokeRaw (which we now use to avoid the case-
+          // transform breaking the request side), no snake→camel conversion
+          // happens on the response either. Read both shapes so we work
+          // whichever invoke variant is used.
+          const h: any = householdData.household ?? {};
+          const peopleRaw: any[] = (householdData as any).people ?? [];
 
-          // Find primary contact with all their contact methods
-          const primaryPerson = household.people?.find(p => p.isPrimary);
+          // Find primary contact with all their contact methods.
+          const primaryPersonRaw: any = peopleRaw.find((p) => p?.isPrimary ?? p?.is_primary);
 
-          const primaryContact = primaryPerson ? {
-            ...primaryPerson,
-            contacts: primaryPerson.contacts?.map((c: any) => ({
+          const primaryContact = primaryPersonRaw ? {
+            id: primaryPersonRaw.id,
+            firstName: primaryPersonRaw.firstName ?? primaryPersonRaw.first_name,
+            lastName: primaryPersonRaw.lastName ?? primaryPersonRaw.last_name,
+            isPrimary: primaryPersonRaw.isPrimary ?? primaryPersonRaw.is_primary ?? false,
+            contacts: (primaryPersonRaw.contacts ?? []).map((c: any) => ({
               id: c.id,
-              type: c.contactType as 'phone' | 'email' | 'mobile',  // camelCase from service
-              value: c.contactValue || '',  // camelCase from service
-              isPrimary: c.isPrimary || false  // already camelCase
-            })) || []
+              type: (c.contactType ?? c.contact_type) as 'phone' | 'email' | 'mobile',
+              value: c.contactValue ?? c.contact_value ?? '',
+              isPrimary: c.isPrimary ?? c.is_primary ?? false,
+            })),
           } : undefined;
 
+          // Normalize the rest of the people list (used by "Other Members"
+          // tag display) so consumers can rely on camelCase keys.
+          const people = peopleRaw.map((p: any) => ({
+            id: p.id,
+            firstName: p.firstName ?? p.first_name,
+            lastName: p.lastName ?? p.last_name,
+            isPrimary: p.isPrimary ?? p.is_primary ?? false,
+            contacts: p.contacts ?? [],
+          }));
+
           patientDetail.household = {
-            id: household.id,
-            householdName: household.householdName,
-            address: household.address,
-            city: household.city,
-            postalCode: household.postalCode,
+            id: h.id,
+            householdName: h.householdName ?? h.household_name ?? '',
+            address: h.address,
+            city: h.city,
+            postalCode: h.postalCode ?? h.postal_code,
             primaryContact,
-            people: household.people
+            people: people as any,
           };
         } catch (error) {
           console.error('Failed to fetch household details:', error);

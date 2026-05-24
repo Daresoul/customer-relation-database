@@ -53,12 +53,23 @@ export class ApiService {
   }
 
   /**
-   * Raw invoke without case transformation - use when you need exact control
+   * Invoke without args transformation, but still normalize the response
+   * snake_case → camelCase.
+   *
+   * This is the right choice for commands with bare multi-word args
+   * (`patientId`, `householdId`, …) or with DTO inputs that already use
+   * camelCase (most modern DTOs in this app). The response is still
+   * transformed because some response structs on the Rust side
+   * (Household, Species, RoomAvailability, …) don't carry
+   * #[serde(rename_all = "camelCase")] and would otherwise leak
+   * snake_case keys into the frontend. snakeToCamel on an already-
+   * camelCase object is a no-op, so this is safe for response structs
+   * that DO have the rename too.
    */
   static async invokeRaw<T>(command: string, args?: any): Promise<T> {
     try {
-      const result = await invoke<T>(command, args);
-      return result;
+      const result = await invoke<any>(command, args);
+      return snakeToCamelObject(result) as T;
     } catch (error) {
       console.error(`Tauri command failed: ${command}`, error);
       throw this.handleError(error);
