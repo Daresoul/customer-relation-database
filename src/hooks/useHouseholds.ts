@@ -83,7 +83,7 @@ export const useUpdateHousehold = () => {
   return useMutation({
     mutationFn: ({ householdId, updates }: {
       householdId: number;
-      updates: { householdName?: string; address?: string; notes?: string };
+      updates: { householdName?: string; address?: string; city?: string; postalCode?: string; notes?: string };
     }) => HouseholdService.updateHousehold(householdId, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [HOUSEHOLDS_KEY] });

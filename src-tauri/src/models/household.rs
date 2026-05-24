@@ -61,6 +61,15 @@ pub struct PatientHousehold {
 pub struct CreateHouseholdDto {
     pub household_name: Option<String>,
     pub address: Option<String>,
+    // City + postal code are split out so the inline create-household
+    // form can capture them as separate inputs (mirrors the
+    // address fields the full HouseholdForm already exposed). Both
+    // optional — older callers that only set `address` keep working
+    // unchanged.
+    #[serde(default)]
+    pub city: Option<String>,
+    #[serde(default)]
+    pub postal_code: Option<String>,
     pub notes: Option<String>,
 }
 

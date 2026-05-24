@@ -43,6 +43,8 @@ interface FormValues {
   phone?: string;
   email?: string;
   address?: string;
+  city?: string;
+  postalCode?: string;
 }
 
 /**
@@ -93,6 +95,8 @@ export const CreateHouseholdInline: React.FC<CreateHouseholdInlineProps> = ({
     const phone = values.phone?.trim();
     const email = values.email?.trim();
     const address = values.address?.trim();
+    const city = values.city?.trim();
+    const postalCode = values.postalCode?.trim();
 
     // first/last name are a pair — providing one requires the other.
     // We accept both empty (no primary contact) but reject lopsided
@@ -150,6 +154,8 @@ export const CreateHouseholdInline: React.FC<CreateHouseholdInlineProps> = ({
           household: {
             householdName,
             address: address || undefined,
+            city: city || undefined,
+            postalCode: postalCode || undefined,
           },
           people: [{
             person: {
@@ -165,16 +171,22 @@ export const CreateHouseholdInline: React.FC<CreateHouseholdInlineProps> = ({
         newHousehold = result.household as unknown as CreatedHousehold;
       } else {
         // Simple path: just the household, no person. The simple
-        // create_household command doesn't accept address, so set it
-        // via update_household afterwards if the user provided one.
+        // create_household command doesn't accept address fields, so
+        // set them via update_household afterwards if the user
+        // provided any.
         newHousehold = await invoke<CreatedHousehold>('create_household', {
           lastName: householdName,
           contacts: [],
         });
 
-        if (address && typeof newHousehold.id === 'number') {
+        const hasAddressInfo = !!(address || city || postalCode);
+        if (hasAddressInfo && typeof newHousehold.id === 'number') {
           try {
-            await HouseholdService.updateHousehold(newHousehold.id, { address });
+            await HouseholdService.updateHousehold(newHousehold.id, {
+              address: address || undefined,
+              city: city || undefined,
+              postalCode: postalCode || undefined,
+            });
           } catch (err) {
             // The household exists; we'll surface the partial failure
             // but not fail the whole create — the parent can prompt
@@ -280,9 +292,29 @@ export const CreateHouseholdInline: React.FC<CreateHouseholdInlineProps> = ({
         <Col xs={24}>
           <Form.Item
             name="address"
-            label={t('patients:detail.householdInfo.address', 'Address')}
+            label={t('patients:detail.householdInfo.address', 'Street Address')}
           >
-            <Input placeholder={t('patients:detail.householdInfo.addressPlaceholder', 'Street, city')} />
+            <Input placeholder={t('patients:detail.householdInfo.streetPlaceholder', 'Street and number')} />
+          </Form.Item>
+        </Col>
+      </Row>
+
+      <Row gutter={16}>
+        <Col xs={24} sm={14}>
+          <Form.Item
+            name="city"
+            label={t('patients:detail.householdInfo.city', 'City')}
+          >
+            <Input placeholder={t('patients:detail.householdInfo.cityPlaceholder', 'City')} />
+          </Form.Item>
+        </Col>
+        <Col xs={24} sm={10}>
+          <Form.Item
+            name="postalCode"
+            label={t('patients:detail.householdInfo.postalCode', 'Postal Code')}
+            rules={[{ max: 20, message: t('patients:detail.householdInfo.postalCodeTooLong', 'Postal code too long') }]}
+          >
+            <Input placeholder={t('patients:detail.householdInfo.postalCodePlaceholder', 'e.g., 1000')} />
           </Form.Item>
         </Col>
       </Row>

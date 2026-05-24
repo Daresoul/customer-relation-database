@@ -170,9 +170,20 @@ pub async fn update_household(
     household_id: i32,
     household_name: Option<String>,
     address: Option<String>,
+    city: Option<String>,
+    postal_code: Option<String>,
     notes: Option<String>,
 ) -> Result<(), String> {
-    household::update_household(&pool, household_id, household_name, address, notes).await
+    household::update_household(
+        &pool,
+        household_id,
+        household_name,
+        address,
+        city,
+        postal_code,
+        notes,
+    )
+    .await
 }
 
 #[tauri::command]

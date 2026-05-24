@@ -42,6 +42,11 @@ export interface PatientHousehold {
 export interface CreateHouseholdDto {
   householdName?: string;
   address?: string;
+  // ApiService.invoke converts these to snake_case (city → city, no
+  // change; postalCode → postal_code) before sending, so they line up
+  // with the Rust CreateHouseholdDto fields of the same names.
+  city?: string;
+  postalCode?: string;
   notes?: string;
 }
 

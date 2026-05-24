@@ -115,21 +115,29 @@ export class HouseholdService {
   }
 
   /**
-   * Update household information
+   * Update household information.
+   *
+   * Each field is independently optional. Passing `undefined` for a
+   * field leaves the existing value untouched (COALESCE on the Rust
+   * side). Passing `null` clears it explicitly.
    */
   static async updateHousehold(
     householdId: number,
     updates: {
       householdName?: string;
       address?: string;
+      city?: string;
+      postalCode?: string;
       notes?: string;
     }
   ): Promise<void> {
     await ApiService.invokeRaw('update_household', {
       householdId,
-      householdName: updates.householdName || null,
-      address: updates.address || null,
-      notes: updates.notes || null,
+      householdName: updates.householdName ?? null,
+      address: updates.address ?? null,
+      city: updates.city ?? null,
+      postalCode: updates.postalCode ?? null,
+      notes: updates.notes ?? null,
     });
   }
 

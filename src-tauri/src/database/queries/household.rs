@@ -11,13 +11,18 @@ pub async fn create_household_with_people(
 
     let txn = db.begin().await.map_err(|e| format!("Failed to begin transaction: {}", e))?;
 
-    // 1. Create household
+    // 1. Create household. `city` and `postal_code` were added to the
+    //    DTO so the inline create form can pass them; older callers
+    //    that only set `address` pass None for both and the DB stores
+    //    NULL, which matches the previous behaviour.
     let result = txn.execute(Statement::from_sql_and_values(
         DbBackend::Sqlite,
-        "INSERT INTO households (household_name, address, notes) VALUES (?, ?, ?)",
+        "INSERT INTO households (household_name, address, city, postal_code, notes) VALUES (?, ?, ?, ?, ?)",
         [
             dto.household.household_name.clone().into(),
             sea_orm::Value::String(dto.household.address.clone().map(Box::new)),
+            sea_orm::Value::String(dto.household.city.clone().map(Box::new)),
+            sea_orm::Value::String(dto.household.postal_code.clone().map(Box::new)),
             sea_orm::Value::String(dto.household.notes.clone().map(Box::new)),
         ]
     ))
@@ -134,13 +139,18 @@ pub async fn create_patient_with_household(
     };
     household_validate_dto.validate().map_err(|e| e.to_string())?;
 
-    // 1. Create household
+    // 1. Create household. `city` and `postal_code` were added to the
+    //    DTO so the inline create form can pass them; older callers
+    //    that only set `address` pass None for both and the DB stores
+    //    NULL, which matches the previous behaviour.
     let result = txn.execute(Statement::from_sql_and_values(
         DbBackend::Sqlite,
-        "INSERT INTO households (household_name, address, notes) VALUES (?, ?, ?)",
+        "INSERT INTO households (household_name, address, city, postal_code, notes) VALUES (?, ?, ?, ?, ?)",
         [
             dto.household.household_name.clone().into(),
             sea_orm::Value::String(dto.household.address.clone().map(Box::new)),
+            sea_orm::Value::String(dto.household.city.clone().map(Box::new)),
+            sea_orm::Value::String(dto.household.postal_code.clone().map(Box::new)),
             sea_orm::Value::String(dto.household.notes.clone().map(Box::new)),
         ]
     ))
@@ -359,20 +369,28 @@ pub async fn get_household_with_people(
     }))
 }
 
-// Update household
+// Update household. Every field is Option<String>; None means "leave
+// unchanged" (COALESCE keeps the existing value), Some("") means
+// "clear to empty string". `city` and `postal_code` were added so the
+// inline create form's address columns can be edited after creation
+// without going through the full HouseholdForm.
 pub async fn update_household(
     db: &DatabaseConnection,
     household_id: i32,
     household_name: Option<String>,
     address: Option<String>,
+    city: Option<String>,
+    postal_code: Option<String>,
     notes: Option<String>,
 ) -> Result<(), String> {
     db.execute(Statement::from_sql_and_values(
         DbBackend::Sqlite,
-        "UPDATE households SET household_name = COALESCE(?, household_name), address = COALESCE(?, address), notes = COALESCE(?, notes), updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        "UPDATE households SET household_name = COALESCE(?, household_name), address = COALESCE(?, address), city = COALESCE(?, city), postal_code = COALESCE(?, postal_code), notes = COALESCE(?, notes), updated_at = CURRENT_TIMESTAMP WHERE id = ?",
         [
             sea_orm::Value::String(household_name.map(Box::new)),
             sea_orm::Value::String(address.map(Box::new)),
+            sea_orm::Value::String(city.map(Box::new)),
+            sea_orm::Value::String(postal_code.map(Box::new)),
             sea_orm::Value::String(notes.map(Box::new)),
             household_id.into(),
         ]
