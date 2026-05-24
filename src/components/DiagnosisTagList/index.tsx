@@ -60,6 +60,20 @@ const DiagnosisTagList: React.FC<DiagnosisTagListProps> = ({
   const patientQuery = useDiagnosesForPatient(patientId);
   const { data, isLoading } = recordId != null ? recordQuery : patientQuery;
 
+  // Debug: log what the component is rendering so a missing tag
+  // problem can be diagnosed via the browser console. Cheap — runs
+  // once per render, and only fires when we have a valid id input.
+  if (recordId != null || patientId != null) {
+    // eslint-disable-next-line no-console
+    console.log('[DiagnosisTagList]', {
+      recordId,
+      patientId,
+      isLoading,
+      dataLength: data?.length,
+      data,
+    });
+  }
+
   // While loading we render nothing — the tags are decorative info
   // and a flickering spinner per card would be visually noisy. The
   // query is fast (single SELECT JOIN) and cached for 30s anyway.

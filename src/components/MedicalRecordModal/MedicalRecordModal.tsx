@@ -126,11 +126,17 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
       // soft error notification without aborting the modal close — the
       // record itself is already saved successfully at this point.
       if (savedRecordId != null && diagnosisIds !== undefined) {
+        console.log('[MedicalRecordModal] saving diagnoses', {
+          medicalRecordId: savedRecordId,
+          diagnosisIds,
+          count: diagnosisIds.length,
+        });
         try {
           await invoke('set_diagnoses_for_record', {
             medicalRecordId: savedRecordId,
             diagnosisIds,
           });
+          console.log('[MedicalRecordModal] diagnoses saved successfully');
           // Tell React Query the per-record diagnosis cache is stale
           // so the detail modal and dashboard cards re-fetch and show
           // the new tag set on next render — otherwise the user would
@@ -148,14 +154,23 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
             queryKey: DIAGNOSES_KEYS.forPatient(patientId),
           });
         } catch (tagErr) {
-          console.error('Failed to save diagnosis tags:', tagErr);
-          notification.warning({
+          console.error('[MedicalRecordModal] Failed to save diagnosis tags:', tagErr);
+          // Promoted from `warning` to `error` — the user kept clicking
+          // save, seeing the medical record success notification, and
+          // then wondering why no tags appeared. A red notification is
+          // much harder to miss than a yellow one.
+          notification.error({
             message: t('messages.diagnosesPartialSave', 'Diagnoses not saved'),
             description: String(tagErr),
             placement: 'bottomRight',
-            duration: 5,
+            duration: 8,
           });
         }
+      } else {
+        console.log('[MedicalRecordModal] skipping diagnoses save', {
+          savedRecordId,
+          diagnosisIdsDefined: diagnosisIds !== undefined,
+        });
       }
       onClose();
     } catch (error) {

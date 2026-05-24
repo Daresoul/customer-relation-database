@@ -306,6 +306,11 @@ impl DiagnosisService {
         medical_record_id: i64,
         diagnosis_ids: &[i64],
     ) -> Result<(), String> {
+        log::info!(
+            "set_diagnoses_for_record: record={} ids={:?}",
+            medical_record_id,
+            diagnosis_ids,
+        );
         // Naive approach — fine for the small N (a medical record
         // typically has 0-5 diagnoses). If we ever start applying
         // hundreds of diagnoses we'd switch to compute-the-diff +
@@ -315,27 +320,46 @@ impl DiagnosisService {
             .await
             .map_err(|e| format!("set_diagnoses_for_record begin: {}", e))?;
 
-        txn.execute(Statement::from_sql_and_values(
+        let delete_result = txn.execute(Statement::from_sql_and_values(
             DbBackend::Sqlite,
             "DELETE FROM medical_record_diagnoses WHERE medical_record_id = ?",
             vec![medical_record_id.into()],
         ))
         .await
         .map_err(|e| format!("set_diagnoses_for_record clear: {}", e))?;
+        log::debug!(
+            "set_diagnoses_for_record: cleared {} existing rows for record {}",
+            delete_result.rows_affected(),
+            medical_record_id,
+        );
 
         for diagnosis_id in diagnosis_ids {
-            txn.execute(Statement::from_sql_and_values(
+            let insert_result = txn.execute(Statement::from_sql_and_values(
                 DbBackend::Sqlite,
                 "INSERT INTO medical_record_diagnoses (medical_record_id, diagnosis_id) VALUES (?, ?)",
                 vec![medical_record_id.into(), (*diagnosis_id).into()],
             ))
             .await
-            .map_err(|e| format!("set_diagnoses_for_record insert: {}", e))?;
+            .map_err(|e| format!(
+                "set_diagnoses_for_record insert (record={}, diagnosis={}): {}",
+                medical_record_id, diagnosis_id, e,
+            ))?;
+            log::debug!(
+                "set_diagnoses_for_record: inserted record={} diagnosis={} (rows={})",
+                medical_record_id,
+                diagnosis_id,
+                insert_result.rows_affected(),
+            );
         }
 
         txn.commit()
             .await
             .map_err(|e| format!("set_diagnoses_for_record commit: {}", e))?;
+        log::info!(
+            "set_diagnoses_for_record: committed {} tags for record {}",
+            diagnosis_ids.len(),
+            medical_record_id,
+        );
 
         Ok(())
     }
