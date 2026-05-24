@@ -24,7 +24,7 @@ pub async fn create_managed_hid_scanner(
     input: CreateManagedHidScannerInput,
 ) -> Result<ManagedHidScanner, String> {
     let created = ManagedHidScannerService::create(&pool, input).await?;
-    raw_input_capture::reload_managed_ids(&pool);
+    raw_input_capture::reload_managed_ids(&pool).await;
     Ok(created)
 }
 
@@ -35,7 +35,7 @@ pub async fn update_managed_hid_scanner(
     input: UpdateManagedHidScannerInput,
 ) -> Result<ManagedHidScanner, String> {
     let updated = ManagedHidScannerService::update(&pool, id, input).await?;
-    raw_input_capture::reload_managed_ids(&pool);
+    raw_input_capture::reload_managed_ids(&pool).await;
     Ok(updated)
 }
 
@@ -45,6 +45,6 @@ pub async fn delete_managed_hid_scanner(
     id: i64,
 ) -> Result<(), String> {
     ManagedHidScannerService::delete(&pool, id).await?;
-    raw_input_capture::reload_managed_ids(&pool);
+    raw_input_capture::reload_managed_ids(&pool).await;
     Ok(())
 }

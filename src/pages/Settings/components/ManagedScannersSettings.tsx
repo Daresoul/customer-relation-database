@@ -99,6 +99,11 @@ const ManagedScannersSettings: React.FC = () => {
   const [rows, setRows] = useState<ManagedHidScanner[]>([]);
   const [loading, setLoading] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  // Tracks whether a create/update/delete is in flight so the Modal's
+  // OK button can show a spinner. Without this the modal looks frozen
+  // while we wait for the backend to write the row and reload the
+  // Raw Input filter list.
+  const [submitting, setSubmitting] = useState(false);
   const [form] = Form.useForm();
 
   const reload = async () => {
@@ -185,6 +190,7 @@ const ManagedScannersSettings: React.FC = () => {
       productId: values.productId,
       enabled: values.enabled ?? true,
     };
+    setSubmitting(true);
     try {
       await invoke('create_managed_hid_scanner', { input });
       setAddOpen(false);
@@ -204,6 +210,8 @@ const ManagedScannersSettings: React.FC = () => {
         description: String(e),
         placement: 'bottomRight',
       });
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -564,10 +572,12 @@ const ManagedScannersSettings: React.FC = () => {
         open={addOpen}
         title={t('settings:managedScanners.addTitle', 'Add managed HID scanner')}
         onCancel={() => {
+          if (submitting) return;
           setAddOpen(false);
           form.resetFields();
         }}
         onOk={() => form.submit()}
+        confirmLoading={submitting}
         okText={t('common:buttons.create', 'Create')}
       >
         <Form form={form} layout="vertical" onFinish={handleAdd}>

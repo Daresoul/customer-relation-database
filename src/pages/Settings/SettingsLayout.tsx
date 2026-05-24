@@ -13,6 +13,7 @@ import {
   AppstoreOutlined,
   UsbOutlined,
   FileTextOutlined,
+  FolderOpenOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, Link } from 'react-router-dom';
@@ -29,6 +30,7 @@ import AppointmentsSettings from './components/AppointmentsSettings';
 import RoomsSettings from './components/RoomsSettings';
 import SpeciesSettings from './components/SpeciesSettings';
 import DeviceInputSettings from './components/DeviceInputSettings';
+import DeviceFilesSettings from './components/DeviceFilesSettings';
 import RecordTemplatesSettings from './components/RecordTemplatesSettings';
 import LineItemsSettings from './components/LineItemsSettings';
 import DiagnosesSettings from './components/DiagnosesSettings';
@@ -38,7 +40,7 @@ import { UpdateSettings } from './UpdateSettings';
 
 const { Content, Sider } = Layout;
 
-type SettingsCategory = 'general' | 'business' | 'appointments' | 'rooms' | 'species' | 'devices' | 'templates' | 'lineItems' | 'diagnoses' | 'backups' | 'managedScanners' | 'updates';
+type SettingsCategory = 'general' | 'business' | 'appointments' | 'rooms' | 'species' | 'devices' | 'managedScanners' | 'deviceFiles' | 'templates' | 'lineItems' | 'diagnoses' | 'backups' | 'updates';
 
 interface MenuItem {
   key: SettingsCategory;
@@ -99,6 +101,18 @@ const SettingsLayout: React.FC = () => {
       component: DeviceInputSettings,
     },
     {
+      key: 'managedScanners',
+      icon: <UsbOutlined />,
+      label: t('settings:sections.managedScanners', 'Managed Scanners'),
+      component: ManagedScannersSettings,
+    },
+    {
+      key: 'deviceFiles',
+      icon: <FolderOpenOutlined />,
+      label: t('settings:sections.deviceFiles', 'Device Files'),
+      component: DeviceFilesSettings,
+    },
+    {
       key: 'templates',
       icon: <FileTextOutlined />,
       label: t('settings:sections.templates'),
@@ -123,12 +137,6 @@ const SettingsLayout: React.FC = () => {
       icon: <CloudUploadOutlined />,
       label: t('settings:sections.backups', 'Backups'),
       component: BackupSettings,
-    },
-    {
-      key: 'managedScanners',
-      icon: <UsbOutlined />,
-      label: t('settings:sections.managedScanners', 'Managed Scanners'),
-      component: ManagedScannersSettings,
     },
     {
       key: 'updates',
@@ -242,7 +250,7 @@ const SettingsLayout: React.FC = () => {
             {/* Content Area */}
             <Content className={styles.settingsContent}>
               {/* Rooms, Species, Devices, Templates, LineItems and Updates tabs don't need the parent form - they manage their own state */}
-              {selectedCategory === 'rooms' || selectedCategory === 'species' || selectedCategory === 'devices' || selectedCategory === 'templates' || selectedCategory === 'lineItems' || selectedCategory === 'backups' || selectedCategory === 'updates' ? (
+              {selectedCategory === 'rooms' || selectedCategory === 'species' || selectedCategory === 'devices' || selectedCategory === 'deviceFiles' || selectedCategory === 'templates' || selectedCategory === 'lineItems' || selectedCategory === 'backups' || selectedCategory === 'updates' ? (
                 <CurrentComponent isUpdating={isUpdating} />
               ) : (
                 <Form

@@ -946,8 +946,17 @@ mod windows_impl {
     /// Reload the managed VID/PID list from SQLite. Called by the settings
     /// commands after add / update / delete so the running capture picks up
     /// changes without restart.
-    pub fn reload_managed_ids_from_pool(pool: &SeaOrmPool) {
-        let result = tauri::async_runtime::block_on(ManagedHidScannerService::list_enabled(pool));
+    ///
+    /// Must be `async`: previously this used `tauri::async_runtime::block_on`
+    /// to wait on `list_enabled`, but that was called from inside an `async
+    /// fn` Tauri command. Tokio's runtime panics (and on some platforms just
+    /// hangs) when you try to block_on a future while already inside one of
+    /// its own tasks. Symptom: the settings UI's "Delete" Popconfirm and
+    /// "Create" modal both stayed in loading state forever, even though the
+    /// DB write actually succeeded. Using normal `.await` here lets the
+    /// runtime schedule the inner future on the same worker pool.
+    pub async fn reload_managed_ids_from_pool(pool: &SeaOrmPool) {
+        let result = ManagedHidScannerService::list_enabled(pool).await;
         match result {
             Ok(rows) => {
                 let ids: Vec<UsbId> = rows
@@ -2207,11 +2216,11 @@ mod windows_impl {
 // Cross-platform reload hook so command handlers can call it without #[cfg]
 // at every call site.
 #[cfg(target_os = "windows")]
-pub fn reload_managed_ids(pool: &crate::database::SeaOrmPool) {
-    windows_impl::reload_managed_ids_from_pool(pool);
+pub async fn reload_managed_ids(pool: &crate::database::SeaOrmPool) {
+    windows_impl::reload_managed_ids_from_pool(pool).await;
 }
 
 #[cfg(not(target_os = "windows"))]
-pub fn reload_managed_ids(_pool: &crate::database::SeaOrmPool) {
+pub async fn reload_managed_ids(_pool: &crate::database::SeaOrmPool) {
     // No-op on non-Windows: there's no Raw Input capture to refresh.
 }

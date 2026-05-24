@@ -1,12 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Table, Button, Typography, Space, Tag, Modal, Form, Input, Select, InputNumber, Switch, Popconfirm, AutoComplete } from 'antd';
-import { UsbOutlined, ReloadOutlined, ApiOutlined, PlusOutlined, EditOutlined, DeleteOutlined, PoweroffOutlined, FolderOpenOutlined, FileTextOutlined } from '@ant-design/icons';
+import { UsbOutlined, ReloadOutlined, ApiOutlined, PlusOutlined, EditOutlined, DeleteOutlined, PoweroffOutlined, FolderOpenOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@tauri-apps/api';
 import { open } from '@tauri-apps/api/dialog';
 import styles from '../Settings.module.css';
-import RecentDeviceFiles from '../../../components/RecentDeviceFiles';
-import PendingDeviceList from '../../../components/PendingDeviceList';
 import {
   useDeviceIntegrations,
   useCreateDeviceIntegration,
@@ -55,7 +53,6 @@ const DeviceInputSettings: React.FC = () => {
   const { t } = useTranslation(['devices', 'common']);
   const [ports, setPorts] = useState<PortInfo[]>([]);
   const [loading, setLoading] = useState(false);
-  const [pendingOpen, setPendingOpen] = useState(false);
   const [autoOpenGeneratedReport, setAutoOpenGeneratedReport] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem('autoOpenGeneratedReport') === 'true';
@@ -689,37 +686,6 @@ const DeviceInputSettings: React.FC = () => {
           />
         </Card>
 
-        <Card
-          title={
-            <span className={styles.cardTitle}>
-              <FileTextOutlined /> Saved For Later
-            </span>
-          }
-          className={styles.settingsCard}
-          extra={
-            <Button type="default" onClick={() => setPendingOpen(true)}>
-              Open Saved For Later
-            </Button>
-          }
-        >
-          <Text type="secondary">
-            Device files saved with a patient serial for later processing. Click “Open Saved For Later” to review and load files into the import flow.
-          </Text>
-        </Card>
-
-        <Card
-          title={
-            <span className={styles.cardTitle}>
-              <FileTextOutlined /> Recent Device Files (Last 14 Days)
-            </span>
-          }
-          className={styles.settingsCard}
-        >
-          <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
-            Files received from devices are tracked here for crash protection and recovery. You can view details and attach unprocessed files to medical records.
-          </Text>
-          <RecentDeviceFiles days={14} />
-        </Card>
       </Space>
 
       {/* Add/Edit Integration Modal */}
@@ -921,8 +887,6 @@ const DeviceInputSettings: React.FC = () => {
         </Form>
       </Modal>
 
-      {/* Saved For Later Drawer */}
-      <PendingDeviceList open={pendingOpen} onClose={() => setPendingOpen(false)} />
     </div>
   );
 };

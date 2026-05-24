@@ -6,11 +6,20 @@
     "rooms": "Rooms",
     "species": "Species & Breeds",
     "devices": "Device Inputs",
+    "managedScanners": "Managed Scanners",
+    "deviceFiles": "Device Files",
     "templates": "Record Templates",
     "lineItems": "Line Items",
     "diagnoses": "Diagnoses",
     "backups": "Backups",
     "updates": "Updates"
+  },
+  "deviceFiles": {
+    "savedForLater": "Saved For Later",
+    "openSavedForLater": "Open Saved For Later",
+    "savedForLaterDescription": "Device files saved with a patient serial for later processing. Click \"Open Saved For Later\" to review and load files into the import flow.",
+    "recentDeviceFiles": "Recent Device Files (Last 14 Days)",
+    "recentDescription": "Files received from devices are tracked here for crash protection and recovery. You can view details and attach unprocessed files to medical records."
   },
   "diagnoses": {
     "title": "Diagnoses",
