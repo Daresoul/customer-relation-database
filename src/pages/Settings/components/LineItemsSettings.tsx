@@ -194,7 +194,7 @@ const LineItemsSettings: React.FC<LineItemsSettingsProps> = ({ isUpdating }) => 
       <Card
         title={
           <span className={styles.cardTitle}>
-            <DollarOutlined /> {t('settings:lineItems.title', 'Line Items')}
+            <DollarOutlined /> {t('settings:lineItems.title', 'Factura')}
           </span>
         }
         extra={

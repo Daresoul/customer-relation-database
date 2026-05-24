@@ -832,7 +832,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
 
                     return (
                       <div className={styles.marginTop16}>
-                        <Text type="secondary" className={styles.descriptionLabel}>{t('medical:lineItems.title', 'Line Items')}</Text>
+                        <Text type="secondary" className={styles.descriptionLabel}>{t('medical:lineItems.title', 'Factura')}</Text>
                         <Table
                           size="small"
                           dataSource={lineItems}

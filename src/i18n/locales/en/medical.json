@@ -48,13 +48,13 @@
   "tabs": {
     "standard": "Standard",
     "prescriptions": "Prescriptions",
-    "lineItems": "Line Items"
+    "lineItems": "Factura"
   },
   "prescriptions": {
     "description": "Enter prescription or pharmacy notes. This will be included in the generated PDF report for the customer."
   },
   "lineItems": {
-    "title": "Line Items",
+    "title": "Factura",
     "addFromTemplate": "Add from saved templates or create custom items",
     "addCustom": "Add custom item",
     "selectTemplate": "Select a line item template...",

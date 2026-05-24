@@ -198,7 +198,14 @@ export const TabbedMedicalRecordFields: React.FC<TabbedMedicalRecordFieldsProps>
       key: 'prescriptions',
       label: labelWithError(
         'prescriptions',
-        <Badge dot={showPrescriptionBadge || hasPrescriptionContent} offset={[6, 0]}>
+        // Blue dot, not the default red, so it's clearly "this tab
+        // has content" — not "this tab has an error" (which is what
+        // red means everywhere else in this form, via labelWithError).
+        <Badge
+          dot={showPrescriptionBadge || hasPrescriptionContent}
+          color="blue"
+          offset={[6, 0]}
+        >
           <span>
             <MedicineBoxOutlined />
             {t('medical:tabs.prescriptions', 'Prescriptions')}
@@ -229,10 +236,16 @@ export const TabbedMedicalRecordFields: React.FC<TabbedMedicalRecordFieldsProps>
       key: 'lineItems',
       label: labelWithError(
         'lineItems',
-        <Badge count={showLineItemsBadge ? lineItemsCount : 0} offset={[6, 0]}>
+        // Blue numeric badge — same "this tab has content" semantics as
+        // the Prescriptions dot. Red is reserved for validation errors.
+        <Badge
+          count={showLineItemsBadge ? lineItemsCount : 0}
+          color="blue"
+          offset={[6, 0]}
+        >
           <span>
             <UnorderedListOutlined />
-            {t('medical:tabs.lineItems', 'Line Items')}
+            {t('medical:tabs.lineItems', 'Factura')}
           </span>
         </Badge>,
       ),
