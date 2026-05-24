@@ -22,17 +22,24 @@ export class LineItemService {
   }
 
   /**
-   * Create a new line item template
+   * Create a new line item template.
+   *
+   * Uses invokeRaw because the Rust CreateLineItemTemplateInput DTO
+   * carries #[serde(rename_all = "camelCase")] — so it expects
+   * `defaultPrice` and `currencyId` on the wire. ApiService.invoke
+   * would snake_case the inner DTO fields and Tauri would reject
+   * with "missing field `defaultPrice`". See PatientService note.
    */
   static async createTemplate(data: CreateLineItemTemplateInput): Promise<LineItemTemplate> {
-    return ApiService.invoke<LineItemTemplate>('create_line_item_template', { input: data });
+    return ApiService.invokeRaw<LineItemTemplate>('create_line_item_template', { input: data });
   }
 
   /**
-   * Update an existing line item template
+   * Update an existing line item template. Same case-transform trap
+   * as createTemplate — DTO uses serde camelCase rename, so invokeRaw.
    */
   static async updateTemplate(id: number, data: UpdateLineItemTemplateInput): Promise<LineItemTemplate> {
-    return ApiService.invoke<LineItemTemplate>('update_line_item_template', { id, input: data });
+    return ApiService.invokeRaw<LineItemTemplate>('update_line_item_template', { id, input: data });
   }
 
   /**
