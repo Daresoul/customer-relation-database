@@ -8,7 +8,6 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Form,
-  Input,
   Select,
   Button,
   Space,
@@ -34,6 +33,8 @@ import { useBreeds } from '../../hooks/useBreeds';
 import { CreateSpeciesModal } from '../../components/CreateSpeciesModal';
 import { CreateBreedModal } from '../../components/CreateBreedModal';
 import { PatientFieldGroup } from './fieldGroups';
+import { CreateHouseholdModal } from './CreateHouseholdModal';
+import type { CreatedHousehold } from './CreateHouseholdInline';
 import styles from './Forms.module.css';
 
 const { Option } = Select;
@@ -74,7 +75,7 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
   const [form] = Form.useForm();
   const [households, setHouseholds] = useState<Household[]>([]);
   const [searchingHouseholds, setSearchingHouseholds] = useState(false);
-  const [showCreateHousehold, setShowCreateHousehold] = useState(false);
+  const [createHouseholdOpen, setCreateHouseholdOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -207,26 +208,11 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
         householdId: values.householdId || null,
       };
 
-      // Create household if needed
-      if (showCreateHousehold && values.newHouseholdName) {
-        try {
-          const newHousehold = await invoke<Household>('create_household', {
-            lastName: values.newHouseholdName,
-            contacts: values.newHouseholdContact ? [{
-              name: values.newHouseholdContact,
-              isPrimary: true,
-              email: values.newHouseholdEmail || null,
-              phone: values.newHouseholdPhone || null,
-            }] : [],
-          });
-          formData.householdId = newHousehold.id;
-        } catch (error: any) {
-          setFormError(`Failed to create household: ${error?.message || error}`);
-          setSubmitting(false);
-          return;
-        }
-      }
-
+      // Note: household creation is no longer deferred to submit-time.
+      // The "Create New Household" button opens <CreateHouseholdModal />,
+      // which creates the household immediately and sets `householdId`
+      // on this form. By the time we get here, householdId already
+      // points at a real row.
       await onSubmit(formData);
       notification.success({
         message: "Success",
@@ -310,102 +296,78 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
         </Divider>
 
         {/* Household Selection */}
-        {!showCreateHousehold ? (
-          <Row gutter={16}>
-            <Col xs={24}>
-              <Form.Item name="householdId" label="Select Household (Optional)">
-                <Select
-                  placeholder="Search for household by name..."
-                  showSearch
-                  allowClear
-                  loading={searchingHouseholds}
-                  onSearch={searchHouseholds}
-                  filterOption={false}
-                  notFoundContent={
-                    searchingHouseholds
-                      ? 'Searching...'
-                      : 'No households match this search. Use "Create New Household" below to add one.'
-                  }
-                  className={styles.fullWidth}
-                >
-                  {(Array.isArray(households) ? households : [])
-                    .filter(household => household && household.id != null)
-                    .map(household => (
-                      <Option key={`household-${household.id}`} value={household.id}>
-                        <Space>
-                          <HomeOutlined />
-                          <span>{household.lastName || 'Unknown'}</span>
-                          {household.primaryContact && (
-                            <span className={styles.householdOption}>({household.primaryContact})</span>
-                          )}
-                        </Space>
-                      </Option>
-                    ))}
-                </Select>
-              </Form.Item>
-              <Button
-                type="dashed"
-                icon={<PlusOutlined />}
-                onClick={() => setShowCreateHousehold(true)}
-                className={styles.actionButton}
+        <Row gutter={16}>
+          <Col xs={24}>
+            <Form.Item name="householdId" label="Select Household (Optional)">
+              <Select
+                placeholder="Search for household by name..."
+                showSearch
+                allowClear
+                loading={searchingHouseholds}
+                onSearch={searchHouseholds}
+                filterOption={false}
+                notFoundContent={
+                  searchingHouseholds
+                    ? 'Searching...'
+                    : 'No households match this search. Use "Create New Household" below to add one.'
+                }
+                className={styles.fullWidth}
               >
-                Create New Household
-              </Button>
-            </Col>
-          </Row>
-        ) : (
-          <>
-            <Row gutter={16}>
-              <Col xs={24} sm={12}>
-                <Form.Item
-                  name="newHouseholdName"
-                  label="Household Name"
-                  rules={[{ required: true, message: 'Please enter household name' }]}
-                >
-                  <Input placeholder="Enter household/last name" />
-                </Form.Item>
-              </Col>
-
-              <Col xs={24} sm={12}>
-                <Form.Item
-                  name="newHouseholdContact"
-                  label="Primary Contact Name"
-                >
-                  <Input placeholder="Enter primary contact name" />
-                </Form.Item>
-              </Col>
-            </Row>
-
-            <Row gutter={16}>
-              <Col xs={24} sm={12}>
-                <Form.Item
-                  name="newHouseholdEmail"
-                  label="Household Email"
-                  rules={[{ type: 'email', message: 'Please enter a valid email' }]}
-                >
-                  <Input placeholder="Enter email" type="email" />
-                </Form.Item>
-              </Col>
-
-              <Col xs={24} sm={12}>
-                <Form.Item name="newHouseholdPhone" label="Household Phone">
-                  <Input placeholder="Enter phone number" />
-                </Form.Item>
-              </Col>
-            </Row>
-
+                {(Array.isArray(households) ? households : [])
+                  .filter(household => household && household.id != null)
+                  .map(household => (
+                    <Option key={`household-${household.id}`} value={household.id}>
+                      <Space>
+                        <HomeOutlined />
+                        <span>{household.lastName || 'Unknown'}</span>
+                        {household.primaryContact && (
+                          <span className={styles.householdOption}>({household.primaryContact})</span>
+                        )}
+                      </Space>
+                    </Option>
+                  ))}
+              </Select>
+            </Form.Item>
             <Button
-              type="link"
-              onClick={() => {
-                setShowCreateHousehold(false);
-                form.resetFields(['newHouseholdName', 'newHouseholdContact', 'newHouseholdEmail', 'newHouseholdPhone']);
-              }}
+              type="dashed"
+              icon={<PlusOutlined />}
+              onClick={() => setCreateHouseholdOpen(true)}
               className={styles.actionButton}
             >
-              Cancel and select existing household
+              Create New Household
             </Button>
-          </>
-        )}
+          </Col>
+        </Row>
+
+        <CreateHouseholdModal
+          open={createHouseholdOpen}
+          onCancel={() => setCreateHouseholdOpen(false)}
+          onCreated={async (newHousehold: CreatedHousehold) => {
+            // Inject the new household into the local search results so
+            // the Select can render it, then select it on the parent form.
+            const householdName =
+              (typeof newHousehold.householdName === 'string' && newHousehold.householdName) ||
+              'New Household';
+            setHouseholds((prev) => {
+              if (prev.some((h) => h.id === newHousehold.id)) return prev;
+              return [
+                {
+                  id: newHousehold.id,
+                  lastName: householdName,
+                },
+                ...prev,
+              ];
+            });
+            form.setFieldValue('householdId', newHousehold.id);
+            setCreateHouseholdOpen(false);
+            notification.success({
+              message: 'Household created',
+              description: `${householdName} created and selected.`,
+              placement: 'bottomRight',
+              duration: 3,
+            });
+          }}
+        />
 
         {/* Form Actions */}
         <Form.Item>

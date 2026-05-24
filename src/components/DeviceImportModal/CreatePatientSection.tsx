@@ -14,6 +14,8 @@ import { useBreeds } from '../../hooks/useBreeds';
 import { HouseholdService } from '../../services/householdService';
 import { theme } from 'antd';
 import { PatientService } from '../../services/patientService';
+import { CreateHouseholdModal } from '../forms/CreateHouseholdModal';
+import type { CreatedHousehold } from '../forms/CreateHouseholdInline';
 import type { ExtractedPatientData, PatientDataConflict } from '../../types/deviceImport';
 import type { Patient, CreatePatientInput } from '../../types';
 import { hasExtractedData } from '../../utils/deviceDataExtraction';
@@ -63,7 +65,7 @@ export const CreatePatientSection: React.FC<CreatePatientSectionProps> = ({
   // Household search state
   const [householdOptions, setHouseholdOptions] = useState<Array<{ value: number; label: string }>>([]);
   const [householdLoading, setHouseholdLoading] = useState(false);
-  const [showCreateHousehold, setShowCreateHousehold] = useState(false);
+  const [createHouseholdOpen, setCreateHouseholdOpen] = useState(false);
 
   // Check if we have extracted data to show prefill option
   const hasDeviceData = hasExtractedData(extractedData);
@@ -106,32 +108,10 @@ export const CreatePatientSection: React.FC<CreatePatientSectionProps> = ({
     setIsSubmitting(true);
 
     try {
-      // Create household if new household name provided
-      let resolvedHouseholdId: number | undefined = values.householdId;
-      if (!resolvedHouseholdId && values.newHouseholdName) {
-        try {
-          // Split full name into first/last for service compatibility
-          let firstName: string | undefined;
-          let lastName: string | undefined;
-          if (values.newHouseholdContact) {
-            const parts = String(values.newHouseholdContact).trim().split(/\s+/);
-            firstName = parts[0] || '';
-            lastName = parts.slice(1).join(' ') || values.newHouseholdName;
-          }
-          const created = await HouseholdService.createHousehold({
-            householdName: values.newHouseholdName,
-            address: undefined,
-            firstName,
-            lastName: lastName || values.newHouseholdName,
-            email: values.newHouseholdEmail || undefined,
-            phone: values.newHouseholdPhone || undefined,
-          });
-          resolvedHouseholdId = created.id;
-        } catch (e) {
-          // Fallback: ignore and continue without household
-        }
-      }
-
+      // Note: household creation happens upfront via <CreateHouseholdModal />
+      // which sets `householdId` on the form. By the time we get here it
+      // already points at a real household row (or is undefined if the
+      // user skipped that step).
       const input: CreatePatientInput = {
         name: values.name,
         speciesId: values.speciesId,
@@ -144,7 +124,7 @@ export const CreatePatientSection: React.FC<CreatePatientSectionProps> = ({
         color: values.color || undefined,
         microchipId: values.microchipId || undefined,
         notes: values.notes || undefined,
-        householdId: resolvedHouseholdId,
+        householdId: values.householdId,
       };
 
       const newPatient = await PatientService.createPatient(input);
@@ -411,68 +391,56 @@ export const CreatePatientSection: React.FC<CreatePatientSectionProps> = ({
             <strong>{t('patients:detail.householdInfo.title', 'Household')}</strong>
           </div>
 
-          {!showCreateHousehold ? (
-            <>
-              <Row gutter={12}>
-                <Col span={24}>
-                  <Form.Item name="householdId" label={t('patients:detail.householdInfo.assignHousehold', 'Assign Household')}>
-                    <Select
-                      showSearch
-                      allowClear
-                      placeholder={t('patients:detail.householdInfo.selectHousehold', 'Select Household (Optional)')}
-                      loading={householdLoading}
-                      filterOption={false}
-                      onSearch={async (q) => {
-                        if (!q || q.trim().length < 2) return;
-                        setHouseholdLoading(true);
-                        try {
-                          const results = await HouseholdService.quickSearchHouseholds(q, 20);
-                          setHouseholdOptions(results.map(r => ({ value: r.id, label: r.name })));
-                        } finally {
-                          setHouseholdLoading(false);
-                        }
-                      }}
-                      options={householdOptions}
-                    />
-                  </Form.Item>
-                  <Button type="dashed" onClick={() => setShowCreateHousehold(true)}>
-                    {t('patients:detail.householdInfo.createHousehold', 'Create New Household')}
-                  </Button>
-                </Col>
-              </Row>
-            </>
-          ) : (
-            <>
-            <Row gutter={12}>
-              <Col span={12}>
-                <Form.Item name="newHouseholdName" label={t('patients:detail.householdInfo.householdName', 'Household Name')}>
-                  <Input placeholder={t('forms:placeholders.enterName', 'Enter name')} />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item name="newHouseholdContact" label={t('patients:detail.householdInfo.primaryContact', 'Primary Contact Name')}>
-                  <Input placeholder={t('forms:placeholders.enterName', 'Enter name')} />
-                </Form.Item>
-              </Col>
-            </Row>
-              <Row gutter={12}>
-                <Col span={12}>
-                  <Form.Item name="newHouseholdEmail" label={t('forms:labels.email', 'Email')}>
-                    <Input placeholder={t('forms:placeholders.enterEmail', 'Enter email address')} />
-                  </Form.Item>
-                </Col>
-                <Col span={12}>
-                  <Form.Item name="newHouseholdPhone" label={t('forms:labels.phone', 'Phone Number')}>
-                    <Input placeholder={t('forms:placeholders.enterPhone', 'Enter phone number')} />
-                  </Form.Item>
-                </Col>
-              </Row>
-              <Button type="link" onClick={() => setShowCreateHousehold(false)}>
-                {t('patients:detail.householdInfo.changeHousehold', 'Cancel and select existing household')}
+          <Row gutter={12}>
+            <Col span={24}>
+              <Form.Item name="householdId" label={t('patients:detail.householdInfo.assignHousehold', 'Assign Household')}>
+                <Select
+                  showSearch
+                  allowClear
+                  placeholder={t('patients:detail.householdInfo.selectHousehold', 'Select Household (Optional)')}
+                  loading={householdLoading}
+                  filterOption={false}
+                  onSearch={async (q) => {
+                    if (!q || q.trim().length < 2) return;
+                    setHouseholdLoading(true);
+                    try {
+                      const results = await HouseholdService.quickSearchHouseholds(q, 20);
+                      setHouseholdOptions(results.map(r => ({ value: r.id, label: r.name })));
+                    } finally {
+                      setHouseholdLoading(false);
+                    }
+                  }}
+                  options={householdOptions}
+                />
+              </Form.Item>
+              <Button type="dashed" onClick={() => setCreateHouseholdOpen(true)}>
+                {t('patients:detail.householdInfo.createHousehold', 'Create New Household')}
               </Button>
-            </>
-          )}
+            </Col>
+          </Row>
         </div>
+
+        <CreateHouseholdModal
+          open={createHouseholdOpen}
+          onCancel={() => setCreateHouseholdOpen(false)}
+          onCreated={async (newHousehold: CreatedHousehold) => {
+            const label =
+              (typeof newHousehold.householdName === 'string' && newHousehold.householdName) ||
+              t('patients:detail.householdInfo.createNewHousehold', 'New Household');
+            setHouseholdOptions((prev) => {
+              if (prev.some((o) => o.value === newHousehold.id)) return prev;
+              return [{ value: newHousehold.id, label }, ...prev];
+            });
+            form.setFieldValue('householdId', newHousehold.id);
+            setCreateHouseholdOpen(false);
+            notification.success({
+              message: t('patients:detail.householdInfo.createSuccess', 'Household created'),
+              description: label,
+              placement: 'bottomRight',
+              duration: 3,
+            });
+          }}
+        />
 
 
         <div style={{ marginTop: 8, marginBottom: 16, textAlign: 'right' }}>
