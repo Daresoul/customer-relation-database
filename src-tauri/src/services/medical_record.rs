@@ -552,6 +552,47 @@ impl MedicalRecordService {
         Ok(record)
     }
 
+    /// Sanitize a string for inclusion in a PDF filename:
+    /// - replaces path separators and reserved characters with `_`
+    /// - collapses control characters
+    /// - trims leading/trailing whitespace and dots (Windows hates
+    ///   trailing dots in particular)
+    /// - truncates to 60 chars so very long titles / patient names
+    ///   don't blow past common filesystem path-length limits when
+    ///   combined with the rest of the filename
+    fn sanitize_filename_part(s: &str) -> String {
+        let cleaned: String = s
+            .chars()
+            .map(|c| match c {
+                '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
+                c if c.is_control() => '_',
+                c => c,
+            })
+            .collect();
+        let trimmed = cleaned.trim_matches(|c: char| c == '.' || c.is_whitespace());
+        if trimmed.chars().count() > 60 {
+            trimmed.chars().take(60).collect::<String>().trim_end().to_string()
+        } else {
+            trimmed.to_string()
+        }
+    }
+
+    /// Format the current UTC timestamp as `YYYY-MM-DD HH-MM` for use
+    /// in filenames. We avoid colons (Windows-illegal), use spaces
+    /// only between date and time (most file browsers handle those
+    /// fine), and skip seconds — minute resolution is more than
+    /// enough for human filenames.
+    fn pdf_timestamp() -> String {
+        chrono::Utc::now().format("%Y-%m-%d %H-%M").to_string()
+    }
+
+    /// Just the date portion of `pdf_timestamp()`. Used for the
+    /// invoice filename where the invoice number already provides
+    /// sub-day uniqueness.
+    fn pdf_date_only() -> String {
+        chrono::Utc::now().format("%Y-%m-%d").to_string()
+    }
+
     /// Generate a simple report PDF using the template with medical record title and description
     async fn generate_simple_report_pdf(
         app_handle: &tauri::AppHandle,
@@ -569,10 +610,19 @@ impl MedicalRecordService {
         std::fs::create_dir_all(&reports_dir)
             .map_err(|e| format!("Failed to create reports directory: {}", e))?;
 
-        // Generate unique filename
-        let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
-        let safe_name = record.name.replace(" ", "_").replace("/", "_");
-        let pdf_filename = format!("report_{}_{}.pdf", safe_name, timestamp);
+        // Build a user-friendly filename:
+        //   "Medical Report - <Patient> - <Record Title> - <YYYY-MM-DD HH-MM>.pdf"
+        // so the user can identify what they're looking at from the
+        // file name alone, both inside the app and when the file is
+        // downloaded / printed externally.
+        let patient_part = Self::sanitize_filename_part(&patient_data.name);
+        let title_part = Self::sanitize_filename_part(&record.name);
+        let pdf_filename = format!(
+            "Medical Report - {} - {} - {}.pdf",
+            patient_part,
+            title_part,
+            Self::pdf_timestamp(),
+        );
         let pdf_path = reports_dir.join(&pdf_filename);
 
         // Generate simple report PDF
@@ -616,15 +666,26 @@ impl MedicalRecordService {
             _ => return Ok(()), // No prescription notes, skip
         };
 
+        // Pull patient name for the filename — slightly redundant with
+        // the simple-report generator's fetch, but cheap (single row)
+        // and avoids restructuring the call sites to share patient
+        // data across the three PDF generators.
+        let patient_data = Self::get_patient_for_pdf(db, record.patient_id).await?;
+
         // Create pharmacy notes directory
         let reports_dir = std::env::temp_dir().join("pharmacy_notes");
         std::fs::create_dir_all(&reports_dir)
             .map_err(|e| format!("Failed to create pharmacy notes directory: {}", e))?;
 
-        // Generate unique filename
-        let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
-        let safe_name = record.name.replace(" ", "_").replace("/", "_");
-        let pdf_filename = format!("pharmacy_note_{}_{}.pdf", safe_name, timestamp);
+        // "Pharmacy Note - <Patient> - <Record Title> - <YYYY-MM-DD HH-MM>.pdf"
+        let patient_part = Self::sanitize_filename_part(&patient_data.name);
+        let title_part = Self::sanitize_filename_part(&record.name);
+        let pdf_filename = format!(
+            "Pharmacy Note - {} - {} - {}.pdf",
+            patient_part,
+            title_part,
+            Self::pdf_timestamp(),
+        );
         let pdf_path = reports_dir.join(&pdf_filename);
 
         log::info!("📄 Calling Java to generate pharmacy note PDF for record {}...", medical_record_id);
@@ -750,8 +811,20 @@ impl MedicalRecordService {
         std::fs::create_dir_all(&reports_dir)
             .map_err(|e| format!("Failed to create invoices directory: {}", e))?;
 
-        let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
-        let pdf_filename = format!("invoice_{}_{}.pdf", medical_record_id, timestamp);
+        // "Invoice <Number> - <Recipient> - <YYYY-MM-DD>.pdf"
+        // Invoice numbers like "042/2025" contain a slash, which we
+        // sanitize to "_" via sanitize_filename_part — so the on-disk
+        // form becomes "Invoice 042_2025 - John Petrov - 2026-05-24.pdf".
+        // The original "042/2025" string is still what's stored in
+        // medical_records.invoice_number and printed on the PDF body.
+        let invoice_part = Self::sanitize_filename_part(&invoice_number);
+        let recipient_part = Self::sanitize_filename_part(&recipient);
+        let pdf_filename = format!(
+            "Invoice {} - {} - {}.pdf",
+            invoice_part,
+            recipient_part,
+            Self::pdf_date_only(),
+        );
         let pdf_path = reports_dir.join(&pdf_filename);
 
         log::info!("📄 Generating invoice PDF for record {}...", medical_record_id);
@@ -871,15 +944,28 @@ impl MedicalRecordService {
         std::fs::create_dir_all(&reports_dir)
             .map_err(|e| format!("Failed to create reports directory: {}", e))?;
 
-        // Generate unique filename based on first device or combined name
-        let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
+        // Build the device-report filename. Single device: include the
+        // device name explicitly so the user can tell which analyzer
+        // a report came from. Multiple devices: collapse to "Device
+        // Report - <Patient> - <date>" since listing every device
+        // name would blow the filename length budget on a typical
+        // batch import.
+        let patient_part = Self::sanitize_filename_part(&patient_data.name);
         let pdf_filename = if device_data_list.len() == 1 {
             let device = &device_data_list[0];
-            let safe_device_name = device.device_name.replace(" ", "_").replace("/", "_");
-            let safe_device_type = device.device_type.replace("_", "-");
-            format!("{}_{}_report_{}.pdf", safe_device_type, safe_device_name, timestamp)
+            let device_part = Self::sanitize_filename_part(&device.device_name);
+            format!(
+                "Device Report - {} - {} - {}.pdf",
+                patient_part,
+                device_part,
+                Self::pdf_timestamp(),
+            )
         } else {
-            format!("combined_device_report_{}.pdf", timestamp)
+            format!(
+                "Device Report - {} - {}.pdf",
+                patient_part,
+                Self::pdf_timestamp(),
+            )
         };
         let pdf_path = reports_dir.join(&pdf_filename);
 

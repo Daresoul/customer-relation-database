@@ -759,14 +759,31 @@ pub async fn regenerate_pdf_from_medical_record(
     // 5. Generate combined PDF using Java service
     use crate::services::java_pdf_service::JavaPdfService;
 
-    let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
+    // Build a user-friendly filename — same pattern as the
+    // per-record device report in medical_record.rs:
+    //   "Device Report - <Patient> - <Device> - <YYYY-MM-DD HH-MM>.pdf"
+    // (single device), or just patient+date for the combined case.
+    let sanitize = |s: &str| -> String {
+        let cleaned: String = s.chars().map(|c| match c {
+            '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
+            c if c.is_control() => '_',
+            c => c,
+        }).collect();
+        let trimmed = cleaned.trim_matches(|c: char| c == '.' || c.is_whitespace());
+        if trimmed.chars().count() > 60 {
+            trimmed.chars().take(60).collect::<String>().trim_end().to_string()
+        } else {
+            trimmed.to_string()
+        }
+    };
+    let timestamp = chrono::Utc::now().format("%Y-%m-%d %H-%M").to_string();
+    let patient_part = sanitize(&patient_data.name);
     let pdf_filename = if all_device_data.len() == 1 {
         let device = &all_device_data[0];
-        let safe_device_name = device.device_name.replace(" ", "_").replace("/", "_");
-        let safe_device_type = device.device_type.replace("_", "-");
-        format!("{}_{}_report_{}.pdf", safe_device_type, safe_device_name, timestamp)
+        let device_part = sanitize(&device.device_name);
+        format!("Device Report - {} - {} - {}.pdf", patient_part, device_part, timestamp)
     } else {
-        format!("combined_device_report_{}.pdf", timestamp)
+        format!("Device Report - {} - {}.pdf", patient_part, timestamp)
     };
 
     let pdf_path = std::env::temp_dir().join(&pdf_filename);
@@ -1018,14 +1035,31 @@ pub async fn generate_configured_report(
     // 5. Generate combined PDF using Java service
     use crate::services::java_pdf_service::JavaPdfService;
 
-    let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
+    // Build a user-friendly filename — same pattern as the
+    // per-record device report in medical_record.rs:
+    //   "Device Report - <Patient> - <Device> - <YYYY-MM-DD HH-MM>.pdf"
+    // (single device), or just patient+date for the combined case.
+    let sanitize = |s: &str| -> String {
+        let cleaned: String = s.chars().map(|c| match c {
+            '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
+            c if c.is_control() => '_',
+            c => c,
+        }).collect();
+        let trimmed = cleaned.trim_matches(|c: char| c == '.' || c.is_whitespace());
+        if trimmed.chars().count() > 60 {
+            trimmed.chars().take(60).collect::<String>().trim_end().to_string()
+        } else {
+            trimmed.to_string()
+        }
+    };
+    let timestamp = chrono::Utc::now().format("%Y-%m-%d %H-%M").to_string();
+    let patient_part = sanitize(&patient_data.name);
     let pdf_filename = if all_device_data.len() == 1 {
         let device = &all_device_data[0];
-        let safe_device_name = device.device_name.replace(" ", "_").replace("/", "_");
-        let safe_device_type = device.device_type.replace("_", "-");
-        format!("{}_{}_report_{}.pdf", safe_device_type, safe_device_name, timestamp)
+        let device_part = sanitize(&device.device_name);
+        format!("Device Report - {} - {} - {}.pdf", patient_part, device_part, timestamp)
     } else {
-        format!("combined_device_report_{}.pdf", timestamp)
+        format!("Device Report - {} - {}.pdf", patient_part, timestamp)
     };
 
     let pdf_path = std::env::temp_dir().join(&pdf_filename);
