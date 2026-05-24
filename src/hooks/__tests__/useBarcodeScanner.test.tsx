@@ -207,3 +207,97 @@ describe('useBarcodeScanner — guards', () => {
     expect(onScan).not.toHaveBeenCalled();
   });
 });
+
+// ---------------------------------------------------------------------------
+// useBarcodeScanner — regression: don't get stuck after rapid typing
+// ---------------------------------------------------------------------------
+//
+// User report (v0.5.11 production): "mashed some keys on the keyboard ...
+// after that the keyboard stopped working in the application, but the
+// keyboard worked in notepad". Bug was: scanning state entered on a fast
+// burst, never exited because the suffix key never arrived, and every
+// subsequent letter keystroke was preventDefault'd by the capture-phase
+// listener — app-wide, regardless of focused element. Backspace/arrows
+// kept working (not classified as `isChar`).
+//
+// Two fixes covered below:
+//   1. Watchdog timeout resets scanning state after inactivity.
+//   2. preventDefault is skipped inside editable elements even during
+//      scanning, so the user's typing is never silently swallowed even
+//      if the scan-burst heuristic misfires.
+
+describe('useBarcodeScanner — regression: stuck-scanning recovery', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('exits scanning mode via watchdog when suffix never arrives', () => {
+    const onScan = vi.fn();
+    renderHook(() => useBarcodeScanner({ onScan, suffixKey: 'Enter' }));
+
+    // Simulate a fast burst that triggers scan detection. Dispatch raw
+    // keyboard events on window (capture-phase listener picks them up
+    // before any input would).
+    const burst = ['1', '2', '3', '4', '5'];
+    for (const key of burst) {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+    }
+
+    // Now without pressing Enter, dispatch a letter as if the user
+    // resumed normal typing. While stuck in scanning mode, the hook
+    // would preventDefault this. We track preventDefault via the event.
+    const stuckEvent = new KeyboardEvent('keydown', { key: 'a', bubbles: true, cancelable: true });
+    window.dispatchEvent(stuckEvent);
+    expect(stuckEvent.defaultPrevented).toBe(true);
+
+    // Advance time past the watchdog threshold (1500ms). The hook
+    // should reset scanning state.
+    vi.advanceTimersByTime(2000);
+
+    // Now a fresh letter should NOT be preventDefault'd — keyboard
+    // works again.
+    const recoveredEvent = new KeyboardEvent('keydown', { key: 'b', bubbles: true, cancelable: true });
+    window.dispatchEvent(recoveredEvent);
+    expect(recoveredEvent.defaultPrevented).toBe(false);
+  });
+
+  it('does not preventDefault letter keys when focus is in an editable element', () => {
+    const onScan = vi.fn();
+    renderHook(() => useBarcodeScanner({ onScan, suffixKey: 'Enter' }));
+
+    // Mount a textarea and put focus on it. The hook should detect this
+    // via document.activeElement and skip preventDefault for chars.
+    const textarea = document.createElement('textarea');
+    document.body.appendChild(textarea);
+    textarea.focus();
+    expect(document.activeElement).toBe(textarea);
+
+    try {
+      // Fast burst — triggers scan detection
+      const burst = ['1', '2', '3', '4', '5'];
+      for (const key of burst) {
+        textarea.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+      }
+
+      // While stuck-scanning, dispatch a letter as if the user resumed
+      // typing into the textarea. preventDefault must NOT fire — the
+      // user's typing has to flow into the field.
+      const letterEvent = new KeyboardEvent('keydown', { key: 'a', bubbles: true, cancelable: true });
+      textarea.dispatchEvent(letterEvent);
+      expect(letterEvent.defaultPrevented).toBe(false);
+
+      // But the suffix key (Enter) MUST still preventDefault — otherwise
+      // it would submit the surrounding form before the hook gets to
+      // overwrite the value with the normalized scan code.
+      const enterEvent = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+      textarea.dispatchEvent(enterEvent);
+      expect(enterEvent.defaultPrevented).toBe(true);
+    } finally {
+      document.body.removeChild(textarea);
+    }
+  });
+});

@@ -98,6 +98,12 @@ export function useBarcodeScanner(options: UseBarcodeScannerOptions) {
   const lastTimeRef = useRef<number>(0);
   const isScanningRef = useRef<boolean>(false);
   const timerRef = useRef<number | null>(null);
+  // Safety watchdog: if scanning state is entered but never resolved by a
+  // suffix key (e.g., the user mashed letters fast and stopped without
+  // pressing Enter), we'd otherwise stay in scanning mode forever and
+  // preventDefault every subsequent letter keystroke app-wide. The
+  // watchdog hard-resets state after a period of inactivity.
+  const watchdogRef = useRef<number | null>(null);
   // Dedup: prevent the same code from firing twice within 500ms
   const lastScanRef = useRef<{ code: string; time: number } | null>(null);
 
@@ -110,6 +116,30 @@ export function useBarcodeScanner(options: UseBarcodeScannerOptions) {
         window.clearTimeout(timerRef.current);
         timerRef.current = null;
       }
+      if (watchdogRef.current) {
+        window.clearTimeout(watchdogRef.current);
+        watchdogRef.current = null;
+      }
+    };
+
+    // Reset scanning state if no key activity for this long. Long enough
+    // that real scanners (which finish a chip ID in <500ms) never trigger
+    // it, short enough that a stuck-scanning state from accidental fast
+    // typing self-recovers before the user notices their keyboard is
+    // unresponsive for long. 1500ms is roughly the time it takes to type
+    // 6-7 characters at a relaxed pace.
+    const WATCHDOG_MS = 1500;
+    const scheduleWatchdog = () => {
+      if (watchdogRef.current) window.clearTimeout(watchdogRef.current);
+      watchdogRef.current = window.setTimeout(() => {
+        // Soft reset — we abandon the buffered burst rather than calling
+        // finalize() so we don't try to emit a malformed scan from
+        // partial input that's now stale.
+        bufferRef.current = '';
+        lastTimeRef.current = 0;
+        isScanningRef.current = false;
+        watchdogRef.current = null;
+      }, WATCHDOG_MS) as unknown as number;
     };
 
     const finalize = () => {
@@ -182,10 +212,22 @@ export function useBarcodeScanner(options: UseBarcodeScannerOptions) {
       // normalized form if it turns out to be a microchip scan.
       const editable = isEditableElement(document.activeElement);
 
-      // Once we've recognized this as a scan burst, always preventDefault.
-      // For the suffix key this is critical even inside editable elements —
-      // otherwise Enter would submit the surrounding form and trigger
-      // validation before we've had a chance to set the normalized value.
+      // Once we've recognized this as a scan burst, behavior depends on
+      // whether the user is in an editable element:
+      //   - Suffix key (typically Enter): ALWAYS preventDefault, even in
+      //     editable elements. Otherwise the Enter that terminates the
+      //     scan would also submit the surrounding form before finalize()
+      //     can set the normalized value.
+      //   - Char keys in an editable element: do NOT preventDefault. We
+      //     still buffer them for finalize() to overwrite the field with
+      //     the normalized form if it turns out to be a real scan. The
+      //     code comment block above (line ~179) promised this behavior
+      //     but v0.5.x had a regression where chars got preventDefault'd
+      //     unconditionally — symptom was "letters stop typing in the
+      //     whole app after mashing keys fast" because the scanning
+      //     state could get stuck and silently swallow every letter.
+      //   - Char keys outside editable elements: preventDefault as before
+      //     so stray scanner output doesn't navigate / trigger shortcuts.
       if (isScanningRef.current) {
         if (suffixKey && e.key === suffixKey) {
           e.preventDefault();
@@ -193,9 +235,17 @@ export function useBarcodeScanner(options: UseBarcodeScannerOptions) {
           return;
         }
         if (isChar) {
-          e.preventDefault();
+          if (!editable) {
+            e.preventDefault();
+          }
           bufferRef.current += e.key;
           lastTimeRef.current = now;
+          // Re-arm the safety watchdog on every char. If the user is
+          // genuinely scanning, the suffix key arrives in well under
+          // WATCHDOG_MS and finalize() clears it. If they were just
+          // typing fast and stopped, the watchdog fires and we exit
+          // scanning mode cleanly.
+          scheduleWatchdog();
           if (!suffixKey) scheduleFinalize();
         }
         return;
@@ -228,11 +278,24 @@ export function useBarcodeScanner(options: UseBarcodeScannerOptions) {
 
       if (longEnough && fastEnough && prefixOk) {
         isScanningRef.current = true;
-        // This key triggered scan detection — prevent it from reaching the
-        // focused input. The first ≤2 chars before we recognized the burst
-        // may have already landed there; finalize() will overwrite with the
-        // normalized value once the scan completes.
-        e.preventDefault();
+        // Arm the safety watchdog the moment we enter scanning mode.
+        // Without this, a burst that fails to complete (user just typing
+        // fast then stopping, scanner output dropped mid-scan, etc.) would
+        // leave isScanningRef pinned to true forever and silently swallow
+        // every subsequent letter keystroke in the app.
+        scheduleWatchdog();
+        // For the trigger key itself: only preventDefault outside editable
+        // elements. The first ≤2 chars before we recognized the burst may
+        // have already landed in a focused textbox, and finalize() will
+        // overwrite the value with the normalized form when the scan
+        // completes — so letting the char through to the input here is
+        // consistent and doesn't worsen the displayed state. In a
+        // non-editable context (focus on a button, page background, etc.)
+        // we still preventDefault to keep stray scanner chars from
+        // triggering accelerators / navigation.
+        if (!editable) {
+          e.preventDefault();
+        }
       }
       // If a suffixKey is required, do not auto-finalize via timeout; wait for suffix
       if (!suffixKey) scheduleFinalize();
