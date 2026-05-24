@@ -6,7 +6,17 @@ import { ReactNode } from 'react';
 // This will fail because useAppointments doesn't exist yet
 import { useAppointments } from '../useAppointments';
 
-describe('useAppointments Hook', () => {
+// These tests are stale TDD scaffolds from the 011-appointments-feature
+// branch — they were written BEFORE the hook existed and still assert
+// it throws "useAppointments hook not implemented". The hook has since
+// been implemented and shipped; the placeholder tests were never
+// updated to actually exercise it.
+//
+// Skipping rather than deleting so the file structure can be filled in
+// with real assertions later (mock @/services/invoke, wrap with
+// QueryClientProvider, exercise filters/pagination/mutations against
+// the mock). Tracked as future work.
+describe.skip('useAppointments Hook', () => {
   let queryClient: QueryClient;
 
   beforeEach(() => {
@@ -155,7 +165,7 @@ describe('useAppointments Hook', () => {
   });
 });
 
-describe('useCreateAppointment Mutation', () => {
+describe.skip('useCreateAppointment Mutation', () => {
   it('should create new appointment', async () => {
     // Expected: Mutation to create appointment
     expect(() => {
@@ -164,7 +174,7 @@ describe('useCreateAppointment Mutation', () => {
   });
 });
 
-describe('useUpdateAppointment Mutation', () => {
+describe.skip('useUpdateAppointment Mutation', () => {
   it('should update existing appointment', async () => {
     // Expected: Mutation to update appointment
     expect(() => {
@@ -173,7 +183,7 @@ describe('useUpdateAppointment Mutation', () => {
   });
 });
 
-describe('useDeleteAppointment Mutation', () => {
+describe.skip('useDeleteAppointment Mutation', () => {
   it('should soft delete appointment', async () => {
     // Expected: Mutation to soft delete
     expect(() => {

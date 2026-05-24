@@ -2,7 +2,7 @@
  * T018: Household form component with Ant Design
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Form,
   Input,
@@ -15,6 +15,11 @@ import {
   message,
   Typography,
   Tooltip,
+  Select,
+  List,
+  Popconfirm,
+  Empty,
+  Tag,
 } from 'antd';
 import {
   SaveOutlined,
@@ -25,9 +30,22 @@ import {
   UserOutlined,
   PhoneOutlined,
   MailOutlined,
+  SearchOutlined,
 } from '@ant-design/icons';
 import type { HouseholdFormValues, ContactFormValues } from '../../types/ui.types';
+import { invoke } from '@/services/invoke';
 import styles from './Forms.module.css';
+
+/** Subset of the Patient model that's enough to render the
+ *  patient-association list inside the household form. */
+interface PatientLite {
+  id: number;
+  name: string;
+  species?: string | null;
+  breed?: string | null;
+  microchipId?: string | null;
+  householdId?: number | null;
+}
 
 const { Title, Text } = Typography;
 
@@ -48,11 +66,113 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
 }) => {
   const [form] = Form.useForm();
 
+  // Patient-association state. Only meaningful in edit mode (need the
+  // household's id to assign patients to it via update_patient). For
+  // create mode we hide this whole section and prompt the user to
+  // re-open the household after creation to add patients.
+  const householdId = mode === 'edit' ? initialValues?.id : undefined;
+  const [householdPatients, setHouseholdPatients] = useState<PatientLite[]>([]);
+  const [loadingPatients, setLoadingPatients] = useState(false);
+  const [searchValue, setSearchValue] = useState<string>('');
+  const [searchResults, setSearchResults] = useState<PatientLite[]>([]);
+  const [searching, setSearching] = useState(false);
+  const patientSearchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     if (initialValues) {
       form.setFieldsValue(initialValues);
     }
   }, [initialValues, form]);
+
+  // Load patients currently assigned to this household when entering
+  // edit mode. The backend doesn't have a dedicated by-household
+  // endpoint so we fetch all and filter — fine for the scales this app
+  // operates at (single clinic, hundreds of patients max). If usage grows
+  // we'd add `get_patients_by_household` as a focused command.
+  const refreshHouseholdPatients = useCallback(async () => {
+    if (!householdId) return;
+    setLoadingPatients(true);
+    try {
+      const all = await invoke<PatientLite[]>('get_patients');
+      setHouseholdPatients(
+        (all || []).filter((p) => p.householdId === householdId),
+      );
+    } catch (err) {
+      console.error('Failed to load household patients:', err);
+      message.error('Could not load patients for this household.');
+    } finally {
+      setLoadingPatients(false);
+    }
+  }, [householdId]);
+
+  useEffect(() => {
+    void refreshHouseholdPatients();
+  }, [refreshHouseholdPatients]);
+
+  // Debounced patient search for the "Add existing patient" picker.
+  // Excludes patients already in this household so the dropdown only
+  // shows actionable choices.
+  const runPatientSearch = useCallback(
+    async (query: string) => {
+      const q = query.trim();
+      if (q.length < 2) {
+        setSearchResults([]);
+        return;
+      }
+      setSearching(true);
+      try {
+        const results = await invoke<PatientLite[]>('search_patients', { query: q });
+        const currentIds = new Set(householdPatients.map((p) => p.id));
+        setSearchResults((results || []).filter((p) => !currentIds.has(p.id)));
+      } catch (err) {
+        console.error('Patient search failed:', err);
+        setSearchResults([]);
+      } finally {
+        setSearching(false);
+      }
+    },
+    [householdPatients],
+  );
+
+  const onPatientSearchTyped = (value: string) => {
+    setSearchValue(value);
+    if (patientSearchTimeout.current) clearTimeout(patientSearchTimeout.current);
+    patientSearchTimeout.current = setTimeout(() => runPatientSearch(value), 250);
+  };
+
+  // Adding / removing a patient is a single update_patient call with the
+  // new householdId (or null for remove). The patient model already has
+  // a nullable household_id so no schema change needed.
+  const handleAddPatient = async (patientId: number) => {
+    if (!householdId) return;
+    try {
+      await invoke('update_patient', {
+        id: patientId,
+        dto: { householdId },
+      });
+      message.success('Patient added to household.');
+      setSearchValue('');
+      setSearchResults([]);
+      await refreshHouseholdPatients();
+    } catch (err: any) {
+      console.error('Add patient failed:', err);
+      message.error(`Could not add patient: ${err?.message || err}`);
+    }
+  };
+
+  const handleRemovePatient = async (patientId: number) => {
+    try {
+      await invoke('update_patient', {
+        id: patientId,
+        dto: { householdId: null },
+      });
+      message.success('Patient removed from household.');
+      await refreshHouseholdPatients();
+    } catch (err: any) {
+      console.error('Remove patient failed:', err);
+      message.error(`Could not remove patient: ${err?.message || err}`);
+    }
+  };
 
   const handleSubmit = async (values: HouseholdFormValues) => {
     // Ensure at least one contact is marked as primary
@@ -297,7 +417,141 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
           </Col>
         </Row>
 
-        <Form.Item>
+        {/* Patient association — edit mode only. For new households we
+            don't have an id yet to assign patients to; the user can
+            re-open the household after creation to add patients. */}
+        {mode === 'edit' && householdId && (
+          <>
+            <Divider orientation="left">
+              <Space>
+                <UserOutlined />
+                Patients
+              </Space>
+            </Divider>
+
+            <List
+              loading={loadingPatients}
+              dataSource={householdPatients}
+              locale={{
+                emptyText: (
+                  <Empty
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    description="No patients in this household yet."
+                  />
+                ),
+              }}
+              renderItem={(p) => (
+                <List.Item
+                  actions={[
+                    <Popconfirm
+                      key="remove"
+                      title="Remove this patient from the household?"
+                      description="The patient record stays — only the household link is cleared."
+                      onConfirm={() => handleRemovePatient(p.id)}
+                      okText="Remove"
+                      cancelText="Cancel"
+                      okButtonProps={{ danger: true }}
+                    >
+                      <Button type="link" danger icon={<DeleteOutlined />}>
+                        Remove
+                      </Button>
+                    </Popconfirm>,
+                  ]}
+                >
+                  <List.Item.Meta
+                    avatar={<UserOutlined />}
+                    title={p.name}
+                    description={
+                      <Space size={6} wrap>
+                        {p.species && <Tag>{p.species}</Tag>}
+                        {p.breed && (
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            {p.breed}
+                          </Text>
+                        )}
+                        {p.microchipId && (
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            Chip: {p.microchipId}
+                          </Text>
+                        )}
+                      </Space>
+                    }
+                  />
+                </List.Item>
+              )}
+            />
+
+            <Form.Item label="Add existing patient" style={{ marginTop: 16 }}>
+              <Select
+                showSearch
+                // Always render as "empty" — we clear immediately after
+                // onChange via handleAddPatient → setSearchValue(''), and
+                // binding `value` to a string search query trips the
+                // type-checker (option values are numeric patient IDs).
+                value={undefined}
+                placeholder="Search by patient name or microchip ID (type 2+ chars)"
+                suffixIcon={<SearchOutlined />}
+                filterOption={false}
+                loading={searching}
+                onSearch={onPatientSearchTyped}
+                onChange={(patientId: number) => {
+                  if (patientId) void handleAddPatient(patientId);
+                }}
+                notFoundContent={
+                  searching
+                    ? 'Searching...'
+                    : searchValue.trim().length < 2
+                      ? 'Type 2 or more characters to search.'
+                      : 'No matching patients found.'
+                }
+                style={{ width: '100%' }}
+                allowClear
+              >
+                {searchResults.map((p) => (
+                  <Select.Option key={p.id} value={p.id}>
+                    <Space>
+                      <UserOutlined />
+                      <span>{p.name}</span>
+                      {p.species && (
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          ({p.species}
+                          {p.breed ? ` — ${p.breed}` : ''})
+                        </Text>
+                      )}
+                      {p.microchipId && (
+                        <Text type="secondary" style={{ fontSize: 11 }}>
+                          {p.microchipId}
+                        </Text>
+                      )}
+                    </Space>
+                  </Select.Option>
+                ))}
+              </Select>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                Picking a patient immediately moves them into this household.
+                The other household (if any) loses the link.
+              </Text>
+            </Form.Item>
+          </>
+        )}
+
+        {mode === 'create' && (
+          <>
+            <Divider orientation="left">
+              <Space>
+                <UserOutlined />
+                Patients
+              </Space>
+            </Divider>
+            <Text type="secondary">
+              Save this household first, then re-open it to add or move patients
+              into it. From the patient form you can also assign patients to
+              this household by name.
+            </Text>
+          </>
+        )}
+
+        <Form.Item style={{ marginTop: 24 }}>
           <Space>
             <Button
               type="primary"

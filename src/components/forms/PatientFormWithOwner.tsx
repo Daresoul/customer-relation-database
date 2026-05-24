@@ -115,13 +115,28 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
     }
   }, [patient, defaultMicrochipId, form]);
 
-  // Search households with debouncing
-  const searchHouseholdsRaw = async (query: string) => {
-    if (query && query.trim().length < 2) {
-      setHouseholds([]);
-      return;
-    }
+  // Pre-load the household dropdown with the most-recent households so the
+  // user sees a populated list the moment they open it. Without this the
+  // dropdown showed "No households found" until 2+ characters were typed,
+  // which looked like there were no households at all.
+  useEffect(() => {
+    searchHouseholdsRaw('');
+    // Intentionally empty deps — fire once on mount. Subsequent searches
+    // happen via the Select's onSearch event.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
+  // Search households with debouncing.
+  //
+  // Empty / short query is intentionally allowed through to the backend so
+  // the dropdown shows a list of recent households the moment the user
+  // opens it — the prior behavior (empty `households` until 2+ chars typed)
+  // made the dropdown look like "No households found" on first open and
+  // people reasonably concluded there were none.
+  //
+  // The backend caps results at `limit: 20` regardless, so empty-query is
+  // bounded.
+  const searchHouseholdsRaw = async (query: string) => {
     setSearchingHouseholds(true);
     try {
       const result = await invoke<any>('search_households', { query: query || '', limit: 20 });
@@ -306,7 +321,11 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
                   loading={searchingHouseholds}
                   onSearch={searchHouseholds}
                   filterOption={false}
-                  notFoundContent={searchingHouseholds ? 'Searching...' : 'No households found'}
+                  notFoundContent={
+                    searchingHouseholds
+                      ? 'Searching...'
+                      : 'No households match this search. Use "Create New Household" below to add one.'
+                  }
                   className={styles.fullWidth}
                 >
                   {(Array.isArray(households) ? households : [])
