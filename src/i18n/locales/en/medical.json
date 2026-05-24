@@ -146,6 +146,7 @@
     "selectDiagnoses": "Select one or more diagnoses…"
   },
   "diagnosesHint": "Tag this record with one or more diagnoses. Manage the list in Settings → Diagnoses.",
+  "diagnosesMore": "more",
   "fileAttachments": "File Attachments",
   "noAttachments": "No attachments yet",
   "fileUploadPending_one": "{{count}} file will be uploaded when you create the record",

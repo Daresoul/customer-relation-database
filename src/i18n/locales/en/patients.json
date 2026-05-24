@@ -113,6 +113,10 @@
     "patientInfo": {
       "title": "Patient Information",
       "failedToSave": "Failed to save changes",
+      "placeholders": {
+        "species": "Search species...",
+        "breed": "Search breed..."
+      },
       "labels": {
         "name": "Name",
         "species": "Species",
