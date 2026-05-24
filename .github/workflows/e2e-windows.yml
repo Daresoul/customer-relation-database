@@ -59,6 +59,15 @@ jobs:
         with:
           clean: false
 
+      - name: Setup Node.js
+        # Self-healing — actions/setup-node checks the runner's tool cache
+        # first and skips download when Node 20 is already there (~1-2s
+        # no-op). On a runner where Node went missing / corrupted, it
+        # re-downloads ~30MB and gets us back to green.
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Install Rust
         # Self-healing toolchain step. On a healthy runner where the
         # active stable is already installed, this is ~5s no-op (rustup
@@ -80,6 +89,16 @@ jobs:
         # The cost is ~5s/run when healthy. The benefit is "CI never gets
         # stuck waiting on a runner fix again". Easy trade.
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Ensure tauri-driver installed
+        # Idempotent self-heal for tauri-driver. `cargo install` checks
+        # the installed version against the requested one and skips work
+        # if up to date — ~1-2s no-op when healthy. If it was wiped (e.g.
+        # along with rustc during a Defender event), this reinstalls
+        # without manual intervention. --locked keeps the install
+        # reproducible against tauri-driver's own Cargo.lock.
+        shell: pwsh
+        run: cargo install tauri-driver --locked
 
       - name: Verify toolchain present
         # Call each tool directly rather than wrapping in
