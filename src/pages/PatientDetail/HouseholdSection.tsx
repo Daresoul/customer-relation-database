@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Typography, Empty, Descriptions, Tag, Space, Button, Select, App } from 'antd';
+import { Card, Typography, Descriptions, Tag, Space, Button, Select, App } from 'antd';
 import { HomeOutlined, UserOutlined, PhoneOutlined, MailOutlined, PlusOutlined, SwapOutlined, DisconnectOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -13,7 +13,14 @@ import styles from './PatientDetail.module.css';
 const { Title, Text } = Typography;
 const { Option } = Select;
 
-type AssignMode = 'idle' | 'selecting' | 'creating';
+// The empty-state UI has only two modes:
+//   - 'pick'    — the default. Shows the household dropdown plus an
+//                 inline "Create new" escape hatch. There's nothing to
+//                 cancel from here (the user hasn't started anything),
+//                 so the previous "Cancel" button has been removed.
+//   - 'create'  — shows the inline create-household form. Its own
+//                 Cancel returns to 'pick'.
+type AssignMode = 'pick' | 'create';
 
 interface HouseholdSectionProps {
   household?: HouseholdSummary;
@@ -25,19 +32,22 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household, p
   const { t } = useTranslation('patients');
   const { notification } = App.useApp();
   const queryClient = useQueryClient();
-  const [mode, setMode] = useState<AssignMode>('idle');
+  const [mode, setMode] = useState<AssignMode>('pick');
   const [selectedHouseholdId, setSelectedHouseholdId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Fetch all households for the select dropdown
+  // Fetch all households for the select dropdown. Enabled whenever we
+  // might show the dropdown — which is the default 'pick' mode for an
+  // unassigned patient. (Once a household IS assigned, the section
+  // renders the read-only summary instead and we never reach here.)
   const { data: allHouseholds = [], isLoading: isLoadingHouseholds } = useQuery({
     queryKey: ['all-households'],
     queryFn: () => invoke<any[]>('get_all_households', { limit: 1000 }),
-    enabled: mode === 'selecting',
+    enabled: !household && mode === 'pick',
   });
 
   const resetForm = () => {
-    setMode('idle');
+    setMode('pick');
     setSelectedHouseholdId(null);
   };
 
@@ -135,8 +145,11 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household, p
           </Title>
         }
       >
-        {mode === 'selecting' && (
+        {mode === 'pick' && patientId && (
           <Space direction="vertical" style={{ width: '100%' }}>
+            <Text type="secondary">
+              {t('detail.householdInfo.noHousehold')}
+            </Text>
             <Select
               placeholder={t('detail.householdInfo.selectHousehold')}
               style={{ width: '100%' }}
@@ -145,6 +158,7 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household, p
               optionFilterProp="children"
               onChange={(value) => setSelectedHouseholdId(value)}
               value={selectedHouseholdId}
+              allowClear
             >
               {allHouseholds.map((h: any) => (
                 <Option key={h.household?.id || h.id} value={h.household?.id || h.id}>
@@ -155,52 +169,31 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household, p
             <Space wrap>
               <Button
                 type="primary"
+                icon={<PlusOutlined />}
                 onClick={handleAssignHousehold}
                 loading={isLoading}
                 disabled={!selectedHouseholdId}
               >
                 {t('detail.householdInfo.assign')}
               </Button>
-              <Button onClick={() => setMode('creating')} disabled={isLoading}>
+              <Button
+                icon={<HomeOutlined />}
+                onClick={() => setMode('create')}
+                disabled={isLoading}
+              >
                 {t('detail.householdInfo.createNew', 'Create new')}
-              </Button>
-              <Button onClick={resetForm} disabled={isLoading}>
-                {t('common:cancel')}
               </Button>
             </Space>
           </Space>
         )}
 
-        {mode === 'creating' && (
+        {mode === 'create' && (
           <CreateHouseholdInline
             onCreated={handleHouseholdCreated}
             onCancel={resetForm}
             disabled={isLoading}
             submitLabel={t('detail.householdInfo.createAndAssign', 'Create and assign')}
           />
-        )}
-
-        {mode === 'idle' && (
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description={
-              <Text type="secondary">
-                {t('detail.householdInfo.noHousehold')}
-              </Text>
-            }
-            className={styles.emptyHousehold}
-          >
-            {patientId && (
-              <Space wrap>
-                <Button type="primary" icon={<PlusOutlined />} onClick={() => setMode('selecting')}>
-                  {t('detail.householdInfo.assignHousehold')}
-                </Button>
-                <Button icon={<HomeOutlined />} onClick={() => setMode('creating')}>
-                  {t('detail.householdInfo.createNew', 'Create new')}
-                </Button>
-              </Space>
-            )}
-          </Empty>
         )}
       </Card>
     );
