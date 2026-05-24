@@ -170,12 +170,7 @@
       "createFailed": "Failed to create household",
       "createAndAssign": "Create and assign",
       "householdNameRequired": "Household name is required",
-      "householdNameTooLong": "Household name must be 100 characters or less",
-      "householdNamePlaceholder": "e.g., The Petrov Family",
-      "primaryContactName": "Primary contact (optional)",
-      "contactNamePlaceholder": "e.g., John Petrov",
-      "contactPhone": "Phone (optional)",
-      "contactEmail": "Email (optional)"
+      "householdNameTooLong": "Household name must be 100 characters or less"
     },
     "medicalHistory": {
       "title": "Medical History",

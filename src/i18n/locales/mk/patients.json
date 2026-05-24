@@ -170,12 +170,7 @@
       "createFailed": "Неуспешно создавање на домаќинство",
       "createAndAssign": "Создај и додели",
       "householdNameRequired": "Името на домаќинството е задолжително",
-      "householdNameTooLong": "Името може да има најмногу 100 знаци",
-      "householdNamePlaceholder": "пр. Семејство Петровски",
-      "primaryContactName": "Примарен контакт (по избор)",
-      "contactNamePlaceholder": "пр. Јане Петровски",
-      "contactPhone": "Телефон (по избор)",
-      "contactEmail": "Е-пошта (по избор)"
+      "householdNameTooLong": "Името може да има најмногу 100 знаци"
     },
     "medicalHistory": {
       "title": "Медицинска историја",

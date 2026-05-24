@@ -1,5 +1,5 @@
 import React from 'react';
-import { Form, Input, Button, Space, App } from 'antd';
+import { Form, Input, Button, Space, App, Row, Col } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@/services/invoke';
 
@@ -65,7 +65,7 @@ export const CreateHouseholdInline: React.FC<CreateHouseholdInlineProps> = ({
   autoFocus = true,
   disabled = false,
 }) => {
-  const { t } = useTranslation('patients');
+  const { t } = useTranslation(['patients', 'forms', 'common']);
   const { notification } = App.useApp();
   const [form] = Form.useForm<FormValues>();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -114,45 +114,58 @@ export const CreateHouseholdInline: React.FC<CreateHouseholdInlineProps> = ({
       onFinish={handleSubmit}
       disabled={busy}
     >
-      <Form.Item
-        name="householdName"
-        label={t('detail.householdInfo.householdName')}
-        rules={[
-          { required: true, message: t('detail.householdInfo.householdNameRequired', 'Household name is required') },
-          { max: 100, message: t('detail.householdInfo.householdNameTooLong', 'Household name must be 100 characters or less') },
-        ]}
-      >
-        <Input
-          placeholder={t('detail.householdInfo.householdNamePlaceholder', 'e.g., The Petrov Family')}
-          autoFocus={autoFocus}
-        />
-      </Form.Item>
+      {/* Two-column layout matches the inline create-household pattern
+          previously embedded in the DeviceImportModal's CreatePatientSection.
+          Stacks to one column on small screens. */}
+      <Row gutter={16}>
+        <Col xs={24} sm={12}>
+          <Form.Item
+            name="householdName"
+            label={t('patients:detail.householdInfo.householdName', 'Household Name')}
+            rules={[
+              { required: true, message: t('patients:detail.householdInfo.householdNameRequired', 'Household name is required') },
+              { max: 100, message: t('patients:detail.householdInfo.householdNameTooLong', 'Household name must be 100 characters or less') },
+            ]}
+          >
+            <Input
+              placeholder={t('forms:placeholders.enterName', 'Enter name')}
+              autoFocus={autoFocus}
+            />
+          </Form.Item>
+        </Col>
+        <Col xs={24} sm={12}>
+          <Form.Item
+            name="contactName"
+            label={t('patients:detail.householdInfo.primaryContact', 'Primary Contact')}
+          >
+            <Input placeholder={t('forms:placeholders.enterName', 'Enter name')} />
+          </Form.Item>
+        </Col>
+      </Row>
 
-      <Form.Item
-        name="contactName"
-        label={t('detail.householdInfo.primaryContactName', 'Primary contact (optional)')}
-      >
-        <Input placeholder={t('detail.householdInfo.contactNamePlaceholder', 'e.g., John Petrov')} />
-      </Form.Item>
-
-      <Form.Item
-        name="phone"
-        label={t('detail.householdInfo.contactPhone', 'Phone (optional)')}
-      >
-        <Input placeholder="+389 70 123 456" />
-      </Form.Item>
-
-      <Form.Item
-        name="email"
-        label={t('detail.householdInfo.contactEmail', 'Email (optional)')}
-        rules={[{ type: 'email', message: t('forms:validation.email', 'Invalid email') }]}
-      >
-        <Input placeholder="contact@example.com" />
-      </Form.Item>
+      <Row gutter={16}>
+        <Col xs={24} sm={12}>
+          <Form.Item
+            name="email"
+            label={t('forms:labels.email', 'Email')}
+            rules={[{ type: 'email', message: t('forms:validation.email', 'Please enter a valid email address') }]}
+          >
+            <Input placeholder={t('forms:placeholders.enterEmail', 'Enter email address')} />
+          </Form.Item>
+        </Col>
+        <Col xs={24} sm={12}>
+          <Form.Item
+            name="phone"
+            label={t('forms:labels.phone', 'Phone Number')}
+          >
+            <Input placeholder={t('forms:placeholders.enterPhone', 'Enter phone number')} />
+          </Form.Item>
+        </Col>
+      </Row>
 
       <Space>
         <Button type="primary" htmlType="submit" loading={isSubmitting}>
-          {submitLabel ?? t('detail.householdInfo.create', 'Create')}
+          {submitLabel ?? t('patients:detail.householdInfo.create', 'Create')}
         </Button>
         <Button onClick={onCancel} disabled={isSubmitting}>
           {t('common:cancel')}
