@@ -20,6 +20,33 @@ use log::LevelFilter;
 use services::device_capture::start_device_capture;
 
 fn main() {
+    // Pick which Sentry "environment" this build reports as. Sentry treats
+    // `environment` as a first-class field — the dashboard has built-in
+    // filtering, separate alert rules, and isolated issue tracking per
+    // environment, all without needing custom tags. Far cleaner than
+    // tagging the build type ourselves.
+    //
+    // Three environments cover every way this binary actually runs:
+    //
+    //   e2e_test:    Running under WDio (TAURI_E2E=1). Events from CI runs
+    //                shouldn't pollute production alerts.
+    //   development: Debug build (`cargo tauri dev`). All the dev-machine
+    //                noise stays here.
+    //   production:  Release build, not under E2E. This is what installed
+    //                binaries report as. Anything serious that fires here
+    //                is a real user-facing issue.
+    //
+    // The TAURI_E2E check goes first because a release binary started with
+    // that env var IS an E2E run, not production — same binary, different
+    // intent.
+    let environment: &'static str = if std::env::var("TAURI_E2E").is_ok() {
+        "e2e_test"
+    } else if cfg!(debug_assertions) {
+        "development"
+    } else {
+        "production"
+    };
+
     // Initialize Sentry FIRST so panics during early setup are still captured.
     // The guard must live for the whole of main(); when it's dropped Sentry
     // flushes pending events on a short timeout before the process exits.
@@ -27,6 +54,7 @@ fn main() {
         "https://e563160f60072e45b88d783b3f153172@o4511411837861888.ingest.de.sentry.io/4511411842187344",
         sentry::ClientOptions {
             release: sentry::release_name!(),
+            environment: Some(environment.into()),
             send_default_pii: true,
             // Cap breadcrumb trail at 100 entries (matches Sentry default but
             // explicit so a future raise doesn't silently bloat events).
@@ -36,24 +64,47 @@ fn main() {
     ));
 
     // Identify this machine in Sentry so we can tell which install reported
-    // an event. Auto-detected from the OS hostname; users can override via
-    // Settings → General if they want a friendlier label like "Reception PC".
-    // Stored as a Sentry tag and also as the user.username so it appears in
-    // the dashboard's user list (we're a single-user app so this is the
-    // closest analog to "which machine").
-    let hostname = std::env::var("COMPUTERNAME")
+    // an event. Resolution order:
+    //
+    //   1. ARKIVET_MACHINE_NAME env var — explicit override, set this when
+    //      the OS hostname isn't recognizable (e.g. "DESKTOP-AB12CD34").
+    //      Recommended values are short human labels: "Reception PC",
+    //      "Surgery Room", "Dev Laptop", "Win Test VM". Set via:
+    //        Windows: System Properties → Environment Variables → New
+    //                 (Machine scope so the runner-service user inherits)
+    //        macOS:   `launchctl setenv ARKIVET_MACHINE_NAME "..."` or
+    //                 in your shell rc; remember Tauri inherits the
+    //                 launching shell's env.
+    //   2. OS hostname — COMPUTERNAME / HOSTNAME / HOST. Always available
+    //      so the dashboard never shows a blank machine_name tag.
+    //   3. "unknown" — only if all of the above are missing.
+    //
+    // The os_user tag is auto-only — it identifies which OS user account
+    // ran the app, useful when a clinic has staff accounts but one
+    // machine_name.
+    let hostname_auto = std::env::var("COMPUTERNAME")
         .or_else(|_| std::env::var("HOSTNAME"))
         .or_else(|_| std::env::var("HOST"))
         .unwrap_or_else(|_| "unknown".to_string());
+    let machine_name = std::env::var("ARKIVET_MACHINE_NAME")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| hostname_auto.clone());
     let os_user = std::env::var("USERNAME")
         .or_else(|_| std::env::var("USER"))
         .unwrap_or_else(|_| "unknown".to_string());
 
     sentry::configure_scope(|scope| {
-        scope.set_tag("machine_name", &hostname);
+        scope.set_tag("machine_name", &machine_name);
+        // Also publish the raw OS hostname when overridden, so we don't
+        // lose the auto-detected value when an explicit machine_name is set.
+        if machine_name != hostname_auto {
+            scope.set_tag("os_hostname", &hostname_auto);
+        }
         scope.set_tag("os_user", &os_user);
+        scope.set_tag("build_environment", environment);
         scope.set_user(Some(sentry::User {
-            username: Some(format!("{os_user}@{hostname}")),
+            username: Some(format!("{os_user}@{machine_name}")),
             ..Default::default()
         }));
     });
@@ -63,7 +114,7 @@ fn main() {
     sentry::add_breadcrumb(sentry::Breadcrumb {
         category: Some("app.lifecycle".into()),
         message: Some(format!(
-            "Arkivet started on {hostname} (user: {os_user})"
+            "Arkivet started on {machine_name} (user: {os_user}, env: {environment})"
         )),
         level: sentry::Level::Info,
         ..Default::default()
