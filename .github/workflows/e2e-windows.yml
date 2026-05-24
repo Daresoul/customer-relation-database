@@ -60,12 +60,23 @@ jobs:
           clean: false
 
       - name: Verify toolchain present
+        # Call each tool directly rather than wrapping in
+        # `Write-Host "$(tool --version)"`. PowerShell 7's subexpression
+        # interpolation of native command output trips a known bug
+        # ("StandardOutputEncoding is only supported when standard output
+        # is redirected") for tools whose stdout includes non-ASCII or
+        # specific encoding hints — rustc/cargo are the usual victims.
+        # Recent runner self-updates bumped pwsh to a version where this
+        # surfaces consistently. Calling them as bare commands works
+        # because pwsh doesn't try to re-encode anything when stdout
+        # flows straight through.
         shell: pwsh
         run: |
-          Write-Host "Node: $(node --version)"
-          Write-Host "npm: $(npm --version)"
-          Write-Host "Rust: $(rustc --version)"
-          Write-Host "Cargo: $(cargo --version)"
+          Write-Host "--- Toolchain versions ---"
+          node --version
+          npm --version
+          rustc --version
+          cargo --version
           where.exe tauri-driver
           where.exe msedgedriver
 
