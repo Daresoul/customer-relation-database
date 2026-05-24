@@ -60,6 +60,16 @@ pub struct HidDeviceInfo {
     /// crate). Falls back when the device didn't ship a `manufacturer`
     /// string, which is very common for cheap microchip scanners.
     pub vendor_name_from_db: Option<String>,
+    /// Bluetooth pairing friendly name — the label the user sees in
+    /// Windows Settings → Bluetooth & devices (e.g. "SYC Bluetooth").
+    /// Only populated for BT-connected devices whose serial number is
+    /// a MAC address that matches a paired-device entry in the Windows
+    /// BT subsystem. None for USB devices, BT devices whose serial isn't
+    /// a MAC, devices paired through a profile we don't enumerate, or
+    /// on non-Windows where we have no BT enumeration. The UI should
+    /// prefer this over `product_name` when available — it's the most
+    /// human-recognizable name for a BT device.
+    pub bluetooth_name: Option<String>,
     /// HID usage page (0x01 = Generic Desktop, 0x8C = POS Bar Code Reader, etc.).
     #[ts(type = "number")]
     pub usage_page: u16,

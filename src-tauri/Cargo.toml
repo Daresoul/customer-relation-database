@@ -66,6 +66,12 @@ windows = { version = "0.52", features = [
   "Win32_System_Threading",
   # WNDCLASSEXW carries HBRUSH/HICON/HCURSOR — needs GDI types resolved
   "Win32_Graphics_Gdi",
+  # Enumerate paired Bluetooth devices to recover their friendly names
+  # (the BT-pairing name shown in Windows Settings → Bluetooth & devices,
+  # e.g. "SYC Bluetooth"). Used by commands::hid_devices::bt_names so the
+  # detect table can show the real device name instead of a generic vendor
+  # string from the HID descriptor.
+  "Win32_Devices_Bluetooth",
 ] }
 dunce = "1.0" # Convert Windows UNC paths to normal paths for Java compatibility
 winreg = "0.52"

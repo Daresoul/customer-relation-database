@@ -71,6 +71,10 @@ interface HidDeviceInfo {
   manufacturer: string | null;
   serialNumber: string | null;
   vendorNameFromDb: string | null;
+  /** BT pairing friendly name from the Windows Bluetooth subsystem
+   *  (e.g. "SYC Bluetooth"). Only set for BT devices whose serial is a
+   *  MAC matching a paired-device entry. */
+  bluetoothName: string | null;
   usagePage: number;
   usage: number;
   interfaceNumber: number;
@@ -149,9 +153,14 @@ const ManagedScannersSettings: React.FC = () => {
   }, [notification, t]);
 
   const handleAddFromDetected = (d: HidDeviceInfo) => {
-    // Pre-fill name with the most informative string available:
-    //   product (HID descriptor) > manufacturer + " device" > vendor name from db
+    // Pre-fill name with the most informative string available, in order:
+    //   bluetoothName (BT pairing label, e.g. "SYC Bluetooth")
+    //   > productName (HID descriptor)
+    //   > manufacturer + " HID device"
+    //   > vendor name from USB-IF db
+    //   > generic "HID device VID:PID"
     const suggestedName =
+      d.bluetoothName ||
       d.productName ||
       (d.manufacturer ? `${d.manufacturer} HID device` : null) ||
       d.vendorNameFromDb ||
@@ -351,11 +360,27 @@ const ManagedScannersSettings: React.FC = () => {
                       title: t('settings:managedScanners.detect.colName', 'Device'),
                       key: 'name',
                       render: (_: unknown, d) => {
+                        // Primary line, in priority order:
+                        //   1. BT pairing name (what the user named it in
+                        //      Windows Settings — most recognizable)
+                        //   2. HID product string (set by the device firmware)
+                        //   3. USB-IF vendor name (e.g. "Apple, Inc." for
+                        //      VID 0x05AC even when the device spoofs)
+                        //   4. Fallback placeholder
                         const primary =
+                          d.bluetoothName ||
                           d.productName ||
                           d.vendorNameFromDb ||
                           t('settings:managedScanners.detect.unnamed', '(unnamed)');
-                        const secondary = d.manufacturer ?? d.vendorNameFromDb;
+                        // Secondary line shows additional context that's
+                        // useful for distinguishing devices but isn't the
+                        // primary identifier. If the primary is the BT
+                        // name, show product string as secondary (or
+                        // manufacturer). Otherwise show manufacturer.
+                        const secondary =
+                          d.bluetoothName && d.productName
+                            ? d.productName
+                            : d.manufacturer ?? d.vendorNameFromDb;
                         return (
                           <Space direction="vertical" size={0}>
                             <Text strong>{primary}</Text>
