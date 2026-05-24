@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Layout, Menu, Card, Form, Button, Space, Typography, Breadcrumb, App } from 'antd';
+import { Layout, Menu, Card, Form, Button, Space, Breadcrumb, App } from 'antd';
 import {
   SettingOutlined,
   GlobalOutlined,
@@ -37,7 +37,6 @@ import ManagedScannersSettings from './components/ManagedScannersSettings';
 import { UpdateSettings } from './UpdateSettings';
 
 const { Content, Sider } = Layout;
-const { Title, Text } = Typography;
 
 type SettingsCategory = 'general' | 'business' | 'appointments' | 'rooms' | 'species' | 'devices' | 'templates' | 'lineItems' | 'diagnoses' | 'backups' | 'managedScanners' | 'updates';
 
@@ -219,16 +218,6 @@ const SettingsLayout: React.FC = () => {
               {t('common:back')}
             </Button>
           </div>
-
-          {/* Title */}
-          <Card
-            className={styles.titleCard}
-          >
-            <Title level={2} className={styles.title}>
-              <SettingOutlined /> {t('navigation:settings')}
-            </Title>
-            <Text className={styles.subtitle}>{t('common:settings')}</Text>
-          </Card>
 
           {/* Main Layout */}
           <Layout className={styles.settingsLayout}>
