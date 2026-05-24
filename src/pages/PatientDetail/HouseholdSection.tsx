@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Typography, Empty, Descriptions, Tag, Space, Button, Select, App, Form, Input } from 'antd';
+import { Card, Typography, Empty, Descriptions, Tag, Space, Button, Select, App } from 'antd';
 import { HomeOutlined, UserOutlined, PhoneOutlined, MailOutlined, PlusOutlined, SwapOutlined, DisconnectOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -7,6 +7,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { HouseholdSummary } from '../../types/patient';
 import { PatientService } from '../../services/patientService';
 import { invoke } from '@/services/invoke';
+import { CreateHouseholdInline, type CreatedHousehold } from '../../components/forms/CreateHouseholdInline';
 import styles from './PatientDetail.module.css';
 
 const { Title, Text } = Typography;
@@ -27,7 +28,6 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household, p
   const [mode, setMode] = useState<AssignMode>('idle');
   const [selectedHouseholdId, setSelectedHouseholdId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [createForm] = Form.useForm();
 
   // Fetch all households for the select dropdown
   const { data: allHouseholds = [], isLoading: isLoadingHouseholds } = useQuery({
@@ -39,7 +39,6 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household, p
   const resetForm = () => {
     setMode('idle');
     setSelectedHouseholdId(null);
-    createForm.resetFields();
   };
 
   const assignPatientToHousehold = async (householdId: number) => {
@@ -74,38 +73,23 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household, p
     }
   };
 
-  // Create a household inline and assign it to the patient in one go.
-  //
-  // Mirrors the PatientFormWithOwner inline-create flow: hits the raw
-  // `create_household` Tauri command (must use raw invoke — see note in
-  // PatientService re: ApiService case-transform breaking multi-arg
-  // commands), then assigns the new household to the current patient.
-  const handleCreateAndAssign = async (values: {
-    householdName: string;
-    contactName?: string;
-    phone?: string;
-    email?: string;
-  }) => {
-    if (!patientId) return;
-
+  // CreateHouseholdInline already calls create_household and surfaces
+  // creation errors via notification. After it succeeds we just chain
+  // the assign step so the new household lands on the current patient.
+  const handleHouseholdCreated = async (newHousehold: CreatedHousehold) => {
+    if (!patientId) {
+      // Edge case: no patient context — just close the form. Shouldn't
+      // happen in practice because the section only renders the create
+      // button when patientId is defined.
+      resetForm();
+      return;
+    }
     setIsLoading(true);
     try {
-      const newHousehold = await invoke<{ id: number }>('create_household', {
-        lastName: values.householdName.trim(),
-        contacts: (values.contactName || values.phone || values.email)
-          ? [{
-              name: values.contactName?.trim() || values.householdName.trim(),
-              isPrimary: true,
-              email: values.email?.trim() || null,
-              phone: values.phone?.trim() || null,
-            }]
-          : [],
-      });
-
       await assignPatientToHousehold(newHousehold.id);
     } catch (error) {
       notification.error({
-        message: t('detail.householdInfo.createFailed', 'Failed to create household'),
+        message: t('detail.householdInfo.assignFailed'),
         description: String(error),
         placement: 'bottomRight',
         duration: 5,
@@ -188,53 +172,12 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household, p
         )}
 
         {mode === 'creating' && (
-          <Form
-            form={createForm}
-            layout="vertical"
-            onFinish={handleCreateAndAssign}
+          <CreateHouseholdInline
+            onCreated={handleHouseholdCreated}
+            onCancel={resetForm}
             disabled={isLoading}
-          >
-            <Form.Item
-              name="householdName"
-              label={t('detail.householdInfo.householdName')}
-              rules={[
-                { required: true, message: t('detail.householdInfo.householdNameRequired', 'Household name is required') },
-                { max: 100, message: t('detail.householdInfo.householdNameTooLong', 'Household name must be 100 characters or less') },
-              ]}
-            >
-              <Input placeholder={t('detail.householdInfo.householdNamePlaceholder', 'e.g., The Petrov Family')} autoFocus />
-            </Form.Item>
-            <Form.Item
-              name="contactName"
-              label={t('detail.householdInfo.primaryContactName', 'Primary contact (optional)')}
-            >
-              <Input placeholder={t('detail.householdInfo.contactNamePlaceholder', 'e.g., John Petrov')} />
-            </Form.Item>
-            <Form.Item
-              name="phone"
-              label={t('detail.householdInfo.contactPhone', 'Phone (optional)')}
-            >
-              <Input placeholder="+389 70 123 456" />
-            </Form.Item>
-            <Form.Item
-              name="email"
-              label={t('detail.householdInfo.contactEmail', 'Email (optional)')}
-              rules={[{ type: 'email', message: t('forms:validation.email', 'Invalid email') }]}
-            >
-              <Input placeholder="contact@example.com" />
-            </Form.Item>
-            <Space>
-              <Button type="primary" htmlType="submit" loading={isLoading}>
-                {t('detail.householdInfo.createAndAssign', 'Create and assign')}
-              </Button>
-              <Button onClick={() => setMode('selecting')} disabled={isLoading}>
-                {t('common:back')}
-              </Button>
-              <Button onClick={resetForm} disabled={isLoading}>
-                {t('common:cancel')}
-              </Button>
-            </Space>
-          </Form>
+            submitLabel={t('detail.householdInfo.createAndAssign', 'Create and assign')}
+          />
         )}
 
         {mode === 'idle' && (

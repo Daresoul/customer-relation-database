@@ -163,6 +163,7 @@
       "unlinkSuccess": "Unlinked from household successfully",
       "unlinkFailed": "Failed to unlink from household",
       "createNew": "Create new",
+      "create": "Create",
       "createFailed": "Failed to create household",
       "createAndAssign": "Create and assign",
       "householdNameRequired": "Household name is required",
