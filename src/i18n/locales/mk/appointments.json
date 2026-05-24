@@ -3,12 +3,12 @@
   "newAppointment": "Нов термин",
   "editAppointment": "Уреди термин",
   "appointmentDetails": "Детали за терминот",
-  "noAppointments": "Нема пронајдено термини",
+  "noAppointments": "Не се пронајдени термини",
   "noAppointmentsDay": "Нема закажани термини за денес",
   "noAppointmentsWeek": "Нема закажани термини за оваа недела",
   "fields": {
     "patient": "Пациент",
-    "room": "Соба (Опционално)",
+    "room": "Соба (по избор)",
     "title": "Наслов",
     "description": "Опис",
     "date": "Датум",
@@ -20,8 +20,8 @@
   "placeholders": {
     "selectPatient": "Изберете пациент",
     "selectRoom": "Изберете соба",
-    "title": "на пр., Годишен преглед, Вакцинација",
-    "description": "Дополнителни забелешки или инструкции"
+    "title": "пр. Годишен преглед, Вакцинација",
+    "description": "Дополнителни белешки или упатства"
   },
   "status": {
     "scheduled": "Закажан",
@@ -30,23 +30,23 @@
     "cancelled": "Откажан"
   },
   "validation": {
-    "selectPatient": "Ве молиме изберете пациент",
-    "enterTitle": "Ве молиме внесете наслов на терминот",
-    "titleMaxLength": "Насловот мора да биде помалку од 200 знаци",
-    "selectDate": "Ве молиме изберете датум",
-    "selectStartTime": "Ве молиме изберете почетно време",
-    "selectEndTime": "Ве молиме изберете крајно време",
+    "selectPatient": "Изберете пациент",
+    "enterTitle": "Внесете наслов на терминот",
+    "titleMaxLength": "Насловот мора да биде пократок од 200 знаци",
+    "selectDate": "Изберете датум",
+    "selectStartTime": "Изберете почетно време",
+    "selectEndTime": "Изберете крајно време",
     "endTimeAfterStart": "Крајното време мора да биде по почетното време",
-    "fifteenMinuteIntervals": "Времињата мора да бидат на 15-минутни интервали",
-    "unableToCheckConflicts": "Не може да се провери за конфликти. Ве молиме проверете рачно."
+    "fifteenMinuteIntervals": "Времињата мора да бидат во интервали од 15 минути",
+    "unableToCheckConflicts": "Не може да се провери за судири. Проверете рачно."
   },
   "conflicts": {
     "roomCapacityExceeded": "Капацитетот на собата е надминат",
-    "capacityWarning": "Капацитетот на собата е {{capacity}}, но има {{count}} термин во ова време",
-    "capacityWarning_plural": "Капацитетот на собата е {{capacity}}, но има {{count}} термини во ова време",
+    "capacityWarning": "Капацитетот на собата е {{capacity}}, но веќе има {{count}} закажан термин во овој временски период",
+    "capacityWarning_plural": "Капацитетот на собата е {{capacity}}, но веќе има {{count}} закажани термини во овој временски период",
     "confirmTitle": "Капацитетот на собата е надминат",
-    "confirmMessage": "Капацитетот на собата е {{capacity}}, но {{isPlural}} {{count}} термин{{pluralSuffix}} во ова време. Дали сакате да продолжите?",
-    "continueAnyway": "Продолжи сепак"
+    "confirmMessage": "Капацитетот на собата е {{capacity}}, но {{isPlural}} {{count}} термин{{pluralSuffix}} во овој временски период. Дали сакате да продолжите?",
+    "continueAnyway": "Сепак продолжи"
   },
   "schedule": "Распоред",
   "actions": {
