@@ -57,9 +57,10 @@ mod windows_impl {
     use windows::core::PCWSTR;
     use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
     use windows::Win32::UI::Input::{
-        GetRawInputData, GetRawInputDeviceInfoW, RegisterRawInputDevices, HRAWINPUT, RAWINPUT,
-        RAWINPUTDEVICE, RAWINPUTHEADER, RAW_INPUT_DEVICE_INFO_COMMAND, RIDEV_INPUTSINK,
-        RID_INPUT,
+        GetRawInputData, GetRawInputDeviceInfoW, GetRawInputDeviceList,
+        RegisterRawInputDevices, HRAWINPUT, RAWINPUT, RAWINPUTDEVICE,
+        RAWINPUTDEVICELIST, RAWINPUTHEADER, RAW_INPUT_DEVICE_INFO_COMMAND,
+        RIDEV_INPUTSINK, RID_INPUT,
     };
     use windows::Win32::UI::WindowsAndMessaging::{
         CallNextHookEx, CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW,
@@ -264,6 +265,26 @@ mod windows_impl {
                 log::error!("raw_input_capture: RegisterRawInputDevices failed");
                 return;
             }
+
+            // Pre-warm the device cache for every currently-attached HID
+            // device. The first WM_INPUT for an unknown device runs
+            // resolve_usb_id which makes two Win32 calls (size query +
+            // actual read of RIDI_DEVICENAME) — a few ms total. During that
+            // window, the LL hook can race ahead and pass-through keystrokes
+            // because pending_suppress hasn't been enqueued yet.
+            //
+            // Without pre-warming, the symptom is exactly what the user
+            // observed on v0.5.11: "writes half the thing in notepad and
+            // then it is intercepted" — the first few keystrokes of a scan
+            // leak because resolve_usb_id is racing the LL hook, then once
+            // the cache is warm subsequent keystrokes suppress correctly.
+            //
+            // Pre-warming eliminates that race for every device attached
+            // at startup. A device hot-plugged after startup still hits
+            // the cold-cache race on its first WM_INPUT, but that's a
+            // rare and one-time event per device (and a re-paired SYC
+            // scanner would be one of those).
+            prewarm_device_cache();
 
             // Install a low-level keyboard hook on this same thread. The hook
             // sees every keystroke system-wide and can suppress them by
@@ -619,6 +640,54 @@ mod windows_impl {
         }
         // Note: managed-device input is intentionally NOT re-injected. That's
         // the whole point — it goes only to our app, never the focused window.
+    }
+
+    /// Enumerate every currently-attached Raw Input device and resolve its
+    /// VID/PID into the device cache. Done once at startup so the first
+    /// keystroke from any attached device hits a warm cache and
+    /// `handle_wm_input` doesn't race the LL hook.
+    ///
+    /// Skipped silently if `GetRawInputDeviceList` fails — pre-warm is a
+    /// performance optimization, not a correctness requirement. The
+    /// previous behavior (cold-cache resolve on first WM_INPUT) still
+    /// works, just with the original race window.
+    unsafe fn prewarm_device_cache() {
+        let mut count: u32 = 0;
+        let entry_size = std::mem::size_of::<RAWINPUTDEVICELIST>() as u32;
+
+        // First call with None buffer gets the count.
+        let initial = GetRawInputDeviceList(None, &mut count, entry_size);
+        if initial == u32::MAX || count == 0 {
+            log::debug!(
+                "raw_input_capture: prewarm — no devices to enumerate (count={count})"
+            );
+            return;
+        }
+
+        let mut buf: Vec<RAWINPUTDEVICELIST> = vec![Default::default(); count as usize];
+        let read = GetRawInputDeviceList(Some(buf.as_mut_ptr()), &mut count, entry_size);
+        if read == u32::MAX {
+            log::warn!("raw_input_capture: prewarm — GetRawInputDeviceList read failed");
+            return;
+        }
+
+        let n = read.min(count) as usize;
+        let mut keyboard_count = 0usize;
+
+        for dev in buf.iter().take(n) {
+            // RIM_TYPEKEYBOARD = 1. Mouse / HID-generic devices won't fire
+            // managed-scanner WM_INPUTs, so we don't need to pre-warm them
+            // — and resolving non-keyboard devices would just bloat the
+            // cache with entries we'll never look up.
+            if dev.dwType == 1 {
+                keyboard_count += 1;
+                let _ = resolve_usb_id(dev.hDevice.0);
+            }
+        }
+
+        log::info!(
+            "raw_input_capture: prewarmed device cache with {keyboard_count} keyboard device(s)"
+        );
     }
 
     /// Look up the source device's USB VID/PID. Cached because the API call
