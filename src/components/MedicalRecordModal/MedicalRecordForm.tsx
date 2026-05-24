@@ -5,9 +5,10 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Form, Button, Space, Divider, Typography, Upload, Drawer, App } from 'antd';
-import { SaveOutlined, CloseOutlined, InboxOutlined, HistoryOutlined } from '@ant-design/icons';
+import { Form, Button, Space, Divider, Typography, Upload, Drawer, App, Select, Tag } from 'antd';
+import { SaveOutlined, CloseOutlined, InboxOutlined, HistoryOutlined, TagsOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { invoke } from '@/services/invoke';
 import FileUpload from '../FileUpload/FileUpload';
 import FileAttachmentList from '../FileUpload/FileAttachmentList';
 import RecentDeviceFiles from '../RecentDeviceFiles';
@@ -26,9 +27,29 @@ import styles from './MedicalRecordForm.module.css';
 const { Text } = Typography;
 const { Dragger } = Upload;
 
+/**
+ * Local "Diagnosis" shape — mirrors the auto-generated TS type from the
+ * Rust model but with the camelCase serde rename applied. Kept local so
+ * the form doesn't pull in the generated file's PascalCase
+ * non-camelCase original field names.
+ */
+interface Diagnosis {
+  id: number;
+  name: string;
+  description?: string | null;
+  color?: string | null;
+  isActive: boolean;
+}
+
 interface MedicalRecordFormProps {
   initialValues?: MedicalRecord;
-  onSubmit: (values: CreateMedicalRecordInput | UpdateMedicalRecordInput, files?: File[], fileSourceIds?: Map<string, string>, deviceDataList?: DeviceDataInput[]) => void;
+  onSubmit: (
+    values: CreateMedicalRecordInput | UpdateMedicalRecordInput,
+    files?: File[],
+    fileSourceIds?: Map<string, string>,
+    deviceDataList?: DeviceDataInput[],
+    diagnosisIds?: number[],
+  ) => void;
   onCancel: () => void;
   loading: boolean;
   isEdit: boolean;
@@ -58,6 +79,15 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
   const [lineItems, setLineItems] = useState<MedicalRecordLineItem[]>(initialValues?.lineItems || []);
   const [discountPercent, setDiscountPercent] = useState<number | undefined>(initialValues?.discountPercent);
   const [manualTotal, setManualTotal] = useState<number | undefined>(initialValues?.manualTotal);
+  // Diagnosis tag state.
+  //   - `availableDiagnoses`: full picker list, loaded once on mount.
+  //   - `selectedDiagnosisIds`: IDs currently applied to this record.
+  // For edit mode, the initial selection is fetched separately via the
+  // get_diagnoses_for_record command (the record load doesn't currently
+  // hydrate diagnoses — kept as a separate join to avoid touching the
+  // existing medical record schema).
+  const [availableDiagnoses, setAvailableDiagnoses] = useState<Diagnosis[]>([]);
+  const [selectedDiagnosisIds, setSelectedDiagnosisIds] = useState<number[]>([]);
   const debouncedSearchTerm = useDebounce(titleSearchTerm, 300);
   const { settings } = useAppSettings();
   const { data: searchedTemplates, isLoading: isSearching } = useSearchRecordTemplates(debouncedSearchTerm, recordType);
@@ -83,6 +113,64 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
       setManualTotal(initialValues.manualTotal);
     }
   }, [initialValues?.id, form]);
+
+  // Load the picker's available diagnoses (active only — inactive ones
+  // are still rendered on edit if they were already applied, but they
+  // can't be newly selected from the dropdown).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const diagnoses = await invoke<Diagnosis[]>('get_diagnoses', {
+          activeOnly: true,
+        });
+        if (!cancelled) setAvailableDiagnoses(diagnoses || []);
+      } catch (e) {
+        console.error('Failed to load diagnoses for picker:', e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // For edit mode, load the diagnoses currently linked to this record.
+  // Also merge any inactive ones into `availableDiagnoses` so the
+  // multi-select can render them as already-selected without losing
+  // the label.
+  useEffect(() => {
+    if (!isEdit || !recordId) {
+      setSelectedDiagnosisIds([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const current = await invoke<Diagnosis[]>('get_diagnoses_for_record', {
+          medicalRecordId: recordId,
+        });
+        if (cancelled) return;
+        setSelectedDiagnosisIds((current || []).map((d) => d.id));
+        // Merge any inactive (or otherwise missing-from-picker)
+        // diagnoses into the available list so they still render with
+        // their proper label/color in the Select.
+        setAvailableDiagnoses((prev) => {
+          const byId = new Map(prev.map((d) => [d.id, d]));
+          for (const d of current || []) {
+            if (!byId.has(d.id)) byId.set(d.id, d);
+          }
+          return Array.from(byId.values()).sort((a, b) =>
+            a.name.localeCompare(b.name),
+          );
+        });
+      } catch (e) {
+        console.error('Failed to load diagnoses for record:', e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isEdit, recordId]);
 
   const handleFinish = (values: any) => {
     // Convert MedicalRecordLineItem to CreateLineItemInput for submission
@@ -128,7 +216,18 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
       });
     }
 
-    onSubmit(formData, !isEdit ? pendingFiles : undefined, !isEdit ? fileSourceIds : undefined, deviceDataList.length > 0 ? deviceDataList : undefined);
+    onSubmit(
+      formData,
+      !isEdit ? pendingFiles : undefined,
+      !isEdit ? fileSourceIds : undefined,
+      deviceDataList.length > 0 ? deviceDataList : undefined,
+      // Pass the chosen diagnosis IDs as a separate parameter — the
+      // parent (MedicalRecordModal) calls set_diagnoses_for_record
+      // after the record save succeeds. Diagnoses live in a junction
+      // table and don't piggyback on the medical record's own update
+      // command, which keeps both backend paths independently small.
+      selectedDiagnosisIds,
+    );
   };
 
   const handleRecordTypeChange = (value: RecordType) => {
@@ -211,6 +310,65 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
         showLineItemsBadge={lineItems.length > 0}
         lineItemsCount={lineItems.length}
       />
+
+      <Divider />
+
+      {/* Diagnoses (tag-style multi-select).
+          Each diagnosis is a row in the `diagnoses` table managed via
+          Settings → Diagnoses. The Select rendering uses each
+          diagnosis's color hint so the in-form tags match how the
+          record displays elsewhere. */}
+      <Form.Item
+        label={
+          <Space>
+            <TagsOutlined />
+            <span>{t('medical:fields.diagnoses', 'Diagnoses')}</span>
+          </Space>
+        }
+        // Not in `name=` because we manage the selection state outside
+        // the AntD Form (we need to pass it to the parent in a separate
+        // onSubmit parameter, not in formData).
+        extra={t(
+          'medical:diagnosesHint',
+          'Tag this record with one or more diagnoses. Manage the list in Settings → Diagnoses.',
+        )}
+      >
+        <Select
+          mode="multiple"
+          value={selectedDiagnosisIds}
+          onChange={setSelectedDiagnosisIds}
+          placeholder={t(
+            'medical:placeholders.selectDiagnoses',
+            'Select one or more diagnoses…',
+          )}
+          allowClear
+          style={{ width: '100%' }}
+          // Search by label (the diagnosis name) — option's `value` is
+          // the numeric id, so default substring filterOption matches
+          // the id text which isn't what users want.
+          filterOption={(input, option) => {
+            const label = (option?.label as string) || '';
+            return label.toLowerCase().includes(input.toLowerCase());
+          }}
+          tagRender={({ value, label, closable, onClose }) => {
+            const d = availableDiagnoses.find((x) => x.id === value);
+            return (
+              <Tag
+                color={d?.color || 'blue'}
+                closable={closable}
+                onClose={onClose}
+                style={{ marginInlineEnd: 4 }}
+              >
+                {label}
+              </Tag>
+            );
+          }}
+          options={availableDiagnoses.map((d) => ({
+            value: d.id,
+            label: d.name,
+          }))}
+        />
+      </Form.Item>
 
       <Divider />
 

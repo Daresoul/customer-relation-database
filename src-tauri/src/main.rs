@@ -571,6 +571,14 @@ fn main() {
             commands::update_managed_hid_scanner,
             commands::delete_managed_hid_scanner,
             commands::list_hid_devices,
+            // Diagnosis tag CRUD + medical-record linkage
+            commands::get_diagnoses,
+            commands::get_diagnosis,
+            commands::create_diagnosis,
+            commands::update_diagnosis,
+            commands::delete_diagnosis,
+            commands::get_diagnoses_for_record,
+            commands::set_diagnoses_for_record,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

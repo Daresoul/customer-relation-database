@@ -8,8 +8,27 @@
     "devices": "Device Inputs",
     "templates": "Record Templates",
     "lineItems": "Line Items",
+    "diagnoses": "Diagnoses",
     "backups": "Backups",
     "updates": "Updates"
+  },
+  "diagnoses": {
+    "title": "Diagnoses",
+    "description": "Manage the list of diagnosis tags that can be applied to medical records. Examples: Arthritis, Otitis externa, Hyperthyroidism.",
+    "descriptionColumn": "Description",
+    "add": "Add diagnosis",
+    "addTitle": "Add diagnosis",
+    "editTitle": "Edit diagnosis",
+    "name": "Name",
+    "namePlaceholder": "e.g., Arthritis",
+    "descriptionPlaceholder": "Optional clinical description for staff reference",
+    "color": "Tag color",
+    "status": "Status",
+    "showInactive": "Show inactive",
+    "created": "Diagnosis created",
+    "updated": "Diagnosis updated",
+    "deactivateConfirm": "Hide this diagnosis from the picker?",
+    "deactivateDesc": "Existing records that already use it stay unchanged."
   },
   "backups": {
     "title": "Backups",

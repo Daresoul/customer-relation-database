@@ -34,6 +34,7 @@
     "attachments": "Attachments",
     "notes": "Notes",
     "diagnosis": "Diagnosis",
+    "diagnoses": "Diagnoses",
     "treatment": "Treatment",
     "prescription": "Prescription",
     "followUp": "Follow-up",
@@ -117,7 +118,8 @@
     "archiveFailed": "Failed to archive record",
     "restoreFailed": "Failed to restore record",
     "downloadFailed": "Failed to download attachment",
-    "archiveInfo": "Archived records will be hidden from the main view but can be restored later."
+    "archiveInfo": "Archived records will be hidden from the main view but can be restored later.",
+    "diagnosesPartialSave": "Diagnoses not saved"
   },
   "filters": {
     "all": "All Records",
@@ -140,8 +142,10 @@
     "noteTitle": "Enter note title",
     "procedureName": "Enter procedure name",
     "description": "Enter detailed description of the procedure or notes",
-    "prescriptionNotes": "Enter medication name, dosage, frequency, duration, and any special instructions..."
+    "prescriptionNotes": "Enter medication name, dosage, frequency, duration, and any special instructions...",
+    "selectDiagnoses": "Select one or more diagnoses…"
   },
+  "diagnosesHint": "Tag this record with one or more diagnoses. Manage the list in Settings → Diagnoses.",
   "fileAttachments": "File Attachments",
   "noAttachments": "No attachments yet",
   "fileUploadPending_one": "{{count}} file will be uploaded when you create the record",

@@ -31,6 +31,7 @@ import SpeciesSettings from './components/SpeciesSettings';
 import DeviceInputSettings from './components/DeviceInputSettings';
 import RecordTemplatesSettings from './components/RecordTemplatesSettings';
 import LineItemsSettings from './components/LineItemsSettings';
+import DiagnosesSettings from './components/DiagnosesSettings';
 import BackupSettings from './components/BackupSettings';
 import ManagedScannersSettings from './components/ManagedScannersSettings';
 import { UpdateSettings } from './UpdateSettings';
@@ -38,7 +39,7 @@ import { UpdateSettings } from './UpdateSettings';
 const { Content, Sider } = Layout;
 const { Title, Text } = Typography;
 
-type SettingsCategory = 'general' | 'business' | 'appointments' | 'rooms' | 'species' | 'devices' | 'templates' | 'lineItems' | 'backups' | 'updates';
+type SettingsCategory = 'general' | 'business' | 'appointments' | 'rooms' | 'species' | 'devices' | 'templates' | 'lineItems' | 'diagnoses' | 'backups' | 'managedScanners' | 'updates';
 
 interface MenuItem {
   key: SettingsCategory;
@@ -109,6 +110,14 @@ const SettingsLayout: React.FC = () => {
       icon: <DollarOutlined />,
       label: t('settings:sections.lineItems'),
       component: LineItemsSettings,
+    },
+    {
+      key: 'diagnoses',
+      // Re-use FileTextOutlined to match the templates tab's visual
+      // family — both are "managed lists of editable terms".
+      icon: <FileTextOutlined />,
+      label: t('settings:sections.diagnoses', 'Diagnoses'),
+      component: DiagnosesSettings,
     },
     {
       key: 'backups',

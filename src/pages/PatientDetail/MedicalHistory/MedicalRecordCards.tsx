@@ -17,6 +17,7 @@ import { useArchiveMedicalRecord, useDownloadAttachment, useCurrencies } from '@
 import { Link, useNavigate } from 'react-router-dom';
 import { formatDate } from '@/utils/dateFormatter';
 import MedicalRecordDetailDrawer from '@/components/MedicalRecordDetail/MedicalRecordDetailDrawer';
+import DiagnosisTagList from '@/components/DiagnosisTagList';
 import styles from './MedicalHistory.module.css';
 
 const { Text, Title, Paragraph } = Typography;
@@ -280,6 +281,22 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
             </Descriptions.Item>
           )}
         </Descriptions>
+
+        {/* Diagnosis tags — compact, top 3 inline with "+N more" for
+            the rest. DiagnosisTagList renders nothing (no chrome) for
+            records with no diagnoses, so the entire row disappears
+            for unrelated records and the card stays the same height
+            it did before this feature shipped. The `showLabel` prefix
+            keeps the row self-explanatory at a glance — important on
+            a dashboard where the user might scan dozens of cards. */}
+        <div style={{ marginTop: 8 }}>
+          <DiagnosisTagList
+            recordId={record.id}
+            maxVisible={3}
+            size="small"
+            showLabel
+          />
+        </div>
       </Card>
     );
   };

@@ -100,8 +100,23 @@ pub async fn resolve_patient_from_identifier(
         return Ok(Some(row_to_patient(&row)?));
     }
 
-    // If not found by microchip, try by name (case-insensitive, partial match)
-    let name_result = pool.query_one(Statement::from_sql_and_values(
+    // If not found by microchip, fall back to name matching.
+    //
+    // The previous implementation used `WHERE LOWER(p.name) LIKE LOWER(?)`
+    // — but SQLite's LOWER() function only handles ASCII a-z / A-Z. For
+    // Macedonian Cyrillic patient names like "Шарко" or Greek/Turkish
+    // accented Latin, the case-fold is a no-op and "ШАРКО" wouldn't
+    // match the stored "Шарко". Net effect: device-imported records
+    // failed to auto-match to existing patients whose name casing
+    // differed from how the device formatted it.
+    //
+    // Fix: lowercase BOTH sides in Rust (Unicode-aware via
+    // `String::to_lowercase`) and compare the result. Cheap because
+    // the patients table is small enough that scanning is fine — and
+    // identifier-based device input only fires occasionally during a
+    // clinic day, not in a hot loop.
+    let target = identifier.to_lowercase();
+    let rows = pool.query_all(Statement::from_string(
         DbBackend::Sqlite,
         "SELECT p.id, p.name, p.species_id, p.breed_id, p.gender, p.date_of_birth,
                 p.weight, p.medical_notes, p.is_active, p.created_at,
@@ -111,24 +126,43 @@ pub async fn resolve_patient_from_identifier(
          FROM patients p
          LEFT JOIN species s ON p.species_id = s.id
          LEFT JOIN breeds b ON p.breed_id = b.id
-         WHERE LOWER(p.name) LIKE LOWER(?) AND p.is_active = 1
-         ORDER BY
-            CASE
-                WHEN LOWER(p.name) = LOWER(?) THEN 0  -- Exact match first
-                WHEN LOWER(p.name) LIKE LOWER(?) THEN 1  -- Starts with
-                ELSE 2  -- Contains
-            END
-         LIMIT 1",
-        [
-            format!("%{}%", identifier).into(),
-            identifier.clone().into(),
-            format!("{}%", identifier).into(),
-        ]
+         WHERE p.is_active = 1".to_string()
     ))
     .await
     .map_err(|e| format!("Database error: {}", e))?;
 
-    if let Some(row) = name_result {
+    // Score each candidate the same way the old SQL did, but with
+    // Unicode-aware string ops. Lower score = better match.
+    //   0: exact match
+    //   1: name starts with the identifier
+    //   2: name contains the identifier
+    //   skip otherwise
+    let mut best: Option<(u8, sea_orm::QueryResult)> = None;
+    for row in rows {
+        let name: String = match row.try_get::<String>("", "name") {
+            Ok(n) => n,
+            Err(_) => continue,
+        };
+        let name_lower = name.to_lowercase();
+        let score = if name_lower == target {
+            0u8
+        } else if name_lower.starts_with(&target) {
+            1u8
+        } else if name_lower.contains(&target) {
+            2u8
+        } else {
+            continue;
+        };
+        if best.as_ref().map_or(true, |(s, _)| score < *s) {
+            best = Some((score, row));
+            // Exact match — can't do better.
+            if score == 0 {
+                break;
+            }
+        }
+    }
+
+    if let Some((_, row)) = best {
         return Ok(Some(row_to_patient(&row)?));
     }
 

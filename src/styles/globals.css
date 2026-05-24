@@ -21,6 +21,21 @@
 @layer base {
   html {
     background-color: var(--bg-base, #141414);
+    /* Clip horizontal overflow at the root rather than allowing the
+       document to grow. AntD popups (Tooltip, Dropdown, Select option
+       lists, Menu ellipsis tooltips) are portaled to <body> with
+       position:absolute. Their placement algorithm targets the
+       viewport but can land a pixel or two past the right edge after
+       sub-pixel rounding — and that "tiny" overflow is enough to
+       trigger document-level horizontal scrollbars on every popup.
+       Reported by users hovering over the Settings sidebar menu;
+       the Macedonian "Управувани скенери" label is wide enough that
+       AntD's ellipsis tooltip kicks in, then the tooltip's portal
+       position would push the body past 100vw.
+       `clip` is preferred over `hidden`: it suppresses the scrollbar
+       without making the element a scroll container, so
+       `position: sticky` and similar descendants still function. */
+    overflow-x: clip;
   }
 
   body {
@@ -32,6 +47,10 @@
     font-family: var(--font-family);
     font-size: var(--font-size-base);
     line-height: var(--line-height-base);
+    /* Same protection at the body level for browsers / contexts where
+       the popup overflow lands on body instead of html (some Tauri
+       WebView2 builds do this — observed during the same bug report). */
+    overflow-x: clip;
   }
 
   #root {

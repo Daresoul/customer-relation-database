@@ -65,9 +65,26 @@ export const MedicalRecordFieldGroup: React.FC<MedicalRecordFieldGroupProps> = (
     }
   };
 
-  // Handle template selection from autocomplete
-  const handleTemplateSelect = (value: string) => {
-    const template = templates.find(t => t.title === value);
+  // Handle template selection from autocomplete.
+  //
+  // The previous implementation matched `templates.find(t => t.title === value)`
+  // — fragile for two reasons:
+  //   1. Title equality is strict: trailing whitespace, casing, or
+  //      invisible characters cause "select fires but nothing applies"
+  //      because no template matches.
+  //   2. Multiple templates can share a title (the schema doesn't
+  //      enforce uniqueness on `title` alone), in which case
+  //      Array.find returns the first match and silently applies the
+  //      wrong template's description/lineItems.
+  //
+  // AntD's AutoComplete passes the full option object as the second
+  // arg to onSelect, so we stash the template id there and look up
+  // by id first. Title-based lookup remains as a defensive fallback.
+  const handleTemplateSelect = (value: string, option?: { templateId?: number }) => {
+    const template =
+      (option?.templateId != null
+        ? templates.find(t => t.id === option.templateId)
+        : undefined) ?? templates.find(t => t.title === value);
     if (template) {
       form.setFieldsValue({
         name: template.title,
@@ -92,9 +109,13 @@ export const MedicalRecordFieldGroup: React.FC<MedicalRecordFieldGroupProps> = (
       : t('medical:placeholders.noteTitle');
   };
 
-  // Build autocomplete options from templates
+  // Build autocomplete options from templates. `templateId` is a custom
+  // field on the option object — AntD's AutoComplete forwards the whole
+  // option to onSelect's second arg, which is how handleTemplateSelect
+  // recovers the unambiguous template even when titles collide.
   const templateOptions = templates.map(template => ({
     value: template.title,
+    templateId: template.id,
     label: (
       <div>
         <div style={{ fontWeight: 500 }}>{template.title}</div>

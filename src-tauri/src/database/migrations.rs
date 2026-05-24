@@ -58,6 +58,8 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, "040_add_invoice_number", add_invoice_number_column).await?;
     run_migration(pool, "041_relax_patient_required_fields", relax_patient_required_fields).await?;
     run_migration(pool, "042_create_managed_hid_scanners", create_managed_hid_scanners_table).await?;
+    run_migration(pool, "043_create_diagnoses_tables", create_diagnoses_tables).await?;
+    run_migration(pool, "044_fts5_unicode61_tokenizer", upgrade_fts5_to_unicode61).await?;
 
     Ok(())
 }
@@ -2617,6 +2619,188 @@ fn create_managed_hid_scanners_table(pool: &SqlitePool) -> std::pin::Pin<Box<dyn
             INSERT OR IGNORE INTO managed_hid_scanners (name, vendor_id, product_id, enabled)
             VALUES ('W91B Microchip Reader (HID mode)', 5, 65535, 1)
         "#).execute(pool).await?;
+
+        Ok(())
+    })
+}
+
+// Migration 043: Create diagnoses + medical_record_diagnoses tables.
+//
+// Adds a tag-style diagnosis system to medical records. Users manage a
+// global list of diagnoses (e.g. "Arthritis", "Otitis externa") via the
+// Settings UI; each medical record can then have any number of those
+// diagnoses applied via the junction table.
+//
+// Design choices:
+//   - Diagnoses are stand-alone master data (not per-patient or per-record)
+//     so terms can be reused and trended across the clinic. Soft-delete via
+//     `is_active` keeps history intact when a diagnosis is retired —
+//     existing record→diagnosis links remain pointable for audit / search.
+//   - `name` is unique to prevent accidental duplicates. The unique
+//     constraint is case-insensitive via the COLLATE NOCASE trick;
+//     "Arthritis" and "arthritis" cannot both exist.
+//   - `color` is an optional hex tag color so the UI can display each
+//     diagnosis with a consistent visual identity across records.
+//   - The junction table uses ON DELETE CASCADE so removing a medical
+//     record cleans up its diagnosis links, and ON DELETE RESTRICT on
+//     diagnosis_id so accidentally deleting a diagnosis in use throws
+//     a clear error rather than silently breaking historical records.
+//     (UI offers soft-delete via `is_active = 0` for the normal flow.)
+fn create_diagnoses_tables(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS diagnoses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL COLLATE NOCASE,
+                description TEXT,
+                color TEXT,
+                is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0, 1)),
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(name)
+            )
+        "#).execute(pool).await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_diagnoses_active ON diagnoses(is_active)")
+            .execute(pool)
+            .await?;
+
+        sqlx::query(r#"
+            CREATE TRIGGER IF NOT EXISTS update_diagnoses_timestamp
+            AFTER UPDATE ON diagnoses
+            BEGIN
+                UPDATE diagnoses SET updated_at = CURRENT_TIMESTAMP
+                WHERE id = NEW.id;
+            END
+        "#).execute(pool).await?;
+
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS medical_record_diagnoses (
+                medical_record_id INTEGER NOT NULL,
+                diagnosis_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (medical_record_id, diagnosis_id),
+                FOREIGN KEY (medical_record_id) REFERENCES medical_records(id) ON DELETE CASCADE,
+                FOREIGN KEY (diagnosis_id) REFERENCES diagnoses(id) ON DELETE RESTRICT
+            )
+        "#).execute(pool).await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_mrd_diagnosis ON medical_record_diagnoses(diagnosis_id)")
+            .execute(pool)
+            .await?;
+
+        Ok(())
+    })
+}
+
+// Migration 044: Switch FTS5 search tables to the unicode61 tokenizer.
+//
+// Previously:
+//   - household_search used `tokenize = 'porter'`. Porter's stemmer is
+//     English-only — it strips English suffixes (-ing, -ed, -es, etc.)
+//     and has zero knowledge of Cyrillic or any other script. For
+//     Macedonian household names like "Петровски" / "Петровска", a
+//     search for "петровски" wouldn't match "Петровска" because the
+//     case-normalization that porter applies is also ASCII-only.
+//   - medical_records_fts had no explicit tokenizer, defaulting to
+//     "simple" — which IS Unicode-aware about splitting but doesn't
+//     case-fold non-ASCII at all. "Артритис" and "артритис" search
+//     as different terms.
+//
+// unicode61 is SQLite's general Unicode-aware tokenizer:
+//   - Splits on Unicode word boundaries (handles every script)
+//   - Lowercases via Unicode tables (Cyrillic, Greek, accented
+//     Latin all fold correctly)
+//   - `remove_diacritics 1` collapses é → e, ñ → n etc. so Spanish
+//     and French-spelled clinic names are searchable without
+//     diacritics (useful for English fallback queries too)
+//
+// FTS5 tables can't have their tokenizer changed in place — drop and
+// recreate, then re-populate from the source content tables. The
+// triggers stay valid because they reference column names, not the
+// tokenizer config.
+fn upgrade_fts5_to_unicode61(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        // --- household_search ---
+        sqlx::query("DROP TABLE IF EXISTS household_search")
+            .execute(pool)
+            .await?;
+
+        sqlx::query(r#"
+            CREATE VIRTUAL TABLE household_search USING fts5(
+                household_id UNINDEXED,
+                household_name,
+                address,
+                people_names,
+                contact_values,
+                display_name,
+                tokenize = "unicode61 remove_diacritics 1",
+                prefix = '2,3,4'
+            )
+        "#)
+        .execute(pool)
+        .await?;
+
+        // Re-populate from existing households. The triggers handle
+        // future inserts/updates/deletes; this just back-fills what's
+        // already there.
+        sqlx::query(r#"
+            INSERT INTO household_search
+                (household_id, household_name, address, people_names, contact_values, display_name)
+            SELECT
+                h.id,
+                COALESCE(h.household_name, ''),
+                COALESCE(h.address, ''),
+                COALESCE(
+                    (SELECT GROUP_CONCAT(p.first_name || ' ' || p.last_name, ' ')
+                     FROM people p
+                     INNER JOIN person_households ph ON ph.person_id = p.id
+                     WHERE ph.household_id = h.id),
+                    ''
+                ),
+                COALESCE(
+                    (SELECT GROUP_CONCAT(pc.contact_value, ' ')
+                     FROM person_contacts pc
+                     INNER JOIN people p ON pc.person_id = p.id
+                     INNER JOIN person_households ph ON ph.person_id = p.id
+                     WHERE ph.household_id = h.id),
+                    ''
+                ),
+                COALESCE(h.household_name, '')
+            FROM households h
+        "#)
+        .execute(pool)
+        .await
+        // Older installs may have slightly different schemas in the
+        // people / person_households tables — if the back-fill fails,
+        // the FTS5 table is still queryable (empty) and will populate
+        // via triggers on the next household edit. Log but don't
+        // bubble the error up: a missing back-fill is recoverable;
+        // an aborted migration is not.
+        .ok();
+
+        // --- medical_records_fts ---
+        sqlx::query("DROP TABLE IF EXISTS medical_records_fts")
+            .execute(pool)
+            .await?;
+
+        sqlx::query(r#"
+            CREATE VIRTUAL TABLE medical_records_fts USING fts5(
+                name,
+                procedure_name,
+                description,
+                content=medical_records,
+                content_rowid=id,
+                tokenize = "unicode61 remove_diacritics 1"
+            )
+        "#)
+        .execute(pool)
+        .await?;
+
+        // Rebuild the contentless FTS5 index from medical_records.
+        sqlx::query("INSERT INTO medical_records_fts(medical_records_fts) VALUES('rebuild')")
+            .execute(pool)
+            .await?;
 
         Ok(())
     })

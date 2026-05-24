@@ -22,3 +22,4 @@ pub mod line_item;
 pub mod backup;
 pub mod managed_hid_scanner;
 pub mod raw_input_capture;
+pub mod diagnosis;

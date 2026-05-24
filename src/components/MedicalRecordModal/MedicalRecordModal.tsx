@@ -4,6 +4,9 @@ import { useTranslation } from 'react-i18next';
 import MedicalRecordForm from './MedicalRecordForm';
 import { useMedicalRecord, useCreateMedicalRecord, useUpdateMedicalRecord, useUploadAttachment } from '@/hooks/useMedicalRecords';
 import type { CreateMedicalRecordInput, UpdateMedicalRecordInput, MedicalRecordHistory, DeviceDataInput } from '@/types/medical';
+import { invoke } from '@/services/invoke';
+import { useQueryClient } from '@tanstack/react-query';
+import { DIAGNOSES_KEYS } from '@/hooks/useDiagnoses';
 import styles from './MedicalRecordModal.module.css';
 
 interface MedicalRecordModalProps {
@@ -31,6 +34,7 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
   const createMutation = useCreateMedicalRecord();
   const updateMutation = useUpdateMedicalRecord();
   const uploadMutation = useUploadAttachment();
+  const queryClient = useQueryClient();
 
   const isEdit = !!recordId;
   const title = isEdit
@@ -54,9 +58,20 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
     }
   }, [isEdit, isLoadingRecord, isError, error, recordDetail]);
 
-  const handleSubmit = async (values: CreateMedicalRecordInput | UpdateMedicalRecordInput, files?: File[], fileSourceIds?: Map<string, string>, deviceDataList?: DeviceDataInput[]) => {
+  const handleSubmit = async (
+    values: CreateMedicalRecordInput | UpdateMedicalRecordInput,
+    files?: File[],
+    fileSourceIds?: Map<string, string>,
+    deviceDataList?: DeviceDataInput[],
+    diagnosisIds?: number[],
+  ) => {
     setLoading(true);
     try {
+      // Track which record we're saving against so the diagnosis-tag
+      // step below can target it for both edit (known id) and create
+      // (id from the mutation result) paths.
+      let savedRecordId: number | null = recordId;
+
       if (isEdit && recordId) {
         await updateMutation.mutateAsync({
           recordId,
@@ -69,6 +84,7 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
           patientId,
           deviceDataList: deviceDataList,
         });
+        if (result) savedRecordId = result.id;
 
         // Upload files if any were selected
         if (files && files.length > 0 && result) {
@@ -97,6 +113,39 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
             });
             console.error('Upload error:', uploadError);
           }
+        }
+      }
+
+      // Persist the diagnosis tag set as a separate step. set_diagnoses_for_record
+      // takes the full intended set and replaces what's currently linked in
+      // medical_record_diagnoses — works the same for create (was empty) and
+      // edit (replaces whatever was there). Pass an empty array to clear all
+      // tags from a record. Only run when we have a confirmed recordId.
+      //
+      // Wrapped in its own try/catch so a tag-save failure surfaces as a
+      // soft error notification without aborting the modal close — the
+      // record itself is already saved successfully at this point.
+      if (savedRecordId != null && diagnosisIds !== undefined) {
+        try {
+          await invoke('set_diagnoses_for_record', {
+            medicalRecordId: savedRecordId,
+            diagnosisIds,
+          });
+          // Tell React Query the per-record diagnosis cache is stale
+          // so the detail modal and dashboard cards re-fetch and show
+          // the new tag set on next render — otherwise the user would
+          // see their just-saved tags only after a hard refresh.
+          await queryClient.invalidateQueries({
+            queryKey: DIAGNOSES_KEYS.forRecord(savedRecordId),
+          });
+        } catch (tagErr) {
+          console.error('Failed to save diagnosis tags:', tagErr);
+          notification.warning({
+            message: t('messages.diagnosesPartialSave', 'Diagnoses not saved'),
+            description: String(tagErr),
+            placement: 'bottomRight',
+            duration: 5,
+          });
         }
       }
       onClose();

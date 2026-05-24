@@ -54,3 +54,6 @@ pub mod pending_file_history_tests;
 
 #[cfg(test)]
 pub mod file_storage_tests;
+
+#[cfg(test)]
+pub mod diagnosis_tests;

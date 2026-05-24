@@ -8,6 +8,7 @@ import {
   DollarOutlined,
 } from '@ant-design/icons';
 import FileAttachmentList from '../FileUpload/FileAttachmentList';
+import DiagnosisTagList from '../DiagnosisTagList';
 import { useMedicalRecord } from '@/hooks/useMedicalRecords';
 import { MedicalService } from '@/services/medicalService';
 import type { MedicalRecord } from '@/types/medical';
@@ -104,6 +105,13 @@ const MedicalRecordDetail: React.FC<MedicalRecordDetailProps> = ({
             <Tag color="blue">v{record.version}</Tag>
           </Descriptions.Item>
         </Descriptions>
+
+        {/* Diagnosis tags applied to this record. DiagnosisTagList
+            renders nothing when the record has no diagnoses, so the
+            section is conditionally visible without extra checks. */}
+        <div style={{ marginTop: 16 }}>
+          <DiagnosisTagList recordId={record.id} showLabel />
+        </div>
 
         {/* File Attachments */}
         <Divider />

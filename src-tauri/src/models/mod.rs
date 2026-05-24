@@ -14,6 +14,7 @@ pub mod device_integration;
 pub mod line_item;
 pub mod managed_hid_scanner;
 pub mod hid_devices;
+pub mod diagnosis;
 
 // Re-exports for public API - some may be unused internally but available for external use
 #[allow(unused_imports)]
@@ -89,4 +90,8 @@ pub use line_item::{
 #[allow(unused_imports)]
 pub use managed_hid_scanner::{
     ManagedHidScanner, CreateManagedHidScannerInput, UpdateManagedHidScannerInput
+};
+#[allow(unused_imports)]
+pub use diagnosis::{
+    Diagnosis, CreateDiagnosisInput, UpdateDiagnosisInput
 };
