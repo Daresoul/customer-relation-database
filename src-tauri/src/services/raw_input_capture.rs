@@ -60,7 +60,7 @@ mod windows_impl {
         GetRawInputData, GetRawInputDeviceInfoW, GetRawInputDeviceList,
         RegisterRawInputDevices, HRAWINPUT, RAWINPUT, RAWINPUTDEVICE,
         RAWINPUTDEVICELIST, RAWINPUTHEADER, RAW_INPUT_DEVICE_INFO_COMMAND,
-        RIDEV_INPUTSINK, RID_INPUT,
+        RIDEV_INPUTSINK, RID_INPUT, RIM_TYPEKEYBOARD,
     };
     use windows::Win32::UI::WindowsAndMessaging::{
         CallNextHookEx, CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW,
@@ -675,11 +675,15 @@ mod windows_impl {
         let mut keyboard_count = 0usize;
 
         for dev in buf.iter().take(n) {
-            // RIM_TYPEKEYBOARD = 1. Mouse / HID-generic devices won't fire
-            // managed-scanner WM_INPUTs, so we don't need to pre-warm them
-            // — and resolving non-keyboard devices would just bloat the
-            // cache with entries we'll never look up.
-            if dev.dwType == 1 {
+            // Mouse / HID-generic devices won't fire managed-scanner
+            // WM_INPUTs, so we don't need to pre-warm them — and resolving
+            // non-keyboard devices would just bloat the cache with entries
+            // we'll never look up.
+            //
+            // RIM_TYPEKEYBOARD is RID_DEVICE_INFO_TYPE(1) in the windows
+            // crate — a newtype around u32, so we can't compare to a bare
+            // integer literal. Use the named constant.
+            if dev.dwType == RIM_TYPEKEYBOARD {
                 keyboard_count += 1;
                 let _ = resolve_usb_id(dev.hDevice.0);
             }
