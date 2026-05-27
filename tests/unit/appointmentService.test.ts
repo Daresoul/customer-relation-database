@@ -11,6 +11,7 @@ import type { Appointment } from '../../src/types/appointments';
 vi.mock('../../src/services/api', () => ({
   ApiService: {
     invoke: vi.fn(),
+    invokeRaw: vi.fn(),
   },
 }));
 
@@ -470,12 +471,16 @@ describe('AppointmentService', () => {
     });
 
     describe('getRoomAvailability', () => {
-      it('calls invoke with roomId and checkTime', async () => {
-        mockInvoke.mockResolvedValueOnce({ isAvailable: true });
+      it('calls invokeRaw with roomId and checkTime (no case transform)', async () => {
+        // getRoomAvailability uses invokeRaw so the camelCase args
+        // (roomId/checkTime) pass through untransformed — assert against
+        // the raw path, not ApiService.invoke.
+        const mockInvokeRaw = vi.mocked(ApiService.invokeRaw);
+        mockInvokeRaw.mockResolvedValueOnce({ isAvailable: true });
 
         await AppointmentService.getRoomAvailability(1, '2024-06-15T10:00:00Z');
 
-        expect(mockInvoke).toHaveBeenCalledWith('get_room_availability', {
+        expect(mockInvokeRaw).toHaveBeenCalledWith('get_room_availability', {
           roomId: 1,
           checkTime: '2024-06-15T10:00:00Z',
         });
