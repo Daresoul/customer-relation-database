@@ -165,7 +165,7 @@ export const MedicalRecordFieldGroup: React.FC<MedicalRecordFieldGroupProps> = (
             isSearchingTemplates ? (
               <Spin size="small" />
             ) : onTemplateSearch ? (
-              t('medical:autocomplete.typeToSearch') || 'Type at least 2 characters to search'
+              t('medical:autocomplete.typeToSearch', 'Type at least 2 characters to search')
             ) : null
           }
           aria-label={getFieldLabel()}

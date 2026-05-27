@@ -30,6 +30,11 @@ export class AppointmentService {
     return ApiService.invoke('get_appointment', { id });
   }
 
+  // NOTE: createdBy / updatedBy are passed but the backend currently
+  // drops them (ApiService.invoke snake_cases the bare arg; Tauri wants
+  // camelCase) — the audit columns record "system". This is a known,
+  // deliberately-deferred latent gap (fixing it means flipping the whole
+  // appointment wire contract to camelCase + updating ~22 contract tests).
   static async createAppointment(
     input: CreateAppointmentInput,
     createdBy?: string

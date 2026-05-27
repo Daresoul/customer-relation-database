@@ -67,6 +67,16 @@ pub struct PatientInfo {
     pub breed: Option<String>,
 }
 
+// NOTE: these DTOs intentionally keep snake_case wire format. The
+// frontend sends them via ApiService.invoke (which transforms the
+// camelCase TS fields → snake_case), so the contract is snake_case
+// — see tests/contract_tests.rs. The bare `createdBy`/`updatedBy`
+// command args are dropped by that same transform (Tauri wants
+// camelCase), so they currently default to "system" in the audit
+// columns. That's a latent gap, not a live bug (no caller passes
+// those args). Fixing it would mean flipping the whole appointment
+// wire contract to camelCase + updating ~22 contract tests, so it's
+// deliberately deferred.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateAppointmentInput {
     pub patient_id: i64,

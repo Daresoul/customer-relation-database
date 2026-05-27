@@ -239,7 +239,7 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
               }
             }}
             options={speciesOptions}
-            placeholder={t('detail.patientInfo.placeholders.species') || 'Search species...'}
+            placeholder={t('detail.patientInfo.placeholders.species', 'Search species...')}
             className={styles.fullWidth}
             disabled={isSaving || isLoadingSpecies}
             loading={isLoadingSpecies}
@@ -272,7 +272,7 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
               value: breed.name,
               label: breed.name,
             }))}
-            placeholder={t('detail.patientInfo.placeholders.breed') || 'Search breed...'}
+            placeholder={t('detail.patientInfo.placeholders.breed', 'Search breed...')}
             className={styles.fullWidth}
             disabled={isSaving || isLoadingBreeds || !selectedSpeciesName}
             loading={isLoadingBreeds}

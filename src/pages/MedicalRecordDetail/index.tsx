@@ -802,7 +802,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
           render: (v: string) => new Date(v).toLocaleString()
         },
         {
-          title: t('common:actions.actions') || t('common:actionsLabel'),
+          title: t('common:actions.actions', { defaultValue: t('common:actionsLabel') }),
           key: 'actions',
           width: 250,
           render: (_: any, row: any) => (
