@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Drawer, Input, Table, Tag, Space, Typography, message, Button } from 'antd';
+import { Drawer, Input, Table, Tag, Space, Typography, App, Button } from 'antd';
 import type { PendingDeviceEntryWithFile } from '@/types/fileHistory';
 import { fileHistoryService } from '@/services/fileHistoryService';
 import { invoke } from '@/services/invoke';
@@ -19,6 +19,7 @@ const PendingDeviceList: React.FC<PendingDeviceListProps> = ({ open, onClose }) 
   const [query, setQuery] = useState('');
   const { addDeviceFile, openModal, setSuggestedPatient } = useDeviceImport();
   const { t } = useTranslation(['devices','common']);
+  const { message } = App.useApp();
 
   const load = async () => {
     setLoading(true);

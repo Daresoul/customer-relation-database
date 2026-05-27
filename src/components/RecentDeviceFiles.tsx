@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Button, Tag, Space, Typography, Tooltip, message, Modal } from 'antd';
+import { Table, Button, Tag, Space, Typography, Tooltip, App, Modal } from 'antd';
 import { ClockCircleOutlined, CheckCircleOutlined, WarningOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { fileHistoryService } from '../services/fileHistoryService';
 import type { FileAccessHistoryWithRecord } from '../types/fileHistory';
@@ -19,6 +19,7 @@ interface RecentDeviceFilesProps {
 const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, days = 14, onRefreshNeeded }) => {
   const [files, setFiles] = useState<FileAccessHistoryWithRecord[]>([]);
   const [loading, setLoading] = useState(false);
+  const { message } = App.useApp();
 
   const loadRecentFiles = async () => {
     setLoading(true);

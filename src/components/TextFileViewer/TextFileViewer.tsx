@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Spin, Typography, Button, Space, message } from 'antd';
+import { Modal, Spin, Typography, Button, Space, App } from 'antd';
 import { CopyOutlined, DownloadOutlined } from '@ant-design/icons';
 import { invoke } from '@/services/invoke';
 import styles from './TextFileViewer.module.css';
@@ -23,6 +23,7 @@ const TextFileViewer: React.FC<TextFileViewerProps> = ({
 }) => {
   const [loading, setLoading] = useState(false);
   const [content, setContent] = useState<string>('');
+  const { message } = App.useApp();
 
   useEffect(() => {
     console.log('📄 TextFileViewer effect:', { open, attachmentId, fileName });

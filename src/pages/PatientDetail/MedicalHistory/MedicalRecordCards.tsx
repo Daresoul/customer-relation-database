@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Typography, Tag, Button, Space, Dropdown, Row, Col, Descriptions, Modal, notification } from 'antd';
+import { Card, Typography, Tag, Button, Space, Dropdown, Row, Col, Descriptions, Modal, App } from 'antd';
 import {
   DeleteOutlined,
   MoreOutlined,
@@ -43,6 +43,7 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
   const [detailId, setDetailId] = useState<number | null>(null);
   const navigate = useNavigate();
   const { data: currencies } = useCurrencies();
+  const { notification } = App.useApp();
 
   const handleArchiveClick = (record: MedicalRecord) => {
     setSelectedRecord(record);
