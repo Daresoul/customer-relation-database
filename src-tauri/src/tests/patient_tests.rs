@@ -552,6 +552,37 @@ async fn search_empty_query_returns_all() {
 }
 
 #[tokio::test]
+async fn search_is_case_insensitive_for_cyrillic() {
+    // Regression: SQLite LIKE / LOWER() only fold ASCII a-z/A-Z, so the
+    // old `name LIKE ?` search couldn't match Macedonian Cyrillic names
+    // differing only in case. search() now folds case in Rust.
+    let db = create_test_db_with_migrations().await;
+
+    PatientService::create(
+        &db,
+        CreatePatientDto {
+            name: Some("Шарко".to_string()),
+            species_id: Some(1),
+            ..minimal_dto()
+        },
+    )
+    .await
+    .unwrap();
+
+    // Lowercase query must find the capitalized stored name.
+    let lower = PatientService::search(&db, "шарко").await.unwrap();
+    assert_eq!(lower.len(), 1, "lowercase Cyrillic query should match");
+
+    // Uppercase query must also match.
+    let upper = PatientService::search(&db, "ШАРКО").await.unwrap();
+    assert_eq!(upper.len(), 1, "uppercase Cyrillic query should match");
+
+    // Partial (substring) Cyrillic match.
+    let partial = PatientService::search(&db, "арк").await.unwrap();
+    assert_eq!(partial.len(), 1, "Cyrillic substring should match");
+}
+
+#[tokio::test]
 async fn search_chip_only_patient_findable_by_chip() {
     // Sanity check that chip-only patients (no name, no species) are still
     // discoverable via search.

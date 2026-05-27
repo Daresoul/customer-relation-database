@@ -1166,28 +1166,42 @@ pub async fn search_record_templates(
     search_term: String,
     record_type: Option<String>,
 ) -> Result<Vec<RecordTemplate>, String> {
-    let search_pattern = format!("%{}%", search_term);
+    // SQLite LIKE only case-folds ASCII, so a Cyrillic search term wouldn't
+    // match Cyrillic template titles/descriptions differing in case. Filter
+    // by record_type (exact match, Cyrillic-safe) in SQL, then match the
+    // search term in Rust with Unicode-aware to_lowercase(). The template
+    // table is small (a clinic configures a handful), so this is cheap.
+    let needle = search_term.trim().to_lowercase();
 
     let rows = if let Some(ref rt) = record_type {
         pool.query_all(Statement::from_sql_and_values(
             DbBackend::Sqlite,
-            "SELECT * FROM record_templates WHERE record_type = ? AND (title LIKE ? OR description LIKE ?) ORDER BY title ASC",
-            [rt.clone().into(), search_pattern.clone().into(), search_pattern.clone().into()]
+            "SELECT * FROM record_templates WHERE record_type = ? ORDER BY title ASC",
+            [rt.clone().into()]
         ))
         .await
         .map_err(|e| format!("Failed to search record templates: {}", e))?
     } else {
-        pool.query_all(Statement::from_sql_and_values(
+        pool.query_all(Statement::from_string(
             DbBackend::Sqlite,
-            "SELECT * FROM record_templates WHERE title LIKE ? OR description LIKE ? ORDER BY record_type, title ASC",
-            [search_pattern.clone().into(), search_pattern.clone().into()]
+            "SELECT * FROM record_templates ORDER BY record_type, title ASC".to_string(),
         ))
         .await
         .map_err(|e| format!("Failed to search record templates: {}", e))?
     };
 
-    let templates: Result<Vec<_>, _> = rows.iter().map(row_to_record_template).collect();
-    templates
+    let templates: Vec<RecordTemplate> = rows
+        .iter()
+        .filter_map(|r| row_to_record_template(r).ok())
+        .filter(|t| {
+            if needle.is_empty() {
+                return true;
+            }
+            t.title.to_lowercase().contains(&needle)
+                || t.description.to_lowercase().contains(&needle)
+        })
+        .collect();
+    Ok(templates)
 }
 
 #[tauri::command]

@@ -36,20 +36,19 @@ impl MedicalRecordService {
                 sql.push_str(" AND is_archived = ?");
                 params.push((if is_archived { 1i32 } else { 0i32 }).into());
             }
-            if let Some(ref search_term) = f.search_term {
-                sql.push_str(" AND (name LIKE ? OR description LIKE ?)");
-                let pattern = format!("%{}%", search_term);
-                params.push(pattern.clone().into());
-                params.push(pattern.into());
-            }
+            // NOTE: search_term is intentionally NOT applied here. SQLite
+            // LIKE only case-folds ASCII, so a Cyrillic search term wouldn't
+            // match Cyrillic record text differing in case. We fetch the
+            // patient's records (filtered by the exact-match record_type /
+            // is_archived above) and apply the search + pagination in Rust
+            // below with Unicode-aware to_lowercase(). Per-patient record
+            // counts are small, so the full fetch is cheap.
         } else {
             // Default to not showing archived records
             sql.push_str(" AND is_archived = 0");
         }
 
-        sql.push_str(" ORDER BY created_at DESC LIMIT ? OFFSET ?");
-        params.push(page_size.into());
-        params.push(offset.into());
+        sql.push_str(" ORDER BY created_at DESC");
 
         log::debug!("Executing safe parameterized query for patient_id: {}", patient_id);
 
@@ -87,8 +86,9 @@ impl MedicalRecordService {
                 .map(|i| i as f64)
                 .or_else(|| row.try_get::<f64>("", "price").ok());
 
-            // Fetch attachments for this record
-            let attachments = Self::fetch_attachments(db, record_id).await.unwrap_or_default();
+            // Attachments are fetched after search-filtering + pagination
+            // (below) so we only hit the DB for the records actually
+            // returned on this page, not the whole patient history.
 
             // Handle discount_percent as either integer or float
             let discount_percent: Option<f64> = row.try_get::<i64>("", "discount_percent")
@@ -121,45 +121,46 @@ impl MedicalRecordService {
                 updated_at,
                 created_by: row.try_get("", "created_by").ok(),
                 updated_by: row.try_get("", "updated_by").ok(),
-                attachments: if attachments.is_empty() { None } else { Some(attachments) },
+                attachments: None, // filled in below, only for the paged slice
                 line_items: None, // Line items are only loaded in get_medical_record detail view
             });
         }
 
-        log::debug!("Found {} records", records.len());
+        log::debug!("Fetched {} records before search filter", records.len());
 
-        // Get total count
-        let mut count_sql = String::from("SELECT COUNT(*) as cnt FROM medical_records WHERE patient_id = ?");
-        let mut count_params: Vec<Value> = vec![patient_id.into()];
-
+        // Cyrillic-safe search filter (SQLite LIKE is ASCII-only). Matches
+        // the same two fields the old SQL LIKE covered (name, description).
         if let Some(ref f) = filter {
-            if let Some(ref record_type) = f.record_type {
-                count_sql.push_str(" AND record_type = ?");
-                count_params.push(record_type.clone().into());
-            }
-            if let Some(is_archived) = f.is_archived {
-                count_sql.push_str(" AND is_archived = ?");
-                count_params.push((if is_archived { 1i32 } else { 0i32 }).into());
-            }
             if let Some(ref search_term) = f.search_term {
-                count_sql.push_str(" AND (name LIKE ? OR description LIKE ?)");
-                let pattern = format!("%{}%", search_term);
-                count_params.push(pattern.clone().into());
-                count_params.push(pattern.into());
+                let needle = search_term.trim().to_lowercase();
+                if !needle.is_empty() {
+                    records.retain(|r| {
+                        r.name.to_lowercase().contains(&needle)
+                            || r.description.to_lowercase().contains(&needle)
+                    });
+                }
             }
-        } else {
-            count_sql.push_str(" AND is_archived = 0");
         }
 
-        let total: i64 = db
-            .query_one(Statement::from_sql_and_values(DbBackend::Sqlite, &count_sql, count_params))
-            .await
-            .map_err(|e| format!("Failed to count medical records: {}", e))?
-            .map(|r| r.try_get::<i64>("", "cnt").unwrap_or(0))
-            .unwrap_or(0);
+        // Total is the filtered count; paginate the in-memory list.
+        let total = records.len() as i64;
+        let start = offset.max(0) as usize;
+        let mut page_records: Vec<MedicalRecord> = records
+            .into_iter()
+            .skip(start)
+            .take(page_size as usize)
+            .collect();
+
+        // Fetch attachments only for the records on this page.
+        for record in page_records.iter_mut() {
+            let attachments = Self::fetch_attachments(db, record.id).await.unwrap_or_default();
+            record.attachments = if attachments.is_empty() { None } else { Some(attachments) };
+        }
+
+        log::debug!("Returning {} of {} records (page {})", page_records.len(), total, page);
 
         Ok(MedicalRecordsResponse {
-            records,
+            records: page_records,
             total,
             page,
             page_size,
@@ -1410,13 +1411,19 @@ impl MedicalRecordService {
         search_term: &str,
         include_archived: bool,
     ) -> Result<Vec<MedicalRecord>, String> {
+        // Fetch the patient's records, then filter by search_term in Rust
+        // with Unicode-aware to_lowercase(). SQLite LIKE only folds ASCII,
+        // so a Cyrillic search term wouldn't match Cyrillic record text
+        // differing only in case. The candidate set is bounded to one
+        // patient's records (small), so the in-memory filter is cheap.
+        let needle = search_term.trim().to_lowercase();
+
         let mut sql = String::from(
             "SELECT id, patient_id, record_type, name, procedure_name, description, \
              prescription_notes, price, currency_id, is_archived, version, created_at, updated_at, \
              created_by, updated_by \
              FROM medical_records \
-             WHERE patient_id = ? \
-             AND (name LIKE ? OR description LIKE ? OR procedure_name LIKE ?)"
+             WHERE patient_id = ?"
         );
 
         if !include_archived {
@@ -1425,17 +1432,12 @@ impl MedicalRecordService {
 
         sql.push_str(" ORDER BY created_at DESC");
 
-        let search_pattern = format!("%{}%", search_term);
-
         let rows = db
             .query_all(Statement::from_sql_and_values(
                 DbBackend::Sqlite,
                 &sql,
                 [
                     patient_id.into(),
-                    search_pattern.clone().into(),
-                    search_pattern.clone().into(),
-                    search_pattern.into(),
                 ],
             ))
             .await
@@ -1475,13 +1477,31 @@ impl MedicalRecordService {
                 .map(|i| i as f64)
                 .or_else(|| row.try_get::<f64>("", "manual_total").ok());
 
+            let name: String = row.try_get("", "name").unwrap_or_default();
+            let procedure_name: Option<String> = row.try_get("", "procedure_name").ok();
+            let description: String = row.try_get("", "description").unwrap_or_default();
+
+            // Unicode-aware substring match across the same three fields the
+            // old SQL LIKE covered (name, description, procedure_name). An
+            // empty needle matches everything (acts as "list all").
+            if !needle.is_empty() {
+                let hit = name.to_lowercase().contains(&needle)
+                    || description.to_lowercase().contains(&needle)
+                    || procedure_name
+                        .as_deref()
+                        .is_some_and(|p| p.to_lowercase().contains(&needle));
+                if !hit {
+                    continue;
+                }
+            }
+
             records.push(MedicalRecord {
                 id: row.try_get("", "id").unwrap_or(0),
                 patient_id: row.try_get("", "patient_id").unwrap_or(0),
                 record_type: row.try_get("", "record_type").unwrap_or_default(),
-                name: row.try_get("", "name").unwrap_or_default(),
-                procedure_name: row.try_get("", "procedure_name").ok(),
-                description: row.try_get("", "description").unwrap_or_default(),
+                name,
+                procedure_name,
+                description,
                 prescription_notes: row.try_get("", "prescription_notes").ok(),
                 price,
                 currency_id: row.try_get("", "currency_id").ok(),

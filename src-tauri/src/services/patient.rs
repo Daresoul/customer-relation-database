@@ -358,10 +358,20 @@ impl PatientService {
     }
 
     pub async fn search(db: &DatabaseConnection, query: &str) -> Result<Vec<Patient>, String> {
-        let search_pattern = format!("%{}%", query);
+        // SQLite's LIKE (and LOWER()) only case-fold ASCII a-z/A-Z, so a
+        // search for "ана" would NOT match the stored "Ана" for Macedonian
+        // Cyrillic names. Fetch the candidate set and filter in Rust with
+        // Unicode-aware String::to_lowercase(). The patients table is
+        // single-clinic scale (low thousands at most), so the full scan is
+        // cheap — correctness beats a faster-but-wrong ASCII LIKE here.
+        // Bonus: dropping LIKE also removes the `%`/`_` wildcard-injection
+        // quirk where a query containing those chars behaved oddly.
+        // Empty query lists everyone (preserves the old `LIKE '%%'`
+        // behaviour the UI relies on for "show all").
+        let needle = query.trim().to_lowercase();
 
         let rows = db
-            .query_all(Statement::from_sql_and_values(
+            .query_all(Statement::from_string(
                 DbBackend::Sqlite,
                 r#"SELECT
                     p.id,
@@ -383,18 +393,41 @@ impl PatientService {
                  FROM patients p
                  LEFT JOIN species s ON p.species_id = s.id
                  LEFT JOIN breeds b ON p.breed_id = b.id
-                 LEFT JOIN patient_households ph ON p.id = ph.patient_id AND ph.is_primary = 1
-                 WHERE p.name LIKE ? OR p.microchip_id LIKE ?
-                 ORDER BY p.name
-                 LIMIT 50"#,
-                [search_pattern.clone().into(), search_pattern.into()],
+                 LEFT JOIN patient_households ph ON p.id = ph.patient_id AND ph.is_primary = 1"#
+                    .to_string(),
             ))
             .await
             .map_err(|e| format!("Failed to search patients: {}", e))?;
 
-        rows.iter()
-            .map(Self::row_to_patient)
-            .collect()
+        let mut matched: Vec<Patient> = rows
+            .iter()
+            .filter_map(|r| Self::row_to_patient(r).ok())
+            .filter(|p| {
+                if needle.is_empty() {
+                    return true;
+                }
+                let name_hit = p
+                    .name
+                    .as_deref()
+                    .is_some_and(|n| n.to_lowercase().contains(&needle));
+                let chip_hit = p
+                    .microchip_id
+                    .as_deref()
+                    .is_some_and(|m| m.to_lowercase().contains(&needle));
+                name_hit || chip_hit
+            })
+            .collect();
+
+        // Stable, case-insensitive ordering by name.
+        matched.sort_by(|a, b| {
+            a.name
+                .as_deref()
+                .unwrap_or("")
+                .to_lowercase()
+                .cmp(&b.name.as_deref().unwrap_or("").to_lowercase())
+        });
+        matched.truncate(50);
+        Ok(matched)
     }
 
     pub async fn advanced_search(
@@ -402,56 +435,75 @@ impl PatientService {
         patient_name: Option<&str>,
         species: Option<&str>,
     ) -> Result<Vec<Patient>, String> {
-        let mut sql = String::from(
-            r#"SELECT
-                p.id,
-                p.name,
-                p.species_id,
-                p.breed_id,
-                s.name as species,
-                b.name as breed,
-                p.gender,
-                p.date_of_birth,
-                p.color,
-                CAST(p.weight AS REAL) as weight,
-                p.microchip_id,
-                p.medical_notes,
-                p.is_active,
-                ph.household_id,
-                p.created_at,
-                p.updated_at
-             FROM patients p
-             LEFT JOIN species s ON p.species_id = s.id
-             LEFT JOIN breeds b ON p.breed_id = b.id
-             LEFT JOIN patient_households ph ON p.id = ph.patient_id AND ph.is_primary = 1
-             WHERE 1=1"#
-        );
-
-        let mut params: Vec<Value> = Vec::new();
-
-        if let Some(name) = patient_name {
-            sql.push_str(" AND p.name LIKE ?");
-            params.push(format!("%{}%", name).into());
-        }
-
-        if let Some(species_name) = species {
-            sql.push_str(" AND s.name LIKE ?");
-            params.push(format!("%{}%", species_name).into());
-        }
-
-        sql.push_str(" ORDER BY p.name LIMIT 100");
+        // Same Cyrillic-safe approach as search(): fetch then filter in
+        // Rust with to_lowercase() instead of ASCII-only SQL LIKE. Both
+        // filters (name + species) are optional and ANDed.
+        let name_needle = patient_name
+            .map(|s| s.trim().to_lowercase())
+            .filter(|s| !s.is_empty());
+        let species_needle = species
+            .map(|s| s.trim().to_lowercase())
+            .filter(|s| !s.is_empty());
 
         let rows = db
-            .query_all(Statement::from_sql_and_values(
+            .query_all(Statement::from_string(
                 DbBackend::Sqlite,
-                &sql,
-                params,
+                r#"SELECT
+                    p.id,
+                    p.name,
+                    p.species_id,
+                    p.breed_id,
+                    s.name as species,
+                    b.name as breed,
+                    p.gender,
+                    p.date_of_birth,
+                    p.color,
+                    CAST(p.weight AS REAL) as weight,
+                    p.microchip_id,
+                    p.medical_notes,
+                    p.is_active,
+                    ph.household_id,
+                    p.created_at,
+                    p.updated_at
+                 FROM patients p
+                 LEFT JOIN species s ON p.species_id = s.id
+                 LEFT JOIN breeds b ON p.breed_id = b.id
+                 LEFT JOIN patient_households ph ON p.id = ph.patient_id AND ph.is_primary = 1"#
+                    .to_string(),
             ))
             .await
             .map_err(|e| format!("Failed to search patients: {}", e))?;
 
-        rows.iter()
-            .map(Self::row_to_patient)
-            .collect()
+        let mut matched: Vec<Patient> = rows
+            .iter()
+            .filter_map(|r| Self::row_to_patient(r).ok())
+            .filter(|p| {
+                let name_ok = match &name_needle {
+                    Some(n) => p
+                        .name
+                        .as_deref()
+                        .is_some_and(|v| v.to_lowercase().contains(n)),
+                    None => true,
+                };
+                let species_ok = match &species_needle {
+                    Some(s) => p
+                        .species
+                        .as_deref()
+                        .is_some_and(|v| v.to_lowercase().contains(s)),
+                    None => true,
+                };
+                name_ok && species_ok
+            })
+            .collect();
+
+        matched.sort_by(|a, b| {
+            a.name
+                .as_deref()
+                .unwrap_or("")
+                .to_lowercase()
+                .cmp(&b.name.as_deref().unwrap_or("").to_lowercase())
+        });
+        matched.truncate(100);
+        Ok(matched)
     }
 }
