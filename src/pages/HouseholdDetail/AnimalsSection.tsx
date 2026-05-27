@@ -148,7 +148,7 @@ export const AnimalsSection: React.FC<AnimalsSectionProps> = ({ patients, househ
           description={t('detail.animals.noAnimals')}
           className={styles.marginBottom24}
         >
-          <Button type="primary" onClick={() => setIsPatientModalOpen(true)}>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setIsPatientModalOpen(true)}>
             {t('detail.animals.registerFirstPet')}
           </Button>
         </Empty>

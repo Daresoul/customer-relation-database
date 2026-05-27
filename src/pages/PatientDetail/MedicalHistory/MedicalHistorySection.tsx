@@ -137,7 +137,7 @@ const MedicalHistorySection: React.FC<MedicalHistorySectionProps> = ({
             }
           >
             {!searchTerm && !filter.recordType && !filter.isArchived && (
-              <Button type="primary" onClick={handleCreateNew}>
+              <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateNew}>
                 {t('detail.medicalHistory.createFirstRecord')}
               </Button>
             )}
