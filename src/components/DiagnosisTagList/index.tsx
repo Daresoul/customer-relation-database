@@ -77,7 +77,7 @@ const DiagnosisTagList: React.FC<DiagnosisTagListProps> = ({
       {showLabel && (
         <span
           style={{
-            color: '#666',
+            color: 'var(--text-secondary)',
             fontSize: size === 'small' ? 11 : 13,
             display: 'inline-flex',
             alignItems: 'center',

@@ -350,7 +350,7 @@ const SpeciesSettings: React.FC<SpeciesSettingsProps> = ({ isUpdating }) => {
 
               if (speciesBreeds.length === 0) {
                 return (
-                  <div style={{ padding: '16px', textAlign: 'center', color: '#999' }}>
+                  <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-tertiary, var(--text-secondary))' }}>
                     {t('settings:breeds.noBreeds')}
                   </div>
                 );

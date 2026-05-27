@@ -119,7 +119,7 @@ export const MedicalRecordFieldGroup: React.FC<MedicalRecordFieldGroupProps> = (
     label: (
       <div>
         <div style={{ fontWeight: 500 }}>{template.title}</div>
-        <div style={{ fontSize: '12px', color: '#888' }}>
+        <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
           {template.description && template.description.length > 60
             ? template.description.substring(0, 60) + '...'
             : template.description || ''}

@@ -219,7 +219,7 @@ const DiagnosesSettings: React.FC = () => {
         </Space>
       }
     >
-      <p style={{ color: '#666', marginBottom: 16 }}>
+      <p style={{ color: 'var(--text-secondary)', marginBottom: 16 }}>
         {t(
           'settings:diagnoses.description',
           'Manage the list of diagnosis tags that can be applied to medical records. Examples: Arthritis, Otitis externa, Hyperthyroidism.',
@@ -252,7 +252,7 @@ const DiagnosesSettings: React.FC = () => {
             dataIndex: 'description',
             key: 'description',
             render: (text: string | null) =>
-              text || <span style={{ color: '#bbb' }}>—</span>,
+              text || <span style={{ color: 'var(--text-tertiary, var(--text-secondary))' }}>—</span>,
           },
           {
             title: t('settings:diagnoses.status', 'Status'),

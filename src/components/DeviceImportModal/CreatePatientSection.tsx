@@ -243,7 +243,7 @@ export const CreatePatientSection: React.FC<CreatePatientSectionProps> = ({
                           {conflict.values.map((v, i) => (
                             <span key={i}>
                               <Tag color="orange">{v.value}</Tag>
-                              <span style={{ fontSize: '0.85em', color: '#888' }}>
+                              <span style={{ fontSize: '0.85em', color: 'var(--text-secondary)' }}>
                                 ({v.source})
                               </span>
                               {i < conflict.values.length - 1 && ' vs '}
@@ -251,7 +251,7 @@ export const CreatePatientSection: React.FC<CreatePatientSectionProps> = ({
                           ))}
                         </div>
                       ))}
-                      <div style={{ marginTop: 8, fontSize: '0.85em', color: '#666' }}>
+                      <div style={{ marginTop: 8, fontSize: '0.85em', color: 'var(--text-secondary)' }}>
                         Using first detected value. You can modify below if needed.
                       </div>
                     </div>
