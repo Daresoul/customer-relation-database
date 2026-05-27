@@ -68,7 +68,9 @@ impl CreateRoomInput {
             return Err("Room name cannot be empty".to_string());
         }
 
-        if self.name.len() > 100 {
+        // chars().count() not len(): byte length halves the limit for
+        // Cyrillic (2 bytes/char).
+        if self.name.chars().count() > 100 {
             return Err("Room name must be 100 characters or less".to_string());
         }
 
@@ -88,7 +90,7 @@ impl UpdateRoomInput {
             if name.is_empty() {
                 return Err("Room name cannot be empty".to_string());
             }
-            if name.len() > 100 {
+            if name.chars().count() > 100 {
                 return Err("Room name must be 100 characters or less".to_string());
             }
         }

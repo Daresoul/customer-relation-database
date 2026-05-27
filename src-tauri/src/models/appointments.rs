@@ -143,8 +143,11 @@ pub struct ConflictCheckResponse {
 // Validation helpers
 impl CreateAppointmentInput {
     pub fn validate(&self) -> Result<(), String> {
-        // Check title length
-        if self.title.len() > 200 {
+        // Count Unicode characters, not bytes: title.len() returns bytes,
+        // and Cyrillic is 2 bytes/char, so a byte limit of 200 would only
+        // allow ~100 Macedonian characters. chars().count() is the real
+        // user-visible length.
+        if self.title.chars().count() > 200 {
             return Err("Title must be 200 characters or less".to_string());
         }
 
@@ -178,9 +181,10 @@ impl CreateAppointmentInput {
 
 impl UpdateAppointmentInput {
     pub fn validate(&self) -> Result<(), String> {
-        // Check title length if provided
+        // Check title length if provided (codepoints, not bytes — see
+        // CreateAppointmentInput::validate).
         if let Some(ref title) = self.title {
-            if title.len() > 200 {
+            if title.chars().count() > 200 {
                 return Err("Title must be 200 characters or less".to_string());
             }
         }

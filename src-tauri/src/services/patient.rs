@@ -142,8 +142,19 @@ impl PatientService {
             ..Default::default()
         };
 
+        // Wrap the patient INSERT and the optional patient_households link
+        // in a single transaction. Previously these were two separate
+        // statements: if the household link failed (e.g. a bad household_id
+        // FK), the patient row was already committed, leaving an orphaned
+        // patient that wasn't attached to the household the caller asked
+        // for. The transaction makes it all-or-nothing.
+        let txn = db
+            .begin()
+            .await
+            .map_err(|e| format!("Failed to begin transaction: {}", e))?;
+
         let result = PatientEntity::insert(new_patient)
-            .exec(db)
+            .exec(&txn)
             .await
             .map_err(|e| {
                 log::error!("❌ Failed to insert patient: {}", e);
@@ -154,7 +165,7 @@ impl PatientService {
 
         // If household_id is provided, create the relationship
         if let Some(household_id) = dto.household_id {
-            db.execute(Statement::from_sql_and_values(
+            txn.execute(Statement::from_sql_and_values(
                 DbBackend::Sqlite,
                 "INSERT INTO patient_households (patient_id, household_id, relationship_type, is_primary) VALUES (?, ?, 'Pet', 1)",
                 [patient_id.into(), household_id.into()],
@@ -162,6 +173,10 @@ impl PatientService {
             .await
             .map_err(|e| format!("Failed to create household relationship: {}", e))?;
         }
+
+        txn.commit()
+            .await
+            .map_err(|e| format!("Failed to commit patient create: {}", e))?;
 
         Self::get_by_id(db, patient_id)
             .await?
