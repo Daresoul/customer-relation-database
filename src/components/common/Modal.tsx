@@ -3,7 +3,7 @@
  */
 
 import React from 'react';
-import { Modal as AntModal, ModalProps as AntModalProps, message, notification } from 'antd';
+import { Modal as AntModal, ModalProps as AntModalProps } from 'antd';
 import {
   CheckCircleOutlined,
   CloseCircleOutlined,
@@ -135,48 +135,6 @@ export const alert = ({
     content,
     ...props,
   });
-};
-
-// Toast notifications (using Ant Design message)
-export const toast = {
-  success: (content: string, duration?: number) =>
-    message.success(content, duration),
-  error: (content: string, duration?: number) =>
-    message.error(content, duration),
-  warning: (content: string, duration?: number) =>
-    message.warning(content, duration),
-  info: (content: string, duration?: number) =>
-    message.info(content, duration),
-  loading: (content: string, duration?: number) =>
-    message.loading(content, duration),
-};
-
-// Notification helpers
-export const notify = {
-  success: (title: string, description?: string) =>
-    notification.success({
-      message: title,
-      description,
-      placement: 'topRight',
-    }),
-  error: (title: string, description?: string) =>
-    notification.error({
-      message: title,
-      description,
-      placement: 'topRight',
-    }),
-  warning: (title: string, description?: string) =>
-    notification.warning({
-      message: title,
-      description,
-      placement: 'topRight',
-    }),
-  info: (title: string, description?: string) =>
-    notification.info({
-      message: title,
-      description,
-      placement: 'topRight',
-    }),
 };
 
 // Form Modal Component

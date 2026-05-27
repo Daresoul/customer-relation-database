@@ -23,7 +23,6 @@ import AppointmentsTab from './Appointments/AppointmentsTab';
 import { useViewContext } from '../contexts/ViewContext';
 import api, { setAppInstance } from '../services/api.integration';
 import { PatientService } from '../services';
-import notifications from '../services/notifications';
 import type { Patient, PatientWithHousehold } from '../types';
 import type { HouseholdTableRecord } from '../types/ui.types';
 import { useThemeColors } from '../utils/themeStyles';
@@ -145,11 +144,11 @@ export const MainDashboard: React.FC = () => {
 
       const res = await invoke<string>('populate_database', { households });
 
-      app.notification.success(res || `Seeded ${households} households`);
+      app.notification.success({ message: res || `Seeded ${households} households` });
       setSeedOpen(false);
       await loadData();
     } catch (e: any) {
-      app.notification.error(e?.message || 'Failed to seed database');
+      app.notification.error({ message: e?.message || 'Failed to seed database' });
     } finally {
       setSeeding(false);
     }

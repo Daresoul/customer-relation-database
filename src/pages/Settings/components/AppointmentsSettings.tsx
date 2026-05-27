@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Form, Switch, Button, Typography, Alert, Space } from 'antd';
+import { Card, Form, Switch, Button, Typography, Alert, Space, App } from 'antd';
 import { CalendarOutlined, GoogleOutlined, LinkOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors } from '../../../utils/themeStyles';
 import { invoke } from '@tauri-apps/api';
-import { notify } from '../../../services/notifications';
 import styles from '../Settings.module.css';
 
 const { Text, Paragraph } = Typography;
@@ -24,6 +23,7 @@ interface GoogleCalendarSettings {
 const AppointmentsSettings: React.FC<AppointmentsSettingsProps> = ({ isUpdating }) => {
   const { t } = useTranslation(['common', 'forms', 'settings']);
   const themeColors = useThemeColors();
+  const { notification } = App.useApp();
   const [settings, setSettings] = useState<GoogleCalendarSettings>({
     connected: false,
     sync_enabled: false,
@@ -54,11 +54,11 @@ const AppointmentsSettings: React.FC<AppointmentsSettingsProps> = ({ isUpdating 
       console.log('Starting OAuth flow...');
       await invoke('start_oauth_flow');
 
-      notify.info(
-        t('settings:googleCalendar.messages.googleAuthorization'),
-        t('settings:googleCalendar.messages.openingBrowser'),
-        { duration: 4 }
-      );
+      notification.info({
+        message: t('settings:googleCalendar.messages.googleAuthorization'),
+        description: t('settings:googleCalendar.messages.openingBrowser'),
+        duration: 4,
+      });
 
       // Poll for OAuth callback completion
       const maxAttempts = 120; // Poll for up to 2 minutes
@@ -85,42 +85,42 @@ const AppointmentsSettings: React.FC<AppointmentsSettingsProps> = ({ isUpdating 
             console.log('Reloading settings...');
             await loadSettings();
 
-            notify.success(
-              t('settings:googleCalendar.messages.connectedSuccess'),
-              t('settings:googleCalendar.messages.connectedDescription'),
-              { duration: 8 }
-            );
+            notification.success({
+              message: t('settings:googleCalendar.messages.connectedSuccess'),
+              description: t('settings:googleCalendar.messages.connectedDescription'),
+              duration: 8,
+            });
             setLoading(false);
           } else if (attempts >= maxAttempts) {
             // Timeout
             console.warn('OAuth flow timed out after', maxAttempts, 'attempts');
             clearInterval(pollInterval);
-            notify.warning(
-              t('settings:googleCalendar.messages.authTimeout'),
-              t('settings:googleCalendar.messages.authTimeoutDescription'),
-              { duration: 10 }
-            );
+            notification.warning({
+              message: t('settings:googleCalendar.messages.authTimeout'),
+              description: t('settings:googleCalendar.messages.authTimeoutDescription'),
+              duration: 10,
+            });
             setLoading(false);
           }
         } catch (error) {
           console.error('OAuth polling error:', error);
           clearInterval(pollInterval);
-          notify.error(
-            t('settings:googleCalendar.messages.oauthError'),
-            t('settings:googleCalendar.messages.oauthFailed', { error }),
-            { duration: 12 }
-          );
+          notification.error({
+            message: t('settings:googleCalendar.messages.oauthError'),
+            description: t('settings:googleCalendar.messages.oauthFailed', { error }),
+            duration: 12,
+          });
           setLoading(false);
         }
       }, 1000); // Poll every second
 
     } catch (error) {
       console.error('Failed to start OAuth flow:', error);
-      notify.error(
-        t('settings:googleCalendar.messages.failedToStart'),
-        t('settings:googleCalendar.messages.failedToStartDescription', { error }),
-        { duration: 12 }
-      );
+      notification.error({
+        message: t('settings:googleCalendar.messages.failedToStart'),
+        description: t('settings:googleCalendar.messages.failedToStartDescription', { error }),
+        duration: 12,
+      });
       setLoading(false);
     }
   };
@@ -130,17 +130,17 @@ const AppointmentsSettings: React.FC<AppointmentsSettingsProps> = ({ isUpdating 
       setLoading(true);
       await invoke('disconnect_google_calendar');
       await loadSettings();
-      notify.success(
-        t('settings:googleCalendar.messages.disconnectedSuccess'),
-        t('settings:googleCalendar.messages.disconnectedDescription'),
-        { duration: 6 }
-      );
+      notification.success({
+        message: t('settings:googleCalendar.messages.disconnectedSuccess'),
+        description: t('settings:googleCalendar.messages.disconnectedDescription'),
+        duration: 6,
+      });
     } catch (error) {
-      notify.error(
-        t('settings:googleCalendar.messages.disconnectFailed'),
-        t('settings:googleCalendar.messages.disconnectFailedDescription', { error }),
-        { duration: 10 }
-      );
+      notification.error({
+        message: t('settings:googleCalendar.messages.disconnectFailed'),
+        description: t('settings:googleCalendar.messages.disconnectFailedDescription', { error }),
+        duration: 10,
+      });
     } finally {
       setLoading(false);
     }
@@ -153,40 +153,40 @@ const AppointmentsSettings: React.FC<AppointmentsSettingsProps> = ({ isUpdating 
       await loadSettings();
 
       if (enabled) {
-        notify.success(
-          t('settings:googleCalendar.messages.syncEnabled'),
-          t('settings:googleCalendar.messages.syncEnabledDescription'),
-          { duration: 4 }
-        );
+        notification.success({
+          message: t('settings:googleCalendar.messages.syncEnabled'),
+          description: t('settings:googleCalendar.messages.syncEnabledDescription'),
+          duration: 4,
+        });
 
         // Trigger initial sync of existing appointments
         try {
           await invoke('trigger_manual_sync');
-          notify.success(
-            t('settings:googleCalendar.messages.initialSyncComplete'),
-            t('settings:googleCalendar.messages.initialSyncCompleteDescription'),
-            { duration: 6 }
-          );
+          notification.success({
+            message: t('settings:googleCalendar.messages.initialSyncComplete'),
+            description: t('settings:googleCalendar.messages.initialSyncCompleteDescription'),
+            duration: 6,
+          });
         } catch (syncError) {
-          notify.warning(
-            t('settings:googleCalendar.messages.initialSyncFailed'),
-            t('settings:googleCalendar.messages.initialSyncFailedDescription', { error: syncError }),
-            { duration: 10 }
-          );
+          notification.warning({
+            message: t('settings:googleCalendar.messages.initialSyncFailed'),
+            description: t('settings:googleCalendar.messages.initialSyncFailedDescription', { error: syncError }),
+            duration: 10,
+          });
         }
       } else {
-        notify.info(
-          t('settings:googleCalendar.messages.syncDisabled'),
-          t('settings:googleCalendar.messages.syncDisabledDescription'),
-          { duration: 4 }
-        );
+        notification.info({
+          message: t('settings:googleCalendar.messages.syncDisabled'),
+          description: t('settings:googleCalendar.messages.syncDisabledDescription'),
+          duration: 4,
+        });
       }
     } catch (error) {
-      notify.error(
-        t('settings:googleCalendar.messages.updateSyncFailed'),
-        t('settings:googleCalendar.messages.updateSyncFailedDescription', { error }),
-        { duration: 8 }
-      );
+      notification.error({
+        message: t('settings:googleCalendar.messages.updateSyncFailed'),
+        description: t('settings:googleCalendar.messages.updateSyncFailedDescription', { error }),
+        duration: 8,
+      });
       // Reload settings to revert the UI
       await loadSettings();
     }
@@ -255,9 +255,9 @@ const AppointmentsSettings: React.FC<AppointmentsSettingsProps> = ({ isUpdating 
                     try {
                       setLoading(true);
                       await invoke('trigger_manual_sync');
-                      notify.success(t('settings:googleCalendar.messages.manualSyncStarted'), t('settings:googleCalendar.messages.manualSyncStartedDescription'));
+                      notification.success({ message: t('settings:googleCalendar.messages.manualSyncStarted'), description: t('settings:googleCalendar.messages.manualSyncStartedDescription') });
                     } catch (error) {
-                      notify.error(t('settings:googleCalendar.messages.syncFailed'), `${error}`);
+                      notification.error({ message: t('settings:googleCalendar.messages.syncFailed'), description: `${error}` });
                     } finally {
                       setLoading(false);
                     }

@@ -120,7 +120,7 @@ function AppContent() {
       <ThemeProvider>
         <ViewProvider>
           <DeviceImportProvider>
-            <AntApp notification={{ maxCount: 1 }}>
+            <AntApp notification={{ maxCount: 1, placement: 'bottomRight' }}>
               <DeviceDataHandler />
               <WakeFromTrayHandler />
               <DeviceImportModal />
