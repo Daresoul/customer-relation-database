@@ -54,6 +54,7 @@
   "selectPlaceholder": "Изберете",
   "confirmDelete": "Дали сте сигурни дека сакате да го избришете овој запис?",
   "operationSuccess": "Операцијата е успешно завршена",
+  "operationSuccessful": "Операцијата е успешно завршена",
   "operationFailed": "Операцијата не успеа",
   "saveSuccess": "Успешно зачувано",
   "updateSuccess": "Успешно ажурирано",
@@ -85,6 +86,7 @@
     "delete": "Избриши",
     "edit": "Уреди",
     "add": "Додај",
-    "close": "Затвори"
+    "close": "Затвори",
+    "submit": "Испрати"
   }
 }

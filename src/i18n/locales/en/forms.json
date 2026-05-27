@@ -78,5 +78,11 @@
     "confirmDelete": "Are you sure you want to delete this item?",
     "noResults": "No results found",
     "searchResults": "{{count}} results found"
+  },
+  "success": {
+    "created": "{{entity}} created successfully"
+  },
+  "error": {
+    "create": "Failed to create {{entity}}"
   }
 }

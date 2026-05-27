@@ -54,6 +54,7 @@
   "selectPlaceholder": "Please select",
   "confirmDelete": "Are you sure you want to delete this item?",
   "operationSuccess": "Operation completed successfully",
+  "operationSuccessful": "Operation completed successfully",
   "operationFailed": "Operation failed",
   "saveSuccess": "Saved successfully",
   "updateSuccess": "Updated successfully",
@@ -85,6 +86,7 @@
     "delete": "Delete",
     "edit": "Edit",
     "add": "Add",
-    "close": "Close"
+    "close": "Close",
+    "submit": "Submit"
   }
 }

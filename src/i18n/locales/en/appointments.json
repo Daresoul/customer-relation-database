@@ -58,7 +58,9 @@
   },
   "tabs": {
     "calendar": "Calendar",
-    "list": "List"
+    "list": "List",
+    "todaysAppointments": "Today's Appointments",
+    "calendarView": "Calendar View"
   },
   "views": {
     "day": "Day",
@@ -110,9 +112,5 @@
     "clear": "Clear",
     "apply": "Apply",
     "timeLabel": "Time"
-  },
-  "tabs": {
-    "todaysAppointments": "Today's Appointments",
-    "calendarView": "Calendar View"
   }
 }

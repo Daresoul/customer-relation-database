@@ -227,7 +227,7 @@ const BreedsSettings: React.FC<BreedsSettingsProps> = ({ isUpdating }) => {
         >
           <Form.Item
             name="speciesId"
-            label={t('entities:species')}
+            label={t('patients:fields.species')}
             rules={[{ required: true, message: t('forms:validation.required') }]}
           >
             <Select
@@ -242,7 +242,7 @@ const BreedsSettings: React.FC<BreedsSettingsProps> = ({ isUpdating }) => {
 
           <Form.Item
             name="name"
-            label={t('entities:breed')}
+            label={t('patients:fields.breed')}
             rules={[{ required: true, message: t('forms:validation.required') }]}
           >
             <Input placeholder={t('settings:breeds.breedPlaceholder')} />

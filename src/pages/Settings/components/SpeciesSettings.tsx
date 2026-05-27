@@ -413,7 +413,7 @@ const SpeciesSettings: React.FC<SpeciesSettingsProps> = ({ isUpdating }) => {
         >
           <Form.Item
             name="name"
-            label={t('entities:species')}
+            label={t('patients:fields.species')}
             rules={[{ required: true, message: t('forms:validation.required') }]}
           >
             <Input placeholder={t('settings:species.speciesPlaceholder')} />
@@ -448,7 +448,7 @@ const SpeciesSettings: React.FC<SpeciesSettingsProps> = ({ isUpdating }) => {
           onFinish={handleBreedSubmit}
           key={editingBreed?.id || 'new'}
         >
-          <Form.Item label={t('entities:species')}>
+          <Form.Item label={t('patients:fields.species')}>
             <Input
               disabled
               value={speciesList.find(s => s.id === selectedSpeciesForBreed)?.name || ''}
@@ -465,7 +465,7 @@ const SpeciesSettings: React.FC<SpeciesSettingsProps> = ({ isUpdating }) => {
 
           <Form.Item
             name="name"
-            label={t('entities:breed')}
+            label={t('patients:fields.breed')}
             rules={[{ required: true, message: t('forms:validation.required') }]}
           >
             <Input placeholder={t('settings:breeds.breedPlaceholder')} />

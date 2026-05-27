@@ -89,6 +89,8 @@
       "registerNewPet": "Register New Pet",
       "registerFirstPet": "Register First Pet",
       "noAnimals": "No pets registered for this household",
+      "patientCreated": "Pet registered successfully",
+      "patientCreateFailed": "Failed to register pet",
       "columns": {
         "name": "Name",
         "species": "Species",

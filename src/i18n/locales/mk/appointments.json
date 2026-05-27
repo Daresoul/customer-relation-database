@@ -58,7 +58,9 @@
   },
   "tabs": {
     "calendar": "Календар",
-    "list": "Листа"
+    "list": "Листа",
+    "todaysAppointments": "Денешни термини",
+    "calendarView": "Календарски преглед"
   },
   "views": {
     "day": "Ден",
@@ -110,9 +112,5 @@
     "clear": "Избриши",
     "apply": "Примени",
     "timeLabel": "Време"
-  },
-  "tabs": {
-    "todaysAppointments": "Денешни термини",
-    "calendarView": "Календарски преглед"
   }
 }

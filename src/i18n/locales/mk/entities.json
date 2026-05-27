@@ -1,4 +1,8 @@
 {
+  "patient": {
+    "singular": "пациент",
+    "plural": "пациенти"
+  },
   "species": {
     "dog": "Куче",
     "cat": "Мачка",

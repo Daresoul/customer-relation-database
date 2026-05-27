@@ -89,6 +89,8 @@
       "registerNewPet": "Регистрирај нов миленик",
       "registerFirstPet": "Регистрирај прв миленик",
       "noAnimals": "Нема регистрирани миленици за ова домаќинство",
+      "patientCreated": "Миленикот е успешно регистриран",
+      "patientCreateFailed": "Неуспешно регистрирање на миленик",
       "columns": {
         "name": "Име",
         "species": "Вид",

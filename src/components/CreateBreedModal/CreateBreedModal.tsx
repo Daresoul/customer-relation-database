@@ -87,7 +87,7 @@ export const CreateBreedModal: React.FC<CreateBreedModalProps> = ({
       <Form form={form} layout="vertical">
         <Form.Item
           name="speciesId"
-          label={t('entities:species')}
+          label={t('patients:fields.species')}
           rules={[{ required: true, message: t('forms:validation.required') }]}
         >
           <Select
@@ -102,7 +102,7 @@ export const CreateBreedModal: React.FC<CreateBreedModalProps> = ({
 
         <Form.Item
           name="name"
-          label={t('entities:breed')}
+          label={t('patients:fields.breed')}
           rules={[
             { required: true, message: t('forms:validation.required') },
             { max: 50, message: t('forms:validation.maxLength', { max: 50 }) },
