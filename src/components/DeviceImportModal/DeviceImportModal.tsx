@@ -705,7 +705,7 @@ const DeviceImportModal: React.FC = () => {
         width={800}
         onClose={() => setRecentFilesDrawerOpen(false)}
         open={recentFilesDrawerOpen}
-        destroyOnClose
+        destroyOnHidden
       >
         <RecentDeviceFiles
           days={14}

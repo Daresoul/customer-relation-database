@@ -160,7 +160,7 @@ export const AnimalsSection: React.FC<AnimalsSectionProps> = ({ patients, househ
         onCancel={() => setIsPatientModalOpen(false)}
         footer={null}
         width={800}
-        destroyOnClose
+        destroyOnHidden
       >
         <PatientFormWithOwner
           onSubmit={handleCreatePatient}

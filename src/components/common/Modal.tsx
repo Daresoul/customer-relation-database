@@ -175,9 +175,11 @@ export const DrawerModal: React.FC<ModalProps> = (props) => (
       top: 0,
       paddingBottom: 0,
     }}
-    bodyStyle={{
-      height: 'calc(100vh - 110px)',
-      overflow: 'auto',
+    styles={{
+      body: {
+        height: 'calc(100vh - 110px)',
+        overflow: 'auto',
+      },
     }}
   />
 );

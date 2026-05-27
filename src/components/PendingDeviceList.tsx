@@ -135,7 +135,7 @@ const PendingDeviceList: React.FC<PendingDeviceListProps> = ({ open, onClose }) 
       width={800}
       open={open}
       onClose={onClose}
-      destroyOnClose
+      destroyOnHidden
       extra={
         <Space>
           <Input.Search

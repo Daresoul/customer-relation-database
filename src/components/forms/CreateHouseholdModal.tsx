@@ -45,7 +45,7 @@ export const CreateHouseholdModal: React.FC<CreateHouseholdModalProps> = ({
       }
       onCancel={onCancel}
       footer={null}
-      destroyOnClose
+      destroyOnHidden
       width={640}
     >
       {open && (
