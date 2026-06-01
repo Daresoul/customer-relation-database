@@ -11,6 +11,8 @@ import com.vetclinic.pdf.models.samples.*;
 import com.vetclinic.pdf.services.PDFReportService;
 
 import java.io.File;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -46,6 +48,18 @@ import java.util.List;
 public class PdfGeneratorCLI {
 
     public static void main(String[] args) {
+        // Force UTF-8 on stdout/stderr regardless of platform default
+        // (Windows defaults to the system code page, e.g. CP-1251 for Cyrillic
+        // locales, which mangles non-ASCII path/text output the Rust side
+        // reads back as UTF-8). The String-charset PrintStream overload is
+        // used for Java 8 compatibility; the Charset overload is Java 10+.
+        try {
+            System.setOut(new PrintStream(System.out, true, "UTF-8"));
+            System.setErr(new PrintStream(System.err, true, "UTF-8"));
+        } catch (java.io.UnsupportedEncodingException e) {
+            // UTF-8 is required by every JVM, so this is unreachable.
+        }
+
         if (args.length != 1) {
             System.err.println("Usage: pdf-generator <input.json>");
             System.exit(1);
@@ -53,7 +67,12 @@ public class PdfGeneratorCLI {
 
         try {
             String inputPath = args[0];
-            String jsonContent = new String(Files.readAllBytes(Paths.get(inputPath)));
+            // Read JSON as UTF-8 — the Rust side always writes UTF-8.
+            // Without an explicit charset, `new String(bytes)` uses the
+            // platform default and corrupts non-ASCII content (e.g. Cyrillic
+            // patient names in output_path), causing the PDF to be written
+            // to a different path than Rust expects.
+            String jsonContent = new String(Files.readAllBytes(Paths.get(inputPath)), StandardCharsets.UTF_8);
 
             Gson gson = new Gson();
             JsonObject json = gson.fromJson(jsonContent, JsonObject.class);
