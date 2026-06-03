@@ -53,8 +53,14 @@ const MAX_RETRY_ATTEMPTS: u32 = 10;  // Maximum number of retry attempts before 
 const BASE_RETRY_DELAY_SECS: u64 = 1;  // Base delay for exponential backoff (1 second)
 const MAX_RETRY_DELAY_SECS: u64 = 60;  // Maximum delay cap (60 seconds)
 
-/// Get the path to the raw data log file for a specific port
-/// Creates the log directory if it doesn't exist
+/// Get the path to the raw data log file for a specific port for today.
+/// Creates the log directory if it doesn't exist.
+///
+/// The filename embeds today's date (`raw_<port>-YYYY-MM-DD.log`) so that
+/// rotation is automatic: each call to `write_raw_log` reopens the file
+/// fresh (see [`write_raw_log`]), and once the wall clock crosses midnight
+/// the next write naturally lands in a new dated file. Old archives are
+/// pruned by [`crate::services::log_rotation::prune_old_logs`] at startup.
 fn get_raw_log_path(app_handle: &AppHandle, port_name: &str) -> Option<std::path::PathBuf> {
     // Get the app data directory
     let app_data_dir = app_handle.path_resolver().app_data_dir()?;
@@ -72,7 +78,11 @@ fn get_raw_log_path(app_handle: &AppHandle, port_name: &str) -> Option<std::path
         .replace('\\', "_")
         .replace(':', "_");
 
-    Some(log_dir.join(format!("raw_{}.log", safe_port_name)))
+    // Local date — clinic users (and we, when reading back logs) think
+    // in local time. Using UTC would make the file roll over at an
+    // unexpected hour from the clinic's perspective.
+    let today = chrono::Local::now().format("%Y-%m-%d");
+    Some(log_dir.join(format!("raw_{}-{}.log", safe_port_name, today)))
 }
 
 /// Write raw bytes to the per-port log file with timestamp
@@ -1259,7 +1269,13 @@ fn handle_listening_serial(
                 write_raw_log(app_handle, port_name, &buffer[..bytes_read]);
 
                 if read_count % 100 == 0 {
-                    log::info!("📊 Read statistics for {} ({}): {} reads, {} total bytes",
+                    // Demoted to debug because this fires every ~200ms during
+                    // a steady analyzer connection and was drowning out the
+                    // signal in production logs. The full byte stream is
+                    // captured separately in `raw_serial_logs/raw_<port>-<date>.log`
+                    // for forensic use, so nothing is actually lost — just
+                    // less noise in the main log.
+                    log::debug!("📊 Read statistics for {} ({}): {} reads, {} total bytes",
                         device_type, port_name, read_count, total_bytes_read);
                 }
                 for i in 0..bytes_read {

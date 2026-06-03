@@ -123,6 +123,43 @@ fn main() {
     // Load environment variables from .env file
     dotenv::dotenv().ok();
 
+    // Generate the Tauri context once, here, so the same value can drive
+    // both early path resolution (for log rotation, below) and the final
+    // .run() call. `generate_context!()` is a macro that bakes in the
+    // contents of tauri.conf.json at compile time — calling it twice
+    // would just be wasted work, not a correctness issue.
+    let context = tauri::generate_context!();
+
+    // Rotate and prune log files BEFORE tauri-plugin-log opens its file.
+    // The plugin holds its log-file handle for the entire process
+    // lifetime; renaming under that handle either fails or — worse on
+    // Windows — leaves the plugin writing to the renamed archive
+    // (split-brain logs). Doing this here is the only safe place.
+    //
+    // Both `app_log_dir` and `app_data_dir` may return None on platforms
+    // where the relevant base dir can't be resolved (extremely rare on
+    // Windows/macOS/Linux but the API is fallible). In that case we
+    // silently skip — rotation is housekeeping, not load-bearing.
+    let bundle_config = &context.config().tauri.bundle;
+    let package_info = context.package_info();
+    let main_log_dir = tauri::api::path::app_log_dir(context.config());
+    let raw_serial_log_dir = tauri::api::path::app_data_dir(context.config())
+        .map(|d| d.join("raw_serial_logs"));
+    // Touch the unused references to avoid future warnings if a refactor
+    // drops them — kept around because we may add log-prefix derivation
+    // (from package name) here later.
+    let _ = (bundle_config, package_info);
+
+    if let Some(ref dir) = main_log_dir {
+        services::log_rotation::rotate_main_log_at_startup(dir);
+        services::log_rotation::prune_old_logs(dir, 30);
+    }
+    if let Some(ref dir) = raw_serial_log_dir {
+        // Raw serial logs already include the date in their filename,
+        // so no startup-rename pass is needed — just the retention sweep.
+        services::log_rotation::prune_old_logs(dir, 30);
+    }
+
     // Configure logging based on build type
     #[cfg(debug_assertions)]
     let log_targets = vec![
@@ -581,6 +618,6 @@ fn main() {
             commands::set_diagnoses_for_record,
             commands::get_diagnoses_for_patient,
         ])
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("error while running tauri application");
 }
