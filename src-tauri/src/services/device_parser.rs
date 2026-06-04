@@ -22,10 +22,47 @@ pub struct DeviceData {
 pub struct DeviceParserService;
 
 impl DeviceParserService {
-    /// Parse Exigo Eos Vet XML file (hematology analyzer)
-    /// Supports both formats:
-    /// 1. Real Exigo format: <sample ID2="..." RBC="..." RBC_L="..." RBC_H="..." />
-    /// 2. Test format with child elements: <PatientID>...</PatientID>
+    /// Parse Exigo Eos Vet XML file (hematology analyzer).
+    ///
+    /// Handles two distinct on-the-wire formats:
+    ///
+    /// 1. **Real Exigo Eos Vet output** (what actual production machines produce):
+    ///    ```xml
+    ///    <ExigoResult>
+    ///      <Header>
+    ///        <SampleId>...</SampleId>
+    ///        <DateTime>...</DateTime>
+    ///      </Header>
+    ///      <Results>
+    ///        <Parameter>
+    ///          <Code>WBC</Code>
+    ///          <Value>12.5</Value>
+    ///          <RefRange>5.5-16.9</RefRange>
+    ///          ...
+    ///        </Parameter>
+    ///        ...
+    ///      </Results>
+    ///    </ExigoResult>
+    ///    ```
+    ///    Each `<Parameter>` contributes `Code → Value` to the results map, plus
+    ///    `Code_L` / `Code_H` parsed from the `<RefRange>` "low-high" string so
+    ///    Java's PDF renderer can show the reference range and low/normal/high
+    ///    indicators. Patient identifier comes from `<SampleId>`.
+    ///
+    /// 2. **Synthetic compact format** (used by our own test fixtures and the
+    ///    older test-data path):
+    ///    ```xml
+    ///    <results>
+    ///      <sample ID2="123456789" RBC="5.4" RBC_L="5.0" RBC_H="8.5" .../>
+    ///    </results>
+    ///    ```
+    ///    All `<sample>` attributes become results entries; `ID2` is the patient
+    ///    identifier.
+    ///
+    /// Both shapes coexist in the wild (real machines + our test fixtures)
+    /// and a single file uses exactly one of them, so the parser branches
+    /// based on which elements/attributes it actually sees rather than
+    /// trying to detect the format ahead of time.
     pub fn parse_exigo_xml(
         device_name: &str,
         file_name: &str,
@@ -42,21 +79,30 @@ impl DeviceParserService {
         let mut current_element = String::new();
         let mut patient_id: Option<String> = None;
 
+        // Real-Exigo-format state: while we're inside a <Parameter> block,
+        // accumulate Code/Value/RefRange and emit them at the closing tag.
+        // Without this, the text-element fallback below would overwrite
+        // results["Code"] / results["Value"] on every iteration and only
+        // the last parameter would survive (and Java would find none of the
+        // expected RBC/WBC/HGB/... keys, rendering an empty PDF table).
+        let mut in_parameter = false;
+        let mut current_param_code: Option<String> = None;
+        let mut current_param_value: Option<String> = None;
+        let mut current_param_ref_range: Option<String> = None;
+
         loop {
             match reader.read_event() {
                 Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
                     let element_name = String::from_utf8_lossy(e.name().as_ref()).to_string();
                     current_element = element_name.clone();
 
-                    // Check if this is a <sample> element with attributes (real Exigo format)
+                    // Synthetic format: <sample ID2="..." RBC="..." .../>
                     if element_name.eq_ignore_ascii_case("sample") {
-                        // Parse all attributes from the sample element
                         for attr_result in e.attributes() {
                             if let Ok(attr) = attr_result {
                                 let key = String::from_utf8_lossy(attr.key.as_ref()).to_string();
                                 let value = String::from_utf8_lossy(&attr.value).to_string();
 
-                                // ID2 is the patient identifier in real Exigo format
                                 if key == "ID2" && patient_id.is_none() {
                                     patient_id = Some(value.clone());
                                 }
@@ -65,20 +111,88 @@ impl DeviceParserService {
                             }
                         }
                     }
+
+                    // Real Exigo format: enter a <Parameter> block. Clear the
+                    // per-parameter accumulators so the previous parameter's
+                    // values can't leak into this one (would happen on a
+                    // malformed file missing one of Code/Value/RefRange).
+                    if element_name == "Parameter" {
+                        in_parameter = true;
+                        current_param_code = None;
+                        current_param_value = None;
+                        current_param_ref_range = None;
+                    }
                 }
                 Ok(Event::Text(e)) => {
                     let text = e.unescape().unwrap_or_default().to_string();
-                    if !text.trim().is_empty() {
-                        // Look for patient identifiers in child elements (test format)
+                    if text.trim().is_empty() {
+                        continue;
+                    }
+                    let text = text.trim().to_string();
+
+                    if in_parameter {
+                        // Inside <Parameter> — route text to the current sub-element.
+                        // Other sub-elements (Unit, Flag, …) are ignored: the PDF
+                        // renderer carries its own unit table for the canonical
+                        // parameter set and doesn't need them.
+                        match current_element.as_str() {
+                            "Code" => current_param_code = Some(text),
+                            "Value" => current_param_value = Some(text),
+                            "RefRange" => current_param_ref_range = Some(text),
+                            _ => {}
+                        }
+                    } else {
+                        // Header-level or other top-level text. Apply the
+                        // patient-identifier heuristic (first ID-bearing element
+                        // wins — SampleId beats OperatorId on document order)
+                        // and fall through to the generic text-element bucket
+                        // so the test format's <PatientID>/<MicrochipID>/... still
+                        // populate the map.
                         if current_element.to_lowercase().contains("patient")
-                            || current_element.to_lowercase().contains("id")
                             || current_element.to_lowercase().contains("microchip")
+                            || current_element.eq_ignore_ascii_case("sampleid")
+                            || current_element.to_lowercase().contains("id")
                         {
                             if patient_id.is_none() {
-                                patient_id = Some(text.trim().to_string());
+                                patient_id = Some(text.clone());
                             }
                         }
-                        results.insert(current_element.clone(), text.trim().to_string());
+                        results.insert(current_element.clone(), text);
+                    }
+                }
+                Ok(Event::End(e)) => {
+                    let element_name = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    if element_name == "Parameter" {
+                        // Flush the accumulated parameter into the results map.
+                        // Skip silently if Code or Value is missing — the source
+                        // file is malformed and there's nothing useful to record.
+                        if let (Some(code), Some(value)) =
+                            (current_param_code.take(), current_param_value.take())
+                        {
+                            // RefRange splits as "<low>-<high>". Real Exigo
+                            // ranges look like "5.5-16.9" (decimal-dash-decimal),
+                            // which `split_once('-')` handles cleanly. If a
+                            // future firmware uses negative bounds (e.g.
+                            // "-2.0-5.0") this naive split would mis-parse the
+                            // sign — not a known case today, would need a real
+                            // sample to design against.
+                            if let Some(range) = current_param_ref_range.take() {
+                                if let Some((low, high)) = range.split_once('-') {
+                                    let low = low.trim();
+                                    let high = high.trim();
+                                    if !low.is_empty() {
+                                        results.insert(format!("{}_L", code), low.to_string());
+                                    }
+                                    if !high.is_empty() {
+                                        results.insert(format!("{}_H", code), high.to_string());
+                                    }
+                                }
+                            }
+                            // Insert the value last so an accidental "Value" key
+                            // in extras can't shadow it.
+                            results.insert(code, value);
+                        }
+                        in_parameter = false;
                     }
                 }
                 Ok(Event::Eof) => break,
@@ -540,6 +654,130 @@ mod tests {
         assert_eq!(results_map.get("RBC").unwrap().as_str().unwrap(), "5.4");
         assert_eq!(results_map.get("WBC").unwrap().as_str().unwrap(), "7.2");
         assert_eq!(results_map.get("SNO").unwrap().as_str().unwrap(), "EXIGO-001");
+    }
+
+    /// Real Exigo Eos Vet machines output `<ExigoResult>` with nested
+    /// `<Parameter><Code>/...<Value>/...<RefRange>/...</Parameter>` blocks.
+    /// This test exercises the production code path — without it, the
+    /// PDF parameter table renders empty because none of the expected
+    /// Code keys reach the results map (they all get overwritten by the
+    /// generic text-element fallback). See `parse_exigo_xml` doc comment.
+    #[test]
+    fn test_parse_exigo_xml_real_exigo_result_format() {
+        let xml_data = r#"<?xml version="1.0" encoding="UTF-8"?>
+            <ExigoResult>
+              <Header>
+                <SampleId>TEST-10210</SampleId>
+                <DateTime>2026-05-24T23:27:49</DateTime>
+                <DeviceType>Exigo Eos Vet</DeviceType>
+                <OperatorId>TEST</OperatorId>
+              </Header>
+              <Results>
+                <Parameter>
+                  <Code>WBC</Code>
+                  <Value>12.5</Value>
+                  <Unit>10^9/L</Unit>
+                  <RefRange>5.5-16.9</RefRange>
+                  <Flag>N</Flag>
+                </Parameter>
+                <Parameter>
+                  <Code>RBC</Code>
+                  <Value>7.2</Value>
+                  <Unit>10^12/L</Unit>
+                  <RefRange>5.5-8.5</RefRange>
+                  <Flag>N</Flag>
+                </Parameter>
+                <Parameter>
+                  <Code>HGB</Code>
+                  <Value>15.8</Value>
+                  <Unit>g/dL</Unit>
+                  <RefRange>12-18</RefRange>
+                  <Flag>N</Flag>
+                </Parameter>
+                <Parameter>
+                  <Code>PLT</Code>
+                  <Value>285</Value>
+                  <Unit>10^9/L</Unit>
+                  <RefRange>175-500</RefRange>
+                  <Flag>N</Flag>
+                </Parameter>
+              </Results>
+            </ExigoResult>"#;
+
+        let result = DeviceParserService::parse_exigo_xml(
+            "Exigo Device",
+            "real_exigo.xml",
+            xml_data.as_bytes(),
+            "file_watch",
+        );
+        assert!(result.is_ok());
+        let device_data = result.unwrap();
+
+        // SampleId is the patient identifier in the real format — it must
+        // win over OperatorId (also contains "id" in lowercased form) by
+        // virtue of appearing first in document order.
+        assert_eq!(device_data.patient_identifier, Some("TEST-10210".to_string()));
+
+        let results = device_data.test_results.as_object().unwrap();
+
+        // Every Parameter's Code → Value made it into the map.
+        assert_eq!(results.get("WBC").unwrap().as_str().unwrap(), "12.5");
+        assert_eq!(results.get("RBC").unwrap().as_str().unwrap(), "7.2");
+        assert_eq!(results.get("HGB").unwrap().as_str().unwrap(), "15.8");
+        assert_eq!(results.get("PLT").unwrap().as_str().unwrap(), "285");
+
+        // RefRange "5.5-16.9" decomposed into Code_L / Code_H — the Java
+        // PDF renderer reads these to draw the reference range column and
+        // low/normal/high indicators on each row.
+        assert_eq!(results.get("WBC_L").unwrap().as_str().unwrap(), "5.5");
+        assert_eq!(results.get("WBC_H").unwrap().as_str().unwrap(), "16.9");
+        assert_eq!(results.get("RBC_L").unwrap().as_str().unwrap(), "5.5");
+        assert_eq!(results.get("RBC_H").unwrap().as_str().unwrap(), "8.5");
+        assert_eq!(results.get("PLT_L").unwrap().as_str().unwrap(), "175");
+        assert_eq!(results.get("PLT_H").unwrap().as_str().unwrap(), "500");
+
+        // Header fields (SampleId, DateTime, DeviceType, OperatorId)
+        // land in the map via the generic text-element fallback. They
+        // don't drive the PDF renderer but they make the diagnostic
+        // info available when the user opens the saved file.
+        assert_eq!(results.get("SampleId").unwrap().as_str().unwrap(), "TEST-10210");
+
+        // Regression guard against the old behavior: with the buggy
+        // parser, `Code` and `Value` would each carry just the LAST
+        // parameter's text (overwritten on every iteration). The fix
+        // is for Code/Value to NOT appear as standalone keys at all —
+        // they're consumed by the Parameter close-tag handler.
+        assert!(results.get("Code").is_none(), "Code must not be a standalone key");
+        assert!(results.get("Value").is_none(), "Value must not be a standalone key");
+    }
+
+    /// Belt-and-suspenders: a Parameter block missing either Code or Value
+    /// shouldn't poison subsequent parameters or panic. We expect malformed
+    /// blocks to be silently skipped.
+    #[test]
+    fn test_parse_exigo_xml_real_format_skips_incomplete_parameter() {
+        let xml_data = r#"<?xml version="1.0"?>
+            <ExigoResult>
+              <Header><SampleId>S1</SampleId></Header>
+              <Results>
+                <Parameter><Code>WBC</Code></Parameter>
+                <Parameter><Code>RBC</Code><Value>5.4</Value></Parameter>
+              </Results>
+            </ExigoResult>"#;
+        let result = DeviceParserService::parse_exigo_xml(
+            "Exigo Device",
+            "malformed.xml",
+            xml_data.as_bytes(),
+            "file_watch",
+        );
+        assert!(result.is_ok());
+        let device_data = result.unwrap();
+        let results = device_data.test_results.as_object().unwrap();
+
+        // The incomplete WBC block is skipped …
+        assert!(results.get("WBC").is_none());
+        // … and the well-formed RBC block still lands as expected.
+        assert_eq!(results.get("RBC").unwrap().as_str().unwrap(), "5.4");
     }
 
     #[test]
