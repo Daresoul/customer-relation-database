@@ -7,12 +7,12 @@ export const getUserDateFormat = (): string => {
   if (settings) {
     try {
       const parsed = JSON.parse(settings);
-      return parsed.dateFormat || 'MM/DD/YYYY';
+      return parsed.dateFormat || 'DD/MM/YYYY';
     } catch {
-      return 'MM/DD/YYYY';
+      return 'DD/MM/YYYY';
     }
   }
-  return 'MM/DD/YYYY';
+  return 'DD/MM/YYYY';
 };
 
 // Format a date string or Date object according to user preference

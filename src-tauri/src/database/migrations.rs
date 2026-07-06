@@ -834,7 +834,7 @@ fn create_app_settings_table(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::fu
                 language TEXT NOT NULL DEFAULT 'en' CHECK(language IN ('en', 'mk')),
                 currency_id INTEGER,
                 theme TEXT DEFAULT 'dark' CHECK(theme IN ('light', 'dark')),
-                date_format TEXT DEFAULT 'MM/DD/YYYY',
+                date_format TEXT DEFAULT 'DD/MM/YYYY',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (currency_id) REFERENCES currencies(id),

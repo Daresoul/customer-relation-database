@@ -165,7 +165,7 @@ const SettingsLayout: React.FC = () => {
       language: values.language !== undefined ? values.language : (settings?.language || 'en'),
       currencyId: values.currencyId !== undefined ? values.currencyId : settings?.currencyId,
       theme: values.theme !== undefined ? values.theme : (settings?.theme || 'light'),
-      dateFormat: values.dateFormat !== undefined ? values.dateFormat : (settings?.dateFormat || 'MM/DD/YYYY'),
+      dateFormat: values.dateFormat !== undefined ? values.dateFormat : (settings?.dateFormat || 'DD/MM/YYYY'),
       googleCalendarSync: values.googleCalendarSync || false,
     };
 
