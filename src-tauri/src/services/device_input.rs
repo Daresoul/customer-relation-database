@@ -49,7 +49,6 @@ fn get_connection_status() -> &'static Mutex<HashMap<String, DeviceConnectionSta
 }
 
 // Configuration for retry behavior
-const MAX_RETRY_ATTEMPTS: u32 = 10;  // Maximum number of retry attempts before giving up
 const BASE_RETRY_DELAY_SECS: u64 = 1;  // Base delay for exponential backoff (1 second)
 const MAX_RETRY_DELAY_SECS: u64 = 60;  // Maximum delay cap (60 seconds)
 
@@ -158,7 +157,7 @@ pub enum ConnectionState {
 }
 
 /// Update connection status and emit event to frontend
-fn update_connection_status(app_handle: &AppHandle, integration_id: i64, port_name: &str, device_type: &str, status: ConnectionState, error: Option<String>, retry_count: u32) {
+fn update_connection_status(app_handle: &AppHandle, integration_id: i64, port_name: &str, device_type: &str, status: ConnectionState, error: Option<String>, retry_count: u32, next_retry_secs: Option<u64>) {
     log::info!("🔄 Device connection status update - Integration ID: {}, Port: {}, Device: {}, Status: {:?}, Retry: {}",
         integration_id, port_name, device_type, status, retry_count);
 
@@ -167,13 +166,15 @@ fn update_connection_status(app_handle: &AppHandle, integration_id: i64, port_na
     }
 
     let now = Utc::now();
-    let next_retry = if status == ConnectionState::Disconnected || status == ConnectionState::Error {
-        let retry_time = (now + chrono::Duration::seconds(5)).to_rfc3339();
-        log::info!("⏰ Next reconnection attempt for {} ({}) scheduled at: {}", device_type, port_name, retry_time);
-        Some(retry_time)
-    } else {
-        None
-    };
+    // Only advertise a next-retry time when the caller is actually going to retry.
+    // Previously this was inferred from the status alone, so a listener that had
+    // already given up still reported a phantom "next retry" to the UI and logs.
+    let next_retry = next_retry_secs.map(|secs| {
+        let retry_time = (now + chrono::Duration::seconds(secs as i64)).to_rfc3339();
+        log::info!("⏰ Next reconnection attempt for {} ({}) scheduled in {}s (at {})",
+            device_type, port_name, secs, retry_time);
+        retry_time
+    });
 
     let connection_status = DeviceConnectionStatus {
         integration_id,
@@ -803,7 +804,10 @@ pub fn stop_all_listeners() -> usize {
 }
 
 /// Start listening to a serial port with the given device protocol
-/// With exponential backoff retry (max 10 attempts, up to 60s delay)
+/// Retries with exponential backoff (capped at 60s) for as long as the listener is
+/// active, so a device powered on, reconnected, or whose COM port is renumbered after
+/// startup recovers automatically without an app restart. Only an explicit shutdown
+/// signal (stop_listen) stops the listener.
 /// Uses mpsc channel for graceful shutdown signal
 pub fn start_listen(
     app_handle: AppHandle,
@@ -863,21 +867,12 @@ pub fn start_listen(
                 break;
             }
 
-            // Check if we've exceeded max retry attempts
-            if retry_count > 0 && retry_count >= MAX_RETRY_ATTEMPTS {
-                log::error!("❌ Max retry attempts ({}) reached for {} ({}), giving up",
-                    MAX_RETRY_ATTEMPTS, device_type_clone, port_name_clone);
-                update_connection_status(&app_handle, integration_id, &port_name_clone, &device_type_clone,
-                    ConnectionState::Error, Some(format!("Max retries ({}) exceeded", MAX_RETRY_ATTEMPTS)), retry_count);
-                break;
-            }
-
-            log::info!("🔌 Attempting connection to {} ({}) - Attempt {}/{}",
-                device_type_clone, port_name_clone, retry_count + 1, MAX_RETRY_ATTEMPTS);
+            log::info!("🔌 Attempting connection to {} ({}) - Attempt {}",
+                device_type_clone, port_name_clone, retry_count + 1);
 
             // Update status to connecting
             update_connection_status(&app_handle, integration_id, &port_name_clone, &device_type_clone,
-                ConnectionState::Connecting, None, retry_count);
+                ConnectionState::Connecting, None, retry_count, None);
 
             // Get protocol configuration for the device type
             let protocol = get_device_protocol(&device_type_clone);
@@ -892,55 +887,43 @@ pub fn start_listen(
                     break; // Clean exit
                 }
                 Err(e) => {
-                    // Categorize errors: fail fast on permanent errors, retry transient ones
-                    // Covers both Unix and Windows error messages:
-                    // - Unix: "Permission denied", "No such file or directory", "not found"
-                    // - Windows: "Access is denied", "The system cannot find the file specified"
-                    let is_permanent_error = e.contains("not found") || e.contains("Not found") ||
-                                            e.contains("permission denied") || e.contains("Permission denied") ||
-                                            e.contains("access denied") || e.contains("Access denied") ||
-                                            e.contains("cannot find the file") || e.contains("Cannot find the file");
+                    // Every serial open/read error is treated as recoverable and retried
+                    // indefinitely with capped exponential backoff. This is deliberate for an
+                    // always-on clinic PC: the common failure is a device that is powered on,
+                    // unplugged, or has its COM port renumbered *after* the app started. Those
+                    // recover on their own once the port reappears — no app restart needed.
+                    // Errors that used to be classed "permanent" (port not found, access denied)
+                    // are exactly this case, so they no longer give up. The listener only stops
+                    // on an explicit shutdown signal (stop_listen).
+                    retry_count = retry_count.saturating_add(1);
 
-                    if is_permanent_error {
-                        log::error!("💥 PERMANENT error on {} ({}): {} - giving up immediately",
-                            device_type_clone, port_name_clone, e);
-                        update_connection_status(&app_handle, integration_id, &port_name_clone, &device_type_clone,
-                            ConnectionState::Error, Some(format!("Permanent error: {}", e)), retry_count);
-                        break; // Don't retry permanent errors
-                    }
-
-                    retry_count += 1;
-                    log::error!("❌ Transient error on {} ({}): {} (attempt {}/{})",
-                        device_type_clone, port_name_clone, e, retry_count, MAX_RETRY_ATTEMPTS);
+                    // Compute the delay up front so the UI shows an accurate next-retry time
+                    // instead of a hard-coded guess.
+                    let delay = calculate_backoff_delay(retry_count);
+                    let delay_secs = delay.as_secs();
+                    log::warn!("⚠️  Connection error on {} ({}): {} (attempt {}) - retrying in {}s",
+                        device_type_clone, port_name_clone, e, retry_count, delay_secs);
                     update_connection_status(&app_handle, integration_id, &port_name_clone, &device_type_clone,
-                        ConnectionState::Error, Some(e.clone()), retry_count);
-                }
-            }
+                        ConnectionState::Error, Some(e.clone()), retry_count, Some(delay_secs));
 
-            // Calculate backoff delay with exponential backoff + jitter
-            let delay = calculate_backoff_delay(retry_count);
-            log::info!("⏳ Waiting {:?} before next connection attempt for {} ({})",
-                delay, device_type_clone, port_name_clone);
-
-            // Efficient backoff sleep using recv_timeout() - blocks until signal or timeout
-            // This is more efficient than spinning with try_recv() + sleep()
-            match shutdown_rx.recv_timeout(delay) {
-                Ok(_) => {
-                    // Shutdown signal received during backoff
-                    log::info!("🛑 Shutdown signal received during backoff for {} ({}), exiting",
-                        device_type_clone, port_name_clone);
-                    return; // Exit thread immediately
-                }
-                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                    // Backoff period complete, continue to next retry
-                    log::debug!("   Backoff period elapsed for {} ({}), retrying connection",
-                        device_type_clone, port_name_clone);
-                }
-                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                    // Sender dropped (stop_listen called), exit gracefully
-                    log::info!("🛑 Shutdown sender disconnected during backoff for {} ({}), exiting",
-                        device_type_clone, port_name_clone);
-                    return;
+                    // Efficient backoff sleep using recv_timeout() - blocks until signal or timeout.
+                    // This is more efficient than spinning with try_recv() + sleep().
+                    match shutdown_rx.recv_timeout(delay) {
+                        Ok(_) => {
+                            log::info!("🛑 Shutdown signal received during backoff for {} ({}), exiting",
+                                device_type_clone, port_name_clone);
+                            return; // Exit thread immediately
+                        }
+                        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                            log::debug!("   Backoff period elapsed for {} ({}), retrying connection",
+                                device_type_clone, port_name_clone);
+                        }
+                        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                            log::info!("🛑 Shutdown sender disconnected during backoff for {} ({}), exiting",
+                                device_type_clone, port_name_clone);
+                            return;
+                        }
+                    }
                 }
             }
         }
@@ -1225,7 +1208,7 @@ fn handle_listening_serial(
         port_name, device_type, integration_id);
 
     // Successfully connected - update status
-    update_connection_status(app_handle, integration_id, port_name, device_type, ConnectionState::Connected, None, 0);
+    update_connection_status(app_handle, integration_id, port_name, device_type, ConnectionState::Connected, None, 0, None);
 
     // Write session start marker to raw log
     if let Some(log_path) = get_raw_log_path(app_handle, port_name) {
