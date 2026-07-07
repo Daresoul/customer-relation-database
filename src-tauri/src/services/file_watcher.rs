@@ -1,5 +1,5 @@
 use notify::{Watcher, RecursiveMode, Event, Result as NotifyResult, EventKind};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::channel;
 use glob::Pattern;
 use sea_orm::{DatabaseConnection, ConnectionTrait, Statement, DbBackend};
@@ -12,6 +12,34 @@ use crate::services::device_parser::DeviceParserService;
 use crate::services::device_capture::throttled_show_and_focus;
 use crate::services::file_storage::FileStorageService;
 use crate::commands::file_history::record_device_file_access_internal_seaorm;
+
+/// Read a file only once its size has stabilised, to avoid grabbing a
+/// half-written file. Some analyzers (e.g. the Exigo) create the result file
+/// empty and then stream content into it — or append to a single per-day file
+/// over time — and the OS fires a create/modify event at each step. Polling
+/// until two consecutive size samples match means we read the complete
+/// document rather than a 0-byte or partial snapshot.
+fn read_settled_file(path: &Path) -> std::io::Result<Vec<u8>> {
+    let mut last_len: Option<u64> = None;
+    for _ in 0..10 {
+        let len = std::fs::metadata(path)?.len();
+        if Some(len) == last_len {
+            break; // size stable across two samples → write has settled
+        }
+        last_len = Some(len);
+        std::thread::sleep(std::time::Duration::from_millis(150));
+    }
+    std::fs::read(path)
+}
+
+/// Cheap non-cryptographic content fingerprint, used to skip re-processing a
+/// file whose bytes haven't changed since we last handled it.
+fn content_fingerprint(data: &[u8]) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    data.hash(&mut hasher);
+    hasher.finish()
+}
 
 // Track connection status for file watchers
 static FILE_WATCHER_STATUS: OnceLock<Mutex<HashMap<i64, FileWatcherStatus>>> = OnceLock::new();
@@ -224,7 +252,8 @@ impl FileWatcherService {
         let db_clone = self.db.clone();
 
         // Create a deduplication cache (file path -> last processed timestamp)
-        let processed_files: Arc<Mutex<HashMap<String, u64>>> = Arc::new(Mutex::new(HashMap::new()));
+        // path -> (last-processed unix secs, content fingerprint of what we imported)
+        let processed_files: Arc<Mutex<HashMap<String, (u64, u64)>>> = Arc::new(Mutex::new(HashMap::new()));
         let processed_files_clone = processed_files.clone();
 
         log::info!("   🎧 Creating file system watcher for '{}'", name);
@@ -259,32 +288,39 @@ impl FileWatcherService {
 
                                     let path_str = path.display().to_string();
 
-                                    // Check if we recently processed this file (within 5 seconds)
-                                    let should_skip = {
-                                        let cache = processed_files_clone.lock().unwrap();
-                                        if let Some(&last_processed) = cache.get(&path_str) {
-                                            if now - last_processed < 5 {
-                                                log::info!("   ⏭️  Skipping {} - processed {} seconds ago (deduplication)",
-                                                    file_name_str, now - last_processed);
-                                                true
-                                            } else {
-                                                false
-                                            }
-                                        } else {
-                                            false
-                                        }
-                                    };
+                                    log::info!("   📖 Reading file (waiting for write to settle): {}", path.display());
 
-                                    if should_skip {
-                                        continue;
-                                    }
-
-                                    log::info!("   📖 Reading file: {}", path.display());
-
-                                    // Read and parse the file
-                                    match std::fs::read(&path) {
+                                    // Read and parse the file, waiting for the write to complete first.
+                                    match read_settled_file(&path) {
                                         Ok(file_data) => {
                                             log::info!("   ✅ File read successfully - Size: {} bytes", file_data.len());
+
+                                            // Skip empty reads. Instruments like the Exigo create the result
+                                            // file before writing content, so create/modify events routinely
+                                            // fire on a 0-byte file. Recording those produced ~half the Exigo
+                                            // history as empty junk rows.
+                                            if file_data.is_empty() {
+                                                log::info!("   ⏭️  Skipping {} - file is empty (still being written or truncated)",
+                                                    file_name_str);
+                                                continue;
+                                            }
+
+                                            // Content-based deduplication: skip if we already imported these
+                                            // exact bytes for this path. The instrument writes/appends to one
+                                            // file per day and the OS fires many modify events for it, so a
+                                            // short time-window filter alone re-imported the same content
+                                            // repeatedly (up to 17× per file in production).
+                                            let fingerprint = content_fingerprint(&file_data);
+                                            let already_processed = {
+                                                let cache = processed_files_clone.lock().unwrap();
+                                                cache.get(&path_str).map(|&(_, h)| h) == Some(fingerprint)
+                                            };
+                                            if already_processed {
+                                                log::info!("   ⏭️  Skipping {} - content unchanged since last import (deduplication)",
+                                                    file_name_str);
+                                                continue;
+                                            }
+
                                             log::info!("   🔍 Parsing file data - Device: {}, Name: '{}'",
                                                 device_type_clone, name_clone);
 
@@ -306,12 +342,15 @@ impl FileWatcherService {
                                                             Ok(_) => {
                                                                 log::info!("   📡 Emitted device-data-received event for '{}'", name_clone);
 
-                                                                // Update cache AFTER successful emission to prevent duplicate processing
+                                                                // Update cache AFTER successful emission to prevent duplicate processing.
+                                                                // Keyed by content fingerprint so a re-fired event for the same bytes
+                                                                // is skipped, while genuinely new/appended content still imports.
                                                                 let mut cache = processed_files_clone.lock().unwrap();
-                                                                cache.insert(path_str.clone(), now);
+                                                                cache.insert(path_str.clone(), (now, fingerprint));
                                                                 log::info!("   📝 Updated deduplication cache for {}", file_name_str);
-                                                                // Clean up old entries (older than 30 seconds)
-                                                                cache.retain(|_, &mut timestamp| now - timestamp < 30);
+                                                                // Retain for 24h so a per-day file that grows over the clinic day
+                                                                // stays deduped (the old 30s window forgot almost immediately).
+                                                                cache.retain(|_, &mut (timestamp, _)| now - timestamp < 86_400);
                                                             }
                                                             Err(e) => log::error!("   ❌ Failed to emit event for '{}': {}", name_clone, e),
                                                         }
@@ -446,5 +485,45 @@ impl FileWatcherService {
     #[allow(dead_code)]
     pub fn active_watcher_count(&self) -> usize {
         self.watchers.len()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{content_fingerprint, read_settled_file};
+    use std::io::Write;
+
+    #[test]
+    fn fingerprint_is_stable_and_distinguishes_content() {
+        let a = b"<ExigoResult>...</ExigoResult>";
+        let b = b"<ExigoResult>...</ExigoResult>";
+        let c = b"<ExigoResult>different</ExigoResult>";
+        // Same bytes -> same fingerprint (so an unchanged re-read is deduped).
+        assert_eq!(content_fingerprint(a), content_fingerprint(b));
+        // Different bytes -> different fingerprint (so new/appended content imports).
+        assert_ne!(content_fingerprint(a), content_fingerprint(c));
+    }
+
+    #[test]
+    fn read_settled_file_returns_full_content() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("BM-53672_result.xml");
+        let payload = b"<ExigoResult><WBC>8.1</WBC></ExigoResult>";
+        std::fs::File::create(&path).unwrap().write_all(payload).unwrap();
+
+        let data = read_settled_file(&path).unwrap();
+        assert_eq!(data, payload);
+    }
+
+    #[test]
+    fn read_settled_file_reports_empty_for_zero_byte_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("BM-53672_empty.xml");
+        std::fs::File::create(&path).unwrap(); // 0 bytes
+
+        // The caller (watcher) treats an empty read as "skip"; here we just
+        // confirm the helper faithfully reports emptiness rather than erroring.
+        let data = read_settled_file(&path).unwrap();
+        assert!(data.is_empty());
     }
 }
