@@ -1,6 +1,7 @@
-use crate::services::device_input::{scan_ports, start_listen, stop_listen, get_all_connection_statuses, enrich_port_info_with_device_names, PortInfo, DeviceConnectionStatus};
+use crate::services::device_input::{scan_ports, start_listen, stop_listen, get_all_connection_statuses, enrich_port_info_with_device_names, PortInfo, DeviceConnectionStatus, ConnectionState};
 use crate::services::file_watcher::{get_all_file_watcher_statuses, FileWatcherStatus};
 use crate::services::device_integration::DeviceIntegrationService;
+use crate::models::device_integration::ConnectionType;
 use crate::database::SeaOrmPool;
 use crate::models::Patient;
 use tauri::{State, AppHandle};
@@ -125,6 +126,68 @@ fn normalize_for_match(s: &str) -> String {
         }
     }
     out.trim().to_string()
+}
+
+/// Manually (re)connect serial device listeners that aren't currently connected.
+///
+/// Backs the "refresh" button in the device status bar. For every enabled serial-port
+/// integration whose live status is not `Connected`, this stops any existing listener
+/// (waking it out of its backoff sleep) and starts a fresh connection attempt right
+/// away — so the user doesn't have to wait out the retry interval after fixing a cable,
+/// powering on an instrument, or reselecting a renumbered port. Already-connected
+/// devices are left untouched so we never interrupt a working stream.
+///
+/// Returns the connection statuses after kicking off the attempts.
+#[tauri::command]
+pub async fn reconnect_device_listeners(
+    app_handle: AppHandle,
+    pool: State<'_, SeaOrmPool>,
+) -> Result<Vec<DeviceConnectionStatus>, String> {
+    let integrations = DeviceIntegrationService::get_all(&pool).await?;
+
+    // integration_ids that are currently connected — skip these.
+    let connected: std::collections::HashSet<i64> = get_all_connection_statuses()
+        .into_iter()
+        .filter(|s| s.status == ConnectionState::Connected)
+        .map(|s| s.integration_id)
+        .collect();
+
+    for integration in integrations {
+        if !integration.enabled || integration.connection_type != ConnectionType::SerialPort {
+            continue;
+        }
+        let Some(port_name) = integration.serial_port_name.clone() else {
+            continue;
+        };
+        if connected.contains(&integration.id) {
+            log::info!("↩️  Reconnect: integration {} ({}) already connected, skipping",
+                integration.id, port_name);
+            continue;
+        }
+
+        let device_type = integration.device_type.to_db_string().to_string();
+        log::info!("🔁 Manual reconnect requested for integration {} ({} / {})",
+            integration.id, port_name, device_type);
+
+        // Stop any stale/sleeping listener, then immediately start a fresh attempt.
+        stop_listen(&port_name, &device_type);
+        if let Err(e) = start_listen(app_handle.clone(), port_name.clone(), device_type.clone(), integration.id) {
+            log::error!("❌ Manual reconnect failed to start listener for integration {} ({}): {}",
+                integration.id, port_name, e);
+        }
+    }
+
+    Ok(get_all_connection_statuses())
+}
+
+/// Lightweight list of the serial port names currently present on the system.
+///
+/// Unlike `get_available_ports`, this skips USB-vendor name enrichment (which can hit
+/// the network), so it's cheap enough to call from the dashboard status bar to detect
+/// when a configured port has gone missing (e.g. a renumbered COM port).
+#[tauri::command]
+pub fn list_serial_port_names() -> Result<Vec<String>, String> {
+    Ok(scan_ports()?.into_iter().map(|p| p.port_name).collect())
 }
 
 /// Resolve a patient from an identifier (microchip ID, name, etc.)

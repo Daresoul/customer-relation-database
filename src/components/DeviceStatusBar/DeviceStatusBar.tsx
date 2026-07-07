@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Space, Tooltip, Typography, App } from 'antd';
-import { ApiOutlined, SettingOutlined, FolderOutlined, UsbOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { ApiOutlined, SettingOutlined, FolderOutlined, UsbOutlined, ThunderboltOutlined, ReloadOutlined } from '@ant-design/icons';
+import { invoke } from '@tauri-apps/api';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useDeviceIntegrations, useDeviceConnectionStatus, useFileWatcherStatus } from '../../hooks/useDeviceIntegrations';
@@ -129,9 +130,52 @@ export const DeviceStatusBar: React.FC = () => {
 
   // Only show on main dashboard
   const isMainDashboard = location.pathname === '/';
+  const { notification } = App.useApp();
   const { data: integrations, isLoading } = useDeviceIntegrations();
-  const { getStatus: getSerialStatus } = useDeviceConnectionStatus();
+  const { getStatus: getSerialStatus, refetch: refetchSerialStatuses } = useDeviceConnectionStatus();
   const { getStatus: getFileWatcherStatus } = useFileWatcherStatus();
+
+  // Names of serial ports currently present on the system. Used to detect when a
+  // configured port has gone missing (e.g. a COM port that got renumbered), so we
+  // can show "port not found" instead of a vague error.
+  const [availablePorts, setAvailablePorts] = useState<string[] | null>(null);
+  const [reconnecting, setReconnecting] = useState(false);
+
+  const scanPorts = useCallback(async () => {
+    try {
+      const names = await invoke<string[]>('list_serial_port_names');
+      setAvailablePorts(names);
+    } catch {
+      // Non-critical: leave as-is if the scan fails.
+    }
+  }, []);
+
+  useEffect(() => {
+    scanPorts();
+  }, [scanPorts]);
+
+  const handleReconnect = useCallback(async () => {
+    if (reconnecting) return;
+    setReconnecting(true);
+    notification.info({
+      message: t('notifications.reconnectStarted'),
+      description: t('notifications.reconnectStartedDesc'),
+      placement: 'bottomRight',
+      duration: 2,
+    });
+    try {
+      await invoke('reconnect_device_listeners');
+      await Promise.all([scanPorts(), refetchSerialStatuses()]);
+    } catch (e) {
+      notification.warning({
+        message: t('notifications.reconnectFailed'),
+        description: String(e),
+        placement: 'bottomRight',
+      });
+    } finally {
+      setReconnecting(false);
+    }
+  }, [reconnecting, notification, t, scanPorts, refetchSerialStatuses]);
 
   // Get enabled integrations by type
   const serialPortIntegrations = integrations?.filter(
@@ -211,8 +255,19 @@ export const DeviceStatusBar: React.FC = () => {
           {/* Serial Port Integrations */}
           {serialPortIntegrations.map((integration) => {
             const status = getSerialStatus(integration.id);
-            const statusColor = getSerialStatusColor(status?.status);
-            const statusText = getSerialStatusText(status?.status, status?.retry_count, status?.last_error);
+            const isConnected = status?.status === 'Connected';
+            // Only trust "port missing" once we have a successful scan and the device
+            // isn't already connected (a connected device is obviously present).
+            const portMissing =
+              !isConnected &&
+              !!integration.serialPortName &&
+              availablePorts !== null &&
+              !availablePorts.includes(integration.serialPortName);
+
+            const statusColor = portMissing ? '#ff4d4f' : getSerialStatusColor(status?.status);
+            const statusText = portMissing
+              ? t('status.portNotFound', { port: integration.serialPortName })
+              : getSerialStatusText(status?.status, status?.retry_count, status?.last_error);
 
             return (
               <Tooltip
@@ -223,6 +278,16 @@ export const DeviceStatusBar: React.FC = () => {
                     <div>{getDeviceTypeDisplayName(integration.deviceType as any)}</div>
                     <div>{t('tooltips.port', { port: integration.serialPortName })}</div>
                     <div>{t('tooltips.status', { status: statusText })}</div>
+                    {portMissing && (
+                      <div>
+                        {availablePorts && availablePorts.length > 0
+                          ? t('tooltips.portNotFound', {
+                              port: integration.serialPortName,
+                              available: availablePorts.join(', '),
+                            })
+                          : t('tooltips.noPortsAvailable')}
+                      </div>
+                    )}
                   </div>
                 }
               >
@@ -281,6 +346,15 @@ export const DeviceStatusBar: React.FC = () => {
             </div>
           </Tooltip>
         )}
+
+        <Tooltip title={t('tooltips.reconnect')}>
+          <ReloadOutlined
+            className={styles.settingsIcon}
+            spin={reconnecting}
+            onClick={reconnecting ? undefined : handleReconnect}
+            style={{ cursor: reconnecting ? 'default' : 'pointer' }}
+          />
+        </Tooltip>
 
         <Tooltip title={t('tooltips.deviceSettings')}>
           <SettingOutlined

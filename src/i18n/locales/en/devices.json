@@ -13,6 +13,8 @@
     "error": "Error",
     "errorWithMessage": "Error: {{message}}",
     "errorRetrying": "Error: {{message}} - retrying...",
+    "portNotFound": "Port {{port}} not found - retrying...",
+    "reconnecting": "Reconnecting...",
     "unknown": "Unknown",
     "watching": "Watching for files",
     "stopped": "Stopped",
@@ -84,7 +86,15 @@
     "port": "Port: {{port}}",
     "status": "Status: {{status}}",
     "directory": "Directory: {{directory}}",
-    "pattern": "Pattern: {{pattern}}"
+    "pattern": "Pattern: {{pattern}}",
+    "reconnect": "Reconnect disconnected devices",
+    "portNotFound": "Configured port {{port}} is not present. Available: {{available}}",
+    "noPortsAvailable": "No serial ports detected"
+  },
+  "notifications": {
+    "reconnectStarted": "Reconnecting devices",
+    "reconnectStartedDesc": "Retrying connection to disconnected devices...",
+    "reconnectFailed": "Reconnect failed"
   },
   "buttons": {
     "refresh": "Refresh",

@@ -13,6 +13,8 @@
     "error": "Грешка",
     "errorWithMessage": "Грешка: {{message}}",
     "errorRetrying": "Грешка: {{message}} — се обидува повторно...",
+    "portNotFound": "Портот {{port}} не е пронајден — се обидува повторно...",
+    "reconnecting": "Повторно поврзување...",
     "unknown": "Непознато",
     "watching": "Следи датотеки",
     "stopped": "Запрено",
@@ -84,7 +86,15 @@
     "port": "Порт: {{port}}",
     "status": "Статус: {{status}}",
     "directory": "Директориум: {{directory}}",
-    "pattern": "Шема: {{pattern}}"
+    "pattern": "Шема: {{pattern}}",
+    "reconnect": "Повторно поврзи ги исклучените уреди",
+    "portNotFound": "Конфигурираниот порт {{port}} не е присутен. Достапни: {{available}}",
+    "noPortsAvailable": "Не се откриени сериски портови"
+  },
+  "notifications": {
+    "reconnectStarted": "Повторно поврзување на уредите",
+    "reconnectStartedDesc": "Се обидува повторно да ги поврзе исклучените уреди...",
+    "reconnectFailed": "Неуспешно повторно поврзување"
   },
   "buttons": {
     "refresh": "Освежи",

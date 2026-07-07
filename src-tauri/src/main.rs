@@ -563,6 +563,8 @@ fn main() {
             commands::resolve_patient_from_identifier,
             commands::start_device_integration_listener,
             commands::stop_device_integration_listener,
+            commands::reconnect_device_listeners,
+            commands::list_serial_port_names,
             commands::get_device_connection_statuses,
             commands::get_file_watcher_statuses,
             // Device integration commands
