@@ -23,6 +23,7 @@ pub mod backup;
 pub mod managed_hid_scanner;
 pub mod hid_devices;
 pub mod diagnosis;
+pub mod telemetry;
 
 pub use patient::*;
 pub use database::*;
@@ -49,3 +50,4 @@ pub use backup::*;
 pub use managed_hid_scanner::*;
 pub use hid_devices::*;
 pub use diagnosis::*;
+pub use telemetry::*;

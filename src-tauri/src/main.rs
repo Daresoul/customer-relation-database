@@ -20,21 +20,18 @@ use log::LevelFilter;
 use services::device_capture::start_device_capture;
 
 fn main() {
-    // Pick which Sentry "environment" this build reports as. Sentry treats
-    // `environment` as a first-class field — the dashboard has built-in
-    // filtering, separate alert rules, and isolated issue tracking per
-    // environment, all without needing custom tags. Far cleaner than
-    // tagging the build type ourselves.
-    //
-    // Three environments cover every way this binary actually runs:
+    // Pick which "environment" this build reports as. The value flows into
+    // log lines (as the `environment` label on Loki streams) so a single
+    // Grafana instance can serve events from multiple build types without
+    // cross-contamination.
     //
     //   e2e_test:    Running under WDio (TAURI_E2E=1). Events from CI runs
-    //                shouldn't pollute production alerts.
+    //                shouldn't pollute production queries.
     //   development: Debug build (`cargo tauri dev`). All the dev-machine
     //                noise stays here.
     //   production:  Release build, not under E2E. This is what installed
-    //                binaries report as. Anything serious that fires here
-    //                is a real user-facing issue.
+    //                binaries report as. Anything serious here is a real
+    //                user-facing issue.
     //
     // The TAURI_E2E check goes first because a release binary started with
     // that env var IS an E2E run, not production — same binary, different
@@ -47,27 +44,35 @@ fn main() {
         "production"
     };
 
-    // Initialize Sentry FIRST so panics during early setup are still captured.
-    // The guard must live for the whole of main(); when it's dropped Sentry
-    // flushes pending events on a short timeout before the process exits.
-    let _sentry_guard = sentry::init((
-        "https://e563160f60072e45b88d783b3f153172@o4511411837861888.ingest.de.sentry.io/4511411842187344",
-        sentry::ClientOptions {
-            release: sentry::release_name!(),
-            environment: Some(environment.into()),
-            send_default_pii: true,
-            // Cap breadcrumb trail at 100 entries (matches Sentry default but
-            // explicit so a future raise doesn't silently bloat events).
-            max_breadcrumbs: 100,
-            ..Default::default()
-        },
-    ));
+    // Install a panic hook so any panic — including during early setup,
+    // before tauri-plugin-log is fully wired up — gets recorded as an
+    // error log line. The line lands in vet-clinic.log, where the Loki
+    // shipper tails it. If the process crashes immediately we may not
+    // flush in time, but on next launch the shipper resumes from the
+    // saved offset and ships the panic line then.
+    std::panic::set_hook(Box::new(|info| {
+        let location = info
+            .location()
+            .map(|l| format!("{}:{}", l.file(), l.line()))
+            .unwrap_or_else(|| "unknown".to_string());
+        let backtrace = format!("{}", std::backtrace::Backtrace::force_capture());
+        services::telemetry::event(
+            log::Level::Error,
+            "panic",
+            &format!("PANIC: {}", info),
+            serde_json::json!({
+                "location": location,
+                "backtrace": backtrace,
+            }),
+        );
+    }));
 
-    // Identify this machine in Sentry so we can tell which install reported
-    // an event. Resolution order:
+    // Identify this machine for the `clinic` label on Loki streams. Same
+    // resolution order Sentry used to read into its machine_name tag —
+    // changed destination, identical data flow:
     //
-    //   1. ARKIVET_MACHINE_NAME env var — explicit override, set this when
-    //      the OS hostname isn't recognizable (e.g. "DESKTOP-AB12CD34").
+    //   1. ARKIVET_MACHINE_NAME env var — explicit override, set this
+    //      when the OS hostname isn't recognizable (e.g. "DESKTOP-AB12CD34").
     //      Recommended values are short human labels: "Reception PC",
     //      "Surgery Room", "Dev Laptop", "Win Test VM". Set via:
     //        Windows: System Properties → Environment Variables → New
@@ -76,12 +81,12 @@ fn main() {
     //                 in your shell rc; remember Tauri inherits the
     //                 launching shell's env.
     //   2. OS hostname — COMPUTERNAME / HOSTNAME / HOST. Always available
-    //      so the dashboard never shows a blank machine_name tag.
+    //      so the Loki `clinic` label is never empty.
     //   3. "unknown" — only if all of the above are missing.
     //
-    // The os_user tag is auto-only — it identifies which OS user account
-    // ran the app, useful when a clinic has staff accounts but one
-    // machine_name.
+    // os_user identifies which OS user account ran the app, useful when
+    // a clinic has staff accounts but one machine. Carried as JSON in
+    // the startup event below alongside the resolved hostname.
     let hostname_auto = std::env::var("COMPUTERNAME")
         .or_else(|_| std::env::var("HOSTNAME"))
         .or_else(|_| std::env::var("HOST"))
@@ -93,32 +98,6 @@ fn main() {
     let os_user = std::env::var("USERNAME")
         .or_else(|_| std::env::var("USER"))
         .unwrap_or_else(|_| "unknown".to_string());
-
-    sentry::configure_scope(|scope| {
-        scope.set_tag("machine_name", &machine_name);
-        // Also publish the raw OS hostname when overridden, so we don't
-        // lose the auto-detected value when an explicit machine_name is set.
-        if machine_name != hostname_auto {
-            scope.set_tag("os_hostname", &hostname_auto);
-        }
-        scope.set_tag("os_user", &os_user);
-        scope.set_tag("build_environment", environment);
-        scope.set_user(Some(sentry::User {
-            username: Some(format!("{os_user}@{machine_name}")),
-            ..Default::default()
-        }));
-    });
-
-    // Startup breadcrumb so any subsequent event has at least one anchor
-    // entry in its trail showing which build / machine produced it.
-    sentry::add_breadcrumb(sentry::Breadcrumb {
-        category: Some("app.lifecycle".into()),
-        message: Some(format!(
-            "Arkivet started on {machine_name} (user: {os_user}, env: {environment})"
-        )),
-        level: sentry::Level::Info,
-        ..Default::default()
-    });
 
     // Load environment variables from .env file
     dotenv::dotenv().ok();
@@ -274,7 +253,35 @@ fn main() {
             }
             _ => {}
         })
-        .setup(|app| {
+        .setup(move |app| {
+            // Anchor startup event. Carries the resolved machine identity
+            // so any later event in this session can be cross-referenced
+            // against "which build ran this?" Captured by the Loki shipper
+            // below — but lands in vet-clinic.log either way, so it's
+            // visible locally even when the shipper is disabled.
+            services::telemetry::event(
+                services::telemetry::Level::Info,
+                "app.lifecycle",
+                &format!("Arkivet started on {machine_name} (user: {os_user}, env: {environment})"),
+                serde_json::json!({
+                    "machine_name": machine_name,
+                    "os_user": os_user,
+                    "os_hostname": hostname_auto,
+                    "environment": environment,
+                }),
+            );
+
+            // Spawn the Loki log shipper. Reads ARKIVET_LOKI_URL/USER/PASSWORD
+            // from the environment, falling back to compile-time-baked
+            // production credentials. In dev builds without env vars, this
+            // is a no-op. See services::loki_shipper for the full design.
+            let shipper_config = services::loki_shipper::config_from_env(
+                &app.handle(),
+                machine_name.clone(),
+                environment,
+            );
+            services::loki_shipper::start(shipper_config);
+
             // Start device-level scanner capture (Windows/macOS dev environments).
             //
             // The hidapi enumeration loop briefly opens HID handles for
@@ -617,6 +624,10 @@ fn main() {
             commands::get_diagnoses_for_record,
             commands::set_diagnoses_for_record,
             commands::get_diagnoses_for_patient,
+            // Bridges React-side telemetry (ErrorBoundary, invoke wrapper)
+            // into Rust's structured logger so frontend events flow through
+            // the same vet-clinic.log → Loki pipeline.
+            commands::log_event,
         ])
         .run(context)
         .expect("error while running tauri application");

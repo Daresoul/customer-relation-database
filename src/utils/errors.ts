@@ -4,10 +4,10 @@
  * This module provides:
  * 1. Custom error classes for different error types
  * 2. Error extraction and normalization
- * 3. Error reporting infrastructure (extensible for Sentry, etc.)
+ * 3. Error reporting infrastructure (currently routed to the Rust
+ *    `log_event` command — see setErrorReporter example below for wiring)
  * 4. User-friendly error message generation
  *
- * @see https://blog.sentry.io/guide-to-error-and-exception-handling-in-react/
  * @see https://medium.com/carousell-insider/mastering-error-handling-in-frontend-applications-a-comprehensive-guide-2df73846385b
  */
 
@@ -822,19 +822,23 @@ let errorReporter: ErrorReporter =
 
 /**
  * Set the global error reporter
- * Use this to integrate Sentry or other services:
+ * Use this to forward errors into our Loki-backed telemetry pipeline:
  *
  * @example
  * // In your app initialization:
- * import * as Sentry from '@sentry/react';
+ * import { invoke } from '@tauri-apps/api/tauri';
  *
  * setErrorReporter({
- *   report: (error) => Sentry.captureException(error.originalError, {
- *     tags: { category: error.category },
- *     extra: error.context,
+ *   report: (error) => invoke('log_event', {
+ *     input: {
+ *       level: error.severity === 'critical' ? 'error' : 'warn',
+ *       subsystem: `app.${error.category}`,
+ *       message: error.message,
+ *       extras: { code: error.code, context: error.context, stack: error.stack },
+ *     },
  *   }),
- *   setUser: (id, data) => Sentry.setUser({ id, ...data }),
- *   addBreadcrumb: (msg, data) => Sentry.addBreadcrumb({ message: msg, data }),
+ *   setUser: () => {},          // identities flow via the `clinic` Loki label
+ *   addBreadcrumb: () => {},    // all events are first-class log lines now
  * });
  */
 export function setErrorReporter(reporter: ErrorReporter): void {

@@ -188,39 +188,35 @@ pub fn start_device_capture(app: AppHandle) {
             Ok(v) => v,
             Err(e) => {
                 log::warn!("HIDAPI not available: {}", e);
-                // Promote to Sentry — hidapi failing means the scanner
-                // capture path can't run at all. Silent failure would
-                // leave clinics wondering why scans aren't appearing.
-                let err_str = format!("{e}");
-                sentry::with_scope(
-                    |scope| {
-                        scope.set_tag("subsystem", "device_capture");
-                        scope.set_tag("failure", "hidapi_init");
-                        scope.set_extra("error", err_str.clone().into());
-                    },
-                    || {
-                        sentry::capture_message(
-                            "device_capture: HidApi::new() failed — \
-                             scanner capture path disabled",
-                            sentry::Level::Warning,
-                        );
-                    },
+                // Promote as a structured event — hidapi failing means
+                // the scanner capture path can't run at all. Silent
+                // failure would leave clinics wondering why scans aren't
+                // appearing.
+                crate::services::telemetry::event(
+                    crate::services::telemetry::Level::Warn,
+                    "device_capture",
+                    "device_capture: HidApi::new() failed — scanner capture path disabled",
+                    serde_json::json!({
+                        "failure": "hidapi_init",
+                        "error": format!("{e}"),
+                    }),
                 );
                 return;
             }
         };
 
-        // Startup breadcrumb so subsequent Sentry events show whether the
-        // hidapi loop is the active enumerator. The doubling investigation
-        // identified this path as a suspect (it briefly opens HID handles
-        // on every matched scanner) — having this anchor in the trail
-        // makes future bug reports immediately interpretable.
-        sentry::add_breadcrumb(sentry::Breadcrumb {
-            category: Some("device_capture".into()),
-            message: Some("hidapi enumeration loop started".into()),
-            level: sentry::Level::Info,
-            ..Default::default()
-        });
+        // Startup anchor event so subsequent failures in this subsystem
+        // are easy to correlate with "did the loop ever start?" The
+        // doubling investigation identified this path as a suspect (it
+        // briefly opens HID handles on every matched scanner) — having
+        // this breadcrumb in the trail makes future bug reports
+        // immediately interpretable.
+        crate::services::telemetry::event(
+            crate::services::telemetry::Level::Info,
+            "device_capture",
+            "hidapi enumeration loop started",
+            serde_json::json!({}),
+        );
 
         loop {
             // Re-enumerate devices each pass to detect plug/unplug
