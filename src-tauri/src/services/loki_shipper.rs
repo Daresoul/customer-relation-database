@@ -669,7 +669,7 @@ mod tests {
 
     #[test]
     fn strips_basename_extension() {
-        assert_eq!(basename_without_ext("vet-clinic.log"), "vet-clinic");
+        assert_eq!(basename_without_ext("Arkivet.log"), "Arkivet");
         assert_eq!(basename_without_ext("raw_COM5-2026-06-03.log"), "raw_COM5-2026-06-03");
         assert_eq!(basename_without_ext("no_extension"), "no_extension");
     }
@@ -708,7 +708,7 @@ mod tests {
         let path = tmp.path().join("state.json");
 
         let mut state = ShipperState::default();
-        state.offsets.insert("/path/to/vet-clinic.log".to_string(), 12345);
+        state.offsets.insert("/path/to/Arkivet.log".to_string(), 12345);
         state.offsets.insert("/path/to/raw_COM5-2026-06-03.log".to_string(), 678);
 
         save_state(&path, &state).unwrap();

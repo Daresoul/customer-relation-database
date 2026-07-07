@@ -46,7 +46,7 @@ fn main() {
 
     // Install a panic hook so any panic — including during early setup,
     // before tauri-plugin-log is fully wired up — gets recorded as an
-    // error log line. The line lands in vet-clinic.log, where the Loki
+    // error log line. The line lands in Arkivet.log, where the Loki
     // shipper tails it. If the process crashes immediately we may not
     // flush in time, but on next launch the shipper resumes from the
     // saved offset and ships the panic line then.
@@ -257,7 +257,7 @@ fn main() {
             // Anchor startup event. Carries the resolved machine identity
             // so any later event in this session can be cross-referenced
             // against "which build ran this?" Captured by the Loki shipper
-            // below — but lands in vet-clinic.log either way, so it's
+            // below — but lands in Arkivet.log either way, so it's
             // visible locally even when the shipper is disabled.
             services::telemetry::event(
                 services::telemetry::Level::Info,
@@ -629,7 +629,7 @@ fn main() {
             commands::get_diagnoses_for_patient,
             // Bridges React-side telemetry (ErrorBoundary, invoke wrapper)
             // into Rust's structured logger so frontend events flow through
-            // the same vet-clinic.log → Loki pipeline.
+            // the same Arkivet.log → Loki pipeline.
             commands::log_event,
         ])
         .run(context)

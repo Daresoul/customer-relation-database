@@ -5,7 +5,7 @@
 //! Rust gives us:
 //! - One credential (in the binary, not the JS bundle)
 //! - The same offline-queue semantics as Rust-side events (the line lands
-//!   in `vet-clinic.log` first, then the shipper picks it up)
+//!   in `Arkivet.log` first, then the shipper picks it up)
 //! - A single Loki stream label set for both frontend and backend telemetry
 
 use serde::Deserialize;

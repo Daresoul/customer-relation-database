@@ -2,7 +2,7 @@
 //!
 //! Two surfaces are kept tidy by this module:
 //!   1. The main app log written by `tauri-plugin-log` (single file, e.g.
-//!      `vet-clinic.log`) — rotated at app startup based on the file's
+//!      `Arkivet.log`) — rotated at app startup based on the file's
 //!      last-modified date. The plugin opens its file handle for the whole
 //!      session and we can't make it re-open mid-run, so rotation here is
 //!      a startup-only pass: if today is not the file's last-modified
@@ -229,13 +229,13 @@ mod tests {
 
         touch(tmp.path(), &format!("vet-clinic-{}.log", old));
         touch(tmp.path(), &format!("vet-clinic-{}.log", recent));
-        touch(tmp.path(), "vet-clinic.log"); // live, no date
+        touch(tmp.path(), "Arkivet.log"); // live, no date
 
         prune_old_logs(tmp.path(), 30);
 
         assert!(!tmp.path().join(format!("vet-clinic-{}.log", old)).exists());
         assert!(tmp.path().join(format!("vet-clinic-{}.log", recent)).exists());
-        assert!(tmp.path().join("vet-clinic.log").exists());
+        assert!(tmp.path().join("Arkivet.log").exists());
     }
 
     #[test]

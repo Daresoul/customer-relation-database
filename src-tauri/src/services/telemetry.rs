@@ -30,7 +30,7 @@
 //!
 //! ## Local-only fallback
 //!
-//! If Loki is unreachable, these lines still land in `vet-clinic.log`
+//! If Loki is unreachable, these lines still land in `Arkivet.log`
 //! the same way every other log line does — `grep '\[event\]'` over the
 //! local file is a perfectly serviceable degraded mode.
 
@@ -50,7 +50,7 @@ pub use log::Level;
 pub fn event(level: Level, subsystem: &str, message: &str, extras: Value) {
     let payload = build_payload(subsystem, extras);
     // log::log!() routes through tauri-plugin-log which writes to the
-    // current vet-clinic.log file. The Loki shipper tails that file and
+    // current Arkivet.log file. The Loki shipper tails that file and
     // forwards lines — see services::loki_shipper.
     log::log!(level, "[event] {} | {}", message, payload);
 }
