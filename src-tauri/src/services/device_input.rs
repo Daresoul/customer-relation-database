@@ -370,6 +370,24 @@ impl FrameAssembler {
         msg
     }
 
+    /// Number of bytes currently buffered mid-frame (0 when between frames).
+    fn partial_len(&self) -> usize {
+        self.data.len()
+    }
+
+    /// Drop a stalled partial frame so its bytes can't be prepended to — and
+    /// corrupt — the next message. Returns how many bytes were discarded.
+    /// Needed because a device that stops mid-frame (power-off, cable yank)
+    /// otherwise leaves that fragment in the buffer until the next result,
+    /// which is especially dangerous for Healvet (no start symbol to re-anchor).
+    fn discard_partial(&mut self, protocol: &DeviceProtocol) -> usize {
+        let n = self.data.len();
+        self.data.clear();
+        self.consecutive_end_symbols = 0;
+        self.started = protocol.start_symbol.is_none();
+        n
+    }
+
     /// Feed one byte; returns the completed message when a frame terminates.
     fn push_byte(&mut self, byte: u8, protocol: &DeviceProtocol) -> Option<Vec<u8>> {
         if byte == protocol.end_symbol && self.started {
@@ -1318,6 +1336,13 @@ fn handle_listening_serial(
     let mut buffer = vec![0; 1024];
     let mut total_bytes_read = 0u64;
     let mut read_count = 0u64;
+    // Time of the last byte received. If a frame stalls partway (device powered
+    // off / cable pulled mid-transmission) we flush the partial buffer after this
+    // idle gap so its bytes don't get prepended to — and corrupt — the next
+    // result. A real frame streams with sub-second inter-byte gaps at these baud
+    // rates, so seconds of silence mid-frame means the frame was abandoned.
+    let mut last_byte_at = Instant::now();
+    const INTER_FRAME_IDLE_FLUSH: Duration = Duration::from_secs(5);
 
     log::info!("📖 Starting serial port read loop for {} ({})", device_type, port_name);
     log::info!("   🔍 Protocol - Start symbol: {:?}, End symbol: {:?}",
@@ -1350,6 +1375,7 @@ fn handle_listening_serial(
                     log::debug!("📊 Read statistics for {} ({}): {} reads, {} total bytes",
                         device_type, port_name, read_count, total_bytes_read);
                 }
+                last_byte_at = Instant::now();
                 for i in 0..bytes_read {
                     if let Some(message) = assembler.push_byte(buffer[i], &protocol) {
                         log::info!("📦 Complete message received from {} ({}) - Size: {} bytes",
@@ -1360,7 +1386,14 @@ fn handle_listening_serial(
                 }
             }
             Ok(_) => {}
-            Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => {}
+            Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => {
+                // Flush a stalled partial frame so it can't corrupt the next result.
+                if assembler.partial_len() > 0 && last_byte_at.elapsed() >= INTER_FRAME_IDLE_FLUSH {
+                    let dropped = assembler.discard_partial(&protocol);
+                    log::warn!("🧹 Discarded {}-byte stalled partial frame from {} ({}) after {:?} idle",
+                        dropped, device_type, port_name, INTER_FRAME_IDLE_FLUSH);
+                }
+            }
             Err(ref e) if e.kind() == std::io::ErrorKind::BrokenPipe ||
             e.kind() == std::io::ErrorKind::ConnectionAborted ||
             e.kind() == std::io::ErrorKind::Interrupted ||
@@ -1473,5 +1506,29 @@ mod frame_assembler_tests {
         // A new start begins a fresh frame.
         for &b in &[0x0B, b'B'] { assert!(asm.push_byte(b, &p).is_none()); }
         assert_eq!(asm.push_byte(0x1C, &p), Some(b"B".to_vec()));
+    }
+
+    #[test]
+    fn discard_partial_clears_stalled_frame_so_next_is_clean() {
+        // Healvet: a partial frame stalls, gets flushed, then a full frame
+        // arrives and must NOT be prepended with the stale bytes.
+        let p = healvet();
+        let mut asm = FrameAssembler::new(&p);
+        for &b in b"PARTIAL&" { assert!(asm.push_byte(b, &p).is_none()); }
+        assert_eq!(asm.partial_len(), 8);
+        assert_eq!(asm.discard_partial(&p), 8);
+        assert_eq!(asm.partial_len(), 0);
+        // Next complete frame is uncontaminated.
+        assert_eq!(feed_into(&mut asm, &p, b"GOOD&EE"), vec![b"GOOD&".to_vec()]);
+    }
+
+    fn feed_into(asm: &mut FrameAssembler, protocol: &DeviceProtocol, bytes: &[u8]) -> Vec<Vec<u8>> {
+        let mut frames = Vec::new();
+        for &b in bytes {
+            if let Some(f) = asm.push_byte(b, protocol) {
+                frames.push(f);
+            }
+        }
+        frames
     }
 }
