@@ -335,6 +335,97 @@ pub fn get_device_protocol(device_type: &str) -> DeviceProtocol {
     }
 }
 
+/// Byte-at-a-time frame assembler for the serial read loop.
+///
+/// Extracted from the read loop so the (device-specific, easy-to-get-wrong)
+/// framing rules can be unit-tested without a real serial port. Feed bytes with
+/// [`FrameAssembler::push_byte`]; it returns `Some(frame)` when a complete
+/// message terminates, preserving the exact per-device terminator rules:
+///   - Healvet (`end_symbol == b'E'`, no start symbol): terminated by `EE`.
+///   - MNCHIP PointCare/PCR (`start 0x0B`, `end 0x1C`): single-byte terminator.
+///   - Devices whose end symbol is `0x0D`: terminated by `\r\r`, keeping a lone
+///     `\r` as a line delimiter (legacy path; no current device uses it).
+///   - Other devices: single end byte terminates.
+struct FrameAssembler {
+    data: Vec<u8>,
+    started: bool,
+    consecutive_end_symbols: u32,
+}
+
+impl FrameAssembler {
+    fn new(protocol: &DeviceProtocol) -> Self {
+        FrameAssembler {
+            data: Vec::new(),
+            // With no start symbol we're "started" immediately.
+            started: protocol.start_symbol.is_none(),
+            consecutive_end_symbols: 0,
+        }
+    }
+
+    /// Reset state and hand back the accumulated frame.
+    fn take_frame(&mut self, protocol: &DeviceProtocol) -> Vec<u8> {
+        let msg = std::mem::take(&mut self.data);
+        self.consecutive_end_symbols = 0;
+        self.started = protocol.start_symbol.is_none();
+        msg
+    }
+
+    /// Feed one byte; returns the completed message when a frame terminates.
+    fn push_byte(&mut self, byte: u8, protocol: &DeviceProtocol) -> Option<Vec<u8>> {
+        if byte == protocol.end_symbol && self.started {
+            self.consecutive_end_symbols += 1;
+
+            // Healvet uses "EE" (two E's) as the end marker.
+            if protocol.end_symbol == b'E' && self.consecutive_end_symbols == 2 {
+                return Some(self.take_frame(protocol));
+            }
+            // Legacy "\r\r" framing (kept for compatibility; unused by current devices).
+            else if protocol.end_symbol == 0x0D && self.consecutive_end_symbols == 2 {
+                if !self.data.is_empty() {
+                    return Some(self.take_frame(protocol));
+                }
+                self.consecutive_end_symbols = 0;
+                self.started = protocol.start_symbol.is_none();
+                return None;
+            }
+            else if protocol.end_symbol == 0x0D && self.consecutive_end_symbols == 1 {
+                // First '\r' — keep it as a line delimiter.
+                self.data.push(byte);
+                return None;
+            }
+            // Single-byte terminator (e.g. HL7 MLLP 0x1C, or newline).
+            else if protocol.end_symbol != b'E' && protocol.end_symbol != 0x0D {
+                return Some(self.take_frame(protocol));
+            }
+            // Healvet with a single 'E' so far: we can't tell yet whether it
+            // begins the "EE" terminator or is a payload byte, so hold it (don't
+            // push). If the next byte isn't 'E', the branch below re-injects it.
+            None
+        } else if let Some(start_byte) = protocol.start_symbol {
+            self.consecutive_end_symbols = 0;
+            if byte == start_byte && !self.started {
+                self.started = true;
+            } else if self.started {
+                self.data.push(byte);
+            }
+            None
+        } else if self.started {
+            // No start symbol (Healvet): accumulate everything. If we were
+            // holding a single 'E' that turned out NOT to begin the "EE"
+            // terminator, re-inject it first — otherwise every lone 'E' inside
+            // the payload is silently dropped, corrupting or blanking results.
+            if self.consecutive_end_symbols == 1 && protocol.end_symbol == b'E' {
+                self.data.push(protocol.end_symbol);
+            }
+            self.consecutive_end_symbols = 0;
+            self.data.push(byte);
+            None
+        } else {
+            None
+        }
+    }
+}
+
 /// Extract friendly description from virtual port name
 fn get_virtual_port_description(port_name: &str) -> String {
     if port_name.contains("ttyHealvet") {
@@ -1223,10 +1314,8 @@ fn handle_listening_serial(
         }
     }
 
-    let mut data: Vec<u8> = Vec::new();
+    let mut assembler = FrameAssembler::new(&protocol);
     let mut buffer = vec![0; 1024];
-    let mut started: bool = protocol.start_symbol.is_none(); // If no start symbol, always "started"
-    let mut consecutive_end_symbols = 0; // For devices that use "EE" as end marker
     let mut total_bytes_read = 0u64;
     let mut read_count = 0u64;
 
@@ -1262,65 +1351,11 @@ fn handle_listening_serial(
                         device_type, port_name, read_count, total_bytes_read);
                 }
                 for i in 0..bytes_read {
-                    if buffer[i] == protocol.end_symbol && started {
-                        consecutive_end_symbols += 1;
-
-                        // Healvet uses "EE" (two E's) as end marker
-                        if protocol.end_symbol == b'E' && consecutive_end_symbols == 2 {
-                            log::info!("📦 Complete message received from {} ({}) - Size: {} bytes (Healvet protocol)",
-                                device_type, port_name, data.len());
-                            // Parse and emit device data
-                            handle_device_data(&app_handle, &data, &port_name, &device_type);
-
-                            data.clear();
-                            consecutive_end_symbols = 0;
-                            // Reset started state based on whether we have a start symbol
-                            started = protocol.start_symbol.is_none();
-                        }
-                        // Pointcare (MNCHIP) uses "\r\r" (two carriage returns) as end marker
-                        else if protocol.end_symbol == 0x0D && consecutive_end_symbols == 2 {
-                            // Only process if we have actual data (not just the \r characters)
-                            if !data.is_empty() {
-                                log::info!("📦 Complete message received from {} ({}) - Size: {} bytes (Pointcare protocol)",
-                                    device_type, port_name, data.len());
-                                // Parse and emit device data
-                                handle_device_data(&app_handle, &data, &port_name, &device_type);
-
-                                data.clear();
-                            }
-                            consecutive_end_symbols = 0;
-                            started = protocol.start_symbol.is_none();
-                        }
-                        else if protocol.end_symbol == 0x0D && consecutive_end_symbols == 1 {
-                            // First \r for Pointcare - add it to data as line delimiter
-                            data.push(buffer[i]);
-                        }
-                        else if protocol.end_symbol != b'E' && protocol.end_symbol != 0x0D {
-                            log::info!("📦 Complete message received from {} ({}) - Size: {} bytes (Generic protocol)",
-                                device_type, port_name, data.len());
-                            // Single end symbol (like newline) for other devices
-                            // Parse and emit device data
-                            handle_device_data(&app_handle, &data, &port_name, &device_type);
-
-                            data.clear();
-                            consecutive_end_symbols = 0;
-                            started = protocol.start_symbol.is_none();
-                        }
-                        // else: still accumulating end symbols (E's for Healvet)
-                    }
-                    else if let Some(start_byte) = protocol.start_symbol {
-                        consecutive_end_symbols = 0; // Reset counter
-                        if buffer[i] == start_byte && !started {
-                            log::info!("🎯 Start symbol detected for {} ({}), beginning data collection",
-                                device_type, port_name);
-                            started = true;
-                        } else if started {
-                            data.push(buffer[i])
-                        }
-                    } else if started {
-                        consecutive_end_symbols = 0; // Reset counter
-                        // No start symbol defined, accumulate all data
-                        data.push(buffer[i])
+                    if let Some(message) = assembler.push_byte(buffer[i], &protocol) {
+                        log::info!("📦 Complete message received from {} ({}) - Size: {} bytes",
+                            device_type, port_name, message.len());
+                        // Parse and emit device data
+                        handle_device_data(&app_handle, &message, &port_name, &device_type);
                     }
                 }
             }
@@ -1355,4 +1390,88 @@ fn handle_listening_serial(
         }
     }
     // Note: Loop never exits normally - all exits are via return statements above
+}
+
+#[cfg(test)]
+mod frame_assembler_tests {
+    use super::{DeviceProtocol, FrameAssembler};
+
+    fn feed(protocol: &DeviceProtocol, bytes: &[u8]) -> Vec<Vec<u8>> {
+        let mut asm = FrameAssembler::new(protocol);
+        let mut frames = Vec::new();
+        for &b in bytes {
+            if let Some(f) = asm.push_byte(b, protocol) {
+                frames.push(f);
+            }
+        }
+        frames
+    }
+
+    fn healvet() -> DeviceProtocol {
+        DeviceProtocol { start_symbol: None, end_symbol: b'E', baud_rate: 9600 }
+    }
+    fn pointcare() -> DeviceProtocol {
+        DeviceProtocol { start_symbol: Some(0x0B), end_symbol: 0x1C, baud_rate: 115200 }
+    }
+
+    #[test]
+    fn healvet_preserves_lone_e_in_payload() {
+        // "ABEC" contains a single 'E' mid-payload; frame terminated by "EE".
+        // Before the fix the lone 'E' was silently dropped -> "ABC".
+        let p = healvet();
+        let frames = feed(&p, b"ABEC EE".iter().filter(|&&b| b != b' ').cloned().collect::<Vec<_>>().as_slice());
+        assert_eq!(frames, vec![b"ABEC".to_vec()]);
+    }
+
+    #[test]
+    fn healvet_ee_terminates_and_is_stripped() {
+        let p = healvet();
+        assert_eq!(feed(&p, b"XYEE"), vec![b"XY".to_vec()]);
+    }
+
+    #[test]
+    fn healvet_multiple_frames_and_realistic_payload() {
+        let p = healvet();
+        // Two frames back-to-back; second has 'E's in "SERUM"/"FELINE"-style text.
+        let frames = feed(&p, b"AFS1000&FELINE&EE#N&SERUM&EE");
+        assert_eq!(
+            frames,
+            vec![b"AFS1000&FELINE&".to_vec(), b"#N&SERUM&".to_vec()]
+        );
+    }
+
+    #[test]
+    fn healvet_ee_split_across_reads_still_terminates() {
+        // The two terminator E's can arrive in separate reads; counter persists.
+        let p = healvet();
+        let mut asm = FrameAssembler::new(&p);
+        for &b in b"AB" { assert!(asm.push_byte(b, &p).is_none()); }
+        assert!(asm.push_byte(b'E', &p).is_none()); // first terminator E, held
+        assert_eq!(asm.push_byte(b'E', &p), Some(b"AB".to_vec())); // second E completes
+    }
+
+    #[test]
+    fn pointcare_frames_between_start_and_single_terminator() {
+        // Start 0x0B, payload, single 0x1C terminator; bytes before start ignored.
+        let p = pointcare();
+        let mut input = vec![b'x', b'x']; // junk before start — ignored
+        input.push(0x0B);
+        input.extend_from_slice(b"MSH|^~");
+        input.push(0x1C);
+        assert_eq!(feed(&p, &input), vec![b"MSH|^~".to_vec()]);
+    }
+
+    #[test]
+    fn pointcare_requires_new_start_after_frame() {
+        let p = pointcare();
+        let mut asm = FrameAssembler::new(&p);
+        for &b in &[0x0B, b'A', 0x1C] {
+            let _ = asm.push_byte(b, &p);
+        }
+        // After a completed frame, bytes without a fresh 0x0B are dropped.
+        assert!(asm.push_byte(b'Z', &p).is_none());
+        // A new start begins a fresh frame.
+        for &b in &[0x0B, b'B'] { assert!(asm.push_byte(b, &p).is_none()); }
+        assert_eq!(asm.push_byte(0x1C, &p), Some(b"B".to_vec()));
+    }
 }
