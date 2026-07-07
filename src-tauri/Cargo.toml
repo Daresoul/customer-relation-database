@@ -42,9 +42,11 @@ dirs = "5.0"
 log = "0.4"
 tauri-plugin-log = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "v1" }
 tauri-plugin-autostart = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "v1" }
-sentry = "0.41"
+# gzip compression for outbound Loki push payloads — raw serial logs run
+# 10× smaller compressed, which adds up when shipping continuously.
+flate2 = "1.0"
 # Pin transitive `time` below 0.3.47 — newer versions bumped MSRV to 1.88,
-# but our toolchain is 1.86. Bump along with sentry/rustc when upgrading.
+# but our toolchain is 1.86. Bump along with rustc when upgrading.
 time = "=0.3.36"
 # Generates TypeScript interfaces from #[derive(TS)] structs. The derive is a
 # no-op at runtime in production; tests under tests/ts_gen.rs invoke

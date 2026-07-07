@@ -3,7 +3,8 @@
  * Handles automatic case transformation between frontend (camelCase) and backend (snake_case)
  */
 
-// Import the Sentry-wrapped invoke so command failures are auto-reported.
+// Import the telemetry-wrapped invoke so command failures are auto-reported
+// via the Rust-side log_event command (which feeds vet-clinic.log → Loki).
 // Reporting lives in one place (services/invoke.ts) to avoid double-capture.
 import { invoke } from './invoke';
 import { ApiError, TauriError } from '../types/api';

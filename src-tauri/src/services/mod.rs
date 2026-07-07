@@ -24,3 +24,5 @@ pub mod managed_hid_scanner;
 pub mod raw_input_capture;
 pub mod diagnosis;
 pub mod log_rotation;
+pub mod telemetry;
+pub mod loki_shipper;
