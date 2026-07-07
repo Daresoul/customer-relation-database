@@ -71,6 +71,62 @@ pub async fn stop_device_integration_listener(
     Ok(())
 }
 
+/// Normalise a name/identifier to a common lowercased-Latin form for matching.
+///
+/// Two things happen: (1) Unicode-aware lowercasing, and (2) Macedonian Cyrillic
+/// → Latin transliteration. Lab analyzers emit patient names in Latin
+/// (e.g. "FIBI", "ceca") while patients are stored in Cyrillic (e.g. "Фиби",
+/// "цеца"); case-folding alone can't bridge the two scripts. Non-Cyrillic
+/// characters pass through unchanged, so pure-Latin and pure-Cyrillic inputs both
+/// normalise to the same key (`normalize_for_match("FIBI") == normalize_for_match("Фиби")`).
+///
+/// The table is the standard Macedonian romanisation. It won't be letter-perfect
+/// for every device convention (e.g. some emit "sh"/"š"/"s" for ш), but it
+/// resolves the common single-letter cases that were failing.
+fn normalize_for_match(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for ch in s.chars() {
+        // Lowercase first (Unicode-aware): 'Ф' → 'ф', 'A' → 'a', etc.
+        for lc in ch.to_lowercase() {
+            match lc {
+                'а' => out.push('a'),
+                'б' => out.push('b'),
+                'в' => out.push('v'),
+                'г' => out.push('g'),
+                'д' => out.push('d'),
+                'ѓ' => out.push_str("gj"),
+                'е' => out.push('e'),
+                'ж' => out.push_str("zh"),
+                'з' => out.push('z'),
+                'ѕ' => out.push_str("dz"),
+                'и' => out.push('i'),
+                'ј' => out.push('j'),
+                'к' => out.push('k'),
+                'л' => out.push('l'),
+                'љ' => out.push_str("lj"),
+                'м' => out.push('m'),
+                'н' => out.push('n'),
+                'њ' => out.push_str("nj"),
+                'о' => out.push('o'),
+                'п' => out.push('p'),
+                'р' => out.push('r'),
+                'с' => out.push('s'),
+                'т' => out.push('t'),
+                'ќ' => out.push_str("kj"),
+                'у' => out.push('u'),
+                'ф' => out.push('f'),
+                'х' => out.push('h'),
+                'ц' => out.push('c'),
+                'ч' => out.push_str("ch"),
+                'џ' => out.push_str("dj"),
+                'ш' => out.push_str("sh"),
+                other => out.push(other),
+            }
+        }
+    }
+    out.trim().to_string()
+}
+
 /// Resolve a patient from an identifier (microchip ID, name, etc.)
 /// Searches in order: microchip_id, name
 #[tauri::command]
@@ -110,12 +166,12 @@ pub async fn resolve_patient_from_identifier(
     // failed to auto-match to existing patients whose name casing
     // differed from how the device formatted it.
     //
-    // Fix: lowercase BOTH sides in Rust (Unicode-aware via
-    // `String::to_lowercase`) and compare the result. Cheap because
-    // the patients table is small enough that scanning is fine — and
-    // identifier-based device input only fires occasionally during a
-    // clinic day, not in a hot loop.
-    let target = identifier.to_lowercase();
+    // Fix: normalise BOTH sides to a common lowercased-Latin form (Unicode
+    // case-fold + Macedonian Cyrillic→Latin transliteration) and compare, so a
+    // device-supplied Latin name like "FIBI" matches a patient stored as "Фиби".
+    // Cheap because the patients table is small enough to scan, and device input
+    // only fires occasionally during a clinic day, not in a hot loop.
+    let target = normalize_for_match(&identifier);
     let rows = pool.query_all(Statement::from_string(
         DbBackend::Sqlite,
         "SELECT p.id, p.name, p.species_id, p.breed_id, p.gender, p.date_of_birth,
@@ -143,12 +199,12 @@ pub async fn resolve_patient_from_identifier(
             Ok(n) => n,
             Err(_) => continue,
         };
-        let name_lower = name.to_lowercase();
-        let score = if name_lower == target {
+        let name_norm = normalize_for_match(&name);
+        let score = if name_norm == target {
             0u8
-        } else if name_lower.starts_with(&target) {
+        } else if name_norm.starts_with(&target) {
             1u8
-        } else if name_lower.contains(&target) {
+        } else if name_norm.contains(&target) {
             2u8
         } else {
             continue;
@@ -209,4 +265,32 @@ fn row_to_patient(row: &sea_orm::QueryResult) -> Result<Patient, String> {
         updated_at,
         microchip_id: row.try_get("", "microchip_id").unwrap_or(None),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_for_match;
+
+    #[test]
+    fn latin_device_name_matches_cyrillic_patient() {
+        // The real cases from production: device emits Latin, patient stored Cyrillic.
+        assert_eq!(normalize_for_match("FIBI"), normalize_for_match("Фиби"));
+        assert_eq!(normalize_for_match("FIBI"), "fibi");
+        assert_eq!(normalize_for_match("ceca"), normalize_for_match("цеца"));
+        assert_eq!(normalize_for_match("ceca"), "ceca");
+    }
+
+    #[test]
+    fn transliterates_common_names() {
+        assert_eq!(normalize_for_match("Лори"), "lori");
+        assert_eq!(normalize_for_match("бубу"), "bubu");
+        // Multi-letter romanisation.
+        assert_eq!(normalize_for_match("Шарко"), "sharko");
+    }
+
+    #[test]
+    fn pure_latin_passes_through_lowercased() {
+        assert_eq!(normalize_for_match("Vini"), "vini");
+        assert_eq!(normalize_for_match("  ABI  "), "abi"); // trimmed
+    }
 }
