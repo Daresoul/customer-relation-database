@@ -6,6 +6,17 @@ import type {
   PendingDeviceEntryWithFile,
 } from '../types/fileHistory';
 
+/** Raw device file pulled back from history (bytes + device metadata). */
+export interface DeviceFileDownload {
+  fileName: string;
+  fileData: number[];
+  mimeType: string;
+  deviceType: string;
+  deviceName: string;
+  connectionMethod?: string | null;
+  testResults?: unknown;
+}
+
 export const fileHistoryService = {
   /**
    * Get recent device files from the last N days (default 14)
@@ -63,5 +74,22 @@ export const fileHistoryService = {
   /** Mark a pending device entry processed */
   async markPendingEntryProcessed(id: number): Promise<void> {
     return await invoke('mark_pending_entry_processed', { id });
+  },
+
+  /**
+   * Fetch a previously-received device file's bytes + metadata from history,
+   * so it can be re-added to the current import flow.
+   */
+  async downloadDeviceFile(fileId: string): Promise<DeviceFileDownload> {
+    return await invoke('download_device_file', { fileId });
+  },
+
+  /**
+   * Open a device file's raw content in the OS default app (for debugging /
+   * inspecting exactly what a device sent). The backend copies it to a temp file
+   * with the original extension so it opens in the right viewer.
+   */
+  async openDeviceFile(fileId: string): Promise<void> {
+    return await invoke('open_device_file', { fileId });
   },
 };

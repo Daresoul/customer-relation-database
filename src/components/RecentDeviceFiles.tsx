@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Table, Button, Tag, Space, Typography, Tooltip, App, Modal } from 'antd';
-import { ClockCircleOutlined, CheckCircleOutlined, WarningOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
+import { ClockCircleOutlined, CheckCircleOutlined, WarningOutlined, EyeOutlined, PlusOutlined, FileSearchOutlined } from '@ant-design/icons';
 import { fileHistoryService } from '../services/fileHistoryService';
 import type { FileAccessHistoryWithRecord } from '../types/fileHistory';
 import dayjs from 'dayjs';
@@ -56,6 +56,22 @@ const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, da
     }
   };
 
+  /**
+   * Open the file's raw bytes in the OS default app — for debugging what a device
+   * actually sent (e.g. inspecting the XML/JSON, checking a 0-byte or malformed file).
+   */
+  const handleOpenFile = async (file: FileAccessHistoryWithRecord) => {
+    const hide = message.loading(`Opening ${file.originalName}…`, 0);
+    try {
+      await fileHistoryService.openDeviceFile(file.fileId);
+      hide();
+    } catch (error) {
+      hide();
+      console.error('[RecentDeviceFiles] Failed to open device file:', error);
+      message.error(`Could not open file: ${error}`);
+    }
+  };
+
   const handleViewFile = (file: FileAccessHistoryWithRecord) => {
     Modal.info({
       title: 'File Details',
@@ -75,6 +91,11 @@ const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, da
             </>
           )}
           <p><strong>Attachment Count:</strong> {file.attachmentCount}</p>
+          <div style={{ marginTop: 16 }}>
+            <Button icon={<FileSearchOutlined />} onClick={() => handleOpenFile(file)}>
+              Open file
+            </Button>
+          </div>
         </div>
       ),
     });
@@ -162,16 +183,26 @@ const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, da
     {
       title: 'Actions',
       key: 'actions',
-      width: 180,
+      width: 210,
       fixed: 'right' as const,
       render: (_: any, record: FileAccessHistoryWithRecord) => (
         <Space size="small">
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleViewFile(record)}
-          />
+          <Tooltip title="File details">
+            <Button
+              type="link"
+              size="small"
+              icon={<EyeOutlined />}
+              onClick={() => handleViewFile(record)}
+            />
+          </Tooltip>
+          <Tooltip title="Open file (debug)">
+            <Button
+              type="link"
+              size="small"
+              icon={<FileSearchOutlined />}
+              onClick={() => handleOpenFile(record)}
+            />
+          </Tooltip>
           {onAddToRecord && (
             <Button
               type="primary"

@@ -83,6 +83,7 @@ const DeviceImportModal: React.FC = () => {
   const {
     modalOpen,
     suggestedPatientId,
+    addDeviceFile,
     removeDeviceFile,
     clearAllFiles,
     closeModal,
@@ -93,6 +94,17 @@ const DeviceImportModal: React.FC = () => {
 
   const pendingFiles = getGroupedFiles();
   const { patients, refreshPatients, loading: patientsLoading } = usePatients();
+
+  // Prefill the "save for later" serial once — from the matched patient's name or
+  // the device-supplied identifier — so staff don't retype what we already know.
+  const firstIdentifier = pendingFiles[0]?.patientIdentifier;
+  useEffect(() => {
+    if (patientSerial.trim()) return; // never clobber manual entry
+    const matched = suggestedPatientId ? patients.find((p) => p.id === suggestedPatientId) : undefined;
+    const prefill = matched?.name || firstIdentifier || '';
+    if (prefill) setPatientSerial(prefill);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suggestedPatientId, firstIdentifier, patients]);
   const { settings } = useAppSettings();
   const createMutation = useCreateMedicalRecord();
   const uploadMutation = useUploadAttachment();
@@ -249,14 +261,39 @@ const DeviceImportModal: React.FC = () => {
     });
   };
 
-  const handleAddRecentFile = (fileId: string, originalName: string) => {
-    notification.info({
-      message: 'Recent File Selected',
-      description: `Selected file: ${originalName}. This feature will be fully implemented to add the file to the pending list.`,
-      placement: 'bottomRight',
-      duration: 4,
-    });
-    setRecentFilesDrawerOpen(false);
+  const handleAddRecentFile = async (fileId: string, originalName: string) => {
+    try {
+      // Pull the stored file's bytes + device metadata back from history and add
+      // it to the current import as a pending file, so it flows through the same
+      // create/attach path as a freshly-received result.
+      const dl = await fileHistoryService.downloadDeviceFile(fileId);
+      addDeviceFile({
+        id: `recent-${fileId}-${Date.now()}`,
+        deviceType: dl.deviceType,
+        deviceName: dl.deviceName,
+        connectionMethod: dl.connectionMethod || 'file_history',
+        fileName: dl.fileName,
+        fileData: dl.fileData,
+        mimeType: dl.mimeType,
+        testResults: dl.testResults,
+        patientIdentifier: undefined,
+        detectedAt: new Date().toISOString(),
+      });
+      notification.success({
+        message: t('common:success'),
+        description: `Added "${originalName}" to this import.`,
+        placement: 'bottomRight',
+        duration: 3,
+      });
+      setRecentFilesDrawerOpen(false);
+    } catch (e: any) {
+      console.error('Add recent file failed:', e);
+      notification.error({
+        message: t('common:error'),
+        description: e?.message || `Failed to add "${originalName}"`,
+        placement: 'bottomRight',
+      });
+    }
   };
 
   const handleSaveForLater = async () => {

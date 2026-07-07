@@ -581,6 +581,7 @@ fn main() {
             commands::update_file_attachment,
             commands::cleanup_old_file_history,
             commands::download_device_file,
+            commands::open_device_file,
             // Pending device entries (Save for later)
             commands::save_device_files_for_later,
             commands::list_pending_device_entries,

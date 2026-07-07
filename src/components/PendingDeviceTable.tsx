@@ -8,7 +8,12 @@ import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
 
-const PendingDeviceTable: React.FC = () => {
+interface PendingDeviceTableProps {
+  /** Called with the current pending-entry count after each load, so a parent can badge it. */
+  onItemsLoaded?: (count: number) => void;
+}
+
+const PendingDeviceTable: React.FC<PendingDeviceTableProps> = ({ onItemsLoaded }) => {
   const [items, setItems] = useState<PendingDeviceEntryWithFile[]>([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
@@ -21,6 +26,7 @@ const PendingDeviceTable: React.FC = () => {
     try {
       const res = await fileHistoryService.listPendingDeviceEntries(query);
       setItems(res);
+      onItemsLoaded?.(res.length);
     } catch (e) {
       console.error(e);
       message.error('Failed to load saved items');
