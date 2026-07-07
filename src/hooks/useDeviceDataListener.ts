@@ -43,7 +43,7 @@ export const useDeviceDataListener = () => {
         let resolvedPatientId: number | undefined;
         if (data.patientIdentifier) {
           try {
-            const result = await invoke<{ id: number } | null>(
+            const result = await invoke<{ id: number; name?: string | null } | null>(
               'resolve_patient_from_identifier',
               { identifier: data.patientIdentifier }
             );
@@ -51,18 +51,22 @@ export const useDeviceDataListener = () => {
             if (result) {
               resolvedPatientId = result.id;
 
+              const who = result.name ? `: ${result.name}` : '';
               notificationRef.current.success({
-                message: 'Device Data Received',
-                description: `File from ${data.deviceName} - Patient auto-detected`,
+                message: 'Lab result received',
+                description: `${data.deviceName} — patient matched${who}`,
                 placement: 'bottomRight',
                 duration: 4,
               });
             } else {
-              notificationRef.current.info({
-                message: 'Device Data Received',
-                description: `File from ${data.deviceName} - Please select patient manually`,
+              // Say WHICH identifier failed so staff know what was searched and
+              // don't blindly create a duplicate patient. Longer duration — the
+              // manual case needs the tech to actually act on it.
+              notificationRef.current.warning({
+                message: 'Lab result received',
+                description: `${data.deviceName} — no patient matched "${data.patientIdentifier}". Select the patient manually.`,
                 placement: 'bottomRight',
-                duration: 4,
+                duration: 8,
               });
             }
           } catch (_error) {
@@ -70,10 +74,10 @@ export const useDeviceDataListener = () => {
           }
         } else {
           notificationRef.current.info({
-            message: 'Device Data Received',
-            description: `File from ${data.deviceName} - Please select patient`,
+            message: 'Lab result received',
+            description: `${data.deviceName} sent a result with no patient ID. Select the patient manually.`,
             placement: 'bottomRight',
-            duration: 4,
+            duration: 6,
           });
         }
 

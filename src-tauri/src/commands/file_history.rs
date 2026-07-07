@@ -357,6 +357,50 @@ pub async fn download_device_file(
     })
 }
 
+/// Open a device file (raw analyzer output tracked in file_access_history) in the
+/// OS default app — for debugging/inspecting exactly what a device sent.
+///
+/// Device files are stored on disk without an extension, so we copy the bytes to
+/// a temp file that keeps the original name (and thus its `.xml`/`.json`
+/// extension) before opening, ensuring the OS picks the right viewer. Mirrors how
+/// medical attachments are materialized.
+#[tauri::command]
+pub async fn open_device_file(
+    pool: State<'_, SeaOrmPool>,
+    file_id: String,
+) -> Result<(), String> {
+    let row = pool.query_one(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "SELECT original_name, file_path FROM file_access_history WHERE file_id = ?",
+        [file_id.into()]
+    ))
+    .await
+    .map_err(|e| format!("Failed to fetch file metadata: {}", e))?
+    .ok_or("File not found in history")?;
+
+    let original_name: String = row.try_get("", "original_name")
+        .map_err(|e| format!("Failed to get original_name: {}", e))?;
+    let file_path: String = row.try_get("", "file_path")
+        .map_err(|e| format!("Failed to get file_path: {}", e))?;
+
+    let file_data = std::fs::read(&file_path)
+        .map_err(|e| format!("Failed to read device file (it may have been pruned): {}", e))?;
+
+    // Copy to a temp file that preserves the original name/extension so the OS
+    // opens it in the correct application.
+    let mut tmp_dir = std::env::temp_dir();
+    tmp_dir.push("vet-clinic-device-files");
+    std::fs::create_dir_all(&tmp_dir)
+        .map_err(|e| format!("Failed to create temp dir: {}", e))?;
+    let target = tmp_dir.join(&original_name);
+    std::fs::write(&target, &file_data)
+        .map_err(|e| format!("Failed to write temp file: {}", e))?;
+
+    crate::services::file_storage::FileStorageService::open_path_with_default_app(
+        &target.display().to_string(),
+    )
+}
+
 /// Response for download_device_file with device metadata
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]

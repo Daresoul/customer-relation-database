@@ -3,7 +3,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Card, Row, Col, Statistic, Space, Tabs, Avatar, TabsProps, App, InputNumber, Modal } from 'antd';
+import { Card, Row, Col, Statistic, Space, Tabs, Avatar, TabsProps, App, InputNumber, Modal, Badge } from 'antd';
 import { TeamOutlined, HeartOutlined, CalendarOutlined, RiseOutlined, UserOutlined, HomeOutlined, FileTextOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 // Removed AppLayout - using simpler layout
@@ -13,6 +13,7 @@ import { PatientSearch } from '../components/search/PatientSearch';
 import { HouseholdSearch } from '../components/search/HouseholdSearch';
 import { Button } from '../components/common/Button';
 import PendingDeviceTable from '../components/PendingDeviceTable';
+import { fileHistoryService } from '../services/fileHistoryService';
 import { invoke } from '@/services/invoke';
 import { FormModal } from '../components/common/Modal';
 import { PatientFormWithOwner } from '../components/forms/PatientFormWithOwner';
@@ -42,6 +43,24 @@ export const MainDashboard: React.FC = () => {
   // Local tab state so we can include custom tabs (like 'saved')
   const [activeTab, setActiveTab] = useState<string>(activeView);
   useEffect(() => setActiveTab(activeView), [activeView]);
+
+  // Count of device results parked in "Saved for Later", shown as a badge on the
+  // tab so staff can see there's a queue without opening it. The table only mounts
+  // when its tab is active, so the dashboard tracks the count independently.
+  const [pendingCount, setPendingCount] = useState(0);
+  const loadPendingCount = React.useCallback(async () => {
+    try {
+      const res = await fileHistoryService.listPendingDeviceEntries();
+      setPendingCount(res.length);
+    } catch {
+      // non-critical
+    }
+  }, []);
+  useEffect(() => {
+    loadPendingCount();
+    const interval = setInterval(loadPendingCount, 60000);
+    return () => clearInterval(interval);
+  }, [loadPendingCount]);
   const [loading, setLoading] = useState(true);
   const [patients, setPatients] = useState<PatientWithHousehold[]>([]);
   const [households, setHouseholds] = useState<HouseholdTableRecord[]>([]);
@@ -415,6 +434,8 @@ export const MainDashboard: React.FC = () => {
               else if (key === 'households') setCurrentView('household');
               else if (key === 'appointments') setCurrentView('appointments');
               // 'saved' is a local-only tab; no view context update needed
+              // Keep the badge fresh as staff move between tabs.
+              loadPendingCount();
             }}
             tabBarExtraContent={
               <Space>
@@ -511,9 +532,12 @@ export const MainDashboard: React.FC = () => {
                   <span>
                     <FileTextOutlined />
                     Saved For Later
+                    {pendingCount > 0 && (
+                      <Badge count={pendingCount} size="small" style={{ marginLeft: 8 }} />
+                    )}
                   </span>
                 ),
-                children: <PendingDeviceTable />,
+                children: <PendingDeviceTable onItemsLoaded={setPendingCount} />,
               },
             ]}
           />
