@@ -79,8 +79,10 @@ const PendingDeviceTable: React.FC<PendingDeviceTableProps> = ({ onItemsLoaded }
                 let resolvedId: number | undefined;
                 if (data.patientIdentifier) {
                   try {
-                    const resolved = await invoke<{ id: number } | null>('resolve_patient_from_identifier', { identifier: data.patientIdentifier });
-                    if (resolved) resolvedId = resolved.id;
+                    // Only pre-select on a confident match (microchip or a unique
+                    // name); an ambiguous name returns no patient, so the tech picks.
+                    const match = await invoke<{ patient: { id: number } | null }>('resolve_patient_from_identifier', { identifier: data.patientIdentifier });
+                    if (match?.patient) resolvedId = match.patient.id;
                   } catch {}
                 }
                 const fileBytes: number[] = data.fileData || [];

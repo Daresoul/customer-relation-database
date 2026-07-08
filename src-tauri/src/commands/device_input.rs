@@ -190,13 +190,85 @@ pub fn list_serial_port_names() -> Result<Vec<String>, String> {
     Ok(scan_ports()?.into_iter().map(|p| p.port_name).collect())
 }
 
-/// Resolve a patient from an identifier (microchip ID, name, etc.)
-/// Searches in order: microchip_id, name
+/// Result of resolving a device-supplied identifier to a clinic patient.
+///
+/// `method` tells the UI *how* we matched so it can show the right confidence:
+/// a `microchip` hit is authoritative and safe to auto-select; a `name` hit is a
+/// suggestion the tech must verify (names aren't unique). When several patients
+/// match a name we return `ambiguous` with no patient, so the UI forces a manual
+/// pick rather than silently binding a result to one of several same-named pets.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PatientMatch {
+    pub patient: Option<Patient>,
+    pub method: String, // "microchip" | "name" | "none"
+    pub ambiguous: bool,
+    pub candidate_count: u32,
+}
+
+/// Outcome of name-based candidate selection (pure, unit-tested).
+#[derive(Debug, PartialEq)]
+enum NameSelection {
+    Unique(usize),  // exactly one best-scoring candidate, at this row index
+    Ambiguous(u32), // multiple candidates tie for the best score
+    NoMatch,
+}
+
+/// Pick the single best name match, or report ambiguity. Scores each candidate
+/// name against the (already normalized) target — 0 exact, 1 starts-with, 2
+/// contains — and returns `Unique` only when exactly one candidate holds the best
+/// score. An empty target matches nothing (guards against `contains("")` matching
+/// every patient).
+fn select_name_match(target: &str, names: &[String]) -> NameSelection {
+    if target.is_empty() {
+        return NameSelection::NoMatch;
+    }
+    let mut best_score: Option<u8> = None;
+    let mut best_idx: usize = 0;
+    let mut best_count: u32 = 0;
+    for (i, name) in names.iter().enumerate() {
+        let n = normalize_for_match(name);
+        let score = if n == target {
+            0u8
+        } else if n.starts_with(target) {
+            1u8
+        } else if n.contains(target) {
+            2u8
+        } else {
+            continue;
+        };
+        match best_score {
+            None => {
+                best_score = Some(score);
+                best_idx = i;
+                best_count = 1;
+            }
+            Some(b) if score < b => {
+                best_score = Some(score);
+                best_idx = i;
+                best_count = 1;
+            }
+            Some(b) if score == b => {
+                best_count += 1;
+            }
+            _ => {}
+        }
+    }
+    match best_score {
+        None => NameSelection::NoMatch,
+        Some(_) if best_count == 1 => NameSelection::Unique(best_idx),
+        Some(_) => NameSelection::Ambiguous(best_count),
+    }
+}
+
+/// Resolve a patient from a device identifier. Tries microchip (exact,
+/// authoritative) then name (suggestion; unique-only, else ambiguous). Returns a
+/// [`PatientMatch`] describing how it matched so the UI can set confidence.
 #[tauri::command]
 pub async fn resolve_patient_from_identifier(
     pool: State<'_, SeaOrmPool>,
     identifier: String,
-) -> Result<Option<Patient>, String> {
+) -> Result<PatientMatch, String> {
     // First try to find by microchip ID (exact match)
     let microchip_result = pool.query_one(Statement::from_sql_and_values(
         DbBackend::Sqlite,
@@ -216,7 +288,12 @@ pub async fn resolve_patient_from_identifier(
     .map_err(|e| format!("Database error: {}", e))?;
 
     if let Some(row) = microchip_result {
-        return Ok(Some(row_to_patient(&row)?));
+        return Ok(PatientMatch {
+            patient: Some(row_to_patient(&row)?),
+            method: "microchip".to_string(),
+            ambiguous: false,
+            candidate_count: 1,
+        });
     }
 
     // If not found by microchip, fall back to name matching.
@@ -250,43 +327,34 @@ pub async fn resolve_patient_from_identifier(
     .await
     .map_err(|e| format!("Database error: {}", e))?;
 
-    // Score each candidate the same way the old SQL did, but with
-    // Unicode-aware string ops. Lower score = better match.
-    //   0: exact match
-    //   1: name starts with the identifier
-    //   2: name contains the identifier
-    //   skip otherwise
-    let mut best: Option<(u8, sea_orm::QueryResult)> = None;
-    for row in rows {
-        let name: String = match row.try_get::<String>("", "name") {
-            Ok(n) => n,
-            Err(_) => continue,
-        };
-        let name_norm = normalize_for_match(&name);
-        let score = if name_norm == target {
-            0u8
-        } else if name_norm.starts_with(&target) {
-            1u8
-        } else if name_norm.contains(&target) {
-            2u8
-        } else {
-            continue;
-        };
-        if best.as_ref().map_or(true, |(s, _)| score < *s) {
-            best = Some((score, row));
-            // Exact match — can't do better.
-            if score == 0 {
-                break;
-            }
-        }
-    }
+    let names: Vec<String> = rows
+        .iter()
+        .map(|r| r.try_get::<String>("", "name").unwrap_or_default())
+        .collect();
 
-    if let Some((_, row)) = best {
-        return Ok(Some(row_to_patient(&row)?));
+    // Names aren't unique, so only auto-suggest a UNIQUE best match; multiple
+    // matches are reported ambiguous (no patient) so the UI forces a manual pick
+    // rather than silently binding the result to one of several same-named pets.
+    match select_name_match(&target, &names) {
+        NameSelection::Unique(i) => Ok(PatientMatch {
+            patient: Some(row_to_patient(&rows[i])?),
+            method: "name".to_string(),
+            ambiguous: false,
+            candidate_count: 1,
+        }),
+        NameSelection::Ambiguous(n) => Ok(PatientMatch {
+            patient: None,
+            method: "name".to_string(),
+            ambiguous: true,
+            candidate_count: n,
+        }),
+        NameSelection::NoMatch => Ok(PatientMatch {
+            patient: None,
+            method: "none".to_string(),
+            ambiguous: false,
+            candidate_count: 0,
+        }),
     }
-
-    // No match found
-    Ok(None)
 }
 
 fn row_to_patient(row: &sea_orm::QueryResult) -> Result<Patient, String> {
@@ -332,7 +400,40 @@ fn row_to_patient(row: &sea_orm::QueryResult) -> Result<Patient, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::normalize_for_match;
+    use super::{normalize_for_match, select_name_match, NameSelection};
+
+    fn names(v: &[&str]) -> Vec<String> {
+        v.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn name_match_unique_exact() {
+        let n = names(&["Rex", "Фиби", "Bella"]);
+        // "FIBI" normalises to the same key as "Фиби" — unique exact match.
+        assert_eq!(select_name_match(&normalize_for_match("FIBI"), &n), NameSelection::Unique(1));
+    }
+
+    #[test]
+    fn name_match_ambiguous_when_duplicates() {
+        // Two pets share the name — must NOT silently pick one.
+        let n = names(&["Bella", "bella", "Rex"]);
+        assert_eq!(select_name_match(&normalize_for_match("bella"), &n), NameSelection::Ambiguous(2));
+    }
+
+    #[test]
+    fn name_match_none_and_empty_target() {
+        let n = names(&["Rex", "Bella"]);
+        assert_eq!(select_name_match(&normalize_for_match("doli"), &n), NameSelection::NoMatch);
+        // Empty/normalised-empty identifier must not match every patient.
+        assert_eq!(select_name_match("", &n), NameSelection::NoMatch);
+    }
+
+    #[test]
+    fn name_match_exact_beats_partial_and_stays_unique() {
+        // "Rex" exact vs "Rexy" contains — exact is the unique best.
+        let n = names(&["Rexy", "Rex"]);
+        assert_eq!(select_name_match(&normalize_for_match("Rex"), &n), NameSelection::Unique(1));
+    }
 
     #[test]
     fn latin_device_name_matches_cyrillic_patient() {

@@ -43,25 +43,43 @@ export const useDeviceDataListener = () => {
         let resolvedPatientId: number | undefined;
         if (data.patientIdentifier) {
           try {
-            const result = await invoke<{ id: number; name?: string | null } | null>(
-              'resolve_patient_from_identifier',
-              { identifier: data.patientIdentifier }
-            );
+            const match = await invoke<{
+              patient: { id: number; name?: string | null } | null;
+              method: string;
+              ambiguous: boolean;
+              candidateCount: number;
+            }>('resolve_patient_from_identifier', { identifier: data.patientIdentifier });
 
-            if (result) {
-              resolvedPatientId = result.id;
-
-              const who = result.name ? `: ${result.name}` : '';
+            if (match?.patient && match.method === 'microchip') {
+              // Microchip is a unique key — safe to auto-select confidently.
+              resolvedPatientId = match.patient.id;
+              const who = match.patient.name ? `: ${match.patient.name}` : '';
               notificationRef.current.success({
                 message: 'Lab result received',
-                description: `${data.deviceName} — patient matched${who}`,
+                description: `${data.deviceName} — patient matched by microchip${who}`,
                 placement: 'bottomRight',
                 duration: 4,
               });
+            } else if (match?.patient && match.method === 'name') {
+              // Name isn't unique — pre-fill as a SUGGESTION but tell the tech to verify.
+              resolvedPatientId = match.patient.id;
+              const who = match.patient.name ? ` "${match.patient.name}"` : '';
+              notificationRef.current.warning({
+                message: 'Lab result received — verify patient',
+                description: `${data.deviceName} — matched by name${who}. Please confirm it's the right patient before saving.`,
+                placement: 'bottomRight',
+                duration: 8,
+              });
+            } else if (match?.ambiguous) {
+              // Several patients share this name — never auto-pick one; force a manual choice.
+              notificationRef.current.warning({
+                message: 'Lab result received — select patient',
+                description: `${data.deviceName} — ${match.candidateCount} patients match "${data.patientIdentifier}". Select the correct patient manually.`,
+                placement: 'bottomRight',
+                duration: 8,
+              });
             } else {
-              // Say WHICH identifier failed so staff know what was searched and
-              // don't blindly create a duplicate patient. Longer duration — the
-              // manual case needs the tech to actually act on it.
+              // No match — say what was searched so staff don't create a duplicate.
               notificationRef.current.warning({
                 message: 'Lab result received',
                 description: `${data.deviceName} — no patient matched "${data.patientIdentifier}". Select the patient manually.`,
