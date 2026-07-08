@@ -1463,6 +1463,22 @@ mod frame_assembler_tests {
     }
 
     #[test]
+    fn healvet_value_ending_in_e_adjacent_to_terminator_is_a_known_ambiguity() {
+        // Protocol note: "EE" terminates a frame, and payloads can contain 'E'.
+        // A value whose LAST byte is 'E' with NO delimiter before the terminator
+        // ("...E" immediately followed by "EE") is genuinely ambiguous on the wire
+        // — "AEEE" is indistinguishable from "A" + "EE" + a stray "E" — and we
+        // terminate on the first "EE". Real Healvet frames always put a '&'
+        // delimiter before the terminator ("...&EE", verified in
+        // actual_data/Healvet.log), so this never occurs in practice. Pinned here
+        // so the limitation is understood, not a silent surprise.
+        let p = healvet();
+        assert_eq!(feed(&p, b"AEEE"), vec![b"A".to_vec()]);
+        // The real-world "<value>&EE" shape round-trips fully, E-containing values and all.
+        assert_eq!(feed(&p, b"Serum Plasma&EE"), vec![b"Serum Plasma&".to_vec()]);
+    }
+
+    #[test]
     fn healvet_multiple_frames_and_realistic_payload() {
         let p = healvet();
         // Two frames back-to-back; second has 'E's in "SERUM"/"FELINE"-style text.
