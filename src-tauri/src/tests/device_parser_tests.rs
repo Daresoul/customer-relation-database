@@ -439,6 +439,57 @@ OBX|1|NM||GLU|95|mg/dL|74-143|N\r\r",
     }
 
     #[test]
+    fn real_pcr_clinic_capture_extracts_sample_id_and_patient() {
+        // REAL MLLP-framed HL7 message captured from the clinic PCR on COM13.
+        const RAW: &[u8] = include_bytes!("../../tests/fixtures/real_pcr_com13.bin");
+        let data = DeviceParserService::parse_hl7_data(
+            "mnchip_pcr_analyzer",
+            "MNCHIP",
+            RAW,
+            "serial_port",
+        )
+        .unwrap();
+        let r = data.test_results.as_object().unwrap();
+        // OBR-44 -> readable run id (was AUTO-GEN before the fix).
+        assert_eq!(r.get("sample_id").and_then(|v| v.as_str()), Some("0C1231-4-0015"));
+        // Patient name comes from PID-6.
+        assert_eq!(r.get("patient_name").and_then(|v| v.as_str()), Some("olav"));
+    }
+
+    #[test]
+    fn real_chem_clinic_capture_carries_device_units_ranges_flags() {
+        // REAL MLLP-framed HL7 chemistry message captured from the clinic PointCare.
+        // Validates the data the PDF fix depends on: the device's own unit/range/flag
+        // are captured (the PDF now renders these instead of a hardcoded US table).
+        const RAW: &[u8] = include_bytes!("../../tests/fixtures/real_chem_pcv.bin");
+        let data = DeviceParserService::parse_hl7_data(
+            "mnchip_pointcare_chemistry",
+            "MNCHIP",
+            RAW,
+            "serial_port",
+        )
+        .unwrap();
+        let r = data.test_results.as_object().unwrap();
+
+        // Real values + device-supplied metadata:
+        assert_eq!(r.get("CRE").and_then(|v| v.as_str()), Some("0.86"));
+        assert_eq!(r.get("CRE_unit").and_then(|v| v.as_str()), Some("mg/dL"));
+        assert_eq!(r.get("CRE_range").and_then(|v| v.as_str()), Some("0.3-1.7"));
+
+        // GLU: device range (70-142) differs from the OLD hardcoded table (70-110)
+        // — proof the hardcoded ranges were wrong even for a mg/dL machine.
+        assert_eq!(r.get("GLU").and_then(|v| v.as_str()), Some("159"));
+        assert_eq!(r.get("GLU_range").and_then(|v| v.as_str()), Some("70-142"));
+        assert_eq!(r.get("GLU_flag").and_then(|v| v.as_str()), Some("H"));
+
+        // Sample id from OBR-44 (leading space trimmed).
+        assert_eq!(
+            r.get("sample_id").and_then(|v| v.as_str()),
+            Some("45512-10-0150-0227-97-250752-821")
+        );
+    }
+
+    #[test]
     fn parse_hl7_empty_message() {
         let hl7 = b"";
 

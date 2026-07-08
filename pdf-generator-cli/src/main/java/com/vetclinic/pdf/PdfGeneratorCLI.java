@@ -412,7 +412,14 @@ public class PdfGeneratorCLI {
             {"Na+/K+", "Na+/K+", "", "", ""},
             {"CO2", "CO2 - јаг.диоксид", "mmol/L", "17", "24"},
             {"Mg", "Mg - магнезиум", "mg/dL", "1.6", "2.4"},
-            {"TG", "TG - триглицериди", "mg/dL", "", ""}
+            {"TG", "TG - триглицериди", "mg/dL", "", ""},
+            // Present in real PointCare output but previously dropped (surfaced by
+            // the unmapped-analyte log). TBA (total bile acids) is a real result;
+            // AST/ALT and Ca*P are derived ratios/products. Units/ranges come from
+            // the device (fallbacks intentionally blank).
+            {"TBA", "TBA - жолчни киселини", "", "", ""},
+            {"AST/ALT", "AST/ALT", "", "", ""},
+            {"Ca*P", "Ca*P", "", "", ""}
         };
 
         // Vendor spelling differences: device code -> canonical table code, so

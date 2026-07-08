@@ -1490,6 +1490,28 @@ mod frame_assembler_tests {
     }
 
     #[test]
+    fn real_healvet_clinic_capture_preserves_e_containing_values() {
+        // REAL bytes captured from the clinic's Healvet on COM12 (not synthetic).
+        // The frame carries CPSE, "10 Year", and "Serum Plasma" — all with 'E's.
+        // Under the old lone-E-drop bug these were corrupted (CPSE->CPS,
+        // Serum->Srum, Year->Yar). This pins the shipped fix against real device
+        // output and guards against regression.
+        const RAW: &[u8] = include_bytes!("../../tests/fixtures/real_healvet_com12.bin");
+        let p = healvet();
+        let frames = feed(&p, RAW);
+        assert_eq!(frames.len(), 1, "expected one EE-terminated frame");
+        let s = String::from_utf8_lossy(&frames[0]);
+        // E-containing real values survive intact:
+        assert!(s.contains("CPSE"), "CPSE lost: {s}");
+        assert!(s.contains("Serum Plasma"), "Serum Plasma lost: {s}");
+        assert!(s.contains("10 Year"), "Year lost: {s}");
+        assert!(s.contains("bubu"), "patient name lost: {s}");
+        // The exact corruptions the old bug produced must NOT appear:
+        assert!(!s.contains("CPS&"), "old E-drop artifact CPS&: {s}");
+        assert!(!s.contains("Srum"), "old E-drop artifact Srum: {s}");
+    }
+
+    #[test]
     fn healvet_ee_split_across_reads_still_terminates() {
         // The two terminator E's can arrive in separate reads; counter persists.
         let p = healvet();
