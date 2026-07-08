@@ -411,6 +411,34 @@ OBX|16|NM||Ca|10.2|mg/dL|7.9-12.0|N\r\r";
     }
 
     #[test]
+    fn parse_hl7_maps_obr44_to_sample_id() {
+        // OBR-44 carries the analyzer's readable run/sample id on both MNCHIP
+        // devices (confirmed from real captures). Without this it fell back to
+        // "AUTO-GEN" on every report. Field 44 = 44 pipes after "OBR".
+        let obr = format!("OBR{}{}", "|".repeat(44), "0C1231-3-0015");
+        let hl7 = format!(
+            "MSH|^~\\&|MNCHIP|LAB|||20250114||ORU^R01|1|P|2.5\r\
+PID|1||555||DOG|doli||M\r\
+{}\r\
+OBX|1|NM||GLU|95|mg/dL|74-143|N\r\r",
+            obr
+        );
+
+        let data = DeviceParserService::parse_hl7_data(
+            "mnchip_pcr_analyzer",
+            "MNCHIP",
+            hl7.as_bytes(),
+            "serial_port",
+        )
+        .unwrap();
+        let results = data.test_results.as_object().unwrap();
+        assert_eq!(
+            results.get("sample_id").and_then(|v| v.as_str()),
+            Some("0C1231-3-0015")
+        );
+    }
+
+    #[test]
     fn parse_hl7_empty_message() {
         let hl7 = b"";
 

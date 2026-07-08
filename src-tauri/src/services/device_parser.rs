@@ -423,6 +423,11 @@ impl DeviceParserService {
                                 4 => "test_code".to_string(),
                                 7 => "test_datetime".to_string(),
                                 15 => "sample_type".to_string(),
+                                // OBR-44 carries the analyzer's readable run/sample id on both
+                                // MNCHIP devices (chemistry "45512-10-…", PCR "0C1231-3-0015"),
+                                // confirmed from real captures. The PDF bridge reads `sample_id`;
+                                // without this it always fell back to "AUTO-GEN".
+                                44 => "sample_id".to_string(),
                                 _ => format!("OBR_{}", idx),
                             };
                             test_results.insert(key, value.to_string());
