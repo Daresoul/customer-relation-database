@@ -16,7 +16,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * CLI entry point for PDF generation
@@ -375,8 +377,14 @@ public class PdfGeneratorCLI {
         JsonObject testResults = json.getAsJsonObject("test_results");
         List<Parameter> parameters = new ArrayList<>();
 
-        // Pointcare parameter definitions with units and reference ranges (dog defaults)
-        // Format: {code, translated_name, unit, ref_low, ref_high}
+        // Units, reference ranges, and abnormal flags are taken from what the
+        // DEVICE actually sent — the Rust parser captures them as `<code>_unit`,
+        // `<code>_range`, `<code>_flag`. The table below supplies only the display
+        // order, translated names, and a fallback for when the device omits
+        // metadata. Previously this table was applied unconditionally in US units,
+        // so an SI-configured analyzer (e.g. GLU in mmol/L, CRE in µmol/L) was
+        // mislabeled "mg/dL" and mis-flagged against mg/dL ranges.
+        // Format: {code, translated_name, fallback_unit, fallback_ref_low, fallback_ref_high}
         String[][] pointcareParams = {
             {"GLU", "GLU - гликоза", "mg/dL", "70", "110"},
             {"BUN", "BUN - уреа", "mg/dL", "7", "27"},
@@ -403,51 +411,153 @@ public class PdfGeneratorCLI {
             {"IBIL", "IBIL - индир.билирубин", "mg/dL", "0.0", "0.6"},
             {"Na+/K+", "Na+/K+", "", "", ""},
             {"CO2", "CO2 - јаг.диоксид", "mmol/L", "17", "24"},
-            {"Mg", "Mg - магнезиум", "mg/dL", "1.6", "2.4"}
+            {"Mg", "Mg - магнезиум", "mg/dL", "1.6", "2.4"},
+            {"TG", "TG - триглицериди", "mg/dL", "", ""}
         };
 
-        // Process parameters in order they appear in the definition
+        // Vendor spelling differences: device code -> canonical table code, so
+        // analytes aren't silently dropped when the machine labels them slightly
+        // differently than our table.
+        Map<String, String> aliasToCanonical = new HashMap<>();
+        aliasToCanonical.put("GLOB", "GLO");
+        aliasToCanonical.put("TRIG", "TG");
+        aliasToCanonical.put("Na", "Na+");
+        aliasToCanonical.put("K", "K+");
+        aliasToCanonical.put("Cl", "Cl-");
+        aliasToCanonical.put("tCO2", "CO2");
+        aliasToCanonical.put("TCO2", "CO2");
+        // canonical code -> accepted device keys (itself first, then any aliases)
+        Map<String, List<String>> deviceKeysFor = new HashMap<>();
+        for (String[] def : pointcareParams) {
+            deviceKeysFor.computeIfAbsent(def[0], k -> new ArrayList<>()).add(def[0]);
+        }
+        for (Map.Entry<String, String> e : aliasToCanonical.entrySet()) {
+            deviceKeysFor.computeIfAbsent(e.getValue(), k -> new ArrayList<>()).add(e.getKey());
+        }
+
+        // Process parameters in the table's display order.
         for (String[] paramDef : pointcareParams) {
-            String code = paramDef[0];
-            if (testResults.has(code)) {
-                Parameter parameter = new Parameter();
-                parameter.setName(paramDef[1]); // Translated name
-                parameter.setResult(testResults.get(code).getAsString());
-                parameter.setUnit(paramDef[2]); // Unit
-
-                // Set reference values
-                String refLow = paramDef[3];
-                String refHigh = paramDef[4];
-                if (!refLow.isEmpty() && !refHigh.isEmpty()) {
-                    parameter.setReferentValues(refLow + " - " + refHigh);
-
-                    // Determine indicator from reference ranges
-                    try {
-                        double resultVal = Double.parseDouble(parameter.getResult());
-                        double low = Double.parseDouble(refLow);
-                        double high = Double.parseDouble(refHigh);
-
-                        if (resultVal < low) {
-                            parameter.setIndicator(Indicator.LOW);
-                        } else if (resultVal > high) {
-                            parameter.setIndicator(Indicator.HIGH);
-                        } else {
-                            parameter.setIndicator(Indicator.NORMAL);
-                        }
-                    } catch (NumberFormatException e) {
-                        parameter.setIndicator(Indicator.NORMAL);
-                    }
-                } else {
-                    parameter.setReferentValues("");
-                    parameter.setIndicator(Indicator.NORMAL);
+            String canonical = paramDef[0];
+            String deviceKey = null;
+            for (String cand : deviceKeysFor.getOrDefault(canonical, java.util.Collections.singletonList(canonical))) {
+                if (testResults.has(cand) && !testResults.get(cand).isJsonNull()) {
+                    deviceKey = cand;
+                    break;
                 }
-
-                parameters.add(parameter);
             }
+            if (deviceKey == null) {
+                continue;
+            }
+
+            Parameter parameter = new Parameter();
+            parameter.setName(paramDef[1]); // Translated name
+            parameter.setResult(testResults.get(deviceKey).getAsString());
+
+            // Unit: device-supplied, else table fallback.
+            parameter.setUnit(getStr(testResults, deviceKey + "_unit", paramDef[2]));
+
+            // Reference range: device-supplied (verbatim), else table low/high.
+            String deviceRange = getStr(testResults, deviceKey + "_range", null);
+            String refLow = paramDef[3];
+            String refHigh = paramDef[4];
+            if (deviceRange != null && !deviceRange.isEmpty()) {
+                parameter.setReferentValues(deviceRange);
+            } else if (!refLow.isEmpty() && !refHigh.isEmpty()) {
+                parameter.setReferentValues(refLow + " - " + refHigh);
+            } else {
+                parameter.setReferentValues("");
+            }
+
+            // Indicator: trust the device's own flag first; only compute locally
+            // (against whichever range we have) when the device sent none.
+            Indicator indicator = indicatorFromFlag(getStr(testResults, deviceKey + "_flag", null));
+            if (indicator == null) {
+                indicator = computeIndicator(parameter.getResult(), deviceRange, refLow, refHigh);
+            }
+            parameter.setIndicator(indicator);
+
+            parameters.add(parameter);
         }
 
         sample.setParameters(parameters);
         return sample;
+    }
+
+    /** Read a string field from the results object; returns {@code dflt} when absent, null, or empty. */
+    private static String getStr(JsonObject o, String key, String dflt) {
+        if (o.has(key) && !o.get(key).isJsonNull()) {
+            String s = o.get(key).getAsString();
+            if (!s.isEmpty()) {
+                return s;
+            }
+        }
+        return dflt;
+    }
+
+    /** Map a device HL7 abnormal-flag (N/H/L/HH/LL/&gt;/&lt;) to an Indicator; null if absent/unknown. */
+    private static Indicator indicatorFromFlag(String flag) {
+        if (flag == null) {
+            return null;
+        }
+        String f = flag.trim().toUpperCase();
+        if (f.isEmpty()) {
+            return null;
+        }
+        if (f.startsWith("H") || f.startsWith(">")) {
+            return Indicator.HIGH;
+        }
+        if (f.startsWith("L") || f.startsWith("<")) {
+            return Indicator.LOW;
+        }
+        if (f.startsWith("N")) {
+            return Indicator.NORMAL;
+        }
+        return null;
+    }
+
+    /**
+     * Compute LOW/HIGH/NORMAL by comparing the value to the device-supplied range
+     * (preferred, format "low-high") or the fallback low/high. Any parse failure
+     * yields NORMAL so a malformed range never paints a misleading flag.
+     */
+    private static Indicator computeIndicator(String result, String deviceRange, String refLow, String refHigh) {
+        Double lo = null;
+        Double hi = null;
+        if (deviceRange != null && !deviceRange.isEmpty()) {
+            int dash = deviceRange.indexOf('-', 1); // skip a possible leading sign
+            if (dash > 0) {
+                try {
+                    lo = Double.parseDouble(deviceRange.substring(0, dash).trim());
+                    hi = Double.parseDouble(deviceRange.substring(dash + 1).trim());
+                } catch (NumberFormatException ignored) {
+                    lo = null;
+                    hi = null;
+                }
+            }
+        }
+        if ((lo == null || hi == null) && !refLow.isEmpty() && !refHigh.isEmpty()) {
+            try {
+                lo = Double.parseDouble(refLow);
+                hi = Double.parseDouble(refHigh);
+            } catch (NumberFormatException ignored) {
+                return Indicator.NORMAL;
+            }
+        }
+        if (lo == null || hi == null) {
+            return Indicator.NORMAL;
+        }
+        try {
+            double v = Double.parseDouble(result.trim());
+            if (v < lo) {
+                return Indicator.LOW;
+            }
+            if (v > hi) {
+                return Indicator.HIGH;
+            }
+            return Indicator.NORMAL;
+        } catch (NumberFormatException e) {
+            return Indicator.NORMAL;
+        }
     }
 
     private static HealvetSample parseHealvetSample(JsonObject json, PatientType patientType) {
