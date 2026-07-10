@@ -63,6 +63,9 @@ pub struct ShipperConfig {
     pub clinic: String,
     /// Used as the `environment` label: "production" / "development" / "e2e_test".
     pub environment: String,
+    /// App version (from tauri.conf.json at build). Becomes the `version`
+    /// Loki label so Grafana can group clinics by which build they run.
+    pub version: String,
     pub log_dir: PathBuf,
     pub raw_serial_dir: PathBuf,
     pub state_file: PathBuf,
@@ -76,6 +79,7 @@ pub fn config_from_env(
     app_handle: &AppHandle,
     clinic: String,
     environment: &str,
+    version: String,
 ) -> Option<ShipperConfig> {
     let url = std::env::var("ARKIVET_LOKI_URL")
         .ok()
@@ -98,6 +102,7 @@ pub fn config_from_env(
         password,
         clinic,
         environment: environment.to_string(),
+        version,
         log_dir,
         raw_serial_dir,
         state_file,
@@ -235,6 +240,9 @@ async fn run_loop(config: ShipperConfig) {
                 }
                 backoff = Duration::from_secs(30);
             }
+            // Only transient errors (network, 5xx) land here — permanent 4xx
+            // rejections are handled inside try_ship_batch by dropping the
+            // batch and advancing offsets, so they can never wedge the loop.
             Err(e) => {
                 log::warn!("loki_shipper: batch failed: {} — backing off {}s", e, backoff.as_secs());
                 tokio::time::sleep(backoff).await;
@@ -248,9 +256,52 @@ async fn run_loop(config: ShipperConfig) {
 // Batch processing
 // =============================================================================
 
-/// Read new bytes from every tracked file, build a Loki push payload,
-/// POST it, and persist new offsets on success. Returns the number of
-/// lines shipped (0 if there was nothing new).
+/// A discovered log file with everything needed to decide whether and
+/// in what order to ship from it this tick.
+struct FileCursor {
+    path: PathBuf,
+    path_key: String,
+    /// Read offset for this tick (saved offset, or 0 after truncation).
+    offset: u64,
+    size: u64,
+    /// Loki `file` label — basename with extension and date suffix stripped.
+    label: String,
+    /// Date parsed from the `-YYYY-MM-DD` filename suffix, if present.
+    /// Drives oldest-first ordering within a label.
+    date: Option<chrono::NaiveDate>,
+}
+
+/// Keep, per stream label, only the OLDEST file that still has unread
+/// bytes. Loki enforces per-stream chronological order (out-of-order
+/// tolerated only within ~1h of the stream head), and `strip_date_suffix`
+/// deliberately merges all day-files of one source into one stream — so
+/// reading a newer day-file before an older one has fully drained would
+/// advance the stream head and get the older lines permanently rejected.
+/// Draining strictly oldest-first keeps each stream monotonic across
+/// ticks. Undated files sort before dated ones (irrelevant in practice:
+/// a label is either always dated or never).
+fn select_shippable(cursors: &mut Vec<FileCursor>) {
+    cursors.sort_by(|a, b| {
+        a.label
+            .cmp(&b.label)
+            .then(a.date.cmp(&b.date))
+            .then(a.path_key.cmp(&b.path_key))
+    });
+    let mut labels_taken: std::collections::HashSet<String> = std::collections::HashSet::new();
+    cursors.retain(|c| c.size > c.offset && labels_taken.insert(c.label.clone()));
+}
+
+/// Read new bytes from tracked files (oldest-first per stream), build a
+/// Loki push payload, POST it, and persist new offsets. Returns the
+/// number of lines shipped (0 if there was nothing new).
+///
+/// Error semantics: `Err` is returned only for transient failures
+/// (network, 5xx) — the caller backs off and the same batch is retried.
+/// A permanent rejection (4xx) is logged, the batch is DROPPED, and
+/// offsets advance anyway: Loki has already ingested what it could and
+/// will never accept the rest, so retrying would wedge the shipper
+/// forever (which is exactly what happened with out-of-order backlog
+/// batches before this was handled).
 async fn try_ship_batch(
     client: &reqwest::Client,
     config: &ShipperConfig,
@@ -258,50 +309,58 @@ async fn try_ship_batch(
 ) -> Result<usize, String> {
     let files = discover_files(&config.log_dir, &config.raw_serial_dir);
 
-    // Per-file: read new bytes from saved offset.
+    let mut cursors: Vec<FileCursor> = files
+        .iter()
+        .filter_map(|file| {
+            let path_key = file.to_string_lossy().to_string();
+            let saved_offset = state.offsets.get(&path_key).copied().unwrap_or(0);
+            // File disappeared between glob and stat — ignore.
+            let size = std::fs::metadata(file).ok()?.len();
+
+            // Detect truncation/replacement: file is smaller than where we
+            // last left off. Most likely cause is rotation creating a fresh
+            // empty file under the same path. Reset to 0 and read forward.
+            let offset = if size < saved_offset { 0 } else { saved_offset };
+
+            let basename = file
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("unknown");
+            let stem = basename_without_ext(basename);
+            Some(FileCursor {
+                path: file.clone(),
+                path_key,
+                offset,
+                size,
+                label: strip_date_suffix(stem),
+                date: date_suffix(stem),
+            })
+        })
+        .collect();
+
+    select_shippable(&mut cursors);
+
     // streams: (file_label, level_label) -> Vec<(ts_ns_string, line)>
     let mut streams: HashMap<(String, String), Vec<(String, String)>> = HashMap::new();
     let mut new_offsets: HashMap<String, u64> = HashMap::new();
     let mut total_lines = 0usize;
+    let now_floor_ns = chrono::Utc::now().timestamp_nanos_opt().unwrap_or(i64::MAX);
 
-    for file in &files {
-        let path_key = file.to_string_lossy().to_string();
-        let saved_offset = state.offsets.get(&path_key).copied().unwrap_or(0);
-
-        let metadata = match std::fs::metadata(file) {
-            Ok(m) => m,
-            Err(_) => continue, // file disappeared between glob and stat — ignore
-        };
-        let size = metadata.len();
-
-        // Detect truncation/replacement: file is smaller than where we
-        // last left off. Most likely cause is rotation creating a fresh
-        // empty file under the same path. Reset to 0 and read forward.
-        let offset = if size < saved_offset { 0 } else { saved_offset };
-
+    for cursor in &cursors {
         // Cap per-file read to avoid loading a massive backlog into RAM
         // all at once. The next tick picks up the rest.
         const PER_FILE_CAP: u64 = 1_000_000;
-        let to_read = (size - offset).min(PER_FILE_CAP);
-        if to_read == 0 {
-            new_offsets.insert(path_key, offset);
-            continue;
-        }
+        let to_read = (cursor.size - cursor.offset).min(PER_FILE_CAP);
 
-        let bytes = match read_chunk(file, offset, to_read) {
+        let bytes = match read_chunk(&cursor.path, cursor.offset, to_read) {
             Ok(b) => b,
             Err(e) => {
-                log::debug!("loki_shipper: read failed for {:?}: {}", file, e);
+                log::debug!("loki_shipper: read failed for {:?}: {}", cursor.path, e);
                 continue;
             }
         };
 
-        let basename = file
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("unknown");
-        let is_raw_serial = basename.starts_with("raw_");
-        let file_label = strip_date_suffix(basename_without_ext(basename));
+        let is_raw_serial = cursor.label.starts_with("raw_");
 
         // Parse each newline-terminated line out of the byte buffer.
         // Partial trailing lines (no newline) are NOT consumed — they
@@ -316,14 +375,18 @@ async fn try_ship_batch(
                 let lvl = parse_main_log_level(line).unwrap_or("INFO").to_string();
                 (ts, lvl)
             };
+            // Clamp future timestamps (skewed machine clock, garbage in a
+            // parsed line) to now — Loki rejects entries more than ~10min
+            // ahead of ITS clock, and one such line would poison the batch.
+            let ts_ns = clamp_to_now(ts_ns, now_floor_ns);
             streams
-                .entry((file_label.clone(), level))
+                .entry((cursor.label.clone(), level))
                 .or_default()
                 .push((ts_ns, line.to_string()));
             total_lines += 1;
         }
 
-        new_offsets.insert(path_key, offset + consumed as u64);
+        new_offsets.insert(cursor.path_key.clone(), cursor.offset + consumed as u64);
     }
 
     if total_lines == 0 {
@@ -333,10 +396,30 @@ async fn try_ship_batch(
         return Ok(0);
     }
 
-    let payload = build_payload(config, &streams);
-    push(client, config, &payload).await?;
+    // Loki requires ascending timestamps within a push. Lines within one
+    // file are already chronological, but clamping and the now_ns()
+    // fallback can perturb individual entries — stable sort restores
+    // monotonicity while preserving file order for equal timestamps.
+    for values in streams.values_mut() {
+        values.sort_by_key(|(ts, _)| ts.parse::<i64>().unwrap_or(0));
+    }
 
-    // Apply new offsets and persist.
+    let payload = build_payload(config, &streams);
+    match push(client, config, &payload).await? {
+        PushOutcome::Accepted => {}
+        PushOutcome::Rejected { status, body } => {
+            log::warn!(
+                "loki_shipper: batch permanently rejected ({}), dropping {} line(s) and advancing offsets: {}",
+                status,
+                total_lines,
+                body.chars().take(500).collect::<String>(),
+            );
+        }
+    }
+
+    // Apply new offsets and persist — on Accepted AND on Rejected (a
+    // rejected batch will never be accepted; freezing offsets here would
+    // retry it forever and silence the machine).
     for (k, v) in new_offsets {
         state.offsets.insert(k, v);
     }
@@ -499,21 +582,33 @@ fn now_ns() -> String {
         .to_string()
 }
 
+/// Parse the `-YYYY-MM-DD` suffix of a filename stem, if present.
+fn date_suffix(name: &str) -> Option<chrono::NaiveDate> {
+    let n = name.len();
+    if n < 11 || !name[..n - 10].ends_with('-') {
+        return None;
+    }
+    chrono::NaiveDate::parse_from_str(&name[n - 10..], "%Y-%m-%d").ok()
+}
+
 /// Strip `-YYYY-MM-DD` suffix from a filename stem so rotation across
 /// midnight doesn't fragment a clinic's stream. Returns the input
 /// unchanged if no recognizable date suffix is present.
 fn strip_date_suffix(name: &str) -> String {
-    let n = name.len();
-    if n < 11 {
-        return name.to_string();
-    }
-    let date_part = &name[n - 10..];
-    if name[..n - 10].ends_with('-')
-        && chrono::NaiveDate::parse_from_str(date_part, "%Y-%m-%d").is_ok()
-    {
-        name[..n - 11].to_string()
+    if date_suffix(name).is_some() {
+        name[..name.len() - 11].to_string()
     } else {
         name.to_string()
+    }
+}
+
+/// Clamp a nanosecond-timestamp string to `now_ns` if it lies in the
+/// future. Unparseable input is passed through unchanged (Loki will
+/// judge it).
+fn clamp_to_now(ts_ns: String, now_ns: i64) -> String {
+    match ts_ns.parse::<i64>() {
+        Ok(ts) if ts > now_ns => now_ns.to_string(),
+        _ => ts_ns,
     }
 }
 
@@ -542,6 +637,7 @@ fn build_payload(
                     "app": "vet-clinic",
                     "clinic": &config.clinic,
                     "environment": &config.environment,
+                    "version": &config.version,
                     "file": file,
                     "level": level,
                 },
@@ -553,11 +649,26 @@ fn build_payload(
     json!({ "streams": stream_objs })
 }
 
+/// Outcome of a push that reached Loki and got an HTTP response.
+enum PushOutcome {
+    /// 2xx — everything ingested.
+    Accepted,
+    /// 4xx — Loki processed the request and permanently refused some or
+    /// all of it (out-of-order entry, bad payload). Retrying the same
+    /// batch can never succeed; the caller must drop it and move on.
+    Rejected {
+        status: reqwest::StatusCode,
+        body: String,
+    },
+}
+
+/// POST a payload to Loki. `Err` means transient (network error or 5xx)
+/// — safe and correct to retry. See `PushOutcome` for the permanent cases.
 async fn push(
     client: &reqwest::Client,
     config: &ShipperConfig,
     payload: &serde_json::Value,
-) -> Result<(), String> {
+) -> Result<PushOutcome, String> {
     use flate2::Compression;
     use flate2::write::GzEncoder;
     use std::io::Write;
@@ -584,11 +695,20 @@ async fn push(
         .map_err(|e| format!("send: {}", e))?;
 
     let status = resp.status();
-    if !status.is_success() {
+    // 401/403 (credentials rotated/misconfigured) and 429 (rate limit)
+    // are recoverable without losing data — keep retrying those rather
+    // than discarding logs. Other 4xx (400 out-of-order/too-new, 413
+    // oversized, …) are verdicts on THIS batch and will never change.
+    let retryable_4xx = matches!(status.as_u16(), 401 | 403 | 429);
+    if status.is_success() {
+        Ok(PushOutcome::Accepted)
+    } else if status.is_client_error() && !retryable_4xx {
+        let body = resp.text().await.unwrap_or_default();
+        Ok(PushOutcome::Rejected { status, body })
+    } else {
         let text = resp.text().await.unwrap_or_default();
-        return Err(format!("Loki returned {}: {}", status, text));
+        Err(format!("Loki returned {}: {}", status, text))
     }
-    Ok(())
 }
 
 // =============================================================================
@@ -672,6 +792,81 @@ mod tests {
         assert_eq!(basename_without_ext("Arkivet.log"), "Arkivet");
         assert_eq!(basename_without_ext("raw_COM5-2026-06-03.log"), "raw_COM5-2026-06-03");
         assert_eq!(basename_without_ext("no_extension"), "no_extension");
+    }
+
+    #[test]
+    fn parses_date_suffix() {
+        assert_eq!(
+            date_suffix("raw_COM5-2026-06-03"),
+            chrono::NaiveDate::from_ymd_opt(2026, 6, 3),
+        );
+        assert_eq!(date_suffix("Arkivet"), None);
+        assert_eq!(date_suffix("file-2026-13-99"), None);
+    }
+
+    // ----- timestamp clamping -----
+
+    #[test]
+    fn clamps_future_timestamps_to_now() {
+        assert_eq!(clamp_to_now("2000".to_string(), 1000), "1000");
+        assert_eq!(clamp_to_now("500".to_string(), 1000), "500");
+        assert_eq!(clamp_to_now("1000".to_string(), 1000), "1000");
+        // Unparseable passes through untouched.
+        assert_eq!(clamp_to_now("garbage".to_string(), 1000), "garbage");
+    }
+
+    // ----- per-stream oldest-first file selection -----
+
+    fn cursor(label: &str, date: Option<(i32, u32, u32)>, offset: u64, size: u64) -> FileCursor {
+        let name = match date {
+            Some((y, m, d)) => format!("{}-{:04}-{:02}-{:02}.log", label, y, m, d),
+            None => format!("{}.log", label),
+        };
+        FileCursor {
+            path: PathBuf::from(format!("/logs/{}", name)),
+            path_key: format!("/logs/{}", name),
+            offset,
+            size,
+            label: label.to_string(),
+            date: date.and_then(|(y, m, d)| chrono::NaiveDate::from_ymd_opt(y, m, d)),
+        }
+    }
+
+    #[test]
+    fn selects_oldest_undrained_file_per_label() {
+        let mut cursors = vec![
+            cursor("raw_COM12", Some((2026, 7, 8)), 0, 100), // newest, has data
+            cursor("raw_COM12", Some((2026, 6, 20)), 0, 100), // oldest, has data
+            cursor("raw_COM12", Some((2026, 7, 1)), 0, 100), // middle, has data
+            cursor("Arkivet", None, 0, 50),                  // other label
+        ];
+        select_shippable(&mut cursors);
+        // Exactly one file per label; for raw_COM12 it must be the oldest.
+        assert_eq!(cursors.len(), 2);
+        assert_eq!(cursors[0].label, "Arkivet");
+        assert_eq!(cursors[1].label, "raw_COM12");
+        assert_eq!(cursors[1].date, chrono::NaiveDate::from_ymd_opt(2026, 6, 20));
+    }
+
+    #[test]
+    fn drained_files_do_not_block_newer_ones() {
+        let mut cursors = vec![
+            cursor("raw_COM12", Some((2026, 6, 20)), 100, 100), // oldest, fully drained
+            cursor("raw_COM12", Some((2026, 7, 8)), 10, 100),   // newest, has data
+        ];
+        select_shippable(&mut cursors);
+        assert_eq!(cursors.len(), 1);
+        assert_eq!(cursors[0].date, chrono::NaiveDate::from_ymd_opt(2026, 7, 8));
+    }
+
+    #[test]
+    fn selects_nothing_when_all_drained() {
+        let mut cursors = vec![
+            cursor("raw_COM12", Some((2026, 7, 8)), 100, 100),
+            cursor("Arkivet", None, 50, 50),
+        ];
+        select_shippable(&mut cursors);
+        assert!(cursors.is_empty());
     }
 
     // ----- line splitting -----

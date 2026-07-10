@@ -82,10 +82,10 @@ mod exigo_xml_parsing {
             "file_watch",
         );
 
-        // Should succeed but have empty results
-        assert!(result.is_ok());
-        let data = result.unwrap();
-        assert!(data.patient_identifier.is_none());
+        // A parse that yields no data must be an Err. (It used to be Ok with
+        // an empty map, which flowed into the PDF as a header-only, silently
+        // empty hematology table — see the exigo_daily_file tests.)
+        assert!(result.is_err());
     }
 
     #[test]
@@ -439,6 +439,57 @@ OBX|1|NM||GLU|95|mg/dL|74-143|N\r\r",
     }
 
     #[test]
+    fn real_pcr_clinic_capture_extracts_sample_id_and_patient() {
+        // REAL MLLP-framed HL7 message captured from the clinic PCR on COM13.
+        const RAW: &[u8] = include_bytes!("../../tests/fixtures/real_pcr_com13.bin");
+        let data = DeviceParserService::parse_hl7_data(
+            "mnchip_pcr_analyzer",
+            "MNCHIP",
+            RAW,
+            "serial_port",
+        )
+        .unwrap();
+        let r = data.test_results.as_object().unwrap();
+        // OBR-44 -> readable run id (was AUTO-GEN before the fix).
+        assert_eq!(r.get("sample_id").and_then(|v| v.as_str()), Some("0C1231-4-0015"));
+        // Patient name comes from PID-6.
+        assert_eq!(r.get("patient_name").and_then(|v| v.as_str()), Some("olav"));
+    }
+
+    #[test]
+    fn real_chem_clinic_capture_carries_device_units_ranges_flags() {
+        // REAL MLLP-framed HL7 chemistry message captured from the clinic PointCare.
+        // Validates the data the PDF fix depends on: the device's own unit/range/flag
+        // are captured (the PDF now renders these instead of a hardcoded US table).
+        const RAW: &[u8] = include_bytes!("../../tests/fixtures/real_chem_pcv.bin");
+        let data = DeviceParserService::parse_hl7_data(
+            "mnchip_pointcare_chemistry",
+            "MNCHIP",
+            RAW,
+            "serial_port",
+        )
+        .unwrap();
+        let r = data.test_results.as_object().unwrap();
+
+        // Real values + device-supplied metadata:
+        assert_eq!(r.get("CRE").and_then(|v| v.as_str()), Some("0.86"));
+        assert_eq!(r.get("CRE_unit").and_then(|v| v.as_str()), Some("mg/dL"));
+        assert_eq!(r.get("CRE_range").and_then(|v| v.as_str()), Some("0.3-1.7"));
+
+        // GLU: device range (70-142) differs from the OLD hardcoded table (70-110)
+        // — proof the hardcoded ranges were wrong even for a mg/dL machine.
+        assert_eq!(r.get("GLU").and_then(|v| v.as_str()), Some("159"));
+        assert_eq!(r.get("GLU_range").and_then(|v| v.as_str()), Some("70-142"));
+        assert_eq!(r.get("GLU_flag").and_then(|v| v.as_str()), Some("H"));
+
+        // Sample id from OBR-44 (leading space trimmed).
+        assert_eq!(
+            r.get("sample_id").and_then(|v| v.as_str()),
+            Some("45512-10-0150-0227-97-250752-821")
+        );
+    }
+
+    #[test]
     fn parse_hl7_empty_message() {
         let hl7 = b"";
 
@@ -698,4 +749,266 @@ OBX|1|NM||GLU|95\r\r";
         // Should handle without panic
         assert!(result.is_ok());
     }
+}
+
+/// Regression tests for the clinic's 2026-07-10 "BLEKI" report (Exigo BM800
+/// per-day file + PointCare chemistry attached to one record, PDF hematology
+/// table empty / wrong). Uses the real per-day file shape: multiple patients'
+/// `<sample>` rows accumulated over the clinic day.
+mod exigo_daily_file {
+    use super::*;
+    use crate::services::device_parser::EXIGO_PDF_ANALYTE_KEYS;
+
+    const DAILY: &[u8] = include_bytes!("../../tests/fixtures/exigo_daily_two_samples.xml");
+
+    fn analyte_hits(d: &crate::services::device_parser::DeviceData) -> usize {
+        let map = d.test_results.as_object().unwrap();
+        EXIGO_PDF_ANALYTE_KEYS
+            .iter()
+            .filter(|k| map.contains_key(**k))
+            .count()
+    }
+
+    fn parse(bytes: &[u8]) -> Result<crate::services::device_parser::DeviceData, String> {
+        DeviceParserService::parse_exigo_xml("Exigo", "BM-53672_2026-07-10.xml", bytes, "file_watch")
+    }
+
+    /// A well-formed daily file must yield the analyte value keys the PDF
+    /// renders — this is the contract that keeps the hematology table
+    /// populated. (GR intentionally absent from the fixture: real captures
+    /// show the BM800 omitting value attributes for some analytes.)
+    #[test]
+    fn daily_file_yields_pdf_analyte_keys() {
+        let d = parse(DAILY).unwrap();
+        assert!(
+            analyte_hits(&d) >= 15,
+            "expected >=15 of the 19 PDF analyte keys, got {}",
+            analyte_hits(&d)
+        );
+    }
+
+    /// Multi-sample per-day file resolves to ONE coherent sample (the last =
+    /// most recently run), never a cross-patient blend. The identifier comes
+    /// from THAT sample (not the first), so values and label agree. Choosing
+    /// which patient a multi-sample file belongs to is still a follow-up
+    /// (per-sample splitting); this only guarantees internal consistency.
+    #[test]
+    fn daily_file_uses_last_sample_without_blending() {
+        let d = parse(DAILY).unwrap();
+        let map = d.test_results.as_object().unwrap();
+        // Identifier and values both come from the LAST sample (KIRE).
+        assert_eq!(d.patient_identifier.as_deref(), Some("KIRE"));
+        assert_eq!(map.get("ID2").unwrap(), "KIRE");
+        assert_eq!(map.get("HGB").unwrap(), "16.2");
+        assert_eq!(map.get("RBC").unwrap(), "6.40");
+        assert_eq!(map.get("WBC").unwrap(), "8.9");
+        // Nothing from the earlier sample (KOKO) leaks in: KOKO's SEQ was
+        // 1219, the coherent result must carry only the last sample's SEQ.
+        assert_eq!(map.get("SEQ").unwrap(), "1220");
+    }
+
+    /// Windows-encoding robustness: BOM and CRLF must not affect parsing.
+    #[test]
+    fn tolerates_utf8_bom_and_crlf() {
+        let mut bom = vec![0xEF, 0xBB, 0xBF];
+        bom.extend_from_slice(DAILY);
+        assert!(analyte_hits(&parse(&bom).unwrap()) >= 15, "UTF-8 BOM broke parsing");
+
+        let crlf = String::from_utf8(DAILY.to_vec()).unwrap().replace('\n', "\r\n");
+        assert!(analyte_hits(&parse(crlf.as_bytes()).unwrap()) >= 15, "CRLF broke parsing");
+    }
+
+    /// A per-day file that is still being appended has no closing `</samples>`
+    /// yet — must still parse.
+    #[test]
+    fn tolerates_unclosed_root_tag() {
+        let unclosed = String::from_utf8(DAILY.to_vec()).unwrap().replace("</samples>\n", "");
+        assert!(analyte_hits(&parse(unclosed.as_bytes()).unwrap()) >= 15);
+    }
+
+    /// A read that raced the device mid-append keeps every fully-written
+    /// sample that precedes the truncation point.
+    #[test]
+    fn truncation_after_first_sample_keeps_first_sample() {
+        let cut = &DAILY[..DAILY.len() * 3 / 4]; // cuts inside sample 2
+        let d = parse(cut).unwrap();
+        assert!(analyte_hits(&d) >= 15);
+        let map = d.test_results.as_object().unwrap();
+        assert_eq!(map.get("HGB").unwrap(), "17.4", "should hold sample 1's values");
+    }
+
+    /// HARDENING (the silent-empty-table fix): input that yields NO data must
+    /// be an Err — not Ok with an empty map, which used to flow into the PDF
+    /// as a header-only hematology table on an otherwise successful report.
+    #[test]
+    fn zero_yield_parses_are_errors_not_empty_results() {
+        // Truncated inside the FIRST sample's attribute list.
+        let early_cut = &DAILY[..DAILY.len() * 3 / 10];
+        assert!(parse(early_cut).is_err(), "early truncation must be an Err");
+
+        // UTF-16LE (Windows wide-char writer) is not decodable as UTF-8.
+        let text = String::from_utf8(DAILY.to_vec()).unwrap();
+        let mut utf16: Vec<u8> = vec![0xFF, 0xFE];
+        for unit in text.encode_utf16() {
+            utf16.extend_from_slice(&unit.to_le_bytes());
+        }
+        assert!(parse(&utf16).is_err(), "UTF-16 must be an Err");
+
+        // CP1251 Cyrillic in an attribute (Macedonian Windows operator input)
+        // is invalid UTF-8.
+        let mut cp1251 = text.replace("ID2=\"KOKO\"", "ID2=\"XXXX\"").into_bytes();
+        if let Some(pos) = cp1251.windows(4).position(|w| w == b"XXXX") {
+            cp1251[pos..pos + 4].copy_from_slice(&[0xCA, 0xCE, 0xCA, 0xCE]); // КОКО
+        }
+        assert!(parse(&cp1251).is_err(), "CP1251 bytes must be an Err");
+
+        // Empty and garbage inputs.
+        assert!(parse(b"").is_err(), "empty file must be an Err");
+        assert!(parse(b"not xml at all").is_err(), "non-XML must be an Err");
+    }
+}
+
+/// End-to-end contract: real Rust parsers -> real Java PDF JAR -> a PDF where
+/// EVERY device table has rows. Guards the exact clinic failure (report
+/// generates fine but the hematology table is empty). Skips with a note when
+/// `java` or the built JAR is unavailable (build with:
+/// `cd pdf-generator-cli && ./gradlew build`). Works on macOS/Linux/Windows —
+/// the JAR's `PARSED_SAMPLE device=<type> params=<n>` stdout lines are the
+/// assertion surface, so no PDF text extraction is needed.
+mod pdf_end_to_end {
+    use super::*;
+
+    #[test]
+    fn exigo_and_pointcare_pdf_renders_rows_for_both_tables() {
+        let jar = std::path::Path::new("../pdf-generator-cli/build/libs/pdf-generator-cli-1.0.0.jar");
+        if !jar.exists() {
+            eprintln!("SKIP: JAR not built ({}). Run: cd pdf-generator-cli && ./gradlew build", jar.display());
+            return;
+        }
+        if std::process::Command::new("java").arg("-version").output().is_err() {
+            eprintln!("SKIP: no `java` on PATH");
+            return;
+        }
+
+        let exigo = DeviceParserService::parse_exigo_xml(
+            "Exigo",
+            "BM-53672_2026-07-10.xml",
+            include_bytes!("../../tests/fixtures/exigo_daily_two_samples.xml"),
+            "file_watch",
+        )
+        .unwrap();
+        let chem = DeviceParserService::parse_hl7_data(
+            "mnchip_pointcare_chemistry",
+            "MNCHIP",
+            include_bytes!("../../tests/fixtures/real_chem_pcv.bin"),
+            "serial_port",
+        )
+        .unwrap();
+
+        // Build the Java input the same way JavaPdfService::generate_pdf_multi
+        // does (device-type mapping, sample_id fallback chain, stringified values).
+        let to_string_map = |v: &serde_json::Value| -> serde_json::Map<String, serde_json::Value> {
+            v.as_object()
+                .map(|o| {
+                    o.iter()
+                        .map(|(k, val)| {
+                            let s = match val {
+                                serde_json::Value::String(s) => s.clone(),
+                                other => other.to_string(),
+                            };
+                            (k.clone(), serde_json::Value::String(s))
+                        })
+                        .collect()
+                })
+                .unwrap_or_default()
+        };
+
+        let out_dir = std::env::temp_dir();
+        let pdf_path = out_dir.join("e2e_device_report.pdf");
+        let _ = std::fs::remove_file(&pdf_path);
+        let input = serde_json::json!({
+            "patient": {
+                "name": "BLEKI", "owner": "Owner", "species": "Dog",
+                "microchip_id": null, "gender": "Male", "date_of_birth": null,
+            },
+            "samples": [
+                {
+                    "device_type": "exigo_eos_vet",
+                    "sample_id": "53672",
+                    "patient_id": "BLEKI",
+                    "detected_at": "2026-07-10T15:01:00Z",
+                    "test_results": to_string_map(&exigo.test_results),
+                },
+                {
+                    "device_type": "pointcare",
+                    "sample_id": "45512",
+                    "patient_id": "BLEKI",
+                    "detected_at": "2026-07-10T15:01:00Z",
+                    "test_results": to_string_map(&chem.test_results),
+                },
+            ],
+            "output_path": pdf_path.to_string_lossy(),
+        });
+        let input_path = out_dir.join("e2e_pdf_input.json");
+        std::fs::write(&input_path, serde_json::to_string(&input).unwrap()).unwrap();
+
+        let output = std::process::Command::new("java")
+            .arg("-Djava.awt.headless=true")
+            .arg("-jar")
+            .arg(jar)
+            .arg(&input_path)
+            .output()
+            .expect("java invocation failed");
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success(),
+            "JAR failed: {}\n{}",
+            stdout,
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(pdf_path.exists(), "PDF not created");
+
+        // Each device table must have rendered rows. params=0 is exactly the
+        // clinic bug: report "generates" but a table is silently empty.
+        let param_count = |device: &str| -> usize {
+            stdout
+                .lines()
+                .find(|l| l.starts_with(&format!("PARSED_SAMPLE device={}", device)))
+                .and_then(|l| l.rsplit("params=").next())
+                .and_then(|n| n.trim().parse().ok())
+                .unwrap_or_else(|| panic!("no PARSED_SAMPLE line for {}\nstdout: {}", device, stdout))
+        };
+        let exigo_rows = param_count("exigo_eos_vet");
+        let chem_rows = param_count("pointcare");
+        assert!(exigo_rows >= 15, "Exigo table rendered only {} rows", exigo_rows);
+        assert!(chem_rows >= 10, "PointCare table rendered only {} rows", chem_rows);
+    }
+}
+
+/// REGRESSION GUARD against the cross-patient blend. A later sample that
+/// omits values an earlier one had (error/QC run writing only ranges/flags
+/// for some analytes — the BM800 does this, note `_F="ER"`) must NOT let the
+/// earlier animal's values leak into the result. The chosen (last) sample's
+/// values stand alone; keys it didn't write are simply absent — never filled
+/// in from another patient. This is the clinical-safety fix: a report is
+/// never a blend of two animals' blood.
+#[test]
+fn daily_file_no_cross_patient_blend() {
+    let xml = r#"<?xml version="1.0" encoding="utf-8"?>
+<samples SNO="53672">
+<sample SEQ="1" APNA="DOG" ID2="FIRST" WBC="10.4" HGB="17.4" PLT="285" RBC="7.10" />
+<sample SEQ="2" APNA="DOG" ID2="SECOND" HGB="16.2" PLT_F="ER" PLT_L="200" PLT_H="500" RBC="6.40" />
+</samples>"#;
+    let d = DeviceParserService::parse_exigo_xml("Exigo", "BM-53672.xml", xml.as_bytes(), "file_watch").unwrap();
+    let m = d.test_results.as_object().unwrap();
+
+    // Everything comes from the last (SECOND) sample, coherently.
+    assert_eq!(d.patient_identifier.as_deref(), Some("SECOND"));
+    assert_eq!(m.get("HGB").unwrap(), "16.2");
+    assert_eq!(m.get("RBC").unwrap(), "6.40");
+    // SECOND omitted these values — they must be ABSENT, not leaked from FIRST.
+    assert!(m.get("WBC").is_none(), "FIRST's WBC leaked into SECOND's result");
+    assert!(m.get("PLT").is_none(), "FIRST's PLT leaked into SECOND's result");
+    // SECOND's own range/flag keys are still present.
+    assert_eq!(m.get("PLT_L").unwrap(), "200");
 }

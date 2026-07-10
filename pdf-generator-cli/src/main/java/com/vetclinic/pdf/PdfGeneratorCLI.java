@@ -260,6 +260,14 @@ public class PdfGeneratorCLI {
             }
 
             if (sample != null) {
+                // One machine-greppable line per sample. The Rust caller logs
+                // this stdout into Arkivet.log (shipped to Loki), so "how many
+                // rows did each device table get?" is answerable remotely.
+                // params=0 means that device's table rendered header-only.
+                int paramCount = (sample.getParameters() == null) ? 0 : sample.getParameters().size();
+                System.out.println("PARSED_SAMPLE device=" + deviceType
+                        + " sample_id=" + sample.getSampleId()
+                        + " params=" + paramCount);
                 samples.add(sample);
             }
         }
@@ -412,7 +420,14 @@ public class PdfGeneratorCLI {
             {"Na+/K+", "Na+/K+", "", "", ""},
             {"CO2", "CO2 - јаг.диоксид", "mmol/L", "17", "24"},
             {"Mg", "Mg - магнезиум", "mg/dL", "1.6", "2.4"},
-            {"TG", "TG - триглицериди", "mg/dL", "", ""}
+            {"TG", "TG - триглицериди", "mg/dL", "", ""},
+            // Present in real PointCare output but previously dropped (surfaced by
+            // the unmapped-analyte log). TBA (total bile acids) is a real result;
+            // AST/ALT and Ca*P are derived ratios/products. Units/ranges come from
+            // the device (fallbacks intentionally blank).
+            {"TBA", "TBA - жолчни киселини", "", "", ""},
+            {"AST/ALT", "AST/ALT", "", "", ""},
+            {"Ca*P", "Ca*P", "", "", ""}
         };
 
         // Vendor spelling differences: device code -> canonical table code, so
@@ -435,6 +450,11 @@ public class PdfGeneratorCLI {
             deviceKeysFor.computeIfAbsent(e.getValue(), k -> new ArrayList<>()).add(e.getKey());
         }
 
+        // Track which device keys we actually rendered, so we can warn about any
+        // analyte the device sent that we didn't map (see the unmapped-code check
+        // after the loop) instead of silently dropping it.
+        java.util.Set<String> consumedKeys = new java.util.HashSet<>();
+
         // Process parameters in the table's display order.
         for (String[] paramDef : pointcareParams) {
             String canonical = paramDef[0];
@@ -448,6 +468,7 @@ public class PdfGeneratorCLI {
             if (deviceKey == null) {
                 continue;
             }
+            consumedKeys.add(deviceKey);
 
             Parameter parameter = new Parameter();
             parameter.setName(paramDef[1]); // Translated name
@@ -479,8 +500,58 @@ public class PdfGeneratorCLI {
             parameters.add(parameter);
         }
 
+        // Observability: warn about analyte value codes the device sent that we
+        // did NOT render, so a newly-added parameter on the analyzer surfaces in
+        // the logs (captured by the Rust JavaPdfService) instead of vanishing.
+        // Skip metadata (MSH/PID/OBR/message headers, patient fields) and the
+        // per-analyte metadata suffixes, which are not results themselves.
+        for (Map.Entry<String, com.google.gson.JsonElement> e : testResults.entrySet()) {
+            String key = e.getKey();
+            if (consumedKeys.contains(key) || isMetadataKey(key)) {
+                continue;
+            }
+            System.err.println(
+                "PointCare: unmapped analyte code not shown on report: '" + key
+                    + "' = " + e.getValue());
+        }
+
         sample.setParameters(parameters);
         return sample;
+    }
+
+    /**
+     * True for HL7 metadata / non-result keys that shouldn't be treated as
+     * droppable analytes: message headers (MSH/PID/OBR/...), patient fields, and
+     * the per-analyte metadata suffixes (`_unit`, `_range`, `_flag`, etc.).
+     */
+    private static boolean isMetadataKey(String key) {
+        if (key.endsWith("_unit") || key.endsWith("_range") || key.endsWith("_flag")
+            || key.endsWith("_sample_type") || key.endsWith("_curve") || key.endsWith("_lot")) {
+            return true;
+        }
+        String[] prefixes = {
+            "MSH_", "PID_", "OBR_", "OBX_", "message_", "sending_", "hl7_", "patient_",
+        };
+        for (String p : prefixes) {
+            if (key.startsWith(p)) {
+                return true;
+            }
+        }
+        switch (key) {
+            case "message_type":
+            case "sample_type":
+            case "test_code":
+            case "test_datetime":
+            case "sample_id":
+            case "species":
+            case "gender":
+            case "gender_alt":
+            case "birth_date":
+            case "birth_date_alt":
+                return true;
+            default:
+                return false;
+        }
     }
 
     /** Read a string field from the results object; returns {@code dflt} when absent, null, or empty. */

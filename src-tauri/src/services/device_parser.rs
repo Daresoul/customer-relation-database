@@ -4,6 +4,14 @@ use std::collections::HashMap;
 use quick_xml::Reader;
 use quick_xml::events::Event;
 
+/// The Exigo analyte value keys the Java PDF renderer knows how to draw
+/// (mirrors `parameterOrder` in PdfGeneratorCLI.parseExigoSample). A parsed
+/// result containing none of these renders a header-only hematology table.
+pub const EXIGO_PDF_ANALYTE_KEYS: [&str; 19] = [
+    "PLT", "MPV", "HGB", "WBC", "LA", "MA", "GA", "LR", "MR", "GR", "EA",
+    "ER", "RBC", "MCV", "HCT", "MCH", "MCHC", "RDWR", "RDWA",
+];
+
 /// Standardized device data structure that will be sent to frontend
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -79,6 +87,15 @@ impl DeviceParserService {
         let mut current_element = String::new();
         let mut patient_id: Option<String> = None;
 
+        // Per-day file safety: the BM800 writes ALL patients run that day into
+        // one file as repeated <sample> elements. We must NOT union their
+        // attributes into `results` — that produced a Frankenstein blend
+        // (later patient's values for keys it wrote, an earlier patient's for
+        // keys it didn't) labelled with yet another patient's id. Each
+        // <sample> is collected whole and independent; a single coherent one
+        // is chosen after the loop. See select-sample logic below.
+        let mut sample_maps: Vec<HashMap<String, String>> = Vec::new();
+
         // Real-Exigo-format state: while we're inside a <Parameter> block,
         // accumulate Code/Value/RefRange and emit them at the closing tag.
         // Without this, the text-element fallback below would overwrite
@@ -90,6 +107,13 @@ impl DeviceParserService {
         let mut current_param_value: Option<String> = None;
         let mut current_param_ref_range: Option<String> = None;
 
+        // Recorded when quick-xml errors mid-document (truncated tag, invalid
+        // markup). We keep whatever parsed before the error, but if NOTHING
+        // parsed, this turns into a hard Err below instead of a silent
+        // empty result.
+        let mut xml_error: Option<String> = None;
+        let mut error_position: usize = 0;
+
         loop {
             match reader.read_event() {
                 Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
@@ -97,18 +121,20 @@ impl DeviceParserService {
                     current_element = element_name.clone();
 
                     // Synthetic format: <sample ID2="..." RBC="..." .../>
+                    // Collect this sample's attributes into its OWN map — never
+                    // into the shared `results` — so multiple patients in a
+                    // per-day file can't blend together.
                     if element_name.eq_ignore_ascii_case("sample") {
+                        let mut sample: HashMap<String, String> = HashMap::new();
                         for attr_result in e.attributes() {
                             if let Ok(attr) = attr_result {
                                 let key = String::from_utf8_lossy(attr.key.as_ref()).to_string();
                                 let value = String::from_utf8_lossy(&attr.value).to_string();
-
-                                if key == "ID2" && patient_id.is_none() {
-                                    patient_id = Some(value.clone());
-                                }
-
-                                results.insert(key, value);
+                                sample.insert(key, value);
                             }
+                        }
+                        if !sample.is_empty() {
+                            sample_maps.push(sample);
                         }
                     }
 
@@ -142,6 +168,13 @@ impl DeviceParserService {
                             _ => {}
                         }
                     } else {
+                        // Text with NO enclosing element seen yet is not XML
+                        // data (e.g. a plain-text file fed to the XML parser)
+                        // — recording it under an empty key would make garbage
+                        // input look like a successful parse.
+                        if current_element.is_empty() {
+                            continue;
+                        }
                         // Header-level or other top-level text. Apply the
                         // patient-identifier heuristic (first ID-bearing element
                         // wins — SampleId beats OperatorId on document order)
@@ -198,10 +231,79 @@ impl DeviceParserService {
                 Ok(Event::Eof) => break,
                 Err(e) => {
                     log::warn!("XML parse error at position {}: {}", reader.buffer_position(), e);
+                    error_position = reader.buffer_position();
+                    xml_error = Some(e.to_string());
                     break;
                 }
                 _ => {}
             }
+        }
+
+        // Choose ONE coherent sample from the <sample>-attribute format.
+        // Single sample: use it (unchanged behaviour). Multiple: the file is a
+        // per-day BM800 export holding several patients — we cannot know which
+        // one the operator means, but we must never blend them. Take the LAST
+        // sample (the most recently run animal, which in the live file-watch
+        // flow is the run the operator just triggered) and carry ITS OWN ID2
+        // as the identifier, so the value set is internally consistent and any
+        // mismatch against the chosen patient is at least detectable. Emit a
+        // telemetry event so the ambiguity is visible in Grafana. Proper
+        // per-sample splitting (one importable capture per animal) is the real
+        // fix and remains a follow-up.
+        if let Some(chosen) = sample_maps.last().cloned() {
+            if sample_maps.len() > 1 {
+                crate::services::telemetry::event(
+                    log::Level::Warn,
+                    "device_parser",
+                    "Exigo per-day file holds multiple patient samples — using the last one, not blending",
+                    serde_json::json!({
+                        "file_name": file_name,
+                        "sample_count": sample_maps.len(),
+                        "chosen_id2": chosen.get("ID2"),
+                    }),
+                );
+            }
+            patient_id = chosen.get("ID2").cloned();
+            results = chosen;
+        }
+
+        // A parse that produced NO data is a failure, not an empty result.
+        // Returning Ok with an empty map used to flow all the way into the
+        // PDF: Java found none of its analyte keys and rendered a header-only
+        // hematology table — a report that looks generated but is silently
+        // missing the results. Surfacing an Err instead makes the caller
+        // skip/log the attachment, which is visible and diagnosable.
+        if results.is_empty() {
+            return Err(match xml_error {
+                Some(e) => format!(
+                    "Exigo XML yielded no data (parse error at byte {}: {})",
+                    error_position, e
+                ),
+                None => "Exigo XML yielded no data (no <sample> attributes, \
+                         <Parameter> blocks, or text elements found)"
+                    .to_string(),
+            });
+        }
+
+        // The PDF renderer draws a row per analyte value key it knows. A
+        // parse that produced keys but NO analyte values renders a header-only
+        // hematology table — report it as a structured event so a clinic
+        // hitting this is diagnosable from Grafana without the file in hand.
+        let analyte_count = EXIGO_PDF_ANALYTE_KEYS
+            .iter()
+            .filter(|k| results.contains_key(**k))
+            .count();
+        if analyte_count == 0 {
+            crate::services::telemetry::event(
+                log::Level::Warn,
+                "device_parser",
+                "Exigo XML parsed but contains no analyte values — PDF hematology table will be empty",
+                serde_json::json!({
+                    "file_name": file_name,
+                    "total_keys": results.len(),
+                    "xml_error": xml_error,
+                }),
+            );
         }
 
         Ok(DeviceData {

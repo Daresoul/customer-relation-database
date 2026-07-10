@@ -1463,6 +1463,22 @@ mod frame_assembler_tests {
     }
 
     #[test]
+    fn healvet_value_ending_in_e_adjacent_to_terminator_is_a_known_ambiguity() {
+        // Protocol note: "EE" terminates a frame, and payloads can contain 'E'.
+        // A value whose LAST byte is 'E' with NO delimiter before the terminator
+        // ("...E" immediately followed by "EE") is genuinely ambiguous on the wire
+        // — "AEEE" is indistinguishable from "A" + "EE" + a stray "E" — and we
+        // terminate on the first "EE". Real Healvet frames always put a '&'
+        // delimiter before the terminator ("...&EE", verified in
+        // actual_data/Healvet.log), so this never occurs in practice. Pinned here
+        // so the limitation is understood, not a silent surprise.
+        let p = healvet();
+        assert_eq!(feed(&p, b"AEEE"), vec![b"A".to_vec()]);
+        // The real-world "<value>&EE" shape round-trips fully, E-containing values and all.
+        assert_eq!(feed(&p, b"Serum Plasma&EE"), vec![b"Serum Plasma&".to_vec()]);
+    }
+
+    #[test]
     fn healvet_multiple_frames_and_realistic_payload() {
         let p = healvet();
         // Two frames back-to-back; second has 'E's in "SERUM"/"FELINE"-style text.
@@ -1471,6 +1487,28 @@ mod frame_assembler_tests {
             frames,
             vec![b"AFS1000&FELINE&".to_vec(), b"#N&SERUM&".to_vec()]
         );
+    }
+
+    #[test]
+    fn real_healvet_clinic_capture_preserves_e_containing_values() {
+        // REAL bytes captured from the clinic's Healvet on COM12 (not synthetic).
+        // The frame carries CPSE, "10 Year", and "Serum Plasma" — all with 'E's.
+        // Under the old lone-E-drop bug these were corrupted (CPSE->CPS,
+        // Serum->Srum, Year->Yar). This pins the shipped fix against real device
+        // output and guards against regression.
+        const RAW: &[u8] = include_bytes!("../../tests/fixtures/real_healvet_com12.bin");
+        let p = healvet();
+        let frames = feed(&p, RAW);
+        assert_eq!(frames.len(), 1, "expected one EE-terminated frame");
+        let s = String::from_utf8_lossy(&frames[0]);
+        // E-containing real values survive intact:
+        assert!(s.contains("CPSE"), "CPSE lost: {s}");
+        assert!(s.contains("Serum Plasma"), "Serum Plasma lost: {s}");
+        assert!(s.contains("10 Year"), "Year lost: {s}");
+        assert!(s.contains("bubu"), "patient name lost: {s}");
+        // The exact corruptions the old bug produced must NOT appear:
+        assert!(!s.contains("CPS&"), "old E-drop artifact CPS&: {s}");
+        assert!(!s.contains("Srum"), "old E-drop artifact Srum: {s}");
     }
 
     #[test]
