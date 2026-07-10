@@ -260,6 +260,14 @@ public class PdfGeneratorCLI {
             }
 
             if (sample != null) {
+                // One machine-greppable line per sample. The Rust caller logs
+                // this stdout into Arkivet.log (shipped to Loki), so "how many
+                // rows did each device table get?" is answerable remotely.
+                // params=0 means that device's table rendered header-only.
+                int paramCount = (sample.getParameters() == null) ? 0 : sample.getParameters().size();
+                System.out.println("PARSED_SAMPLE device=" + deviceType
+                        + " sample_id=" + sample.getSampleId()
+                        + " params=" + paramCount);
                 samples.add(sample);
             }
         }
