@@ -254,6 +254,15 @@ fn main() {
             _ => {}
         })
         .setup(move |app| {
+            // App version as the binary reports it at runtime (injected from
+            // tauri.conf.json by the release process). This is the ground
+            // truth for "which build is this clinic running?" — more reliable
+            // than asking staff, and lets us confirm a machine actually took
+            // an update. Carried both in the startup event payload (greppable
+            // in Arkivet.log) and as a Loki stream label (so Grafana can group
+            // clinics by version).
+            let app_version = app.package_info().version.to_string();
+
             // Anchor startup event. Carries the resolved machine identity
             // so any later event in this session can be cross-referenced
             // against "which build ran this?" Captured by the Loki shipper
@@ -262,8 +271,9 @@ fn main() {
             services::telemetry::event(
                 services::telemetry::Level::Info,
                 "app.lifecycle",
-                &format!("Arkivet started on {machine_name} (user: {os_user}, env: {environment})"),
+                &format!("Arkivet {app_version} started on {machine_name} (user: {os_user}, env: {environment})"),
                 serde_json::json!({
+                    "version": app_version,
                     "machine_name": machine_name,
                     "os_user": os_user,
                     "os_hostname": hostname_auto,
@@ -279,6 +289,7 @@ fn main() {
                 &app.handle(),
                 machine_name.clone(),
                 environment,
+                app_version,
             );
             services::loki_shipper::start(shipper_config);
 
