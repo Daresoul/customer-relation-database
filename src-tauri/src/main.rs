@@ -281,6 +281,21 @@ fn main() {
                 }),
             );
 
+            // Verify the bundled PDF-generator JAR matches this app version.
+            // Runs off-thread because it spawns Java (~0.5s) and must not block
+            // window setup. Catches the stale-JAR failure mode from the July 2026
+            // clinic incident (updated app, un-updated JAR → wrong-unit PDFs for
+            // days); logs + ships an ERROR event on mismatch. See
+            // services::java_pdf_service::verify_jar_version.
+            {
+                let jar_check_handle = app.handle();
+                std::thread::spawn(move || {
+                    services::java_pdf_service::JavaPdfService::verify_jar_version(
+                        &jar_check_handle,
+                    );
+                });
+            }
+
             // Spawn the Loki log shipper. Reads ARKIVET_LOKI_URL/USER/PASSWORD
             // from the environment, falling back to compile-time-baked
             // production credentials. In dev builds without env vars, this

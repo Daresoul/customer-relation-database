@@ -100,6 +100,54 @@ jobs:
         shell: pwsh
         run: cargo install tauri-driver --locked
 
+      - name: Match msedgedriver to installed Edge
+        # Self-heal the #1 cause of this suite's red runs: Edge/WebView2 is
+        # evergreen and auto-updates on the runner, but msedgedriver was pinned
+        # (manually dropped in C:\webdrivers per WINDOWS_RUNNER_SETUP.md). When
+        # they drift apart, every session dies with
+        #   "session not created: DevToolsActivePort file doesn't exist"
+        # which is exactly what killed the July 2026 runs (green June 4, red
+        # every run after Edge updated during the gap). This step downloads the
+        # msedgedriver whose version matches the Edge on the box and puts it
+        # ahead of the stale one on PATH, so the suite no longer rots between
+        # Edge updates.
+        #
+        # Deliberately best-effort: if version detection or the download fails,
+        # it warns and continues on the pre-installed driver rather than newly
+        # breaking a previously-green runner. NOTE: unverified in CI while the
+        # self-hosted runner is offline — validate on the next real run.
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $ErrorActionPreference = 'Stop'
+          try {
+            $edgePaths = @(
+              "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+              "C:\Program Files\Microsoft\Edge\Application\msedge.exe"
+            )
+            $edge = $edgePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+            if (-not $edge) { throw "msedge.exe not found in the usual locations" }
+            $ver = (Get-Item $edge).VersionInfo.ProductVersion
+            Write-Host "Installed Edge version: $ver"
+
+            $dest = "C:\webdrivers"
+            New-Item -ItemType Directory -Force -Path $dest | Out-Null
+            $zip = Join-Path $env:RUNNER_TEMP "edgedriver_win64.zip"
+            # msedgedriver.microsoft.com is the current stable host (azureedge.net
+            # is being retired). The path is the exact Edge version.
+            $url = "https://msedgedriver.microsoft.com/$ver/edgedriver_win64.zip"
+            Write-Host "Downloading $url"
+            Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+            Expand-Archive -Path $zip -DestinationPath $dest -Force
+
+            # Prepend so this matched driver shadows any stale one already on PATH.
+            Add-Content -Path $env:GITHUB_PATH -Value $dest
+            Write-Host "msedgedriver refreshed to match Edge $ver in $dest"
+            & "$dest\msedgedriver.exe" --version
+          } catch {
+            Write-Warning "Could not refresh msedgedriver ($_). Falling back to the pre-installed driver; if the suite fails with 'DevToolsActivePort', the runner's msedgedriver no longer matches its Edge — re-run WINDOWS_RUNNER_SETUP.md Step 3."
+          }
+
       - name: Verify toolchain present
         # Call each tool directly rather than wrapping in
         # `Write-Host "$(tool --version)"`. PowerShell 7's subexpression

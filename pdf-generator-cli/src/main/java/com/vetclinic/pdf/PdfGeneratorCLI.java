@@ -62,8 +62,20 @@ public class PdfGeneratorCLI {
             // UTF-8 is required by every JVM, so this is unreachable.
         }
 
+        // Report the version this JAR was built for, so the Rust host can detect
+        // a stale JAR left behind by a partially-applied update (app binary
+        // updated, resources/pdf-generator.jar not). Prints the manifest's
+        // Implementation-Version (set from -PappVersion at release build time),
+        // or "dev" for local builds. Kept before the usage check so it needs no
+        // input file.
+        if (args.length == 1 && "--version".equals(args[0])) {
+            String v = PdfGeneratorCLI.class.getPackage().getImplementationVersion();
+            System.out.println(v != null ? v : "dev");
+            return;
+        }
+
         if (args.length != 1) {
-            System.err.println("Usage: pdf-generator <input.json>");
+            System.err.println("Usage: pdf-generator <input.json>  |  pdf-generator --version");
             System.exit(1);
         }
 

@@ -50,7 +50,7 @@ Thumbs.db
 .specify/**
 CLAUDE.md
 **.md
-# Java PDF Generator - built by CI
-src-tauri/resources/pdf-generator.jar
+# Java PDF Generator - built by CI (fixed name for dev/E2E, versioned for releases)
+src-tauri/resources/pdf-generator*.jar
 .tauri-password-backup.txt
 *.db

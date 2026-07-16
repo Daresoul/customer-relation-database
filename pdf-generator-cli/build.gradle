@@ -62,9 +62,18 @@ application {
 //     }
 // }
 
+// App version this JAR is built for. The release workflow passes the real
+// version via -PappVersion=<x.y.z> right before bundling; local/dev builds
+// leave it at "dev". The Rust side reads this back (java -jar ... --version)
+// at startup and warns if it doesn't match the running app version — the guard
+// against a partially-applied update leaving a stale JAR that silently renders
+// medical documents with outdated code (observed at the clinic, July 2026).
+def appVersion = (project.findProperty('appVersion') ?: 'dev').toString().replaceFirst(/^v/, '')
+
 jar {
     manifest {
-        attributes 'Main-Class': 'com.vetclinic.pdf.PdfGeneratorCLI'
+        attributes 'Main-Class': 'com.vetclinic.pdf.PdfGeneratorCLI',
+                   'Implementation-Version': appVersion
     }
     from {
         configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }

@@ -336,50 +336,99 @@ public class PDFReportService {
         PdfPCell rightUpCell = null;
         PdfPCell rightDownCell = null;
 
-        for (int i = 0; i < samples.size(); i++) {
-            Sample sample = samples.get(i);
-
+        // Collect the samples by device type. Slot assignment must NOT depend on
+        // the order samples arrive in. Previously Exigo ran
+        // `rightUpCell = generateExigoSampleTable(...)` unconditionally, so a caller
+        // that passed Pointcare before Exigo had the Exigo table overwrite the
+        // Pointcare cell — leftDownCell stayed null, isOnlyOneTableBeingGenerated
+        // became true, and the chemistry table was silently dropped from the report.
+        // Correctness used to rest entirely on the Rust caller pre-sorting samples
+        // (Exigo→Pointcare→Healvet); here we make the layout robust to any order.
+        ExigoSample exigoSample = null;
+        PointcareSample pointcareSample = null;
+        HealvetSample healvetSample = null;
+        for (Sample sample : samples) {
             if (sample instanceof ExigoSample) {
-                //System.out.println("Sample instance of Exigo Sample - RUC");
-                // Exigo will always have the rightUpCell reserved for displaying info
-                rightUpCell = generateExigoSampleTable((ExigoSample) sample);
+                exigoSample = (ExigoSample) sample;
+            } else if (sample instanceof PointcareSample) {
+                pointcareSample = (PointcareSample) sample;
+            } else if (sample instanceof HealvetSample) {
+                healvetSample = (HealvetSample) sample;
+            }
+        }
+
+        // Slot policy — identical to the intended layout for the canonical
+        // Exigo→Pointcare→Healvet order, so reports that already render correctly
+        // are unchanged; only the previously-broken orderings are fixed:
+        //   1 sample : the single table → rightUpCell (centered beside patient info)
+        //   2 samples: higher priority (Exigo > Pointcare > Healvet) → rightUpCell,
+        //              the other → leftDownCell
+        //   3 samples: Exigo → rightUpCell, Pointcare → leftDownCell,
+        //              Healvet → rightDownCell (the large table that gets the
+        //              page-overflow check below)
+        int sampleCount = samples.size();
+        if (sampleCount == 1) {
+            if (exigoSample != null) {
+                rightUpCell = generateExigoSampleTable(exigoSample);
                 isExigoSampleFilled = true;
-                continue;
-            }
-
-            if (sample instanceof PointcareSample) {
-                if (samples.size() == 1) {
-                    //System.out.println("Sample instance of Pointcare Sample - RUC ");
-                    rightUpCell = generatePointcareSampleTable((PointcareSample) sample);
-                } else if (samples.size() == 2) {
-                    if (rightUpCell != null) {
-                        //System.out.println("Sample instance of Pointcare Sample - LDC ");
-                        leftDownCell = generatePointcareSampleTable((PointcareSample) sample);
-                    } else {
-                        //System.out.println("Sample instance of Pointcare Sample - RUC ");
-                        rightUpCell = generatePointcareSampleTable((PointcareSample) sample);
-                    }
-                } else if (samples.size() == 3) {
-                    //System.out.println("Sample instance of Pointcare Sample - LDC ");
-                    leftDownCell = generatePointcareSampleTable((PointcareSample) sample);
-                }
+            } else if (pointcareSample != null) {
+                rightUpCell = generatePointcareSampleTable(pointcareSample);
                 isPointcareSampleFilled = true;
-                continue;
-            }
-
-            if (sample instanceof HealvetSample) {
-                if (samples.size() == 1) {
-                    //System.out.println("Sample instance of Healvet Sample - RUC ");
-                    rightUpCell = generateHealvetSampleTable((HealvetSample) sample);
-                } else if (samples.size() == 2) {
-                   // System.out.println("Sample instance of Healvet Sample - LDC ");
-                    leftDownCell = generateHealvetSampleTable((HealvetSample) sample);
-                } else if (samples.size() == 3) {
-                    //System.out.println("Sample instance of Healvet Sample - RDC ");
-                    rightDownCell = generateHealvetSampleTable((HealvetSample) sample);
-                }
+            } else if (healvetSample != null) {
+                rightUpCell = generateHealvetSampleTable(healvetSample);
                 isHealvetSampleFilled = true;
             }
+        } else if (sampleCount == 2) {
+            if (exigoSample != null) {
+                rightUpCell = generateExigoSampleTable(exigoSample);
+                isExigoSampleFilled = true;
+                if (pointcareSample != null) {
+                    leftDownCell = generatePointcareSampleTable(pointcareSample);
+                    isPointcareSampleFilled = true;
+                } else if (healvetSample != null) {
+                    leftDownCell = generateHealvetSampleTable(healvetSample);
+                    isHealvetSampleFilled = true;
+                }
+            } else {
+                // No Exigo present: the pair is Pointcare + Healvet.
+                if (pointcareSample != null) {
+                    rightUpCell = generatePointcareSampleTable(pointcareSample);
+                    isPointcareSampleFilled = true;
+                }
+                if (healvetSample != null) {
+                    leftDownCell = generateHealvetSampleTable(healvetSample);
+                    isHealvetSampleFilled = true;
+                }
+            }
+        } else { // sampleCount == 3: Exigo + Pointcare + Healvet
+            if (exigoSample != null) {
+                rightUpCell = generateExigoSampleTable(exigoSample);
+                isExigoSampleFilled = true;
+            }
+            if (pointcareSample != null) {
+                leftDownCell = generatePointcareSampleTable(pointcareSample);
+                isPointcareSampleFilled = true;
+            }
+            if (healvetSample != null) {
+                rightDownCell = generateHealvetSampleTable(healvetSample);
+                isHealvetSampleFilled = true;
+            }
+        }
+
+        // Safety net: a medical table must never be silently dropped. If the number
+        // of rendered sample cells doesn't match the number of samples we were
+        // given (e.g. an unhandled device type, or two samples of the same type
+        // collapsing onto one slot), fail loudly. The CLI turns this into exit
+        // code 1, which the Rust caller logs — far safer than a report that looks
+        // complete but is missing a table.
+        int placedCells = (rightUpCell != null ? 1 : 0)
+                + (leftDownCell != null ? 1 : 0)
+                + (rightDownCell != null ? 1 : 0);
+        if (placedCells != sampleCount) {
+            throw new GeneratingPDFReportException(
+                    "Sample/table count mismatch: " + sampleCount + " sample(s) but "
+                    + placedCells + " table(s) placed — refusing to emit a report with a "
+                    + "missing table (unhandled device type or duplicate sample type?)");
         }
 
         boolean isOnlyOneTableBeingGenerated = leftDownCell == null && rightDownCell == null;

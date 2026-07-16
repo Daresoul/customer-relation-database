@@ -11,6 +11,18 @@ use std::fs;
 /// This provides 100% identical output to the original print-app
 pub struct JavaPdfService;
 
+/// Outcome of comparing the bundled JAR's build version against the running
+/// app version. See `JavaPdfService::classify_jar_version`.
+#[derive(Debug, PartialEq, Eq)]
+enum JarVersionVerdict {
+    /// Dev/unstamped build ("dev" JAR or "0.0.0" app) — no meaningful check.
+    SkipDev { app: String, jar: String },
+    /// JAR and app agree.
+    Match { version: String },
+    /// JAR was built for a different app version (stale JAR after a partial update).
+    Mismatch { app: String, jar: String },
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 struct JavaPdfInput {
     patient: JavaPatient,
@@ -203,6 +215,140 @@ impl JavaPdfService {
         cmd
     }
 
+    /// Ask the bundled JAR which app version it was built for (`java -jar … --version`,
+    /// printing the manifest's Implementation-Version). Returns the trimmed string,
+    /// or an Err if the JAR can't be located or Java can't run it.
+    fn read_jar_version(app_handle: &tauri::AppHandle) -> Result<String, String> {
+        let jar_path = Self::get_jar_path(app_handle)?;
+        let mut cmd = Command::new("java");
+        cmd.arg("-Djava.awt.headless=true")
+            .arg("-Dapple.awt.UIElement=true")
+            .arg("-Djava.awt.GraphicsEnvironment=sun.java2d.HeadlessGraphicsEnvironment")
+            .arg("-jar")
+            .arg(&jar_path)
+            .arg("--version")
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            cmd.process_group(0);
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            cmd.creation_flags(CREATE_NO_WINDOW);
+        }
+        let output = cmd
+            .output()
+            .map_err(|e| format!("Failed to run JAR --version: {}", e))?;
+        if !output.status.success() {
+            return Err(format!(
+                "JAR --version exited non-zero: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    }
+
+    /// Verify the bundled PDF-generator JAR was built for the same app version
+    /// that's running. Guards against a partially-applied update (app binary
+    /// updated, resources/pdf-generator.jar left stale) silently rendering
+    /// medical documents with outdated code — observed at the clinic in July
+    /// 2026, where a 0.7.2 app kept emitting 0.7.0 PDFs (wrong unit labels) for
+    /// days because the JAR was never replaced.
+    ///
+    /// On a real mismatch this emits an ERROR telemetry event (shipped to Loki)
+    /// and logs locally. It is intentionally a warning, not a hard failure: the
+    /// app still generates PDFs (an out-of-date renderer beats none), but the
+    /// mismatch is now loudly visible instead of silent. Dev sentinels ("dev"
+    /// JAR, "0.0.0" app) are skipped so local runs stay quiet.
+    pub fn verify_jar_version(app_handle: &tauri::AppHandle) {
+        let app_version = app_handle.package_info().version.to_string();
+        let jar_version = match Self::read_jar_version(app_handle) {
+            Ok(v) => v,
+            Err(e) => {
+                // Can't read the JAR version at all — surface it, but don't
+                // block startup; the first real PDF request will report a
+                // harder error if the JAR is truly missing.
+                log::warn!("⚠️  Could not read PDF generator JAR version: {}", e);
+                return;
+            }
+        };
+
+        match Self::classify_jar_version(&app_version, &jar_version) {
+            JarVersionVerdict::SkipDev { app, jar } => {
+                log::debug!(
+                    "PDF JAR version check skipped (dev build): app={}, jar={}",
+                    app,
+                    jar
+                );
+            }
+            JarVersionVerdict::Match { version } => {
+                log::info!("✅ PDF generator JAR version matches app: {}", version);
+            }
+            JarVersionVerdict::Mismatch { app, jar } => {
+                // Real mismatch: the JAR on disk was built for a different app
+                // version — the stale-JAR signature from the July 2026 clinic
+                // incident (0.7.2 app still emitting 0.7.0 PDFs with wrong unit
+                // labels). A warning, not a hard failure: the app still renders
+                // PDFs (an out-of-date renderer beats none), but the mismatch is
+                // now loud instead of silent.
+                log::error!(
+                    "❌ PDF generator JAR version mismatch: app={}, jar={} — a stale JAR \
+                     will render PDFs with outdated code (e.g. wrong unit labels). \
+                     Reinstall to replace resources/pdf-generator.jar.",
+                    app,
+                    jar
+                );
+                crate::services::telemetry::event(
+                    log::Level::Error,
+                    "pdf_generator",
+                    "PDF generator JAR version does not match app version (stale JAR after partial update)",
+                    serde_json::json!({
+                        "failure": "jar_version_mismatch",
+                        "app_version": app,
+                        "jar_version": jar,
+                    }),
+                );
+            }
+        }
+    }
+
+    /// Pure decision for the JAR-vs-app version check (no I/O, so it's unit
+    /// testable). Normalizes both versions (trim, drop a leading `v`) and:
+    ///   - skips dev/unstamped builds ("dev" JAR or "0.0.0" app), where a
+    ///     mismatch is expected and would only be noise;
+    ///   - reports Match when the normalized versions are equal;
+    ///   - reports Mismatch otherwise — the stale-JAR case worth alerting on.
+    fn classify_jar_version(app_version: &str, jar_version: &str) -> JarVersionVerdict {
+        let norm = |s: &str| s.trim().trim_start_matches('v').to_string();
+        let app = norm(app_version);
+        let jar = norm(jar_version);
+
+        if jar == "dev" || app == "0.0.0" {
+            JarVersionVerdict::SkipDev { app, jar }
+        } else if app == jar {
+            JarVersionVerdict::Match { version: app }
+        } else {
+            JarVersionVerdict::Mismatch { app, jar }
+        }
+    }
+
+    /// Resource path of the bundled JAR for a given app version. Real releases
+    /// ship `pdf-generator-<version>.jar` (per-version filename so a failed
+    /// update can't leave a silently-used stale JAR); untagged dev/E2E builds
+    /// (version "0.0.0") ship the legacy fixed `pdf-generator.jar`.
+    fn jar_resource_name(version: &str) -> String {
+        if version == "0.0.0" {
+            "resources/pdf-generator.jar".to_string()
+        } else {
+            format!("resources/pdf-generator-{}.jar", version)
+        }
+    }
+
     /// Get the path to the JAR file
     /// In development: uses relative path to pdf-generator-cli build output
     /// In production: uses Tauri's resource resolver to locate bundled resources
@@ -231,13 +377,33 @@ impl JavaPdfService {
         // - macOS: Contents/Resources/
         // - Windows: resources/ (handled by Tauri internally)
         // - Linux: resources/
-        // Note: "resources/**" in tauri.conf.json bundles src-tauri/resources/* files,
-        // so we reference them without the "resources/" prefix
+        //
+        // The JAR is bundled under a VERSION-STAMPED name
+        // (`pdf-generator-<version>.jar`) and we resolve exactly the name matching
+        // this app's version. This is deliberate: a Windows installer update can
+        // fail to overwrite a fixed-name resource (MSI skips "modified" unversioned
+        // files; a file locked by a running java.exe can't be replaced), which used
+        // to leave a stale JAR that silently rendered PDFs with outdated code
+        // (July 2026 clinic incident — 0.7.2 app, 0.7.0 JAR, wrong unit labels). A
+        // per-version filename turns that into a NEW file each release (always
+        // installed, never a locked-overwrite), and if the matching file is absent
+        // we fail loudly here rather than fall back to a stale one.
+        //
+        // Untagged builds (dev/E2E) report version "0.0.0" and ship the JAR under
+        // the legacy fixed name, so they keep resolving `pdf-generator.jar`.
+        let version = app_handle.package_info().version.to_string();
+        let jar_resource = Self::jar_resource_name(&version);
+
         let resource_path = app_handle
             .path_resolver()
-            .resolve_resource("resources/pdf-generator.jar")
+            .resolve_resource(&jar_resource)
             .ok_or_else(|| {
-                "Could not resolve pdf-generator.jar resource path. Ensure it's bundled in src-tauri/resources/".to_string()
+                format!(
+                    "Could not resolve {} resource path. A version-matched JAR must be \
+                     bundled in src-tauri/resources/ — a missing one usually means an \
+                     update did not replace it (reinstall to fix).",
+                    jar_resource
+                )
             })?;
 
         // On Windows, resolve_resource returns UNC paths (\\?\C:\...) which Java doesn't support
@@ -251,8 +417,9 @@ impl JavaPdfService {
 
         if !normalized_path.exists() {
             return Err(format!(
-                "pdf-generator.jar not found at resolved path: {:?}. Ensure it's bundled in src-tauri/resources/",
-                normalized_path
+                "{} not found at resolved path: {:?}. A missing version-matched JAR \
+                 usually means an update did not replace it — reinstall to fix.",
+                jar_resource, normalized_path
             ));
         }
 
@@ -535,4 +702,75 @@ pub struct InvoiceLineItem {
     pub name: String,
     pub quantity: i32,
     pub unit_price: f64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn jar_version_exact_match() {
+        assert_eq!(
+            JavaPdfService::classify_jar_version("0.7.2", "0.7.2"),
+            JarVersionVerdict::Match { version: "0.7.2".to_string() }
+        );
+    }
+
+    #[test]
+    fn jar_version_normalizes_leading_v_and_whitespace() {
+        // App version comes from semver (no 'v'); JAR --version prints the
+        // manifest value, which is stamped from a tag that may carry a 'v'
+        // and a trailing newline. Both must normalize to the same thing.
+        assert_eq!(
+            JavaPdfService::classify_jar_version("0.7.2", " v0.7.2\n"),
+            JarVersionVerdict::Match { version: "0.7.2".to_string() }
+        );
+    }
+
+    #[test]
+    fn jar_version_mismatch_is_flagged() {
+        // The July 2026 clinic case: 0.7.2 app, stale 0.7.0 JAR on disk.
+        assert_eq!(
+            JavaPdfService::classify_jar_version("0.7.2", "0.7.0"),
+            JarVersionVerdict::Mismatch { app: "0.7.2".to_string(), jar: "0.7.0".to_string() }
+        );
+    }
+
+    #[test]
+    fn jar_resource_name_is_versioned_for_real_releases() {
+        assert_eq!(
+            JavaPdfService::jar_resource_name("0.7.3"),
+            "resources/pdf-generator-0.7.3.jar"
+        );
+        assert_eq!(
+            JavaPdfService::jar_resource_name("1.2.10"),
+            "resources/pdf-generator-1.2.10.jar"
+        );
+    }
+
+    #[test]
+    fn jar_resource_name_falls_back_to_legacy_for_untagged_builds() {
+        // Dev/E2E binaries report 0.0.0 and ship the fixed-name JAR.
+        assert_eq!(
+            JavaPdfService::jar_resource_name("0.0.0"),
+            "resources/pdf-generator.jar"
+        );
+    }
+
+    #[test]
+    fn jar_version_dev_builds_are_skipped() {
+        // Local Gradle build (no -PappVersion) stamps "dev"; dev app reports 0.0.0.
+        assert!(matches!(
+            JavaPdfService::classify_jar_version("0.0.0", "dev"),
+            JarVersionVerdict::SkipDev { .. }
+        ));
+        assert!(matches!(
+            JavaPdfService::classify_jar_version("0.0.0", "0.7.2"),
+            JarVersionVerdict::SkipDev { .. }
+        ));
+        assert!(matches!(
+            JavaPdfService::classify_jar_version("0.7.2", "dev"),
+            JarVersionVerdict::SkipDev { .. }
+        ));
+    }
 }

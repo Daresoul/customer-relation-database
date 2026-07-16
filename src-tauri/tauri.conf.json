@@ -54,7 +54,7 @@
         "icons/icon.ico"
       ],
       "resources": [
-        "resources/pdf-generator.jar",
+        "resources/pdf-generator*.jar",
         "resources/pdfium/**"
       ]
     },

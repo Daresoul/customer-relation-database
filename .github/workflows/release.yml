@@ -28,8 +28,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # platform: [macos-latest, windows-latest]  # Uncomment to restore macOS builds
-        platform: [[self-hosted, Windows]]
+        # Temporarily on GitHub-hosted windows-latest while the self-hosted
+        # runner is offline. Everything is self-provisioned (Node/Rust/Java via
+        # setup actions, pdfium committed, JAR built in-workflow), so hosted
+        # builds fine — just cold (no warm cache, ~30-45 min). Switch back to
+        # [[self-hosted, Windows]] when the runner returns for faster cached builds.
+        # platform: [[self-hosted, Windows]]
+        platform: [windows-latest]
 
     steps:
       - name: Checkout repository
@@ -95,32 +100,59 @@ jobs:
         # Dropped `clean` — Gradle's incremental compiler is the whole point.
         # When sources haven't changed this is a sub-second no-op; with `clean`
         # it was a forced ~60-90s rebuild on every run.
+        #
+        # -PappVersion stamps this release's version into the JAR manifest
+        # (Implementation-Version). At runtime the app reads it back and warns
+        # if it doesn't match the running app version — catching a stale JAR
+        # left behind by a partially-applied update (the July 2026 clinic
+        # incident, where an updated app kept rendering PDFs with the old JAR).
+        env:
+          RELEASE_VERSION: ${{ inputs.version || github.ref_name }}
         run: |
           cd pdf-generator-cli
           chmod +x gradlew
-          ./gradlew build
+          ./gradlew build -PappVersion="$RELEASE_VERSION"
           cd ..
 
       - name: Build Java PDF Generator (Windows)
         if: runner.os == 'Windows'
         # See Unix step — `clean` removed for incremental compile.
+        # -PappVersion: see the Unix step (JAR version stamp for the stale-JAR guard).
+        env:
+          RELEASE_VERSION: ${{ inputs.version || github.ref_name }}
         run: |
           cd pdf-generator-cli
-          ./gradlew.bat build
+          ./gradlew.bat build -PappVersion="$RELEASE_VERSION"
           cd ..
 
       - name: Copy JAR to Tauri resources (Unix)
         if: runner.os != 'Windows'
+        # Bundle the JAR under a VERSION-STAMPED name (pdf-generator-<x.y.z>.jar).
+        # The Rust side resolves the name matching the running app version, so a
+        # failed update (stale JAR) surfaces as a hard "JAR not found" error rather
+        # than silently rendering with outdated code. Strip a leading "v" so the
+        # filename matches package_info().version (which has none).
+        env:
+          RELEASE_VERSION: ${{ inputs.version || github.ref_name }}
         run: |
           mkdir -p src-tauri/resources
-          cp pdf-generator-cli/build/libs/pdf-generator-cli-1.0.0.jar src-tauri/resources/pdf-generator.jar
+          # Drop any JAR from a prior run (the runner persists between builds via
+          # clean: false) so exactly one version-stamped JAR ends up in the bundle.
+          rm -f src-tauri/resources/pdf-generator*.jar
+          VERSION="${RELEASE_VERSION#v}"
+          cp pdf-generator-cli/build/libs/pdf-generator-cli-1.0.0.jar "src-tauri/resources/pdf-generator-${VERSION}.jar"
           ls -lh src-tauri/resources/
 
       - name: Copy JAR to Tauri resources (Windows)
         if: runner.os == 'Windows'
+        # See Unix step — version-stamped JAR name for the stale-JAR guard.
+        env:
+          RELEASE_VERSION: ${{ inputs.version || github.ref_name }}
         run: |
           mkdir -p src-tauri/resources
-          cp pdf-generator-cli/build/libs/pdf-generator-cli-1.0.0.jar src-tauri/resources/pdf-generator.jar
+          rm -f src-tauri/resources/pdf-generator*.jar
+          VERSION="${RELEASE_VERSION#v}"
+          cp pdf-generator-cli/build/libs/pdf-generator-cli-1.0.0.jar "src-tauri/resources/pdf-generator-${VERSION}.jar"
           ls -lh src-tauri/resources/
 
       - name: Update version from tag
@@ -147,5 +179,11 @@ jobs:
           tagName: ${{ inputs.version || github.ref_name }}
           releaseName: 'Veterinary Clinic Manager ${{ inputs.version || github.ref_name }}'
           releaseBody: 'See the assets to download and install this version.'
-          releaseDraft: false
+          # Publish as a DRAFT: the updater serves `releases/latest`, which
+          # excludes drafts, so a build does NOT auto-reach the clinics until a
+          # human clicks "Publish release" in GitHub. This is both the immediate
+          # need (validate this build on Windows tomorrow before the fleet gets
+          # it) and a sound standing posture for a clinical app — no release
+          # updates patient-facing machines without a deliberate publish step.
+          releaseDraft: true
           prerelease: false
