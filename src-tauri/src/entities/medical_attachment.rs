@@ -18,6 +18,10 @@ pub struct Model {
     pub device_name: Option<String>,
     pub connection_method: Option<String>,
     pub attachment_type: Option<String>,
+    /// Soft-deletion stamp — a non-NULL value hides the attachment from the
+    /// record (reads filter `deleted_at IS NULL`); the row and the blob on
+    /// disk are kept.
+    pub deleted_at: Option<ChronoDateTimeUtc>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

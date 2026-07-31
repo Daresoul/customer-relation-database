@@ -60,6 +60,7 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, "042_create_managed_hid_scanners", create_managed_hid_scanners_table).await?;
     run_migration(pool, "043_create_diagnoses_tables", create_diagnoses_tables).await?;
     run_migration(pool, "044_fts5_unicode61_tokenizer", upgrade_fts5_to_unicode61).await?;
+    run_migration(pool, "045_add_attachment_deleted_at", add_attachment_deleted_at_column).await?;
 
     Ok(())
 }
@@ -2463,6 +2464,27 @@ fn create_line_items_tables(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::fut
 }
 
 // Migration 040: Add invoice_number column to medical_records for sequential invoice numbering
+/// Soft deletion for medical attachments: a deleted file keeps its row and its
+/// blob on disk, it just stops appearing on the record. Mirrors the
+/// appointments soft-delete pattern (`deleted_at IS NULL` filters on reads).
+fn add_attachment_deleted_at_column(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        let column_exists: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM pragma_table_info('medical_attachments') WHERE name = 'deleted_at'"
+        )
+        .fetch_one(pool)
+        .await?;
+
+        if column_exists.0 == 0 {
+            sqlx::query("ALTER TABLE medical_attachments ADD COLUMN deleted_at DATETIME")
+                .execute(pool)
+                .await?;
+        }
+
+        Ok(())
+    })
+}
+
 fn add_invoice_number_column(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
     Box::pin(async move {
         let column_exists: (i64,) = sqlx::query_as(

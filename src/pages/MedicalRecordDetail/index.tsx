@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Layout, Card, Typography, Space, Button, Alert, Spin, Table, Tag, Descriptions, App, Switch, Breadcrumb, Drawer } from 'antd';
+import { Layout, Card, Typography, Space, Button, Alert, Spin, Table, Tag, Descriptions, App, Switch, Breadcrumb, Drawer, Popconfirm } from 'antd';
 import { invoke, convertFileSrc } from '@/services/invoke';
 import { useTranslation } from 'react-i18next';
 import PdfInlineViewer from '@/components/PdfInlineViewer';
@@ -252,6 +252,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
   const [showDiffs, setShowDiffs] = useState(false);
   const [displayRecord, setDisplayRecord] = useState<MedicalRecord | null>(null);
   const [regeneratingId, setRegeneratingId] = useState<number | null>(null);
+  const [deletingAttachmentId, setDeletingAttachmentId] = useState<number | null>(null);
   const [recentFilesDrawerOpen, setRecentFilesDrawerOpen] = useState(false);
   const [refreshRecentFiles, setRefreshRecentFiles] = useState<(() => void) | null>(null);
   const [printReportModalOpen, setPrintReportModalOpen] = useState(false);
@@ -712,6 +713,34 @@ export const MedicalRecordDetailPage: React.FC = () => {
    * lives here in one place. Both calls share the expanded-row /
    * preview state by attachment id.
    */
+  const handleDeleteAttachment = async (row: any) => {
+    setDeletingAttachmentId(row.id);
+    try {
+      await MedicalService.deleteAttachment(row.id);
+      // Collapse the row if its preview was expanded — the id no longer exists.
+      setExpandedRowKeys(prev => prev.filter(k => k !== String(row.id)));
+      notification.success({
+        message: t('common:success'),
+        description: t('medical:detail.attachmentDeleted', {
+          defaultValue: 'File "{{name}}" was deleted.',
+          name: row.originalName,
+        }),
+        placement: 'bottomRight',
+        duration: 3,
+      });
+      await refetch();
+    } catch (e: any) {
+      notification.error({
+        message: t('common:error'),
+        description: e?.message || t('medical:detail.attachmentDeleteFailed', 'Failed to delete the file.'),
+        placement: 'bottomRight',
+        duration: 5,
+      });
+    } finally {
+      setDeletingAttachmentId(null);
+    }
+  };
+
   const renderAttachmentsTable = (dataSource: any[], emptyText: string) => (
     <Table
       size="small"
@@ -825,6 +854,27 @@ export const MedicalRecordDetailPage: React.FC = () => {
               >
                 {t('common:download')}
               </Button>
+              <Popconfirm
+                title={t('medical:detail.deleteAttachmentConfirm', 'Delete this file?')}
+                description={t(
+                  'medical:detail.deleteAttachmentDesc',
+                  'The file will be removed from this record.',
+                )}
+                okText={t('common:buttons.delete', 'Delete')}
+                okButtonProps={{ danger: true }}
+                cancelText={t('common:buttons.cancel', 'Cancel')}
+                onConfirm={() => handleDeleteAttachment(row)}
+                onPopupClick={(e) => e.stopPropagation()}
+              >
+                <Button
+                  size="small"
+                  danger
+                  loading={deletingAttachmentId === row.id}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {t('common:buttons.delete', 'Delete')}
+                </Button>
+              </Popconfirm>
             </Space>
           )
         }

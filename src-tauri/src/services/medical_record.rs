@@ -174,7 +174,7 @@ impl MedicalRecordService {
                 DbBackend::Sqlite,
                 "SELECT id, medical_record_id, file_id, original_name, mime_type, \
                  file_size, uploaded_at, device_type, device_name, connection_method, attachment_type \
-                 FROM medical_attachments WHERE medical_record_id = ?",
+                 FROM medical_attachments WHERE medical_record_id = ? AND deleted_at IS NULL",
                 [record_id.into()],
             ))
             .await

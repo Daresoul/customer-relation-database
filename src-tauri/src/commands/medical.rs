@@ -173,14 +173,14 @@ pub async fn download_medical_attachment(
     res
 }
 
-// T038: Implement delete_medical_attachment command
+// T038: Implement delete_medical_attachment command (soft delete — the row and
+// the blob on disk are kept; the attachment just stops appearing on the record)
 #[tauri::command]
 pub async fn delete_medical_attachment(
-    app_handle: AppHandle,
     pool: State<'_, SeaOrmPool>,
     attachment_id: i64,
 ) -> Result<(), String> {
-    FileStorageService::delete_attachment(&app_handle, &pool, attachment_id).await
+    FileStorageService::delete_attachment(&pool, attachment_id).await
 }
 
 // Get attachment content for text file viewer
@@ -454,7 +454,7 @@ pub async fn regenerate_pdf_from_attachment(
         DbBackend::Sqlite,
         "SELECT id, medical_record_id, file_id, original_name, mime_type, \
          file_size, uploaded_at, device_type, device_name, connection_method, attachment_type \
-         FROM medical_attachments WHERE id = ?",
+         FROM medical_attachments WHERE id = ? AND deleted_at IS NULL",
         [attachment_id.into()]
     ))
     .await
@@ -611,6 +611,7 @@ pub async fn regenerate_pdf_from_medical_record(
          file_size, uploaded_at, device_type, device_name, connection_method, attachment_type \
          FROM medical_attachments \
          WHERE medical_record_id = ? \
+         AND deleted_at IS NULL \
          AND device_type IS NOT NULL \
          AND device_name IS NOT NULL \
          AND (attachment_type = 'test_result' \
@@ -950,12 +951,12 @@ pub async fn generate_configured_report(
     // 3.5 Ensure we don't accumulate multiple generated PDFs: delete existing generated_pdf attachments for this record
     if let Ok(rows) = pool.query_all(Statement::from_sql_and_values(
         DbBackend::Sqlite,
-        "SELECT id FROM medical_attachments WHERE medical_record_id = ? AND attachment_type = 'generated_pdf'",
+        "SELECT id FROM medical_attachments WHERE medical_record_id = ? AND attachment_type = 'generated_pdf' AND deleted_at IS NULL",
         [medical_record_id.into()]
     )).await {
         for row in rows {
             if let Ok(att_id) = row.try_get::<i64>("", "id") {
-                let _ = FileStorageService::delete_attachment(&app_handle, &pool, att_id).await;
+                let _ = FileStorageService::delete_attachment(&pool, att_id).await;
             }
         }
     }
@@ -967,7 +968,7 @@ pub async fn generate_configured_report(
         let attachment_row = pool.query_one(Statement::from_sql_and_values(
             DbBackend::Sqlite,
             "SELECT id, original_name, device_type, device_name, connection_method \
-             FROM medical_attachments WHERE id = ?",
+             FROM medical_attachments WHERE id = ? AND deleted_at IS NULL",
             [(*attachment_id).into()]
         ))
         .await

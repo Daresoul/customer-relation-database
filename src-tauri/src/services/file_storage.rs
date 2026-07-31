@@ -114,7 +114,7 @@ impl FileStorageService {
         let row = db.query_one(Statement::from_sql_and_values(
             DbBackend::Sqlite,
             "SELECT file_id, original_name, mime_type \
-             FROM medical_attachments WHERE id = ?",
+             FROM medical_attachments WHERE id = ? AND deleted_at IS NULL",
             [attachment_id.into()]
         ))
         .await
@@ -146,42 +146,28 @@ impl FileStorageService {
         })
     }
 
+    /// SOFT delete: the row keeps existing with `deleted_at` set and the blob
+    /// stays on disk — the attachment just stops appearing on the record (all
+    /// read paths filter `deleted_at IS NULL`). Medical data is never
+    /// destroyed by a UI action; a mistaken delete is recoverable by clearing
+    /// `deleted_at` in the DB. Same pattern as appointment soft deletion.
     pub async fn delete_attachment(
-        app_handle: &AppHandle,
         db: &DatabaseConnection,
         attachment_id: i64,
     ) -> Result<(), String> {
-        // Get file_id before deleting from database
-        let row = db.query_one(Statement::from_sql_and_values(
+        let result = db.execute(Statement::from_sql_and_values(
             DbBackend::Sqlite,
-            "SELECT file_id FROM medical_attachments WHERE id = ?",
-            [attachment_id.into()]
-        ))
-        .await
-        .map_err(|e| format!("Failed to fetch attachment: {}", e))?
-        .ok_or("Attachment not found".to_string())?;
-
-        let file_id: String = row.try_get("", "file_id")
-            .map_err(|e| format!("Failed to get file_id: {}", e))?;
-
-        // Delete from database
-        db.execute(Statement::from_sql_and_values(
-            DbBackend::Sqlite,
-            "DELETE FROM medical_attachments WHERE id = ?",
-            [attachment_id.into()]
+            "UPDATE medical_attachments SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL",
+            [Utc::now().to_rfc3339().into(), attachment_id.into()]
         ))
         .await
         .map_err(|e| format!("Failed to delete attachment record: {}", e))?;
 
-        // Delete file from disk
-        let storage_dir = Self::get_storage_dir(app_handle)?;
-        let file_path = storage_dir.join(&file_id);
-
-        if file_path.exists() {
-            fs::remove_file(&file_path)
-                .map_err(|e| format!("Failed to delete file: {}", e))?;
+        if result.rows_affected() == 0 {
+            return Err("Attachment not found".to_string());
         }
 
+        log::info!("🗑️  Soft-deleted attachment {} (file kept on disk)", attachment_id);
         Ok(())
     }
 

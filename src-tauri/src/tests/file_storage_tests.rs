@@ -235,3 +235,70 @@ async fn delete_single_attachment_leaves_others_intact() {
     let remaining: i64 = row.try_get("", "c").unwrap();
     assert_eq!(remaining, 1);
 }
+
+// ---------------------------------------------------------------------------
+// Soft deletion — a deleted attachment disappears from the record but its row
+// (and the blob on disk, untouched by the service) survive. Medical data is
+// never destroyed by a UI action.
+// ---------------------------------------------------------------------------
+
+/// The record's attachment listing (same `deleted_at IS NULL` filter the real
+/// fetch uses) must stop returning the attachment, while the raw row remains
+/// with `deleted_at` stamped.
+#[tokio::test]
+async fn soft_delete_hides_attachment_but_keeps_row() {
+    let db = create_test_db_with_migrations().await;
+    let record_id = seed_record(&db).await;
+    let id1 = insert_attachment(&db, record_id, "sd-1", "old-report.pdf", "generated_pdf").await;
+    insert_attachment(&db, record_id, "sd-2", "kept.pdf", "file").await;
+
+    FileStorageService::delete_attachment(&db, id1).await.expect("soft delete");
+
+    // Hidden from the record view...
+    let visible = db.query_one(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "SELECT COUNT(*) AS c FROM medical_attachments WHERE medical_record_id = ? AND deleted_at IS NULL",
+        [record_id.into()],
+    )).await.unwrap().unwrap();
+    assert_eq!(visible.try_get::<i64>("", "c").unwrap(), 1);
+
+    // ...but the row survives, stamped.
+    let raw = db.query_one(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "SELECT deleted_at FROM medical_attachments WHERE id = ?",
+        [id1.into()],
+    )).await.unwrap().expect("row must still exist");
+    let deleted_at: Option<String> = raw.try_get("", "deleted_at").ok();
+    assert!(deleted_at.is_some(), "deleted_at must be stamped");
+}
+
+/// Deleting an already-deleted (or unknown) attachment errors instead of
+/// silently succeeding — and must not overwrite the original deletion stamp.
+#[tokio::test]
+async fn soft_delete_twice_errors_and_keeps_first_stamp() {
+    let db = create_test_db_with_migrations().await;
+    let record_id = seed_record(&db).await;
+    let id = insert_attachment(&db, record_id, "sd-3", "x.pdf", "file").await;
+
+    FileStorageService::delete_attachment(&db, id).await.expect("first delete");
+    let first = db.query_one(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "SELECT deleted_at FROM medical_attachments WHERE id = ?",
+        [id.into()],
+    )).await.unwrap().unwrap();
+    let first_stamp: String = first.try_get("", "deleted_at").unwrap();
+
+    let second = FileStorageService::delete_attachment(&db, id).await;
+    assert!(second.is_err(), "second delete must error");
+
+    let after = db.query_one(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "SELECT deleted_at FROM medical_attachments WHERE id = ?",
+        [id.into()],
+    )).await.unwrap().unwrap();
+    let second_stamp: String = after.try_get("", "deleted_at").unwrap();
+    assert_eq!(first_stamp, second_stamp, "original deletion stamp must be preserved");
+
+    // Unknown id errors too.
+    assert!(FileStorageService::delete_attachment(&db, 999_999).await.is_err());
+}
