@@ -7,6 +7,10 @@ use chrono::Utc;
 use tauri::AppHandle;
 use std::io::Write;
 use std::fs::File;
+// Only the macOS/Linux launch paths shell out to `open`/`xdg-open`/`osascript`;
+// Windows uses ShellExecuteW directly (see the helpers at the bottom of this
+// file), so these imports would be unused warnings on Windows builds.
+#[cfg(not(target_os = "windows"))]
 use std::process::{Command, Stdio};
 
 // T028: FileStorageService for attachment handling
@@ -277,19 +281,40 @@ impl FileStorageService {
 
         #[cfg(target_os = "windows")]
         {
-            let mut cmd = Command::new("cmd");
-            cmd.args(["/C", "start", "", path])
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::null());
-            {
-                use std::os::windows::process::CommandExt;
-                const CREATE_NO_WINDOW: u32 = 0x08000000;
-                cmd.creation_flags(CREATE_NO_WINDOW);
+            // ShellExecuteW instead of `cmd /C start "" <path>`: same effect
+            // (open with the associated app), but it returns a real result
+            // code we can log — `cmd start` always "succeeded" as long as
+            // cmd.exe spawned, so association problems were invisible in the
+            // clinic logs. It also removes cmd.exe's quote-parsing quirks
+            // from the path handling entirely.
+            log::info!("📂 Opening file with default app: {}", path);
+            log_windows_launch_context(path);
+
+            let code = windows_shell_execute(path, "open");
+            if code > 32 {
+                log::info!("   ✅ File opened with default app");
+                return Ok(());
             }
-            cmd.spawn()
-                .map_err(|e| format!("Failed to open file: {}", e))?;
-            return Ok(());
+            log::error!(
+                "   ❌ Open failed with code {} ({})",
+                code, describe_shellexecute_code(code)
+            );
+            crate::services::telemetry::event(
+                log::Level::Error,
+                "os_launch",
+                "Opening a file with its default app failed",
+                serde_json::json!({
+                    "path": path,
+                    "code": code,
+                    "code_meaning": describe_shellexecute_code(code),
+                    "open_handler": windows_resolve_association(path, Some("open")),
+                }),
+            );
+            return Err(format!(
+                "Could not open file. Error code: {} ({})",
+                code,
+                describe_shellexecute_code(code)
+            ));
         }
 
         #[cfg(target_os = "linux")]
@@ -348,53 +373,57 @@ impl FileStorageService {
 
         #[cfg(target_os = "windows")]
         {
-            use std::ffi::OsStr;
-            use std::os::windows::ffi::OsStrExt;
-            use windows::Win32::UI::Shell::ShellExecuteW;
-            use windows::Win32::Foundation::HWND;
-            use windows::core::PCWSTR;
-
             log::info!("🖨️  Printing file: {}", path);
-
-            // Convert path to wide string (UTF-16) for Windows API
-            let wide_path: Vec<u16> = OsStr::new(path)
-                .encode_wide()
-                .chain(Some(0))
-                .collect();
+            log_windows_launch_context(path);
 
             // Try "print" verb first, fallback to "open" if not supported
-            let operations = ["print", "open"];
-            let mut last_error = 0;
-
-            for operation_str in &operations {
-                let operation: Vec<u16> = OsStr::new(operation_str)
-                    .encode_wide()
-                    .chain(Some(0))
-                    .collect();
-
-                unsafe {
-                    let result = ShellExecuteW(
-                        HWND(0),                          // No parent window
-                        PCWSTR(operation.as_ptr()),       // "print" or "open" verb
-                        PCWSTR(wide_path.as_ptr()),       // File path
-                        PCWSTR::null(),                   // No parameters
-                        PCWSTR::null(),                   // No directory
-                        windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL  // Show window
-                    );
-
-                    let code = result.0 as i32;
-                    if code > 32 {
-                        log::info!("   ✅ File opened with '{}' verb - user can print from viewer", operation_str);
-                        return Ok(());
+            let mut codes: Vec<(&str, i32)> = Vec::new();
+            for verb in ["print", "open"] {
+                let code = windows_shell_execute(path, verb);
+                if code > 32 {
+                    if verb == "open" {
+                        // The print verb didn't work and we opened the viewer
+                        // instead. The user asked to PRINT — make the degraded
+                        // outcome visible in Grafana, with what actually ran.
+                        crate::services::telemetry::event(
+                            log::Level::Warn,
+                            "os_launch",
+                            "Print verb unavailable — opened file in viewer instead of printing",
+                            serde_json::json!({
+                                "path": path,
+                                "print_verb_code": codes.first().map(|(_, c)| *c),
+                                "open_handler": windows_resolve_association(path, Some("open")),
+                            }),
+                        );
                     }
-
-                    last_error = code;
-                    log::warn!("   ⚠️  '{}' verb failed with code {}, trying next...", operation_str, code);
+                    log::info!("   ✅ File opened with '{}' verb - user can print from viewer", verb);
+                    return Ok(());
                 }
+                log::warn!(
+                    "   ⚠️  '{}' verb failed with code {} ({}), trying next...",
+                    verb, code, describe_shellexecute_code(code)
+                );
+                codes.push((verb, code));
             }
 
+            let last_error = codes.last().map(|(_, c)| *c).unwrap_or(0);
             log::error!("   ❌ All print methods failed. Last error: {}", last_error);
-            return Err(format!("Could not open file for printing. Error code: {}", last_error));
+            crate::services::telemetry::event(
+                log::Level::Error,
+                "os_launch",
+                "Print failed — no verb could launch a handler for the file",
+                serde_json::json!({
+                    "path": path,
+                    "verb_codes": codes.iter().map(|(v, c)| format!("{}={}", v, c)).collect::<Vec<_>>(),
+                    "open_handler": windows_resolve_association(path, Some("open")),
+                    "print_handler": windows_resolve_association(path, Some("print")),
+                }),
+            );
+            return Err(format!(
+                "Could not open file for printing. Error code: {} ({})",
+                last_error,
+                describe_shellexecute_code(last_error)
+            ));
         }
 
         #[cfg(target_os = "linux")]
@@ -438,5 +467,116 @@ impl FileStorageService {
             .map_err(|e| format!("Failed to write device file: {}", e))?;
 
         Ok((file_id, file_path.display().to_string()))
+    }
+}
+
+/// Launch `path` via ShellExecuteW with the given verb ("open", "print").
+/// Returns the raw ShellExecute result code: > 32 means success, <= 32 is one
+/// of the SE_ERR_* failures (see `describe_shellexecute_code`).
+#[cfg(target_os = "windows")]
+fn windows_shell_execute(path: &str, verb: &str) -> i32 {
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::UI::Shell::ShellExecuteW;
+
+    let wide_path: Vec<u16> = OsStr::new(path).encode_wide().chain(Some(0)).collect();
+    let wide_verb: Vec<u16> = OsStr::new(verb).encode_wide().chain(Some(0)).collect();
+
+    unsafe {
+        let result = ShellExecuteW(
+            HWND(0),                    // No parent window
+            PCWSTR(wide_verb.as_ptr()), // "print" or "open" verb
+            PCWSTR(wide_path.as_ptr()), // File path
+            PCWSTR::null(),             // No parameters
+            PCWSTR::null(),             // No directory
+            windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL,
+        );
+        result.0 as i32
+    }
+}
+
+/// Ask the Windows shell which executable is registered for `verb` on this
+/// file's extension (e.g. `.pdf` + "open" → the default PDF viewer). This is
+/// the single most useful diagnostic when a launch misbehaves at a clinic:
+/// it tells us remotely what app Windows would hand the file to.
+#[cfg(target_os = "windows")]
+fn windows_resolve_association(path: &str, verb: Option<&str>) -> Option<String> {
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+    use windows::core::{PCWSTR, PWSTR};
+    use windows::Win32::UI::Shell::{AssocQueryStringW, ASSOCF_NONE, ASSOCSTR_EXECUTABLE};
+
+    let ext = std::path::Path::new(path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| format!(".{}", e))?;
+
+    let wide_ext: Vec<u16> = OsStr::new(&ext).encode_wide().chain(Some(0)).collect();
+    let wide_verb: Option<Vec<u16>> =
+        verb.map(|v| OsStr::new(v).encode_wide().chain(Some(0)).collect());
+
+    let mut buf = [0u16; 1024];
+    let mut len = buf.len() as u32;
+    unsafe {
+        let hr = AssocQueryStringW(
+            ASSOCF_NONE,
+            ASSOCSTR_EXECUTABLE,
+            PCWSTR(wide_ext.as_ptr()),
+            wide_verb
+                .as_ref()
+                .map(|v| PCWSTR(v.as_ptr()))
+                .unwrap_or(PCWSTR::null()),
+            PWSTR(buf.as_mut_ptr()),
+            &mut len,
+        );
+        if hr.is_ok() && len > 1 {
+            Some(String::from_utf16_lossy(&buf[..(len as usize - 1)]))
+        } else {
+            None
+        }
+    }
+}
+
+/// Log everything about the file and its associations that a remote
+/// diagnosis needs BEFORE we hand it to the shell: does the file exist, how
+/// big is it, and which executables Windows resolves for its "open" and
+/// "print" verbs. One glance at these lines in Arkivet.log answers "what did
+/// Windows actually launch?" without touching the clinic machine.
+#[cfg(target_os = "windows")]
+fn log_windows_launch_context(path: &str) {
+    match std::fs::metadata(path) {
+        Ok(m) => log::info!("   📄 File exists, {} bytes", m.len()),
+        Err(e) => log::error!("   ❌ File does NOT exist at launch time: {}", e),
+    }
+    log::info!(
+        "   🔗 'open' handler: {}",
+        windows_resolve_association(path, Some("open")).unwrap_or_else(|| "<none registered>".into())
+    );
+    log::info!(
+        "   🔗 'print' handler: {}",
+        windows_resolve_association(path, Some("print")).unwrap_or_else(|| "<none registered>".into())
+    );
+}
+
+/// Human-readable meaning of a ShellExecute result code <= 32, so clinic logs
+/// don't require a Win32 reference to interpret.
+#[cfg(target_os = "windows")]
+fn describe_shellexecute_code(code: i32) -> &'static str {
+    match code {
+        0 => "system out of memory or resources",
+        2 => "file not found (SE_ERR_FNF)",
+        3 => "path not found (SE_ERR_PNF)",
+        5 => "access denied (SE_ERR_ACCESSDENIED)",
+        8 => "out of memory (SE_ERR_OOM)",
+        26 => "sharing violation (SE_ERR_SHARE)",
+        27 => "file association incomplete or invalid (SE_ERR_ASSOCINCOMPLETE)",
+        28 => "DDE transaction timed out (SE_ERR_DDETIMEOUT)",
+        29 => "DDE transaction failed (SE_ERR_DDEFAIL)",
+        30 => "DDE busy (SE_ERR_DDEBUSY)",
+        31 => "no application associated with this file type (SE_ERR_NOASSOC)",
+        32 => "DLL not found (SE_ERR_DLLNOTFOUND)",
+        _ => "unknown error",
     }
 }
