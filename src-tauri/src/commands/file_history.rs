@@ -304,6 +304,56 @@ pub async fn cleanup_old_file_history(
     Ok(result.rows_affected() as i64)
 }
 
+/// Recover the parsed test results for a stored device file by running its
+/// bytes back through the device parser — the same path the live import and
+/// the regenerate-report command use. `parse_device_data` already handles
+/// both raw captures (Exigo XML, HL7, Healvet serial) and the stored-JSON
+/// form some devices persist, so every file format the app can save is
+/// covered.
+///
+/// This used to special-case `.json` files only and return None for
+/// everything else, so an Exigo `.xml` re-added from a "recent files" drawer
+/// reached PDF generation with NO test results and rendered a header-only
+/// hematology table (clinic incident 2026-07-22, record 35). None now means
+/// "genuinely unparseable", and the PDF layer refuses to render such a
+/// sample rather than emitting an empty table.
+fn resolve_stored_test_results(
+    device_type: &str,
+    device_name: &str,
+    original_name: &str,
+    file_data: &[u8],
+    connection_method: &str,
+) -> Option<serde_json::Value> {
+    match crate::services::device_parser::DeviceParserService::parse_device_data(
+        device_type,
+        device_name,
+        original_name,
+        file_data,
+        connection_method,
+    ) {
+        Ok(parsed) => Some(parsed.test_results),
+        Err(parse_err) => {
+            // Unknown device type or bytes the parser can't handle. Keep the
+            // legacy raw-JSON fallback so a stored results file whose device
+            // type the parser doesn't dispatch on still round-trips.
+            if let Ok(json) = serde_json::from_slice::<serde_json::Value>(file_data) {
+                return Some(json);
+            }
+            crate::services::telemetry::event(
+                log::Level::Warn,
+                "file_history",
+                "Stored device file could not be re-parsed — re-adding it to a record will carry no test results",
+                serde_json::json!({
+                    "file_name": original_name,
+                    "device_type": device_type,
+                    "error": parse_err,
+                }),
+            );
+            None
+        }
+    }
+}
+
 /// Download device file by file_id from storage (includes device metadata for PDF generation)
 #[tauri::command]
 pub async fn download_device_file(
@@ -336,15 +386,13 @@ pub async fn download_device_file(
     let file_data = std::fs::read(&file_path)
         .map_err(|e| format!("Failed to read device file: {}", e))?;
 
-    // Parse test results from file if it's JSON
-    let test_results = if original_name.ends_with(".json") {
-        match serde_json::from_slice::<serde_json::Value>(&file_data) {
-            Ok(json) => Some(json),
-            Err(_) => None,
-        }
-    } else {
-        None
-    };
+    let test_results = resolve_stored_test_results(
+        &device_type,
+        &device_name,
+        &original_name,
+        &file_data,
+        connection_method.as_deref().unwrap_or("file_history"),
+    );
 
     Ok(DeviceFileDownloadResponse {
         file_name: original_name,
@@ -412,4 +460,72 @@ pub struct DeviceFileDownloadResponse {
     pub device_name: String,
     pub connection_method: Option<String>,
     pub test_results: Option<serde_json::Value>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_stored_test_results;
+
+    // The 2026-07-22 clinic incident: an Exigo `.xml` re-added from the
+    // "recent files" drawer carried no test results into the record because
+    // this path only knew how to read `.json`. Stored raw captures must
+    // round-trip through the device parser like a live import does.
+    #[test]
+    fn exigo_xml_recovers_test_results() {
+        let results = resolve_stored_test_results(
+            "exigo_eos_vet",
+            "Exigo Blood analyzer",
+            "BM-53672_2026-07-22.xml",
+            include_bytes!("../../tests/fixtures/exigo_daily_two_samples.xml"),
+            "file_history",
+        )
+        .expect("stored Exigo XML must yield test results");
+        let map = results.as_object().expect("results must be an object");
+        assert!(!map.is_empty());
+        assert!(
+            map.contains_key("WBC") || map.contains_key("HGB"),
+            "expected analyte keys, got: {:?}",
+            map.keys().collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn stored_pointcare_json_recovers_test_results() {
+        let json = br#"{"ALT": "45", "AST": "38", "sample_id": "1784724879"}"#;
+        let results = resolve_stored_test_results(
+            "mnchip_pointcare_chemistry",
+            "COM7",
+            "mnchip_pointcare_chemistry_dog_1784724879.json",
+            json,
+            "file_history",
+        )
+        .expect("stored PointCare JSON must yield test results");
+        assert!(results.as_object().is_some_and(|m| !m.is_empty()));
+    }
+
+    #[test]
+    fn unknown_device_type_falls_back_to_raw_json() {
+        let json = br#"{"K": "4.1"}"#;
+        let results = resolve_stored_test_results(
+            "some_future_device",
+            "X",
+            "capture.json",
+            json,
+            "file_history",
+        )
+        .expect("raw JSON fallback must apply for unknown device types");
+        assert_eq!(results["K"], "4.1");
+    }
+
+    #[test]
+    fn unparseable_bytes_yield_none() {
+        assert!(resolve_stored_test_results(
+            "exigo_eos_vet",
+            "Exigo Blood analyzer",
+            "garbage.xml",
+            b"not xml at all",
+            "file_history",
+        )
+        .is_none());
+    }
 }

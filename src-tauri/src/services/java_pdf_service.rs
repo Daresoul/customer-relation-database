@@ -61,6 +61,14 @@ impl JavaPdfService {
     ) -> Result<(), String> {
         log::info!("☕ Generating PDF using Java JAR (iText 5) with {} samples...", device_data_list.len());
 
+        // A sample with no test results must never reach the renderer: Java
+        // finds none of its analyte keys and emits a report with a header-only
+        // table that looks complete (clinic incident 2026-07-22 — a recent-files
+        // re-add carried `null` results into an Exigo report). Same philosophy
+        // as the parser's zero-yield-is-an-error rule: fail loudly, visibly,
+        // and diagnosably instead of producing a silently empty medical report.
+        Self::reject_empty_samples(device_data_list)?;
+
         // Sort samples in the order Java expects: Exigo, Pointcare, Healvet, PCR
         // PCR samples go last as they are rendered on separate pages
         // This is critical for correct PDF layout (Java PDF code line 273)
@@ -428,6 +436,38 @@ impl JavaPdfService {
     }
 
     /// Convert JSON Value to HashMap<String, String>
+    /// Refuse to render any device sample whose test results are missing or
+    /// empty (`null`, `{}`, or a non-object). Emits a telemetry event naming
+    /// the offending device so the failure is visible in Grafana, then errors
+    /// — callers surface it to the user (regenerate) or log it while keeping
+    /// the medical record (create).
+    fn reject_empty_samples(
+        device_data_list: &[crate::services::device_pdf_service::DeviceTestData],
+    ) -> Result<(), String> {
+        let empty: Vec<&str> = device_data_list
+            .iter()
+            .filter(|d| Self::value_to_hashmap(&d.test_results).is_empty())
+            .map(|d| d.device_type.as_str())
+            .collect();
+        if empty.is_empty() {
+            return Ok(());
+        }
+        crate::services::telemetry::event(
+            log::Level::Error,
+            "pdf_generator",
+            "Device sample(s) with no test results reached PDF generation — refusing to render an empty table",
+            serde_json::json!({
+                "empty_device_types": empty,
+                "sample_count": device_data_list.len(),
+            }),
+        );
+        Err(format!(
+            "Device sample(s) {:?} carry no test results — refusing to render a report with an empty table. \
+             Re-add the device file or reimport it.",
+            empty
+        ))
+    }
+
     fn value_to_hashmap(value: &Value) -> HashMap<String, String> {
         if let Some(obj) = value.as_object() {
             obj.iter()
@@ -707,6 +747,47 @@ pub struct InvoiceLineItem {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn sample(device_type: &str, test_results: serde_json::Value) -> crate::services::device_pdf_service::DeviceTestData {
+        crate::services::device_pdf_service::DeviceTestData {
+            device_type: device_type.to_string(),
+            device_name: device_type.to_string(),
+            test_results,
+            detected_at: chrono::Utc::now(),
+            patient_identifier: None,
+        }
+    }
+
+    // The 2026-07-22 clinic incident: a recent-files re-add carried `null`
+    // test results into PDF generation and produced a header-only hematology
+    // table. Empty samples must be rejected before Java ever runs.
+    #[test]
+    fn empty_samples_are_rejected() {
+        for empty in [serde_json::Value::Null, serde_json::json!({})] {
+            let err = JavaPdfService::reject_empty_samples(&[sample("exigo_eos_vet", empty)])
+                .expect_err("empty test_results must be rejected");
+            assert!(err.contains("exigo_eos_vet"), "error should name the device: {}", err);
+        }
+    }
+
+    #[test]
+    fn one_empty_sample_rejects_the_whole_report() {
+        // A report must never silently miss one of its tables — a batch with
+        // any empty sample fails as a whole rather than rendering partially.
+        let result = JavaPdfService::reject_empty_samples(&[
+            sample("mnchip_pointcare_chemistry", serde_json::json!({"ALT": "45"})),
+            sample("exigo_eos_vet", serde_json::json!({})),
+        ]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn populated_samples_pass() {
+        JavaPdfService::reject_empty_samples(&[
+            sample("exigo_eos_vet", serde_json::json!({"WBC": "10.4", "HGB": "17.4"})),
+        ])
+        .expect("non-empty samples must pass");
+    }
 
     #[test]
     fn jar_version_exact_match() {

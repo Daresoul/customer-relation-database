@@ -267,6 +267,17 @@ const DeviceImportModal: React.FC = () => {
       // it to the current import as a pending file, so it flows through the same
       // create/attach path as a freshly-received result.
       const dl = await fileHistoryService.downloadDeviceFile(fileId);
+      if (!dl.testResults || Object.keys(dl.testResults).length === 0) {
+        // The backend re-parses stored files; if it still returned nothing,
+        // the file is unreadable as device data. Warn now, at add time — the
+        // report generated later will not include a table for this file.
+        notification.warning({
+          message: t('common:warning'),
+          description: `Could not read test results from "${originalName}" — it will be attached as a plain file, without a device report table.`,
+          placement: 'bottomRight',
+          duration: 8,
+        });
+      }
       addDeviceFile({
         id: `recent-${fileId}-${Date.now()}`,
         deviceType: dl.deviceType,
@@ -363,11 +374,17 @@ const DeviceImportModal: React.FC = () => {
     try {
       setLoading(true);
 
-      const deviceDataList = pendingFiles.map(file => ({
-        deviceTestData: file.testResults,
-        deviceType: file.deviceType,
-        deviceName: file.deviceName,
-      }));
+      // Files whose results could not be recovered (warned about at add time)
+      // are attached as plain files but excluded from the device report — the
+      // backend refuses to render a report containing an empty sample, which
+      // would otherwise block the tables of the healthy samples too.
+      const deviceDataList = pendingFiles
+        .filter(file => file.testResults && Object.keys(file.testResults).length > 0)
+        .map(file => ({
+          deviceTestData: file.testResults,
+          deviceType: file.deviceType,
+          deviceName: file.deviceName,
+        }));
 
       // Convert line items for submission
       const lineItemsInput: CreateLineItemInput[] | undefined = lineItems.length > 0

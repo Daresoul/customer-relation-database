@@ -280,6 +280,19 @@ public class PdfGeneratorCLI {
                 System.out.println("PARSED_SAMPLE device=" + deviceType
                         + " sample_id=" + sample.getSampleId()
                         + " params=" + paramCount);
+                // A grid sample with zero parameters would render a header-only
+                // table on a report that otherwise looks complete — the same
+                // silently-empty failure the Rust side guards against. Refuse
+                // (exit 1, logged by the Rust caller) rather than emit it. This
+                // also catches key-shape mismatches between Rust and this JAR
+                // that the Rust-side non-empty check cannot see. PCR samples
+                // are exempt: they render on their own page from a different
+                // structure and legitimately may carry no grid parameters.
+                if (paramCount == 0 && !"pcr".equals(deviceType)) {
+                    throw new IllegalStateException(
+                            "Sample for device '" + deviceType + "' parsed to 0 parameters — "
+                            + "refusing to render a report with an empty results table");
+                }
                 samples.add(sample);
             }
         }

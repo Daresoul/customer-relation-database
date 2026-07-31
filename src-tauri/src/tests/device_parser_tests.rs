@@ -983,6 +983,60 @@ mod pdf_end_to_end {
         assert!(exigo_rows >= 15, "Exigo table rendered only {} rows", exigo_rows);
         assert!(chem_rows >= 10, "PointCare table rendered only {} rows", chem_rows);
     }
+
+    /// The JAR must refuse (exit non-zero) a grid sample that parses to zero
+    /// parameters instead of rendering a header-only table. This is the Java
+    /// backstop behind the Rust-side `reject_empty_samples` guard: it also
+    /// catches key-shape mismatches between what Rust sends and what this JAR
+    /// expects, which the Rust non-empty check cannot see.
+    #[test]
+    fn jar_refuses_zero_param_grid_sample() {
+        let jar = std::path::Path::new("../pdf-generator-cli/build/libs/pdf-generator-cli-1.0.0.jar");
+        if !jar.exists() {
+            eprintln!("SKIP: JAR not built ({}). Run: cd pdf-generator-cli && ./gradlew build", jar.display());
+            return;
+        }
+        if std::process::Command::new("java").arg("-version").output().is_err() {
+            eprintln!("SKIP: no `java` on PATH");
+            return;
+        }
+
+        let out_dir = std::env::temp_dir();
+        let pdf_path = out_dir.join("e2e_empty_sample_report.pdf");
+        let _ = std::fs::remove_file(&pdf_path);
+        let input = serde_json::json!({
+            "patient": {
+                "name": "NINA", "owner": "Owner", "species": "Dog",
+                "microchip_id": null, "gender": "Female", "date_of_birth": null,
+            },
+            "samples": [{
+                "device_type": "exigo_eos_vet",
+                "sample_id": "AUTO-GEN",
+                "patient_id": "NINA",
+                "detected_at": "2026-07-22T14:48:56Z",
+                // No analyte keys at all — the exact payload the 2026-07-22
+                // clinic incident sent (null results stringified to nothing).
+                "test_results": {},
+            }],
+            "output_path": pdf_path.to_string_lossy(),
+        });
+        let input_path = out_dir.join("e2e_empty_sample_input.json");
+        std::fs::write(&input_path, serde_json::to_string(&input).unwrap()).unwrap();
+
+        let output = std::process::Command::new("java")
+            .arg("-Djava.awt.headless=true")
+            .arg("-jar")
+            .arg(jar)
+            .arg(&input_path)
+            .output()
+            .expect("java invocation failed");
+        assert!(
+            !output.status.success(),
+            "JAR must exit non-zero for a zero-param grid sample, got success.\nstdout: {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+        assert!(!pdf_path.exists(), "no PDF must be written for a refused sample");
+    }
 }
 
 /// REGRESSION GUARD against the cross-patient blend. A later sample that

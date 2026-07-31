@@ -245,12 +245,25 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
       setFileSourceIds(prev => new Map(prev).set(originalName, fileId));
 
       if (fileData.deviceType && fileData.deviceName) {
-        const deviceData: DeviceDataInput = {
-          deviceTestData: fileData.testResults || null,
-          deviceType: fileData.deviceType,
-          deviceName: fileData.deviceName,
-        };
-        setFileDeviceData(prev => new Map(prev).set(originalName, deviceData));
+        // Only register device data when the backend recovered actual test
+        // results — a null/empty payload would reach the PDF as a header-only
+        // results table (or, since the backend now refuses empty samples, kill
+        // the device report outright). The raw file still attaches either way.
+        if (fileData.testResults && Object.keys(fileData.testResults).length > 0) {
+          const deviceData: DeviceDataInput = {
+            deviceTestData: fileData.testResults,
+            deviceType: fileData.deviceType,
+            deviceName: fileData.deviceName,
+          };
+          setFileDeviceData(prev => new Map(prev).set(originalName, deviceData));
+        } else {
+          notification.warning({
+            message: t('common:warning'),
+            description: `Could not read test results from "${originalName}" — it will be attached as a plain file, without a device report table.`,
+            placement: 'bottomRight',
+            duration: 8,
+          });
+        }
       }
 
       notification.success({
