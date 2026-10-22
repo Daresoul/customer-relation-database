@@ -34,8 +34,8 @@ export function usePatients() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: [PATIENTS_KEY] });
       notification.success({
-        message: 'Patient Created',
-        description: `${data.name} has been added successfully`,
+        message: t('patients:messages.createdTitle'),
+        description: t('patients:messages.createdDesc', { name: data.name }),
         placement: 'bottomRight',
         duration: 3,
       });
@@ -50,8 +50,8 @@ export function usePatients() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [PATIENTS_KEY] });
       notification.success({
-        message: 'Patient Updated',
-        description: 'Patient information has been saved',
+        message: t('patients:messages.updatedTitle'),
+        description: t('patients:messages.infoSaved'),
         placement: 'bottomRight',
         duration: 3,
       });
@@ -65,8 +65,8 @@ export function usePatients() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [PATIENTS_KEY] });
       notification.success({
-        message: 'Patient Deleted',
-        description: 'Patient has been removed',
+        message: t('patients:messages.deletedTitle'),
+        description: t('patients:messages.removedDesc'),
         placement: 'bottomRight',
         duration: 3,
       });

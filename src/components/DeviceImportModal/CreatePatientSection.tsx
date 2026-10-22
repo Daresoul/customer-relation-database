@@ -147,7 +147,7 @@ export const CreatePatientSection: React.FC<CreatePatientSectionProps> = ({
 
       notification.success({
         message: t('forms:success.created', { entity: t('entities:patient.singular') }),
-        description: `${newPatient.name} created successfully`,
+        description: t('forms:success.created', { entity: newPatient.name }),
         placement: 'bottomRight',
         duration: 3,
       });
@@ -162,7 +162,7 @@ export const CreatePatientSection: React.FC<CreatePatientSectionProps> = ({
       console.error('Failed to create patient:', error);
       notification.error({
         message: t('forms:error.create', { entity: t('entities:patient.singular') }),
-        description: knownErrorMessage(error, t) || error?.message || 'Unknown error',
+        description: knownErrorMessage(error, t) || error?.message || t('forms:messages.unknownError'),
         placement: 'bottomRight',
         duration: 5,
       });
@@ -250,7 +250,7 @@ export const CreatePatientSection: React.FC<CreatePatientSectionProps> = ({
                   showIcon
                   icon={<WarningOutlined />}
                   style={{ marginTop: 8 }}
-                  message="Conflicting data detected across files"
+                  message={t('patients:deviceImport.conflicts')}
                   description={
                     <div style={{ marginTop: 4 }}>
                       {conflicts.map((conflict, idx) => (
@@ -262,13 +262,13 @@ export const CreatePatientSection: React.FC<CreatePatientSectionProps> = ({
                               <span style={{ fontSize: '0.85em', color: 'var(--text-secondary)' }}>
                                 ({v.source})
                               </span>
-                              {i < conflict.values.length - 1 && ' vs '}
+                              {i < conflict.values.length - 1 && ` ${t('patients:deviceImport.vs')} `}
                             </span>
                           ))}
                         </div>
                       ))}
                       <div style={{ marginTop: 8, fontSize: '0.85em', color: 'var(--text-secondary)' }}>
-                        Using first detected value. You can modify below if needed.
+                        {t('patients:deviceImport.usingFirst')}
                       </div>
                     </div>
                   }

@@ -111,7 +111,7 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
         setLocalValues(prev => ({ ...prev, [field]: patient[field as keyof typeof patient] }));
       }
       console.error('Update failed:', error);
-      notification.error({ message: "Error", description: knownErrorMessage(error, t) || t('detail.patientInfo.failedToSave'), placement: "bottomRight", duration: 5 });
+      notification.error({ message: t('common:error'), description: knownErrorMessage(error, t) || t('detail.patientInfo.failedToSave'), placement: "bottomRight", duration: 5 });
     }
   };
 
@@ -185,7 +185,7 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
                 setLocalValues(prev => ({ ...prev, name: value })); // Immediate update
                 const result = nameEdit.onChange(value);
                 if (!result.success && result.error) {
-                  notification.error({ message: "Error", description: result.error, placement: "bottomRight", duration: 5 });
+                  notification.error({ message: t('common:error'), description: result.error, placement: "bottomRight", duration: 5 });
                   setLocalValues(prev => ({ ...prev, name: patient.name || '' })); // Revert on validation error
                 }
               },
@@ -233,8 +233,8 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
               } else {
                 console.error('Species not found in speciesData:', value);
                 notification.error({
-                  message: "Error",
-                  description: `Species "${value}" not found. Please refresh and try again.`,
+                  message: t('common:error'),
+                  description: t('detail.patientInfo.speciesNotFound', { name: value }),
                   placement: "bottomRight",
                   duration: 5
                 });
@@ -326,7 +326,7 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
             parser={localeNumberParser}
             className={styles.fullWidth}
             disabled={isSaving}
-            addonAfter="kg"
+            addonAfter={t('units.kg')}
           />
         </Descriptions.Item>
 
@@ -337,7 +337,7 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
                 setLocalValues(prev => ({ ...prev, color: value })); // Immediate update
                 const result = colorEdit.onChange(value);
                 if (!result.success && result.error) {
-                  notification.error({ message: "Error", description: result.error, placement: "bottomRight", duration: 5 });
+                  notification.error({ message: t('common:error'), description: result.error, placement: "bottomRight", duration: 5 });
                   setLocalValues(prev => ({ ...prev, color: patient.color || '' })); // Revert on validation error
                 }
               },
@@ -356,7 +356,7 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
                 setLocalValues(prev => ({ ...prev, microchipId: value })); // Immediate update
                 const result = microchipEdit.onChange(value);
                 if (!result.success && result.error) {
-                  notification.error({ message: "Error", description: result.error, placement: "bottomRight", duration: 5 });
+                  notification.error({ message: t('common:error'), description: result.error, placement: "bottomRight", duration: 5 });
                   setLocalValues(prev => ({ ...prev, microchipId: patient.microchipId || '' })); // Revert on validation error
                 }
               },

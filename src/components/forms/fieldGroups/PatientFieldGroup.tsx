@@ -93,7 +93,7 @@ export const PatientFieldGroup: React.FC<PatientFieldGroupProps> = ({
       return Promise.resolve();
     }
     if (value.isAfter(dayjs())) {
-      return Promise.reject(new Error('Date of birth cannot be in the future'));
+      return Promise.reject(new Error(t('forms:validation.dobFuture')));
     }
     return Promise.resolve();
   };

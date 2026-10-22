@@ -50,7 +50,9 @@
     "contactInfo": "Contact Information",
     "requiredField": "This field is required",
     "invalidEmail": "Please enter a valid email",
-    "invalidPhone": "Please enter a valid phone number"
+    "invalidPhone": "Please enter a valid phone number",
+    "createButton": "Create Patient",
+    "updateButton": "Update Patient"
   },
   "actions": {
     "view": "View Details",
@@ -69,7 +71,15 @@
     "archiveSuccess": "Patient archived successfully",
     "restoreSuccess": "Patient restored successfully",
     "confirmDelete": "Are you sure you want to delete this patient?",
-    "confirmArchive": "Are you sure you want to archive this patient?"
+    "confirmArchive": "Are you sure you want to archive this patient?",
+    "updatedTitle": "Patient Updated",
+    "updatedDesc": "Patient information saved successfully",
+    "infoSaved": "Patient information has been saved",
+    "createdTitle": "Patient Created",
+    "createdDesc": "{{name}} has been added successfully",
+    "deletedTitle": "Patient Deleted",
+    "removedDesc": "Patient has been removed",
+    "confirmDeleteNamed": "Are you sure you want to delete {{name}}? This action cannot be undone."
   },
   "filters": {
     "all": "All Patients",
@@ -144,7 +154,8 @@
       "status": {
         "active": "Active",
         "inactive": "Inactive"
-      }
+      },
+      "speciesNotFound": "Species \"{{name}}\" not found. Please refresh and try again."
     },
     "householdInfo": {
       "title": "Household Information",
@@ -215,5 +226,15 @@
     "loadFailed": "Could not load patients and households"
   },
   "scanNotFoundTitle": "No patient found",
-  "scanNotFoundDesc": "No patient matches this microchip. Opening \"Add new patient\" with the chip pre-filled."
+  "scanNotFoundDesc": "No patient matches this microchip. Opening \"Add new patient\" with the chip pre-filled.",
+  "tableTotal": "{{start}}-{{end}} of {{total}} patients",
+  "units": {
+    "kg": "kg",
+    "weightKg": "{{weight}} kg"
+  },
+  "deviceImport": {
+    "conflicts": "Conflicting data detected across files",
+    "vs": "vs",
+    "usingFirst": "Using first detected value. You can modify below if needed."
+  }
 }

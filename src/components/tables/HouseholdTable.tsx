@@ -178,7 +178,7 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
             <Text ellipsis>{text}</Text>
           </Tooltip>
         ) : (
-          <Text type="secondary">No address</Text>
+          <Text type="secondary">{t('entities:defaults.noAddress')}</Text>
         ),
     },
     {
@@ -312,27 +312,27 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
           <div>
             <Space direction="vertical" className={styles.fullWidth} size="middle">
               <Text strong className={styles.textMedium}>
-                <HomeOutlined /> Household Details
+                <HomeOutlined /> {t('households:table.details')}
               </Text>
 
               <div className={styles.detailCard}>
                 <Space direction="vertical" size="middle" className={styles.fullWidth}>
                   <div>
-                    <Text type="secondary">Household Name:</Text>
+                    <Text type="secondary">{t('households:table.householdName')}</Text>
                     <br />
-                    <Text strong className={styles.textMedium}>{record.lastName || 'Not specified'}</Text>
+                    <Text strong className={styles.textMedium}>{record.lastName || t('households:table.notSpecified')}</Text>
                   </div>
 
                   {record.address && (
                     <div>
-                      <Text type="secondary">Address:</Text>
+                      <Text type="secondary">{t('households:table.address')}</Text>
                       <br />
                       <Text>{record.address}</Text>
                     </div>
                   )}
 
                   <div>
-                    <Text type="secondary">Number of Pets:</Text>
+                    <Text type="secondary">{t('households:table.petCount')}</Text>
                     <br />
                     <Badge
                       count={record.petCount || 0}
@@ -341,19 +341,19 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
                     />
                     {record.petCount > 0 && (
                       <Text type="secondary" className={styles.marginLeft8}>
-                        View household page to see all pets
+                        {t('households:table.viewPetsHint')}
                       </Text>
                     )}
                   </div>
 
                   <div>
-                    <Text type="secondary">Last Activity:</Text>
+                    <Text type="secondary">{t('households:table.lastActivity')}</Text>
                     <br />
-                    <Text>{record.lastActivity ? formatDate(record.lastActivity) : 'Never'}</Text>
+                    <Text>{record.lastActivity ? formatDate(record.lastActivity) : t('common:never')}</Text>
                   </div>
 
                   <div>
-                    <Text type="secondary">Status:</Text>
+                    <Text type="secondary">{t('households:table.status')}</Text>
                     <br />
                     <Tag color={getActivityStatus(record.lastActivity).color}>
                       {getActivityStatus(record.lastActivity).text}
@@ -362,7 +362,7 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
 
                   {record.notes && (
                     <div>
-                      <Text type="secondary">Notes:</Text>
+                      <Text type="secondary">{t('households:table.notes')}</Text>
                       <br />
                       <Text className={styles.textItalic}>{record.notes}</Text>
                     </div>
@@ -378,21 +378,21 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
                   size="small"
                   onClick={() => onAddPatient?.(record)}
                 >
-                  Add Pet
+                  {t('households:table.addPet')}
                 </Button>
                 <Button
                   icon={<EditOutlined />}
                   size="small"
                   onClick={() => onEdit?.(record)}
                 >
-                  Edit Household
+                  {t('patients:editHousehold')}
                 </Button>
                 <Button
                   icon={<EyeOutlined />}
                   size="small"
                   onClick={() => onView?.(record)}
                 >
-                  View Full Details
+                  {t('households:table.viewFullDetails')}
                 </Button>
               </Space>
             </Space>
@@ -429,7 +429,7 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
           defaultPageSize: 10,
           showSizeChanger: true,
           showQuickJumper: true,
-          showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} households`,
+          showTotal: (total, range) => t('households:table.total', { start: range[0], end: range[1], total }),
         }}
         scroll={{ x: 1400, y: 'calc(100vh - 300px)' }}
         size="middle"

@@ -10,13 +10,13 @@ import { PatientService } from '../services/patientService';
 import { Patient, UpdatePatientInput } from '../types';
 import { PatientDetail, DeletePatientResponse } from '../types/patient';
 import dayjs from 'dayjs';
-import { createMutationErrorHandler, extractErrorMessage } from '../utils/errors';
+import { createMutationErrorHandler, extractErrorMessage, type TFunction } from '../utils/errors';
 import { invalidatePatientData } from './invalidation';
 
 /**
  * Calculate age from date of birth
  */
-function calculateAge(dateOfBirth?: string) {
+function calculateAge(dateOfBirth: string | undefined, t: TFunction) {
   if (!dateOfBirth) return undefined;
 
   const birthDate = dayjs(dateOfBirth);
@@ -27,13 +27,15 @@ function calculateAge(dateOfBirth?: string) {
   const years = today.diff(birthDate, 'year');
   const months = today.diff(birthDate.add(years, 'year'), 'month');
 
+  const yearsText = t('households:detail.animals.age.years', { count: years });
+  const monthsText = t('households:detail.animals.age.months', { count: months });
   let display: string;
   if (years === 0) {
-    display = months === 1 ? '1 month' : `${months} months`;
+    display = monthsText;
   } else if (months === 0) {
-    display = years === 1 ? '1 year' : `${years} years`;
+    display = yearsText;
   } else {
-    display = `${years} year${years !== 1 ? 's' : ''} ${months} month${months !== 1 ? 's' : ''}`;
+    display = `${yearsText} ${monthsText}`;
   }
 
   return { years, months, display };
@@ -43,6 +45,7 @@ function calculateAge(dateOfBirth?: string) {
  * Hook to fetch patient detail with household information
  */
 export function usePatientDetail(patientId: number) {
+  const { t } = useTranslation();
   return useQuery({
     queryKey: ['patient', patientId],
     queryFn: async () => {
@@ -52,7 +55,7 @@ export function usePatientDetail(patientId: number) {
       // Transform to PatientDetail with calculated age
       const patientDetail: PatientDetail = {
         ...patient,
-        age: calculateAge(patient.dateOfBirth)
+        age: calculateAge(patient.dateOfBirth, t)
       };
 
       // If patient has a household, fetch household details
@@ -172,7 +175,7 @@ export function useUpdatePatient() {
           ...previousPatient,
           ...updates,
           age: updates.dateOfBirth
-            ? calculateAge(updates.dateOfBirth)
+            ? calculateAge(updates.dateOfBirth, t)
             : previousPatient.age
         };
         queryClient.setQueryData(['patient', patientId], optimisticPatient);
@@ -193,7 +196,7 @@ export function useUpdatePatient() {
         if (!old) return old;
         const updated = {
           ...updatedPatient,
-          age: calculateAge(updatedPatient.dateOfBirth),
+          age: calculateAge(updatedPatient.dateOfBirth, t),
           household: old.household // Preserve household data
         };
         return updated;
@@ -202,8 +205,8 @@ export function useUpdatePatient() {
       invalidatePatientData(queryClient);
 
       notification.success({
-        message: 'Patient Updated',
-        description: 'Patient information saved successfully',
+        message: t('patients:messages.updatedTitle'),
+        description: t('patients:messages.updatedDesc'),
         placement: 'bottomRight',
         duration: 3,
       });
@@ -225,7 +228,7 @@ export function useDeletePatient() {
       await PatientService.deletePatient(patientId);
       return {
         success: true,
-        message: 'Patient deleted successfully',
+        message: t('patients:messages.deleteSuccess'),
         redirectTo: '/'
       } as DeletePatientResponse;
     },
@@ -235,7 +238,7 @@ export function useDeletePatient() {
       invalidatePatientData(queryClient);
 
       notification.success({
-        message: 'Patient Deleted',
+        message: t('patients:messages.deletedTitle'),
         description: response.message,
         placement: 'bottomRight',
         duration: 3,
@@ -262,15 +265,16 @@ export function useDeletePatient() {
  */
 export function useDeleteConfirmation() {
   const { modal } = App.useApp();
+  const { t } = useTranslation();
   const deletePatient = useDeletePatient();
 
   const showDeleteConfirm = (patientId: number, patientName: string) => {
     modal.confirm({
-      title: 'Delete Patient',
-      content: `Are you sure you want to delete ${patientName}? This action cannot be undone.`,
-      okText: 'Delete',
+      title: t('patients:deletePatient'),
+      content: t('patients:messages.confirmDeleteNamed', { name: patientName }),
+      okText: t('common:delete'),
       okType: 'danger',
-      cancelText: 'Cancel',
+      cancelText: t('common:cancel'),
       icon: null, // Icon styling is handled by CSS
       centered: true,
       onOk: async () => {
