@@ -225,6 +225,42 @@ async fn each_household_has_exactly_one_index_row_after_edits() {
 }
 
 // ---------------------------------------------------------------------------
+// C3: the household list has no hidden cap
+// ---------------------------------------------------------------------------
+
+async fn insert_households(db: &DatabaseConnection, n: usize) {
+    for i in 0..n {
+        insert_household(db, &format!("H{i:04}")).await;
+    }
+}
+
+#[tokio::test]
+async fn household_list_without_limit_returns_every_household() {
+    let db = create_test_db_with_migrations().await;
+    insert_households(&db, 150).await;
+
+    let all = household_search::list_households(&db, None, None).await.unwrap();
+
+    assert_eq!(all.results.len(), 150);
+    assert_eq!(all.total, 150);
+    assert!(!all.has_more);
+}
+
+#[tokio::test]
+async fn household_list_honours_a_limit_above_100() {
+    let db = create_test_db_with_migrations().await;
+    insert_households(&db, 150).await;
+
+    let page = household_search::list_households(&db, Some(120), None).await.unwrap();
+    assert_eq!(page.results.len(), 120);
+    assert!(page.has_more);
+
+    let rest = household_search::list_households(&db, Some(120), Some(120)).await.unwrap();
+    assert_eq!(rest.results.len(), 30);
+    assert!(!rest.has_more);
+}
+
+// ---------------------------------------------------------------------------
 // C2: FTS5 special characters in the query
 // ---------------------------------------------------------------------------
 

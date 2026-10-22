@@ -210,14 +210,7 @@ pub async fn get_all_households(
     limit: Option<i32>,
     offset: Option<i32>,
 ) -> Result<Vec<HouseholdWithPeople>, String> {
-    // Use the search function with an empty pattern to get all households
-    let search_response = household_search::search_households(
-        &pool,
-        "",  // Empty pattern triggers get_all_households_internal
-        limit,
-        offset
-    )
-    .await?;
+    let search_response = household_search::list_households(&pool, limit, offset).await?;
 
     // Convert search results to HouseholdWithPeople
     let mut households = Vec::new();

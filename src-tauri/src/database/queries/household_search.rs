@@ -212,6 +212,15 @@ async fn get_all_households_internal(
     })
 }
 
+// Every household, ordered by name, for the household list
+pub async fn list_households(
+    db: &DatabaseConnection,
+    limit: Option<i32>,
+    offset: Option<i32>,
+) -> Result<SearchHouseholdsResponse, String> {
+    search_households(db, "", limit, offset).await
+}
+
 // Search households using FTS5
 pub async fn search_households(
     db: &DatabaseConnection,
