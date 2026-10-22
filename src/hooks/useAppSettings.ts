@@ -45,13 +45,6 @@ export const useAppSettings = () => {
         // Invalidate only settings query - components will re-render via React Query
         queryClient.invalidateQueries({ queryKey: ['settings'] });
       }
-
-      notification.success({
-        message: 'Settings Updated',
-        description: i18n.t('common:updateSuccess'),
-        placement: 'bottomRight',
-        duration: 3,
-      });
     },
     onError: createMutationErrorHandler(notification, 'Update Settings', t, 'useAppSettings'),
   });
@@ -81,7 +74,7 @@ export const useAppSettings = () => {
     currency: data?.currency,
     isLoading,
     error,
-    updateSettings: updateSettings.mutate,
+    updateSettings: updateSettings.mutateAsync,
     isUpdating: updateSettings.isPending,
   };
 };

@@ -11,7 +11,7 @@ export const LanguageSwitcher: React.FC = () => {
   const { settings, updateSettings, isLoading } = useAppSettings();
 
   const handleLanguageChange = (language: 'en' | 'mk') => {
-    updateSettings({ language });
+    updateSettings({ language }).catch(() => {});
   };
 
   return (
