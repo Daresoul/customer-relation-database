@@ -1,0 +1,71 @@
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { App } from 'antd';
+import { MedicalRecordDetailPage } from '..';
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (key: string) => key }),
+}));
+vi.mock('@/services/invoke', () => ({ invoke: vi.fn(), convertFileSrc: vi.fn() }));
+vi.mock('@tanstack/react-query', () => ({ useQueryClient: () => ({ invalidateQueries: vi.fn() }) }));
+
+// A record from before manual totals were cleared on save: items plus a
+// stale manual total.
+const recordQuery = {
+  data: {
+    record: {
+      id: 7,
+      patientId: 3,
+      recordType: 'note',
+      name: 'Visit',
+      description: 'Notes',
+      version: 1,
+      manualTotal: 2000,
+      lineItems: [{ id: 1, name: 'Exam', unitPrice: 1500, currencyId: 1, quantity: 1 }],
+      createdAt: '2026-10-20T10:00:00Z',
+      updatedAt: '2026-10-20T10:00:00Z',
+    },
+    attachments: [],
+    history: [],
+  },
+  isLoading: false,
+  isError: false,
+  refetch: () => Promise.resolve(),
+};
+const updateMutation = { mutateAsync: () => Promise.resolve(), isPending: false };
+const currencies = { data: [] };
+const upload = { mutateAsync: () => Promise.resolve() };
+vi.mock('@/hooks/useMedicalRecords', () => ({
+  useMedicalRecord: () => recordQuery,
+  useUpdateMedicalRecord: () => updateMutation,
+  useCurrencies: () => currencies,
+  useUploadAttachment: () => upload,
+}));
+vi.mock('@/hooks/usePatient', () => ({ usePatientDetail: () => ({ data: undefined }) }));
+vi.mock('@/services/medicalService', () => ({ MedicalService: {} }));
+vi.mock('@/components/PdfInlineViewer', () => ({ default: () => null }));
+vi.mock('@/components/PdfMultiPagePreview', () => ({ default: () => null }));
+vi.mock('@/components/RecentDeviceFiles', () => ({ default: () => null }));
+vi.mock('@/components/PrintReportModal', () => ({ default: () => null }));
+vi.mock('@/components/DiagnosisTagList', () => ({ default: () => null }));
+vi.mock('@/components/DeviceStatusBar', () => ({ DeviceStatusInline: () => null }));
+
+describe('record page total', () => {
+  it('is the sum of the line items, not a leftover manual total', () => {
+    render(
+      <App>
+        <MemoryRouter initialEntries={['/medical-records/7']}>
+          <Routes>
+            <Route path="/medical-records/:id" element={<MedicalRecordDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </App>,
+    );
+
+    const totalLabel = screen.getByText('medical:lineItems.total:');
+    const totalRow = totalLabel.closest('tr') as HTMLElement;
+    expect(totalRow.textContent).toContain('1500.00');
+    expect(totalRow.textContent).not.toContain('2000');
+  });
+});
