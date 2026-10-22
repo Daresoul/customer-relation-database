@@ -515,7 +515,10 @@ pub async fn regenerate_pdf_from_attachment(
     .map_err(|e| format!("Failed to fetch patient: {}", e))?
     .ok_or("Patient not found".to_string())?;
 
-    let owner_name = lookup_owner_name(&pool, patient_id).await.unwrap_or_default();
+    let owner_name = lookup_owner_name(&pool, patient_id).await.unwrap_or_else(|e| {
+        log::error!("{} (patient {}); the PDF is printed without an owner", e, patient_id);
+        String::new()
+    });
 
     let patient_data = PatientData {
         name: patient_row.try_get("", "name").unwrap_or_else(|_| "Непознат Пациент".to_string()),
@@ -639,7 +642,10 @@ pub async fn regenerate_pdf_from_medical_record(
     .map_err(|e| format!("Failed to fetch patient: {}", e))?
     .ok_or("Patient not found".to_string())?;
 
-    let owner_name = lookup_owner_name(&pool, patient_id).await.unwrap_or_default();
+    let owner_name = lookup_owner_name(&pool, patient_id).await.unwrap_or_else(|e| {
+        log::error!("{} (patient {}); the PDF is printed without an owner", e, patient_id);
+        String::new()
+    });
 
     let patient_data = PatientData {
         name: patient_row.try_get("", "name").unwrap_or_else(|_| "Непознат Пациент".to_string()),
@@ -865,7 +871,10 @@ pub async fn generate_configured_report(
     .map_err(|e| format!("Failed to fetch patient: {}", e))?
     .ok_or("Patient not found".to_string())?;
 
-    let owner_name = lookup_owner_name(&pool, patient_id).await.unwrap_or_default();
+    let owner_name = lookup_owner_name(&pool, patient_id).await.unwrap_or_else(|e| {
+        log::error!("{} (patient {}); the PDF is printed without an owner", e, patient_id);
+        String::new()
+    });
 
     // 3. Build patient data, applying overrides if provided
     let overrides = patient_overrides.unwrap_or_default();
@@ -1247,27 +1256,29 @@ pub async fn delete_record_template(
     Ok(())
 }
 
-/// The name printed as "owner" on PDFs for a patient: "" when the patient has
+/// The name printed as "owner" on PDFs for a patient: the household's primary
+/// person, else the household name, else any person; "" when the patient has
 /// no household.
 pub(crate) async fn lookup_owner_name(db: &sea_orm::DatabaseConnection, patient_id: i64) -> Result<String, String> {
     let row = db
         .query_one(Statement::from_sql_and_values(
             DbBackend::Sqlite,
             "SELECT COALESCE( \
-                (SELECT p.first_name || ' ' || p.last_name \
-                 FROM people p \
-                 JOIN household_members hm ON hm.person_id = p.id \
-                 JOIN patient_households ph ON ph.household_id = hm.household_id \
-                 WHERE ph.patient_id = ? AND hm.is_primary_contact = 1 \
-                 LIMIT 1), \
-                (SELECT h.name \
-                 FROM households h \
-                 JOIN patient_households ph ON ph.household_id = h.id \
-                 WHERE ph.patient_id = ? \
-                 LIMIT 1), \
+                (SELECT p.first_name || ' ' || p.last_name FROM people p \
+                 WHERE p.household_id = h.id AND p.is_primary = 1 \
+                 ORDER BY p.id LIMIT 1), \
+                NULLIF(TRIM(h.household_name), ''), \
+                (SELECT p.first_name || ' ' || p.last_name FROM people p \
+                 WHERE p.household_id = h.id \
+                 ORDER BY p.id LIMIT 1), \
                 '' \
-             ) as owner_name",
-            [patient_id.into(), patient_id.into()],
+             ) AS owner_name \
+             FROM patient_households ph \
+             JOIN households h ON h.id = ph.household_id \
+             WHERE ph.patient_id = ? \
+             ORDER BY ph.is_primary DESC, ph.id \
+             LIMIT 1",
+            [patient_id.into()],
         ))
         .await
         .map_err(|e| format!("Failed to look up owner: {}", e))?;
