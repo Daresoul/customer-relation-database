@@ -81,6 +81,7 @@ describe('MedicalRecordForm: diagnoses must load before an edit can save', () =>
   });
 
   it('shows a message with Retry when they fail, then saves once they load', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
     let attempt = 0;
     const pending: Deferred[] = [];
     mockDiagnoses(

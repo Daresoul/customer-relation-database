@@ -126,7 +126,9 @@
     "downloadFailed": "Failed to download attachment",
     "archiveInfo": "Archived records will be hidden from the main view but can be restored later.",
     "diagnosesPartialSave": "Diagnoses not saved",
-    "validationFailed": "Please fill in the required fields highlighted in red."
+    "validationFailed": "Please fill in the required fields highlighted in red.",
+    "diagnosesLoadFailed": "This record's diagnoses could not be loaded",
+    "diagnosesLoadFailedHint": "Saving is paused so they are not lost. Try loading them again."
   },
   "filters": {
     "all": "All Records",
