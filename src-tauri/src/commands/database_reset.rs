@@ -131,13 +131,11 @@ pub async fn wipe_database_data(
 
     // Delete data in correct order to respect foreign keys
     let delete_queries = vec![
-        "DELETE FROM patient_owners",
         "DELETE FROM patient_households",
         "DELETE FROM person_contacts",
         "DELETE FROM people",
         "DELETE FROM households",
         "DELETE FROM patients",
-        "DELETE FROM owners",
     ];
 
     let mut deleted_count = 0;

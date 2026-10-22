@@ -6,6 +6,46 @@ use sea_orm::*;
 
 pub struct PatientService;
 
+/// Stored form of a typed or scanned chip: no spaces or dashes, and a 12-hex
+/// FDX-B read as its 15-digit number (what scanners emit). `None` when blank.
+pub fn normalize_microchip(raw: &str) -> Option<String> {
+    let compact: String = raw.chars().filter(|c| !c.is_whitespace() && *c != '-').collect();
+    if compact.is_empty() {
+        None
+    } else {
+        Some(crate::services::device_capture::normalize_microchip_public(&compact))
+    }
+}
+
+/// Refuses a chip that another active patient already has. Enforced here, not
+/// by a UNIQUE index, so clinic DBs that already hold duplicates still load.
+async fn ensure_chip_free(db: &DatabaseConnection, chip: &str, own_id: Option<i64>) -> Result<(), String> {
+    let row = db
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "SELECT id, name FROM patients \
+             WHERE REPLACE(REPLACE(microchip_id, ' ', ''), '-', '') = ? \
+               AND is_active = 1 AND id != ? \
+             ORDER BY id LIMIT 1",
+            [chip.into(), own_id.unwrap_or(-1).into()],
+        ))
+        .await
+        .map_err(|e| format!("Failed to check microchip: {}", e))?;
+
+    match row {
+        None => Ok(()),
+        Some(r) => {
+            let id: i64 = r.try_get("", "id").unwrap_or_default();
+            let name = r
+                .try_get::<Option<String>>("", "name")
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| format!("#{}", id));
+            Err(format!("Microchip {} is already registered to another patient: {}", chip, name))
+        }
+    }
+}
+
 impl PatientService {
     /// Helper to convert a raw query row to a Patient model
     fn row_to_patient(row: &QueryResult) -> Result<Patient, String> {
@@ -107,10 +147,10 @@ impl PatientService {
             .map(|s| s.trim())
             .filter(|s| !s.is_empty())
             .map(|s| s.to_string());
-        let microchip_id = dto.microchip_id.as_ref()
-            .map(|s| s.trim())
-            .filter(|s| !s.is_empty())
-            .map(|s| s.to_string());
+        let microchip_id = dto.microchip_id.as_deref().and_then(normalize_microchip);
+        if let Some(chip) = &microchip_id {
+            ensure_chip_free(db, chip, None).await?;
+        }
 
         // Require at least some way to identify the patient. The frontend
         // enforces this too, but defend against API misuse.
@@ -292,9 +332,13 @@ impl PatientService {
             MaybeNull::Null => {
                 set_clauses.push("microchip_id = NULL".to_string());
             },
-            MaybeNull::Value(v) => {
-                set_clauses.push("microchip_id = ?".to_string());
-                params.push(v.into());
+            MaybeNull::Value(v) => match normalize_microchip(&v) {
+                None => set_clauses.push("microchip_id = NULL".to_string()),
+                Some(chip) => {
+                    ensure_chip_free(db, &chip, Some(id)).await?;
+                    set_clauses.push("microchip_id = ?".to_string());
+                    params.push(chip.into());
+                }
             },
         }
 

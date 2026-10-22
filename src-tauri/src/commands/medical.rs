@@ -503,34 +503,22 @@ pub async fn regenerate_pdf_from_attachment(
     let patient_id: i64 = record_row.try_get("", "patient_id")
         .map_err(|e| format!("Failed to get patient_id: {}", e))?;
 
-    // Fetch patient details (simplified query to avoid schema issues)
     let patient_row = pool.query_one(Statement::from_sql_and_values(
         DbBackend::Sqlite,
-        "SELECT id, name, species, breed, microchip_id, gender, date_of_birth \
-         FROM patients \
-         WHERE id = ?",
+        "SELECT p.id, p.name, s.name AS species, p.microchip_id, p.gender, p.date_of_birth \
+         FROM patients p \
+         LEFT JOIN species s ON p.species_id = s.id \
+         WHERE p.id = ?",
         [patient_id.into()]
     ))
     .await
     .map_err(|e| format!("Failed to fetch patient: {}", e))?
     .ok_or("Patient not found".to_string())?;
 
-    // Try to fetch owner information separately (optional, won't fail if tables don't exist)
-    let owner_row = pool.query_one(Statement::from_sql_and_values(
-        DbBackend::Sqlite,
-        "SELECT o.name FROM patient_owners po \
-         JOIN owners o ON po.owner_id = o.id \
-         WHERE po.patient_id = ? AND po.is_primary = 1 \
-         LIMIT 1",
-        [patient_id.into()]
-    ))
-    .await
-    .ok()
-    .flatten();
-
-    let owner_name: String = owner_row
-        .and_then(|r| r.try_get::<String>("", "name").ok())
-        .unwrap_or_default(); // Empty string - PDF will skip owner row
+    let owner_name = lookup_owner_name(&pool, patient_id).await.unwrap_or_else(|e| {
+        log::error!("{} (patient {}); the PDF is printed without an owner", e, patient_id);
+        String::new()
+    });
 
     let patient_data = PatientData {
         name: patient_row.try_get("", "name").unwrap_or_else(|_| "Непознат Пациент".to_string()),
@@ -654,32 +642,10 @@ pub async fn regenerate_pdf_from_medical_record(
     .map_err(|e| format!("Failed to fetch patient: {}", e))?
     .ok_or("Patient not found".to_string())?;
 
-    // Try to get owner information - prefer primary contact's full name, fall back to household name
-    let owner_row = pool.query_one(Statement::from_sql_and_values(
-        DbBackend::Sqlite,
-        "SELECT COALESCE( \
-            (SELECT p.first_name || ' ' || p.last_name \
-             FROM people p \
-             JOIN household_members hm ON hm.person_id = p.id \
-             JOIN patient_households ph ON ph.household_id = hm.household_id \
-             WHERE ph.patient_id = ? AND hm.is_primary_contact = 1 \
-             LIMIT 1), \
-            (SELECT h.name \
-             FROM households h \
-             JOIN patient_households ph ON ph.household_id = h.id \
-             WHERE ph.patient_id = ? \
-             LIMIT 1), \
-            '' \
-         ) as owner_name",
-        [patient_id.into(), patient_id.into()]
-    ))
-    .await
-    .ok()
-    .flatten();
-
-    let owner_name: String = owner_row
-        .and_then(|r| r.try_get::<String>("", "owner_name").ok())
-        .unwrap_or_default(); // Empty string - PDF will skip owner row
+    let owner_name = lookup_owner_name(&pool, patient_id).await.unwrap_or_else(|e| {
+        log::error!("{} (patient {}); the PDF is printed without an owner", e, patient_id);
+        String::new()
+    });
 
     let patient_data = PatientData {
         name: patient_row.try_get("", "name").unwrap_or_else(|_| "Непознат Пациент".to_string()),
@@ -905,32 +871,10 @@ pub async fn generate_configured_report(
     .map_err(|e| format!("Failed to fetch patient: {}", e))?
     .ok_or("Patient not found".to_string())?;
 
-    // Try to get owner information
-    let owner_row = pool.query_one(Statement::from_sql_and_values(
-        DbBackend::Sqlite,
-        "SELECT COALESCE( \
-            (SELECT p.first_name || ' ' || p.last_name \
-             FROM people p \
-             JOIN household_members hm ON hm.person_id = p.id \
-             JOIN patient_households ph ON ph.household_id = hm.household_id \
-             WHERE ph.patient_id = ? AND hm.is_primary_contact = 1 \
-             LIMIT 1), \
-            (SELECT h.name \
-             FROM households h \
-             JOIN patient_households ph ON ph.household_id = h.id \
-             WHERE ph.patient_id = ? \
-             LIMIT 1), \
-            '' \
-         ) as owner_name",
-        [patient_id.into(), patient_id.into()]
-    ))
-    .await
-    .ok()
-    .flatten();
-
-    let owner_name: String = owner_row
-        .and_then(|r| r.try_get::<String>("", "owner_name").ok())
-        .unwrap_or_default();
+    let owner_name = lookup_owner_name(&pool, patient_id).await.unwrap_or_else(|e| {
+        log::error!("{} (patient {}); the PDF is printed without an owner", e, patient_id);
+        String::new()
+    });
 
     // 3. Build patient data, applying overrides if provided
     let overrides = patient_overrides.unwrap_or_default();
@@ -1310,4 +1254,35 @@ pub async fn delete_record_template(
     .map_err(|e| format!("Failed to delete template: {}", e))?;
 
     Ok(())
+}
+
+/// The name printed as "owner" on PDFs for a patient: the household's primary
+/// person, else the household name, else any person; "" when the patient has
+/// no household.
+pub(crate) async fn lookup_owner_name(db: &sea_orm::DatabaseConnection, patient_id: i64) -> Result<String, String> {
+    let row = db
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "SELECT COALESCE( \
+                (SELECT p.first_name || ' ' || p.last_name FROM people p \
+                 WHERE p.household_id = h.id AND p.is_primary = 1 \
+                 ORDER BY p.id LIMIT 1), \
+                NULLIF(TRIM(h.household_name), ''), \
+                (SELECT p.first_name || ' ' || p.last_name FROM people p \
+                 WHERE p.household_id = h.id \
+                 ORDER BY p.id LIMIT 1), \
+                '' \
+             ) AS owner_name \
+             FROM patient_households ph \
+             JOIN households h ON h.id = ph.household_id \
+             WHERE ph.patient_id = ? \
+             ORDER BY ph.is_primary DESC, ph.id \
+             LIMIT 1",
+            [patient_id.into()],
+        ))
+        .await
+        .map_err(|e| format!("Failed to look up owner: {}", e))?;
+    Ok(row
+        .and_then(|r| r.try_get::<String>("", "owner_name").ok())
+        .unwrap_or_default())
 }

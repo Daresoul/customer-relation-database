@@ -127,10 +127,10 @@ export const patientApi = {
 export const householdApi = {
   search: async (query: string, limit?: number): Promise<HouseholdTableRecord[]> => {
     try {
-      // If query is completely empty, use get_all_households to fetch everything
+      // Empty query: list every household (no limit unless the caller pages)
       if (!query || query.trim().length === 0) {
         try {
-          const results = await invoke<any[]>('get_all_households', { limit: limit || 1000 });
+          const results = await invoke<any[]>('get_all_households', { limit });
           // Transform nested household data to flat structure
           return results.map(r => {
             if (r.household) {

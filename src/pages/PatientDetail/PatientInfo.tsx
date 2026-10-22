@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Descriptions, Typography, Spin, App, Select, DatePicker, InputNumber } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { knownErrorMessage } from '@/utils/errors';
 import { useQueryClient } from '@tanstack/react-query';
 import { PatientDetail, GENDER_OPTIONS, PATIENT_FIELD_RULES } from '../../types/patient';
 import { useUpdatePatient } from '../../hooks/usePatient';
@@ -109,7 +110,7 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
         setLocalValues(prev => ({ ...prev, [field]: patient[field as keyof typeof patient] }));
       }
       console.error('Update failed:', error);
-      notification.error({ message: "Error", description: t('detail.patientInfo.failedToSave'), placement: "bottomRight", duration: 5 });
+      notification.error({ message: "Error", description: knownErrorMessage(error, t) || t('detail.patientInfo.failedToSave'), placement: "bottomRight", duration: 5 });
     }
   };
 

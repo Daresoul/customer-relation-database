@@ -1,39 +1,78 @@
 use sea_orm::{DatabaseConnection, ConnectionTrait, Statement, DbBackend};
 use crate::models::household::*;
 
-// Sanitize query for FTS5 to prevent syntax errors.
-//
-// FTS5 treats `@`, `.`, `:`, and several other ASCII punctuation chars as
-// query syntax. We can't keep them in the term even though they're common in
-// emails and phone numbers — the FTS5 tokenizer already splits source content
-// on those boundaries when indexing, so a search for "alice" still finds
-// "alice@example.com".
-fn sanitize_fts5_query(query: &str) -> String {
-    let terms: Vec<String> = query
-        .chars()
-        // Replace anything that isn't alphanumeric, whitespace, or `-` with a
-        // space so the splitter handles it as a token boundary.
-        .map(|c| if c.is_alphanumeric() || c.is_whitespace() || c == '-' { c } else { ' ' })
-        .collect::<String>()
-        .split_whitespace()
-        .filter(|s| !s.is_empty())
-        .map(|s| format!("{}*", s)) // wildcard for prefix matching
-        .collect();
+/// `INSERT INTO household_search` of one row per household matching `filter`
+/// (an SQL condition on `h`, e.g. `h.id = NEW.id`), built from the live
+/// households / people / person_contacts tables. Phone contacts are indexed
+/// twice: as typed and with separators removed, so "070123456" finds
+/// "070 123 456".
+///
+/// Migration 046 bakes this into its triggers. Changing it only changes the
+/// triggers through a new migration that recreates them.
+pub(crate) fn index_rows_sql(filter: &str) -> String {
+    format!(
+        r#"
+        INSERT INTO household_search
+            (household_id, household_name, address, people_names, contact_values, display_name)
+        SELECT
+            h.id,
+            COALESCE(h.household_name, ''),
+            TRIM(COALESCE(h.address, '') || ' ' || COALESCE(h.city, '') || ' ' || COALESCE(h.postal_code, '')),
+            COALESCE((SELECT GROUP_CONCAT(p.first_name || ' ' || p.last_name, ' ')
+                      FROM people p WHERE p.household_id = h.id), ''),
+            COALESCE((SELECT GROUP_CONCAT(
+                          CASE WHEN pc.contact_type IN ('phone', 'mobile', 'work_phone')
+                               THEN pc.contact_value || ' ' ||
+                                    REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+                                        pc.contact_value, ' ', ''), '-', ''), '/', ''), '(', ''), ')', ''), '.', '')
+                               ELSE pc.contact_value END, ' ')
+                      FROM person_contacts pc
+                      JOIN people p ON pc.person_id = p.id
+                      WHERE p.household_id = h.id), ''),
+            COALESCE(NULLIF(TRIM(h.household_name), ''),
+                     (SELECT GROUP_CONCAT(p.first_name || ' ' || p.last_name, ' & ')
+                      FROM people p WHERE p.household_id = h.id),
+                     'Household ' || h.id)
+        FROM households h
+        WHERE {filter}"#
+    )
+}
 
-    // Join with OR operator, but only if we have multiple terms
-    if terms.is_empty() {
-        String::new()
-    } else if terms.len() == 1 {
-        terms[0].clone()
-    } else {
-        terms.join(" OR ")
-    }
+// Turns free text into a safe FTS5 query: each typed word becomes a quoted
+// prefix phrase of its alphanumeric parts, so punctuation and FTS5 syntax
+// (`-`, `"`, `*`, `:`, NOT, OR, ...) are never parsed as operators. The
+// tokenizer splits stored text on the same punctuation, so "070-123-456"
+// matches "070 123 456" and "Петровска-Николовска" matches as a phrase. A
+// word made only of digit groups also matches the digits run together.
+// Words are OR-ed; bm25 ranks households matching more words first.
+fn sanitize_fts5_query(query: &str) -> String {
+    query
+        .split_whitespace()
+        .filter_map(|word| {
+            let parts: Vec<&str> = word
+                .split(|c: char| !c.is_alphanumeric())
+                .filter(|p| !p.is_empty())
+                .collect();
+            if parts.is_empty() {
+                return None;
+            }
+            let phrase = format!("\"{}\"*", parts.join(" "));
+            let all_digits = parts.iter().all(|p| p.chars().all(|c| c.is_ascii_digit()));
+            if parts.len() > 1 && all_digits {
+                Some(format!("({} OR \"{}\"*)", phrase, parts.concat()))
+            } else {
+                Some(phrase)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" OR ")
 }
 
 // Helper function to get all households without search
+// `limit: None` returns every household.
 async fn get_all_households_internal(
     db: &DatabaseConnection,
-    limit: i32,
+    limit: Option<i32>,
     offset: i32,
 ) -> Result<SearchHouseholdsResponse, String> {
     // Get households directly without FTS5
@@ -48,7 +87,7 @@ async fn get_all_households_internal(
         ORDER BY household_name, id
         LIMIT ? OFFSET ?
         "#,
-        [limit.into(), offset.into()]
+        [limit.unwrap_or(-1).into(), offset.into()]
     ))
     .await
     .map_err(|e| format!("Failed to fetch households: {}", e))?;
@@ -170,8 +209,17 @@ async fn get_all_households_internal(
     Ok(SearchHouseholdsResponse {
         results,
         total,
-        has_more: (offset + limit) < total,
+        has_more: limit.is_some_and(|l| offset + l < total),
     })
+}
+
+// Every household, ordered by name, for the household list
+pub async fn list_households(
+    db: &DatabaseConnection,
+    limit: Option<i32>,
+    offset: Option<i32>,
+) -> Result<SearchHouseholdsResponse, String> {
+    get_all_households_internal(db, limit, offset.unwrap_or(0)).await
 }
 
 // Search households using FTS5
@@ -187,10 +235,13 @@ pub async fn search_households(
     // Handle empty or too short queries
     if query.trim().is_empty() || query.trim().len() < 2 {
         // For empty queries, return all households (without FTS5 search)
-        return get_all_households_internal(db, limit, offset).await;
+        return get_all_households_internal(db, Some(limit), offset).await;
     }
 
     let fts_query = sanitize_fts5_query(query);
+    if fts_query.is_empty() {
+        return Ok(SearchHouseholdsResponse { results: Vec::new(), total: 0, has_more: false });
+    }
 
     // Search using FTS5
     let search_results = db.query_all(Statement::from_sql_and_values(
@@ -344,6 +395,9 @@ pub async fn quick_search_households(
     limit: i32,
 ) -> Result<Vec<(i32, String)>, String> {
     let fts_query = sanitize_fts5_query(query);
+    if fts_query.is_empty() {
+        return Ok(Vec::new());
+    }
     let limit = limit.min(20);
 
     let results = db.query_all(Statement::from_sql_and_values(
@@ -497,86 +551,11 @@ pub async fn search_households_by_contact(
 
 // Rebuild FTS5 index (for maintenance)
 pub async fn rebuild_search_index(db: &DatabaseConnection) -> Result<(), String> {
-    // Clear existing index
-    db.execute(Statement::from_sql_and_values(
-        DbBackend::Sqlite,
-        "DELETE FROM household_search",
-        []
-    ))
-    .await
-    .map_err(|e| format!("Failed to clear search index: {}", e))?;
-
-    // Rebuild from households
-    let household_rows = db.query_all(Statement::from_sql_and_values(
-        DbBackend::Sqlite,
-        r#"
-        SELECT
-            h.id,
-            h.household_name,
-            h.address,
-            -- SQLite GROUP_CONCAT cannot combine DISTINCT with a custom separator
-            -- ("DISTINCT aggregates must have exactly one argument"). Drop the
-            -- DISTINCT here: duplicate names/contacts within a household are
-            -- very unlikely, and even if present, FTS5 tokenization dedupes.
-            GROUP_CONCAT(p.first_name || ' ' || p.last_name, ' ') as people_names,
-            GROUP_CONCAT(pc.contact_value, ' ') as contact_values
-        FROM households h
-        LEFT JOIN people p ON p.household_id = h.id
-        LEFT JOIN person_contacts pc ON pc.person_id = p.id
-        GROUP BY h.id
-        "#,
-        []
-    ))
-    .await
-    .map_err(|e| format!("Failed to fetch households for reindex: {}", e))?;
-
-    for household_row in household_rows {
-        let id: i64 = household_row.try_get("", "id")
-            .map_err(|e| format!("Failed to get id: {}", e))?;
-        let household_name: Option<String> = household_row.try_get("", "household_name").ok();
-        let address: Option<String> = household_row.try_get("", "address").ok();
-        let people_names: Option<String> = household_row.try_get("", "people_names").ok();
-        let contact_values: Option<String> = household_row.try_get("", "contact_values").ok();
-
-        // Generate display name
-        let display_name = if let Some(name) = &household_name {
-            name.clone()
-        } else if let Some(people) = &people_names {
-            let names: Vec<&str> = people.split(' ').collect();
-            if names.len() == 2 {
-                format!("{} & {}", names[0], names[1])
-            } else {
-                people.clone()
-            }
-        } else {
-            format!("Household {}", id)
-        };
-
-        db.execute(Statement::from_sql_and_values(
-            DbBackend::Sqlite,
-            r#"
-            INSERT INTO household_search (
-                household_id,
-                household_name,
-                address,
-                people_names,
-                contact_values,
-                display_name
-            )
-            VALUES (?, ?, ?, ?, ?, ?)
-            "#,
-            [
-                id.into(),
-                sea_orm::Value::String(household_name.map(Box::new)),
-                sea_orm::Value::String(address.map(Box::new)),
-                sea_orm::Value::String(people_names.map(Box::new)),
-                sea_orm::Value::String(contact_values.map(Box::new)),
-                display_name.into(),
-            ]
-        ))
+    db.execute_unprepared("DELETE FROM household_search")
         .await
-        .map_err(|e| format!("Failed to insert into search index: {}", e))?;
-    }
-
+        .map_err(|e| format!("Failed to clear search index: {}", e))?;
+    db.execute_unprepared(&index_rows_sql("1 = 1"))
+        .await
+        .map_err(|e| format!("Failed to rebuild search index: {}", e))?;
     Ok(())
 }

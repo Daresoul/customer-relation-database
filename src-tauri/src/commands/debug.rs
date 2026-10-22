@@ -9,7 +9,7 @@ pub async fn debug_database_info(app: tauri::AppHandle, pool: State<'_, SeaOrmPo
 
     // Count records in each table
     let owner_count: i64 = pool
-        .query_one(Statement::from_string(DbBackend::Sqlite, "SELECT COUNT(*) as cnt FROM owners".to_string()))
+        .query_one(Statement::from_string(DbBackend::Sqlite, "SELECT COUNT(*) as cnt FROM people".to_string()))
         .await
         .ok()
         .flatten()
@@ -25,7 +25,7 @@ pub async fn debug_database_info(app: tauri::AppHandle, pool: State<'_, SeaOrmPo
         .unwrap_or(0);
 
     let relationship_count: i64 = pool
-        .query_one(Statement::from_string(DbBackend::Sqlite, "SELECT COUNT(*) as cnt FROM patient_owners".to_string()))
+        .query_one(Statement::from_string(DbBackend::Sqlite, "SELECT COUNT(*) as cnt FROM patient_households".to_string()))
         .await
         .ok()
         .flatten()
@@ -36,7 +36,7 @@ pub async fn debug_database_info(app: tauri::AppHandle, pool: State<'_, SeaOrmPo
     let abc_owners_rows = pool
         .query_all(Statement::from_string(
             DbBackend::Sqlite,
-            "SELECT id, first_name, last_name FROM owners WHERE first_name LIKE '%abc%' OR last_name LIKE '%abc%'".to_string()
+            "SELECT id, first_name, last_name FROM people WHERE first_name LIKE '%abc%' OR last_name LIKE '%abc%'".to_string()
         ))
         .await
         .unwrap_or_default();
@@ -75,7 +75,7 @@ pub async fn debug_database_info(app: tauri::AppHandle, pool: State<'_, SeaOrmPo
     let sample_owners_rows = pool
         .query_all(Statement::from_string(
             DbBackend::Sqlite,
-            "SELECT id, first_name, last_name FROM owners LIMIT 5".to_string()
+            "SELECT id, first_name, last_name FROM people LIMIT 5".to_string()
         ))
         .await
         .unwrap_or_default();

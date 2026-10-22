@@ -107,10 +107,10 @@ export const MainDashboard: React.FC = () => {
         total_medical_records: number;
       }>('get_dashboard_stats');
 
-      // Get a reasonable amount of data for display (pagination would be better for large datasets)
+      // Every patient and household; the tables page on the client
       const [patientsResults, householdsResults, statsData] = await Promise.all([
         PatientService.getPatients(), // Fetch all patients without search limit
-        api.household.search('', 1000), // Get first 1000 for display
+        api.household.search(''),
         statsPromise
       ]);
 
