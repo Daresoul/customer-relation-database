@@ -811,7 +811,6 @@ export const MedicalRecordDetailPage: React.FC = () => {
                   {(() => {
                     const lineItems = displayRecord?.lineItems || record.lineItems;
                     const discount = displayRecord?.discountPercent ?? record.discountPercent;
-                    const manualTotalVal = displayRecord?.manualTotal ?? record.manualTotal;
 
                     if (!lineItems || lineItems.length === 0) return null;
 
@@ -821,7 +820,8 @@ export const MedicalRecordDetailPage: React.FC = () => {
                     // Calculate total with discount
                     const discountMultiplier = discount ? (100 - discount) / 100 : 1;
                     const calculatedTotal = subtotal * discountMultiplier;
-                    const finalTotal = manualTotalVal ?? calculatedTotal;
+                    // A manual total only stands in when there are no items.
+                    const finalTotal = calculatedTotal;
 
                     // Get currency for display
                     const firstCurrencyId = lineItems[0]?.currencyId;
