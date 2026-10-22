@@ -69,9 +69,10 @@ fn sanitize_fts5_query(query: &str) -> String {
 }
 
 // Helper function to get all households without search
+// `limit: None` returns every household.
 async fn get_all_households_internal(
     db: &DatabaseConnection,
-    limit: i32,
+    limit: Option<i32>,
     offset: i32,
 ) -> Result<SearchHouseholdsResponse, String> {
     // Get households directly without FTS5
@@ -86,7 +87,7 @@ async fn get_all_households_internal(
         ORDER BY household_name, id
         LIMIT ? OFFSET ?
         "#,
-        [limit.into(), offset.into()]
+        [limit.unwrap_or(-1).into(), offset.into()]
     ))
     .await
     .map_err(|e| format!("Failed to fetch households: {}", e))?;
@@ -208,7 +209,7 @@ async fn get_all_households_internal(
     Ok(SearchHouseholdsResponse {
         results,
         total,
-        has_more: (offset + limit) < total,
+        has_more: limit.is_some_and(|l| offset + l < total),
     })
 }
 
@@ -218,7 +219,7 @@ pub async fn list_households(
     limit: Option<i32>,
     offset: Option<i32>,
 ) -> Result<SearchHouseholdsResponse, String> {
-    search_households(db, "", limit, offset).await
+    get_all_households_internal(db, limit, offset.unwrap_or(0)).await
 }
 
 // Search households using FTS5
@@ -234,7 +235,7 @@ pub async fn search_households(
     // Handle empty or too short queries
     if query.trim().is_empty() || query.trim().len() < 2 {
         // For empty queries, return all households (without FTS5 search)
-        return get_all_households_internal(db, limit, offset).await;
+        return get_all_households_internal(db, Some(limit), offset).await;
     }
 
     let fts_query = sanitize_fts5_query(query);

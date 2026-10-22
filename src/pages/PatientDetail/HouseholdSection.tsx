@@ -42,7 +42,7 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household, p
   // renders the read-only summary instead and we never reach here.)
   const { data: allHouseholds = [], isLoading: isLoadingHouseholds } = useQuery({
     queryKey: ['all-households'],
-    queryFn: () => invoke<any[]>('get_all_households', { limit: 1000 }),
+    queryFn: () => invoke<any[]>('get_all_households', {}),
     enabled: !household && mode === 'pick',
   });
 
