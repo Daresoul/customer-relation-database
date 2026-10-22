@@ -228,15 +228,20 @@ impl PatientService {
         let exists = db
             .query_one(Statement::from_sql_and_values(
                 DbBackend::Sqlite,
-                "SELECT id FROM patients WHERE id = ?",
+                "SELECT id, microchip_id FROM patients WHERE id = ?",
                 [id.into()],
             ))
             .await
             .map_err(|e| format!("Failed to fetch patient: {}", e))?;
 
-        if exists.is_none() {
+        let Some(existing) = exists else {
             return Ok(None);
-        }
+        };
+        let current_chip = existing
+            .try_get::<Option<String>>("", "microchip_id")
+            .ok()
+            .flatten()
+            .and_then(|c| normalize_microchip(&c));
 
         // Build dynamic UPDATE query
         let mut set_clauses: Vec<String> = Vec::new();
@@ -335,7 +340,9 @@ impl PatientService {
             MaybeNull::Value(v) => match normalize_microchip(&v) {
                 None => set_clauses.push("microchip_id = NULL".to_string()),
                 Some(chip) => {
-                    ensure_chip_free(db, &chip, Some(id)).await?;
+                    if current_chip.as_deref() != Some(chip.as_str()) {
+                        ensure_chip_free(db, &chip, Some(id)).await?;
+                    }
                     set_clauses.push("microchip_id = ?".to_string());
                     params.push(chip.into());
                 }
