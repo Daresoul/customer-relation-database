@@ -25,8 +25,32 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
   recordId,
 }) => {
   const { t } = useTranslation('medical');
-  const { notification } = App.useApp();
+  const { notification, modal } = App.useApp();
   const [loading, setLoading] = useState(false);
+  const [dirty, setDirty] = useState(false);
+
+  useEffect(() => {
+    if (!open) setDirty(false);
+  }, [open]);
+
+  // Closing (X, Esc or Cancel) with typed text asks first.
+  const requestClose = () => {
+    if (!dirty) {
+      onClose();
+      return;
+    }
+    modal.confirm({
+      title: t('unsaved.title'),
+      content: t('unsaved.body'),
+      okText: t('unsaved.discard'),
+      okButtonProps: { danger: true },
+      cancelText: t('unsaved.keepEditing'),
+      onOk: () => {
+        setDirty(false);
+        onClose();
+      },
+    });
+  };
   const { data: recordDetail, isLoading: isLoadingRecord, isError, error, refetch } = useMedicalRecord(
     recordId || 0,
     true // include history when editing
@@ -173,7 +197,8 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
     <Modal
       title={title}
       open={open}
-      onCancel={onClose}
+      onCancel={requestClose}
+      maskClosable={false}
       footer={null}
       width={800}
       destroyOnHidden
@@ -207,7 +232,8 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
           <MedicalRecordForm
             initialValues={isEdit && recordDetail ? recordDetail.record : undefined}
             onSubmit={handleSubmit}
-            onCancel={onClose}
+            onCancel={requestClose}
+            onDirtyChange={setDirty}
             loading={loading}
             isEdit={isEdit}
             patientId={patientId}

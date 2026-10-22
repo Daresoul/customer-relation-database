@@ -126,7 +126,9 @@
     "downloadFailed": "Failed to download attachment",
     "archiveInfo": "Archived records will be hidden from the main view but can be restored later.",
     "diagnosesPartialSave": "Diagnoses not saved",
-    "validationFailed": "Please fill in the required fields highlighted in red."
+    "validationFailed": "Please fill in the required fields highlighted in red.",
+    "diagnosesLoadFailed": "This record's diagnoses could not be loaded",
+    "diagnosesLoadFailedHint": "Saving is paused so they are not lost. Try loading them again."
   },
   "filters": {
     "all": "All Records",
@@ -256,5 +258,21 @@
   },
   "errors": {
     "templateSearchFailed": "Failed to search templates"
+  },
+  "documents": {
+    "someFailed": "Record saved, but a document could not be made",
+    "retrySucceeded": "{{document}} is ready",
+    "kinds": {
+      "report": "Medical report",
+      "pharmacy_note": "Pharmacy note",
+      "invoice": "Invoice",
+      "device_report": "Lab report"
+    }
+  },
+  "unsaved": {
+    "title": "Discard your changes?",
+    "body": "What you typed in this record has not been saved.",
+    "discard": "Discard",
+    "keepEditing": "Keep editing"
   }
 }

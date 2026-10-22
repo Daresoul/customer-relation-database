@@ -14,6 +14,7 @@ import { useCurrencies } from '../../../hooks/useCurrencies';
 import { useAppSettings } from '../../../hooks/useAppSettings';
 import { LineItemTemplate, CreateLineItemTemplateInput, UpdateLineItemTemplateInput } from '../../../types/lineItem';
 import { Currency } from '../../../types/medical';
+import { localeNumberParser } from '@/utils/localeNumber';
 
 const { TextArea } = Input;
 
@@ -270,6 +271,7 @@ const LineItemsSettings: React.FC<LineItemsSettingsProps> = ({ isUpdating }) => 
               step={0.01}
               precision={2}
               placeholder="0.00"
+              parser={localeNumberParser}
               className={styles.fullWidth}
             />
           </Form.Item>

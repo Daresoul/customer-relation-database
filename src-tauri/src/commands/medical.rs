@@ -1,7 +1,7 @@
 use tauri::{AppHandle, State};
 use crate::database::SeaOrmPool;
 use crate::models::medical::*;
-use crate::services::medical_record::MedicalRecordService;
+use crate::services::medical_record::{MedicalRecordService, PdfEnv, PdfStatus, SavedMedicalRecord};
 use crate::services::file_storage::FileStorageService;
 use crate::services::pdf_render::PdfRenderService;
 use crate::services::device_parser::DeviceParserService;
@@ -42,7 +42,7 @@ pub async fn create_medical_record(
     app_handle: AppHandle,
     pool: State<'_, SeaOrmPool>,
     input: CreateMedicalRecordInput,
-) -> Result<MedicalRecord, String> {
+) -> Result<SavedMedicalRecord, String> {
     // Validate input
     if input.name.is_empty() {
         return Err("Name is required".to_string());
@@ -66,7 +66,7 @@ pub async fn update_medical_record(
     pool: State<'_, SeaOrmPool>,
     record_id: i64,
     updates: UpdateMedicalRecordInput,
-) -> Result<MedicalRecord, String> {
+) -> Result<SavedMedicalRecord, String> {
     // Validate updates
     if let Some(ref name) = updates.name {
         if name.is_empty() {
@@ -80,6 +80,19 @@ pub async fn update_medical_record(
     }
 
     MedicalRecordService::update_medical_record(&app_handle, &pool, record_id, updates).await
+}
+
+/// Make one of a record's documents again (`report`, `pharmacy_note` or
+/// `invoice`), replacing the old one once the new one is stored.
+#[tauri::command]
+pub async fn regenerate_record_document(
+    app_handle: AppHandle,
+    pool: State<'_, SeaOrmPool>,
+    record_id: i64,
+    kind: String,
+) -> Result<PdfStatus, String> {
+    let env = PdfEnv::from_app(&app_handle)?;
+    Ok(MedicalRecordService::regenerate_document(&env, &pool, record_id, &kind).await)
 }
 
 // T035: Implement archive_medical_record command
@@ -420,7 +433,7 @@ pub async fn revert_medical_record(
     app_handle: AppHandle,
     pool: State<'_, SeaOrmPool>,
     record_id: i64,
-) -> Result<MedicalRecord, String> {
+) -> Result<SavedMedicalRecord, String> {
     MedicalRecordService::revert_one_step(&app_handle, &pool, record_id).await
 }
 
@@ -659,6 +672,7 @@ pub async fn regenerate_pdf_from_medical_record(
     log::debug!("Patient info: name={}, microchip={:?}", patient_data.name, patient_data.microchip_id);
 
     // 4. Parse each attachment and collect device data
+    let record_time = MedicalRecordService::record_time(&pool, medical_record_id).await?;
     let mut all_device_data: Vec<DeviceTestData> = Vec::new();
 
     for attachment_row in &attachment_rows {
@@ -706,7 +720,7 @@ pub async fn regenerate_pdf_from_medical_record(
                     device_type: parsed_data.device_type.clone(),
                     device_name: parsed_data.device_name.clone(),
                     test_results: parsed_data.test_results.clone(),
-                    detected_at: parsed_data.detected_at,
+                    detected_at: record_time,
                     patient_identifier: patient_data.microchip_id.clone().or_else(|| Some(patient_data.name.clone())),
                 });
             }
@@ -893,6 +907,7 @@ pub async fn generate_configured_report(
     log::debug!("Patient info (with overrides): name={}, owner={}", patient_data.name, patient_data.owner);
 
     // 4. Fetch and parse selected attachments
+    let record_time = MedicalRecordService::record_time(&pool, medical_record_id).await?;
     let mut all_device_data: Vec<DeviceTestData> = Vec::new();
 
     for attachment_id in &selected_attachment_ids {
@@ -947,7 +962,7 @@ pub async fn generate_configured_report(
                     device_type: parsed_data.device_type.clone(),
                     device_name: parsed_data.device_name.clone(),
                     test_results: parsed_data.test_results.clone(),
-                    detected_at: parsed_data.detected_at,
+                    detected_at: record_time,
                     patient_identifier: patient_data.microchip_id.clone().or_else(|| Some(patient_data.name.clone())),
                 });
             }

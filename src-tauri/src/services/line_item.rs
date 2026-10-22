@@ -223,6 +223,13 @@ impl LineItemService {
         db: &DatabaseConnection,
         medical_record_id: i64,
     ) -> Result<Vec<MedicalRecordLineItem>, String> {
+        Self::get_line_items_for_record_in(db, medical_record_id).await
+    }
+
+    pub async fn get_line_items_for_record_in<C: ConnectionTrait>(
+        db: &C,
+        medical_record_id: i64,
+    ) -> Result<Vec<MedicalRecordLineItem>, String> {
         let line_items = MedicalRecordLineItemEntity::find()
             .filter(medical_record_line_item::Column::MedicalRecordId.eq(medical_record_id))
             .order_by_asc(medical_record_line_item::Column::Id)
@@ -236,6 +243,14 @@ impl LineItemService {
     /// Create line items for a medical record
     pub async fn create_line_items_for_record(
         db: &DatabaseConnection,
+        medical_record_id: i64,
+        items: Vec<CreateLineItemInput>,
+    ) -> Result<Vec<MedicalRecordLineItem>, String> {
+        Self::create_line_items_for_record_in(db, medical_record_id, items).await
+    }
+
+    pub async fn create_line_items_for_record_in<C: ConnectionTrait>(
+        db: &C,
         medical_record_id: i64,
         items: Vec<CreateLineItemInput>,
     ) -> Result<Vec<MedicalRecordLineItem>, String> {
@@ -275,12 +290,20 @@ impl LineItemService {
                 .map_err(|e| format!("Failed to create line items: {}", e))?;
         }
 
-        Self::get_line_items_for_record(db, medical_record_id).await
+        Self::get_line_items_for_record_in(db, medical_record_id).await
     }
 
     /// Replace all line items for a medical record
     pub async fn replace_line_items_for_record(
         db: &DatabaseConnection,
+        medical_record_id: i64,
+        items: Vec<CreateLineItemInput>,
+    ) -> Result<Vec<MedicalRecordLineItem>, String> {
+        Self::replace_line_items_for_record_in(db, medical_record_id, items).await
+    }
+
+    pub async fn replace_line_items_for_record_in<C: ConnectionTrait>(
+        db: &C,
         medical_record_id: i64,
         items: Vec<CreateLineItemInput>,
     ) -> Result<Vec<MedicalRecordLineItem>, String> {
@@ -292,7 +315,7 @@ impl LineItemService {
             .map_err(|e| format!("Failed to delete existing line items: {}", e))?;
 
         // Create new line items
-        Self::create_line_items_for_record(db, medical_record_id, items).await
+        Self::create_line_items_for_record_in(db, medical_record_id, items).await
     }
 
     /// Delete all line items for a medical record

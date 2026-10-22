@@ -16,8 +16,8 @@ export interface MedicalRecord {
   price?: number;
   currencyId?: number;
   // Line items pricing
-  discountPercent?: number;
-  manualTotal?: number;
+  discountPercent?: number | null;
+  manualTotal?: number | null;
   lineItems?: MedicalRecordLineItem[];
   isArchived: boolean;
   createdAt: string;
@@ -80,8 +80,8 @@ export interface CreateMedicalRecordInput {
   price?: number;
   currencyId?: number;
   // Line items pricing
-  discountPercent?: number;
-  manualTotal?: number;
+  discountPercent?: number | null;
+  manualTotal?: number | null;
   lineItems?: CreateLineItemInput[];
   // Optional device test data for PDF generation (legacy single device)
   deviceTestData?: any;
@@ -99,8 +99,8 @@ export interface UpdateMedicalRecordInput {
   price?: number;
   currencyId?: number;
   // Line items pricing
-  discountPercent?: number;
-  manualTotal?: number;
+  discountPercent?: number | null;
+  manualTotal?: number | null;
   lineItems?: CreateLineItemInput[];
   isArchived?: boolean;
 }

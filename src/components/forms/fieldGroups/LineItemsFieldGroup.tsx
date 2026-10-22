@@ -37,6 +37,7 @@ import { useCurrencies } from '../../../hooks/useCurrencies';
 import { useAppSettings } from '../../../hooks/useAppSettings';
 import type { LineItemTemplate, MedicalRecordLineItem, CreateLineItemInput } from '../../../types/lineItem';
 import type { Currency } from '../../../types/medical';
+import { localeNumberParser } from '../../../utils/localeNumber';
 import styles from '../Forms.module.css';
 
 const { Text, Title } = Typography;
@@ -48,13 +49,13 @@ export interface LineItemsFieldGroupProps {
   /** Callback when line items change */
   onLineItemsChange: (items: MedicalRecordLineItem[]) => void;
   /** Current discount percentage */
-  discountPercent?: number;
-  /** Callback when discount changes */
-  onDiscountChange?: (percent: number | undefined) => void;
+  discountPercent?: number | null;
+  /** Callback when discount changes; null when the field is cleared */
+  onDiscountChange?: (percent: number | null) => void;
   /** Manual total override (when no line items) */
-  manualTotal?: number;
-  /** Callback when manual total changes */
-  onManualTotalChange?: (total: number | undefined) => void;
+  manualTotal?: number | null;
+  /** Callback when manual total changes; null when the field is cleared */
+  onManualTotalChange?: (total: number | null) => void;
   /** Whether the form is disabled */
   disabled?: boolean;
   /** Default currency ID from settings */
@@ -297,11 +298,8 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
             const currency = getCurrency(record.currencyId);
             return currency?.symbol ? `${currency.symbol} ${value}` : `${value}`;
           }}
-          parser={(value) => {
-            const currency = getCurrency(record.currencyId);
-            const prefix = currency?.symbol ? `${currency.symbol} ` : '';
-            return parseFloat((value || '0').replace(prefix, '')) || 0;
-          }}
+          parser={localeNumberParser}
+          aria-label={t('medical:lineItems.unitPrice', 'Unit Price')}
           style={{ width: 120 }}
         />
       ),
@@ -317,6 +315,9 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
           onChange={(val) => handleQuantityChange(index, val)}
           min={1}
           max={999}
+          precision={0}
+          parser={localeNumberParser}
+          aria-label={t('medical:lineItems.quantity', 'Qty')}
           disabled={disabled}
           style={{ width: 60 }}
         />
@@ -427,15 +428,16 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <Text>{t('medical:lineItems.discountPercent', 'Discount %')}:</Text>
               <InputNumber
-                value={discountPercent || 0}
-                onChange={(val) => onDiscountChange?.(val || undefined)}
+                value={discountPercent ?? null}
+                onChange={(val) => onDiscountChange?.(val ?? null)}
                 min={0}
                 max={100}
                 step={1}
                 precision={1}
                 disabled={disabled}
-                formatter={(value) => `${value}%`}
-                parser={(value) => parseFloat((value || '0').replace('%', '')) || 0}
+                formatter={(value) => (value === undefined || String(value) === '' ? '' : `${value}%`)}
+                parser={localeNumberParser}
+                aria-label={t('medical:lineItems.discountPercent', 'Discount %')}
                 style={{ width: 100 }}
               />
             </div>
@@ -460,8 +462,8 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
               {t('medical:lineItems.manualTotalHint', 'Or enter a total amount directly:')}
             </Text>
             <InputNumber
-              value={manualTotal}
-              onChange={(val) => onManualTotalChange?.(val || undefined)}
+              value={manualTotal ?? null}
+              onChange={(val) => onManualTotalChange?.(val ?? null)}
               min={0}
               step={0.01}
               precision={2}
@@ -471,10 +473,8 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
                 if (!value) return '';
                 return primaryCurrency?.symbol ? `${primaryCurrency.symbol} ${value}` : `${value}`;
               }}
-              parser={(value) => {
-                const prefix = primaryCurrency?.symbol ? `${primaryCurrency.symbol} ` : '';
-                return parseFloat((value || '0').replace(prefix, '')) || 0;
-              }}
+              parser={localeNumberParser}
+              aria-label={t('medical:lineItems.manualTotal', 'Manual Total')}
               style={{ width: '100%' }}
             />
           </div>
@@ -580,6 +580,7 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
                 step={0.01}
                 precision={2}
                 placeholder="0.00"
+                parser={localeNumberParser}
                 style={{ width: '100%' }}
               />
             </Form.Item>
@@ -604,7 +605,7 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
               rules={[{ required: true, message: t('forms:validation.required', 'This field is required') }]}
               style={{ width: 100 }}
             >
-              <InputNumber min={1} max={999} style={{ width: '100%' }} />
+              <InputNumber min={1} max={999} precision={0} parser={localeNumberParser} style={{ width: '100%' }} />
             </Form.Item>
           </Space>
         </Form>

@@ -64,6 +64,8 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, "046_rebuild_household_search", rebuild_household_search).await?;
     run_migration(pool, "047_device_health", add_device_health_columns).await?;
     run_migration(pool, "048_google_sync_status", add_google_sync_status_columns).await?;
+    run_migration(pool, "049_fix_medical_records_fts_triggers", fix_medical_records_fts_triggers).await?;
+    run_migration(pool, "050_add_invoice_date", add_invoice_date_column).await?;
 
     Ok(())
 }
@@ -3013,6 +3015,52 @@ fn add_google_sync_status_columns(pool: &SqlitePool) -> std::pin::Pin<Box<dyn st
             if exists.0 == 0 {
                 sqlx::query(ddl).execute(pool).await?;
             }
+        }
+        Ok(())
+    })
+}
+// Migration 049: medical_records_fts is an external-content table, so an
+// AFTER UPDATE trigger that runs `UPDATE medical_records_fts` makes FTS5 read
+// the *new* row to find the tokens to remove. Those were never indexed, and
+// SQLite answers "database disk image is malformed": editing a record's
+// title or description failed. Remove the old tokens with the 'delete'
+// command and the OLD values instead, then rebuild the index once.
+fn fix_medical_records_fts_triggers(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        let remove_old = "INSERT INTO medical_records_fts(medical_records_fts, rowid, name, procedure_name, description) \
+                          VALUES('delete', old.id, old.name, old.procedure_name, old.description);";
+        let add_new = "INSERT INTO medical_records_fts(rowid, name, procedure_name, description) \
+                       VALUES (new.id, new.name, new.procedure_name, new.description);";
+        let triggers = [
+            ("medical_records_fts_update", "AFTER UPDATE ON medical_records", format!("{}\n{}", remove_old, add_new)),
+            ("medical_records_fts_delete", "AFTER DELETE ON medical_records", remove_old.to_string()),
+        ];
+        for (name, event, body) in triggers {
+            sqlx::query(&format!("DROP TRIGGER IF EXISTS {name}")).execute(pool).await?;
+            sqlx::query(&format!("CREATE TRIGGER {name} {event} BEGIN\n{body}\nEND"))
+                .execute(pool)
+                .await?;
+        }
+        sqlx::query("INSERT INTO medical_records_fts(medical_records_fts) VALUES('rebuild')")
+            .execute(pool)
+            .await?;
+        Ok(())
+    })
+}
+
+// Migration 050: the invoice date (local calendar date, `YYYY-MM-DD`), stored
+// once when the invoice number is assigned so later edits reprint the same date.
+fn add_invoice_date_column(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        let exists: (i32,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM pragma_table_info('medical_records') WHERE name = 'invoice_date'"
+        )
+        .fetch_one(pool)
+        .await?;
+        if exists.0 == 0 {
+            sqlx::query("ALTER TABLE medical_records ADD COLUMN invoice_date TEXT")
+                .execute(pool)
+                .await?;
         }
         Ok(())
     })

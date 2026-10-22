@@ -19,6 +19,7 @@ import MedicalRecordForm from '@/components/MedicalRecordModal/MedicalRecordForm
 import DiagnosisTagList from '@/components/DiagnosisTagList';
 import { DIAGNOSES_KEYS } from '@/hooks/useDiagnoses';
 import { useQueryClient } from '@tanstack/react-query';
+import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 // Inline PDF viewer handled by PdfInlineViewer with reliable fallbacks
 import type { MedicalRecord, MedicalRecordHistory, UpdateMedicalRecordInput } from '@/types/medical';
 import type { MedicalRecordLineItem } from '@/types/lineItem';
@@ -43,6 +44,11 @@ export const MedicalRecordDetailPage: React.FC = () => {
   const uploadMutation = useUploadAttachment();
   const { data: currencies } = useCurrencies();
   const [isEditing, setIsEditing] = useState(false);
+  const [editDirty, setEditDirty] = useState(false);
+  useEffect(() => {
+    if (!isEditing) setEditDirty(false);
+  }, [isEditing]);
+  const confirmLeave = useUnsavedChangesGuard(isEditing && editDirty);
   const [selectedVersion, setSelectedVersion] = useState<number | null>(null);
   const [selectedHistory, setSelectedHistory] = useState<MedicalRecordHistory | null>(null);
   const [showDiffs, setShowDiffs] = useState(false);
@@ -677,7 +683,18 @@ export const MedicalRecordDetailPage: React.FC = () => {
           <Breadcrumb
             items={[
               {
-                title: <Link to="/" className={styles.breadcrumbLink}><HomeOutlined /> {t('navigation:home')}</Link>,
+                title: (
+                  <Link
+                    to="/"
+                    className={styles.breadcrumbLink}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      confirmLeave(() => navigate('/'));
+                    }}
+                  >
+                    <HomeOutlined /> {t('navigation:home')}
+                  </Link>
+                ),
               },
               {
                 title: record?.patientId ? (
@@ -685,11 +702,15 @@ export const MedicalRecordDetailPage: React.FC = () => {
                     to={`/patients/${record.patientId}`}
                     className={styles.breadcrumbLink}
                     onClick={(e) => {
-                      // Save the current tab state so we return to the Medical History tab
-                      sessionStorage.setItem(
-                        `patient-detail-active-tab-${record.patientId}`,
-                        'medical-history'
-                      );
+                      e.preventDefault();
+                      confirmLeave(() => {
+                        // Save the current tab state so we return to the Medical History tab
+                        sessionStorage.setItem(
+                          `patient-detail-active-tab-${record.patientId}`,
+                          'medical-history'
+                        );
+                        navigate(`/patients/${record.patientId}`);
+                      });
                     }}
                   >
                     {t('navigation:patients')}
@@ -709,7 +730,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
       <div className={styles.breadcrumbContainer}>
         <Button
           icon={<ArrowLeftOutlined />}
-          onClick={() => {
+          onClick={() => confirmLeave(() => {
             if (record?.patientId) {
               // Save the tab state before navigating back
               sessionStorage.setItem(
@@ -720,7 +741,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
             } else {
               navigate('/');
             }
-          }}
+          })}
         >
           {t('medical:detail.backToPatient')}
         </Button>
@@ -790,7 +811,6 @@ export const MedicalRecordDetailPage: React.FC = () => {
                   {(() => {
                     const lineItems = displayRecord?.lineItems || record.lineItems;
                     const discount = displayRecord?.discountPercent ?? record.discountPercent;
-                    const manualTotalVal = displayRecord?.manualTotal ?? record.manualTotal;
 
                     if (!lineItems || lineItems.length === 0) return null;
 
@@ -800,7 +820,8 @@ export const MedicalRecordDetailPage: React.FC = () => {
                     // Calculate total with discount
                     const discountMultiplier = discount ? (100 - discount) / 100 : 1;
                     const calculatedTotal = subtotal * discountMultiplier;
-                    const finalTotal = manualTotalVal ?? calculatedTotal;
+                    // A manual total only stands in when there are no items.
+                    const finalTotal = calculatedTotal;
 
                     // Get currency for display
                     const firstCurrencyId = lineItems[0]?.currencyId;
@@ -947,7 +968,8 @@ export const MedicalRecordDetailPage: React.FC = () => {
                 // error messages are handled in the hook; keep UI responsive
               }
             }}
-            onCancel={() => setIsEditing(false)}
+            onCancel={() => confirmLeave(() => setIsEditing(false))}
+            onDirtyChange={setEditDirty}
             loading={updateMutation.isPending}
             isEdit={true}
             patientId={record.patientId}

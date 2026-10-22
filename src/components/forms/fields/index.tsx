@@ -26,6 +26,7 @@ import {
 import { validationRules } from '../../../utils/validation/formRules';
 import type { Dayjs } from 'dayjs';
 import styles from './FormFields.module.css';
+import { localeNumberParser } from '@/utils/localeNumber';
 
 const { TextArea } = Input;
 const { Option } = Select;
@@ -257,6 +258,7 @@ export const NumberField: React.FC<NumberFieldProps> = ({
         step={step}
         precision={precision}
         prefix={prefix}
+        parser={localeNumberParser}
         disabled={disabled}
         size={size}
       />

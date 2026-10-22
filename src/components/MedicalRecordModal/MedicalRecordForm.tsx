@@ -4,8 +4,8 @@
  * Refactored to use MedicalRecordFieldGroup for reusable field definitions.
  */
 
-import React, { useState, useEffect } from 'react';
-import { Form, Button, Space, Divider, Typography, Upload, Drawer, App, Select, Tag } from 'antd';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Form, Button, Space, Divider, Typography, Upload, Drawer, App, Select, Tag, Alert } from 'antd';
 import { SaveOutlined, CloseOutlined, InboxOutlined, HistoryOutlined, TagsOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@/services/invoke';
@@ -52,6 +52,8 @@ interface MedicalRecordFormProps {
   isEdit: boolean;
   patientId: number;
   recordId: number | null;
+  /** Called with true once the user changes anything. */
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
@@ -62,6 +64,7 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
   isEdit,
   patientId,
   recordId,
+  onDirtyChange,
 }) => {
   const { t } = useTranslation(['medical', 'common', 'forms']);
   const { notification } = App.useApp();
@@ -74,8 +77,8 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
   const [titleSearchTerm, setTitleSearchTerm] = useState<string>('');
   // Line items state
   const [lineItems, setLineItems] = useState<MedicalRecordLineItem[]>(initialValues?.lineItems || []);
-  const [discountPercent, setDiscountPercent] = useState<number | undefined>(initialValues?.discountPercent);
-  const [manualTotal, setManualTotal] = useState<number | undefined>(initialValues?.manualTotal);
+  const [discountPercent, setDiscountPercent] = useState<number | null>(initialValues?.discountPercent ?? null);
+  const [manualTotal, setManualTotal] = useState<number | null>(initialValues?.manualTotal ?? null);
   // Diagnosis tag state.
   //   - `availableDiagnoses`: full picker list, loaded once on mount.
   //   - `selectedDiagnosisIds`: IDs currently applied to this record.
@@ -85,6 +88,15 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
   // existing medical record schema).
   const [availableDiagnoses, setAvailableDiagnoses] = useState<Diagnosis[]>([]);
   const [selectedDiagnosisIds, setSelectedDiagnosisIds] = useState<number[]>([]);
+  // An edit saves the full diagnosis set, so it must not save until the
+  // record's current diagnoses have loaded: an empty list would wipe them.
+  const [diagnosesLoad, setDiagnosesLoad] = useState<'loading' | 'loaded' | 'failed'>(isEdit ? 'loading' : 'loaded');
+  const dirtyRef = useRef(false);
+  const markDirty = useCallback(() => {
+    if (dirtyRef.current) return;
+    dirtyRef.current = true;
+    onDirtyChange?.(true);
+  }, [onDirtyChange]);
   // Validation error field names from the most recent submit attempt.
   // Passed down to TabbedMedicalRecordFields so it can flag the tabs
   // that contain failing fields and auto-switch to the first one.
@@ -105,8 +117,8 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
       setRecordType(initialValues.recordType);
       // Set line items state
       setLineItems(initialValues.lineItems || []);
-      setDiscountPercent(initialValues.discountPercent);
-      setManualTotal(initialValues.manualTotal);
+      setDiscountPercent(initialValues.discountPercent ?? null);
+      setManualTotal(initialValues.manualTotal ?? null);
     }
   }, [initialValues?.id, form]);
 
@@ -134,12 +146,15 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
   // Also merge any inactive ones into `availableDiagnoses` so the
   // multi-select can render them as already-selected without losing
   // the label.
+  const [diagnosesAttempt, setDiagnosesAttempt] = useState(0);
   useEffect(() => {
     if (!isEdit || !recordId) {
       setSelectedDiagnosisIds([]);
+      setDiagnosesLoad('loaded');
       return;
     }
     let cancelled = false;
+    setDiagnosesLoad('loading');
     (async () => {
       try {
         const current = await invoke<Diagnosis[]>('get_diagnoses_for_record', {
@@ -147,9 +162,6 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
         });
         if (cancelled) return;
         setSelectedDiagnosisIds((current || []).map((d) => d.id));
-        // Merge any inactive (or otherwise missing-from-picker)
-        // diagnoses into the available list so they still render with
-        // their proper label/color in the Select.
         setAvailableDiagnoses((prev) => {
           const byId = new Map(prev.map((d) => [d.id, d]));
           for (const d of current || []) {
@@ -159,27 +171,46 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
             a.name.localeCompare(b.name),
           );
         });
+        setDiagnosesLoad('loaded');
       } catch (e) {
         console.error('Failed to load diagnoses for record:', e);
+        if (!cancelled) setDiagnosesLoad('failed');
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [isEdit, recordId]);
+  }, [isEdit, recordId, diagnosesAttempt]);
+
+  const saveBlocked = isEdit && diagnosesLoad !== 'loaded';
+
+  const changeLineItems = (items: MedicalRecordLineItem[]) => {
+    markDirty();
+    setLineItems(items);
+  };
+  const changeDiscount = (value: number | null) => {
+    markDirty();
+    setDiscountPercent(value);
+  };
+  const changeManualTotal = (value: number | null) => {
+    markDirty();
+    setManualTotal(value);
+  };
 
   const handleFinish = (values: any) => {
     // Convert MedicalRecordLineItem to CreateLineItemInput for submission
-    const lineItemsInput: CreateLineItemInput[] | undefined = lineItems.length > 0
-      ? lineItems.map(item => ({
-          templateId: item.templateId,
-          name: item.name,
-          description: item.description,
-          unitPrice: item.unitPrice,
-          currencyId: item.currencyId,
-          quantity: item.quantity,
-        }))
-      : undefined;
+    // Cleared values go out as [] / null: a missing field means "unchanged"
+    // to the backend, so leaving them out would keep the old ones.
+    const lineItemsInput: CreateLineItemInput[] = lineItems.map(item => ({
+      templateId: item.templateId,
+      name: item.name,
+      description: item.description,
+      unitPrice: item.unitPrice,
+      currencyId: item.currencyId,
+      quantity: item.quantity,
+    }));
+    // The manual total stands in for line items; with items it no longer applies.
+    const manualTotalInput = lineItems.length > 0 ? null : manualTotal;
 
     const formData = isEdit
       ? {
@@ -187,7 +218,7 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
           description: values.description,
           prescriptionNotes: values.prescriptionNotes,
           discountPercent: discountPercent,
-          manualTotal: manualTotal,
+          manualTotal: manualTotalInput,
           lineItems: lineItemsInput,
         } as UpdateMedicalRecordInput
       : {
@@ -197,8 +228,8 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
           description: values.description,
           prescriptionNotes: values.prescriptionNotes,
           discountPercent: discountPercent,
-          manualTotal: manualTotal,
-          lineItems: lineItemsInput,
+          manualTotal: manualTotalInput,
+          lineItems: lineItemsInput.length > 0 ? lineItemsInput : undefined,
         } as CreateMedicalRecordInput;
 
     // Collect device data from files that have it (for PDF generation)
@@ -222,7 +253,7 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
       // after the record save succeeds. Diagnoses live in a junction
       // table and don't piggyback on the medical record's own update
       // command, which keeps both backend paths independently small.
-      selectedDiagnosisIds,
+      saveBlocked ? undefined : selectedDiagnosisIds,
     );
   };
 
@@ -241,6 +272,7 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
         type: fileData.mimeType || 'application/octet-stream',
       });
 
+      markDirty();
       setPendingFiles(prev => [...prev, file]);
       setFileSourceIds(prev => new Map(prev).set(originalName, fileId));
 
@@ -321,6 +353,7 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
       // Clear error indicators as soon as the user starts fixing
       // the offending field — no need to wait for the next submit.
       onValuesChange={(changed) => {
+        markDirty();
         if (errorFields.length === 0) return;
         const changedNames = Object.keys(changed);
         const remaining = errorFields.filter((f) => !changedNames.includes(f));
@@ -346,11 +379,11 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
         hideRecordType={isEdit}
         // Line items props
         lineItems={lineItems}
-        onLineItemsChange={setLineItems}
+        onLineItemsChange={changeLineItems}
         discountPercent={discountPercent}
-        onDiscountChange={setDiscountPercent}
+        onDiscountChange={changeDiscount}
         manualTotal={manualTotal}
-        onManualTotalChange={setManualTotal}
+        onManualTotalChange={changeManualTotal}
         showLineItemsBadge={lineItems.length > 0}
         lineItemsCount={lineItems.length}
         errorFields={errorFields}
@@ -381,7 +414,11 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
               <Select
                 mode="multiple"
                 value={selectedDiagnosisIds}
-                onChange={setSelectedDiagnosisIds}
+                onChange={(ids: number[]) => {
+                  markDirty();
+                  setSelectedDiagnosisIds(ids);
+                }}
+                disabled={saveBlocked}
                 placeholder={t(
                   'medical:placeholders.selectDiagnoses',
                   'Select one or more diagnoses…',
@@ -457,6 +494,7 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
                         validFiles.push(file.originFileObj as File);
                       }
                     });
+                    markDirty();
                     setPendingFiles(validFiles);
                   }}
                   fileList={pendingFiles.map((file, index) => ({
@@ -488,12 +526,28 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
         }
       />
 
+      {isEdit && diagnosesLoad === 'failed' && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message={t('medical:messages.diagnosesLoadFailed')}
+          description={t('medical:messages.diagnosesLoadFailedHint')}
+          action={
+            <Button size="small" onClick={() => setDiagnosesAttempt((n) => n + 1)}>
+              {t('medical:actions.retry')}
+            </Button>
+          }
+        />
+      )}
+
       <Form.Item className={styles.submitButton}>
         <Space>
           <Button
             type="primary"
             htmlType="submit"
             loading={loading}
+            disabled={saveBlocked}
             icon={<SaveOutlined />}
             data-testid="medical-record-form-submit-btn"
           >

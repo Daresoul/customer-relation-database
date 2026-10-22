@@ -20,6 +20,7 @@ import type { CreatedHousehold } from '../forms/CreateHouseholdInline';
 import type { ExtractedPatientData, PatientDataConflict } from '../../types/deviceImport';
 import type { Patient, CreatePatientInput } from '../../types';
 import { hasExtractedData } from '../../utils/deviceDataExtraction';
+import { localeNumberParser } from '@/utils/localeNumber';
 
 interface CreatePatientSectionProps {
   extractedData: ExtractedPatientData;
@@ -365,7 +366,7 @@ export const CreatePatientSection: React.FC<CreatePatientSectionProps> = ({
           </Col>
           <Col span={12}>
             <Form.Item name="weight" label={t('patients:detail.patientInfo.labels.weight', 'Weight (kg)')}>
-              <InputNumber min={0.01} max={500} precision={2} style={{ width: '100%' }} placeholder={t('forms:placeholders.example', { example: '4.50' })} />
+              <InputNumber min={0.01} max={500} precision={2} parser={localeNumberParser} style={{ width: '100%' }} placeholder={t('forms:placeholders.example', { example: '4.50' })} />
             </Form.Item>
           </Col>
         </Row>

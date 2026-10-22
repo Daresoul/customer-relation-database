@@ -87,3 +87,6 @@ pub mod folder_watch_tests;
 
 #[cfg(test)]
 pub mod google_sync_status_tests;
+
+#[cfg(test)]
+pub mod record_money_tests;

@@ -94,6 +94,17 @@ impl JavaPdfService {
         patient: &crate::services::device_pdf_service::PatientData,
         device_data_list: &[crate::services::device_pdf_service::DeviceTestData],
     ) -> Result<(), String> {
+        let jar_path = Self::get_jar_path(app_handle)?;
+        Self::generate_pdf_multi_with_jar(&jar_path, output_path, patient, device_data_list)
+    }
+
+    /// `generate_pdf_multi` with the JAR already located.
+    pub fn generate_pdf_multi_with_jar(
+        jar_path: &Path,
+        output_path: &str,
+        patient: &crate::services::device_pdf_service::PatientData,
+        device_data_list: &[crate::services::device_pdf_service::DeviceTestData],
+    ) -> Result<(), String> {
         log::info!("☕ Generating PDF using Java JAR (iText 5) with {} samples...", device_data_list.len());
 
         // A sample with no test results must never reach the renderer: Java
@@ -116,8 +127,7 @@ impl JavaPdfService {
 
         let input = serde_json::to_value(&java_input)
             .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
-        let jar_path = Self::get_jar_path(app_handle)?;
-        Self::run_jar_job(&jar_path, input, output_path, JAVA_TIMEOUT)?;
+        Self::run_jar_job(jar_path, input, output_path, JAVA_TIMEOUT)?;
 
         log::info!("✅ Java PDF generated successfully");
         Ok(())
@@ -502,7 +512,7 @@ impl JavaPdfService {
     /// Get the path to the JAR file
     /// In development: uses relative path to pdf-generator-cli build output
     /// In production: uses Tauri's resource resolver to locate bundled resources
-    fn get_jar_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
+    pub(crate) fn get_jar_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
         // In development mode: use relative path to project
         if cfg!(debug_assertions) {
             // Try relative path from src-tauri directory
@@ -655,7 +665,7 @@ impl JavaPdfService {
     /// Generate a simple PDF report using the template (Rapport.pdf)
     /// This creates a report with title and description overlaid on the clinic letterhead
     pub fn generate_simple_report(
-        app_handle: &tauri::AppHandle,
+        jar_path: &Path,
         output_path: &str,
         title: &str,
         description: &str,
@@ -683,8 +693,7 @@ impl JavaPdfService {
             });
         }
 
-        let jar_path = Self::get_jar_path(app_handle)?;
-        Self::run_jar_job(&jar_path, json_obj, output_path, JAVA_TIMEOUT)?;
+        Self::run_jar_job(jar_path, json_obj, output_path, JAVA_TIMEOUT)?;
 
         log::info!("✅ Simple report PDF generated successfully");
         Ok(())
@@ -693,7 +702,7 @@ impl JavaPdfService {
     /// Generate an invoice PDF using the invoice.pdf template
     /// Creates an invoice with dynamic line items table, totals, and form fields
     pub fn generate_invoice(
-        app_handle: &tauri::AppHandle,
+        jar_path: &Path,
         output_path: &str,
         date: &str,
         invoice_number: &str,
@@ -727,8 +736,7 @@ impl JavaPdfService {
             "output_path": output_path
         });
 
-        let jar_path = Self::get_jar_path(app_handle)?;
-        Self::run_jar_job(&jar_path, json_obj, output_path, JAVA_TIMEOUT)?;
+        Self::run_jar_job(jar_path, json_obj, output_path, JAVA_TIMEOUT)?;
 
         log::info!("✅ Invoice PDF generated successfully");
         Ok(())
@@ -737,7 +745,7 @@ impl JavaPdfService {
     /// Generate a pharmacy note PDF using the pharmacy_note.pdf template
     /// Overlays prescription text onto the pre-designed template
     pub fn generate_pharmacy_note(
-        app_handle: &tauri::AppHandle,
+        jar_path: &Path,
         output_path: &str,
         prescription_text: &str,
     ) -> Result<(), String> {
@@ -749,8 +757,7 @@ impl JavaPdfService {
             "output_path": output_path
         });
 
-        let jar_path = Self::get_jar_path(app_handle)?;
-        Self::run_jar_job(&jar_path, json_obj, output_path, JAVA_TIMEOUT)?;
+        Self::run_jar_job(jar_path, json_obj, output_path, JAVA_TIMEOUT)?;
 
         log::info!("✅ Pharmacy note PDF generated successfully");
         Ok(())
