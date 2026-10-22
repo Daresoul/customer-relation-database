@@ -4,9 +4,11 @@
 //! `backup_config.json` and the source files live) and one as the chosen
 //! backup destination. `tempfile::TempDir` auto-cleans on drop.
 
-use crate::services::backup::{BackupConfig, BackupService};
+use crate::services::backup::{
+    is_backup_due, is_pre_update_snapshot, snapshot_file_name, BackupConfig, BackupService, SnapshotKind,
+};
 use crate::test_utils::create_test_db_with_migrations;
-use chrono::Utc;
+use chrono::{TimeZone, Utc};
 use std::fs;
 use std::path::Path;
 use std::time::Duration;
@@ -314,4 +316,155 @@ async fn run_backup_prune_ignores_non_db_files() {
 
     assert!(db_dir.join("README.txt").exists());
     assert!(db_dir.join("notes.md").exists());
+}
+
+// ---------------------------------------------------------------------------
+// pre-update snapshots
+// ---------------------------------------------------------------------------
+
+fn pre_update(version: &str) -> SnapshotKind {
+    SnapshotKind::PreUpdate { app_version: version.to_string() }
+}
+
+fn set_mtime_days_ago(path: &Path, days: u64) {
+    let t = std::time::SystemTime::now() - Duration::from_secs(86400 * days);
+    fs::OpenOptions::new().write(true).open(path).unwrap().set_modified(t).unwrap();
+}
+
+#[test]
+fn daily_snapshot_name_is_the_utc_date() {
+    let now = Utc.with_ymd_and_hms(2026, 10, 22, 9, 5, 7).unwrap();
+    assert_eq!(snapshot_file_name(&SnapshotKind::Daily, now), "vet_clinic_2026-10-22.db");
+}
+
+#[test]
+fn pre_update_snapshot_name_carries_time_and_version() {
+    let now = Utc.with_ymd_and_hms(2026, 10, 22, 9, 5, 7).unwrap();
+    assert_eq!(
+        snapshot_file_name(&pre_update("0.7.3"), now),
+        "vet_clinic_2026-10-22_09-05-07_pre-update-0.7.3.db"
+    );
+}
+
+#[test]
+fn pre_update_names_are_recognised_and_daily_names_are_not() {
+    let now = Utc.with_ymd_and_hms(2026, 10, 22, 9, 5, 7).unwrap();
+    assert!(is_pre_update_snapshot(&snapshot_file_name(&pre_update("0.7.3"), now)));
+    assert!(!is_pre_update_snapshot(&snapshot_file_name(&SnapshotKind::Daily, now)));
+    assert!(!is_pre_update_snapshot("vet_clinic_old_01.db"));
+}
+
+#[tokio::test]
+async fn daily_backup_on_the_same_day_keeps_the_pre_update_snapshot() {
+    let fx = setup().await;
+    BackupService::set_directory(fx.app_dir.path(), fx.dest_dir.path().to_str().unwrap()).unwrap();
+
+    BackupService::run_backup_with_kind(fx.app_dir.path(), &fx.test_db, pre_update("0.7.3"))
+        .await
+        .unwrap();
+    BackupService::run_backup(fx.app_dir.path(), &fx.test_db).await.unwrap();
+
+    let db_dir = fx.dest_dir.path().join("db");
+    let names: Vec<String> = fs::read_dir(&db_dir)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
+        .collect();
+    let today = Utc::now().format("%Y-%m-%d").to_string();
+    assert!(names.contains(&format!("vet_clinic_{}.db", today)), "daily missing: {:?}", names);
+    let pre: Vec<_> = names.iter().filter(|n| is_pre_update_snapshot(n)).collect();
+    assert_eq!(pre.len(), 1, "pre-update snapshot should survive: {:?}", names);
+    assert!(fs::metadata(db_dir.join(pre[0])).unwrap().len() > 0);
+}
+
+#[tokio::test]
+async fn daily_prune_never_deletes_pre_update_snapshots() {
+    let fx = setup().await;
+    BackupService::set_directory(fx.app_dir.path(), fx.dest_dir.path().to_str().unwrap()).unwrap();
+    let db_dir = fx.dest_dir.path().join("db");
+    fs::create_dir_all(&db_dir).unwrap();
+
+    let old_pre = db_dir.join("vet_clinic_2026-01-01_10-00-00_pre-update-0.6.0.db");
+    fs::write(&old_pre, "pre").unwrap();
+    set_mtime_days_ago(&old_pre, 300);
+    for i in 0..35 {
+        let f = db_dir.join(format!("vet_clinic_old_{:02}.db", i));
+        fs::write(&f, "fake").unwrap();
+        set_mtime_days_ago(&f, 35 - i as u64);
+    }
+
+    BackupService::run_backup(fx.app_dir.path(), &fx.test_db).await.unwrap();
+
+    assert!(old_pre.exists(), "daily prune removed a pre-update snapshot");
+    let daily = fs::read_dir(&db_dir)
+        .unwrap()
+        .filter(|e| !is_pre_update_snapshot(&e.as_ref().unwrap().file_name().to_string_lossy()))
+        .count();
+    assert_eq!(daily, 30);
+}
+
+#[tokio::test]
+async fn pre_update_snapshots_keep_their_own_newest_ten() {
+    let fx = setup().await;
+    BackupService::set_directory(fx.app_dir.path(), fx.dest_dir.path().to_str().unwrap()).unwrap();
+    let db_dir = fx.dest_dir.path().join("db");
+    fs::create_dir_all(&db_dir).unwrap();
+
+    let daily_old = db_dir.join("vet_clinic_2026-01-01.db");
+    fs::write(&daily_old, "daily").unwrap();
+    set_mtime_days_ago(&daily_old, 400);
+    for i in 0..12 {
+        let f = db_dir.join(format!("vet_clinic_2026-02-{:02}_10-00-00_pre-update-0.6.{}.db", i + 1, i));
+        fs::write(&f, "pre").unwrap();
+        set_mtime_days_ago(&f, 100 - i as u64);
+    }
+
+    BackupService::run_backup_with_kind(fx.app_dir.path(), &fx.test_db, pre_update("0.7.3"))
+        .await
+        .unwrap();
+
+    let pre: Vec<String> = fs::read_dir(&db_dir)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
+        .filter(|n| is_pre_update_snapshot(n))
+        .collect();
+    assert_eq!(pre.len(), 10, "got {:?}", pre);
+    assert!(pre.iter().any(|n| n.ends_with("_pre-update-0.7.3.db")), "new one kept: {:?}", pre);
+    assert!(!pre.iter().any(|n| n.contains("2026-02-01_")), "oldest pruned: {:?}", pre);
+    assert!(daily_old.exists(), "pre-update prune must not touch daily snapshots");
+}
+
+// ---------------------------------------------------------------------------
+// scheduled backups
+// ---------------------------------------------------------------------------
+
+fn cfg_with(directory: Option<&str>, last_backup_at: Option<String>) -> BackupConfig {
+    BackupConfig {
+        directory: directory.map(str::to_string),
+        last_backup_at,
+        last_error: None,
+    }
+}
+
+#[test]
+fn backup_is_not_due_without_a_folder() {
+    assert!(!is_backup_due(&cfg_with(None, None), Utc::now()));
+}
+
+#[test]
+fn backup_is_due_when_there_never_was_one() {
+    assert!(is_backup_due(&cfg_with(Some("/b"), None), Utc::now()));
+}
+
+#[test]
+fn backup_is_due_once_the_last_success_is_a_day_old() {
+    let now = Utc::now();
+    let recent = (now - chrono::Duration::hours(23)).to_rfc3339();
+    let old = (now - chrono::Duration::hours(25)).to_rfc3339();
+    assert!(!is_backup_due(&cfg_with(Some("/b"), Some(recent)), now));
+    assert!(is_backup_due(&cfg_with(Some("/b"), Some(old)), now));
+}
+
+#[test]
+fn backup_is_due_when_the_last_time_is_unreadable() {
+    assert!(is_backup_due(&cfg_with(Some("/b"), Some("garbage".into())), Utc::now()));
 }

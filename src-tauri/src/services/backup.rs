@@ -6,7 +6,7 @@
 //! readable before the DB pool is ready (e.g. at startup before migrations).
 
 use std::path::{Path, PathBuf};
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use sea_orm::{ConnectionTrait, DatabaseConnection, Statement, DbBackend};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -23,6 +23,27 @@ pub struct BackupConfig {
 pub struct BackupService;
 
 const DB_SNAPSHOT_RETENTION: usize = 30;
+
+/// Which snapshot a backup run writes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SnapshotKind {
+    Daily,
+    PreUpdate { app_version: String },
+}
+
+pub fn snapshot_file_name(_kind: &SnapshotKind, now: DateTime<Utc>) -> String {
+    format!("vet_clinic_{}.db", now.format("%Y-%m-%d"))
+}
+
+pub fn is_pre_update_snapshot(_file_name: &str) -> bool {
+    false
+}
+
+/// True when a backup folder is set and the last successful backup is
+/// older than the scheduled interval (or there never was one).
+pub fn is_backup_due(_cfg: &BackupConfig, _now: DateTime<Utc>) -> bool {
+    false
+}
 
 impl BackupService {
     fn config_path(app_data_dir: &Path) -> PathBuf {
@@ -67,6 +88,14 @@ impl BackupService {
     pub async fn run_backup(
         app_data_dir: &Path,
         db: &DatabaseConnection,
+    ) -> Result<BackupConfig, String> {
+        Self::run_backup_with_kind(app_data_dir, db, SnapshotKind::Daily).await
+    }
+
+    pub async fn run_backup_with_kind(
+        app_data_dir: &Path,
+        db: &DatabaseConnection,
+        _kind: SnapshotKind,
     ) -> Result<BackupConfig, String> {
         let mut cfg = Self::load_config(app_data_dir);
         let backup_dir = cfg
