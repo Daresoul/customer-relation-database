@@ -179,6 +179,17 @@ fn main() {
     let tray = SystemTray::new().with_menu(tray_menu);
 
     let run_result = tauri::Builder::default()
+        // First plugin, so a second copy exits before the other plugins start.
+        // Two copies would import every device file twice and fight over COM
+        // ports; the second launch brings the running window forward instead.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            if let Some(window) = app.get_window("main") {
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+            log::info!("Second launch: showed the running window instead");
+        }))
         .plugin(Builder::default()
             .targets(log_targets)
             .level(LevelFilter::Info)
