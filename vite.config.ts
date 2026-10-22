@@ -44,6 +44,7 @@ export default defineConfig({
     //     to real assertions. Filed for future cleanup.
     exclude: [
       '**/node_modules/**',
+      '**/.claude/**',
       '**/e2e/**',
       '**/e2e-fullstack/**',
       '**/src-tauri/**',
