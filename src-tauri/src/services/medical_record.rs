@@ -146,7 +146,17 @@ impl MedicalRecordService {
     /// When the record was made; lab reports print it when the analyzer
     /// sent no test time of its own.
     pub async fn record_time(db: &DatabaseConnection, record_id: i64) -> Result<DateTime<Utc>, String> {
-        Err(format!("not implemented for {}", record_id))
+        let row = db
+            .query_one(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "SELECT created_at FROM medical_records WHERE id = ?",
+                [record_id.into()],
+            ))
+            .await
+            .map_err(|e| format!("Failed to read the record's time: {}", e))?
+            .ok_or("Medical record not found".to_string())?;
+        let created_at: String = row.try_get("", "created_at").unwrap_or_default();
+        Ok(Self::parse_datetime(&created_at))
     }
 
     /// Regenerate one document (the Retry after a failed save).

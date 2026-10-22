@@ -672,6 +672,7 @@ pub async fn regenerate_pdf_from_medical_record(
     log::debug!("Patient info: name={}, microchip={:?}", patient_data.name, patient_data.microchip_id);
 
     // 4. Parse each attachment and collect device data
+    let record_time = MedicalRecordService::record_time(&pool, medical_record_id).await?;
     let mut all_device_data: Vec<DeviceTestData> = Vec::new();
 
     for attachment_row in &attachment_rows {
@@ -719,7 +720,7 @@ pub async fn regenerate_pdf_from_medical_record(
                     device_type: parsed_data.device_type.clone(),
                     device_name: parsed_data.device_name.clone(),
                     test_results: parsed_data.test_results.clone(),
-                    detected_at: parsed_data.detected_at,
+                    detected_at: record_time,
                     patient_identifier: patient_data.microchip_id.clone().or_else(|| Some(patient_data.name.clone())),
                 });
             }
@@ -906,6 +907,7 @@ pub async fn generate_configured_report(
     log::debug!("Patient info (with overrides): name={}, owner={}", patient_data.name, patient_data.owner);
 
     // 4. Fetch and parse selected attachments
+    let record_time = MedicalRecordService::record_time(&pool, medical_record_id).await?;
     let mut all_device_data: Vec<DeviceTestData> = Vec::new();
 
     for attachment_id in &selected_attachment_ids {
@@ -960,7 +962,7 @@ pub async fn generate_configured_report(
                     device_type: parsed_data.device_type.clone(),
                     device_name: parsed_data.device_name.clone(),
                     test_results: parsed_data.test_results.clone(),
-                    detected_at: parsed_data.detected_at,
+                    detected_at: record_time,
                     patient_identifier: patient_data.microchip_id.clone().or_else(|| Some(patient_data.name.clone())),
                 });
             }
