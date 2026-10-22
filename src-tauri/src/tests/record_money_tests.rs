@@ -237,6 +237,84 @@ async fn editing_name_and_description_keeps_the_search_index_healthy() {
     assert_eq!(stale, 0);
 }
 
+// ---------------------------------------------------------------------------
+// D4: invoice date in clinic time, set once with the number
+// ---------------------------------------------------------------------------
+
+fn skopje_winter(rfc3339_utc: &str) -> chrono::DateTime<chrono::FixedOffset> {
+    chrono::DateTime::parse_from_rfc3339(rfc3339_utc)
+        .unwrap()
+        .with_timezone(&chrono::FixedOffset::east_opt(3600).unwrap())
+}
+
+async fn stored_invoice_date(db: &DatabaseConnection, id: i64) -> Option<String> {
+    db.query_one(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "SELECT invoice_date FROM medical_records WHERE id = ?",
+        [id.into()],
+    ))
+    .await
+    .unwrap()
+    .unwrap()
+    .try_get::<Option<String>>("", "invoice_date")
+    .unwrap()
+}
+
+#[tokio::test]
+async fn first_invoice_after_local_midnight_takes_the_local_date_and_year() {
+    let db = create_test_db_with_migrations().await;
+    let patient_id = seed_patient(&db).await;
+    let record = MedicalRecordService::save_new_record(&db, new_record(patient_id, vec![item("Exam", 1500.0)])).await.unwrap();
+
+    // 00:30 on 1 Jan in Skopje is still 31 Dec in UTC.
+    let invoice = MedicalRecordService::assign_invoice(&db, record.id, skopje_winter("2025-12-31T23:30:00Z")).await.unwrap();
+
+    assert_eq!(invoice.number, "001/2026");
+    assert_eq!(invoice.date, chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap());
+    assert_eq!(stored_invoice_date(&db, record.id).await.as_deref(), Some("2026-01-01"));
+}
+
+#[tokio::test]
+async fn a_later_edit_keeps_the_invoice_number_and_date() {
+    let db = create_test_db_with_migrations().await;
+    let patient_id = seed_patient(&db).await;
+    let record = MedicalRecordService::save_new_record(&db, new_record(patient_id, vec![item("Exam", 1500.0)])).await.unwrap();
+    let first = MedicalRecordService::assign_invoice(&db, record.id, skopje_winter("2025-12-20T10:00:00Z")).await.unwrap();
+
+    let again = MedicalRecordService::assign_invoice(&db, record.id, skopje_winter("2026-01-05T10:00:00Z")).await.unwrap();
+
+    assert_eq!(first.number, "001/2025");
+    assert_eq!(again.number, "001/2025");
+    assert_eq!(again.date, chrono::NaiveDate::from_ymd_opt(2025, 12, 20).unwrap());
+}
+
+#[tokio::test]
+async fn numbers_count_up_within_the_local_year() {
+    let db = create_test_db_with_migrations().await;
+    let patient_id = seed_patient(&db).await;
+    let a = MedicalRecordService::save_new_record(&db, new_record(patient_id, vec![item("Exam", 1.0)])).await.unwrap();
+    let b = MedicalRecordService::save_new_record(&db, new_record(patient_id, vec![item("Exam", 1.0)])).await.unwrap();
+
+    MedicalRecordService::assign_invoice(&db, a.id, skopje_winter("2026-02-01T10:00:00Z")).await.unwrap();
+    let second = MedicalRecordService::assign_invoice(&db, b.id, skopje_winter("2026-02-01T11:00:00Z")).await.unwrap();
+
+    assert_eq!(second.number, "002/2026");
+}
+
+#[tokio::test]
+async fn an_old_invoice_without_a_stored_date_gets_its_record_date() {
+    let db = create_test_db_with_migrations().await;
+    let patient_id = seed_patient(&db).await;
+    // created 2026-10-20T10:00Z, numbered before invoice dates were stored
+    let id = insert_record_with_invoice(&db, patient_id, "012/2026").await;
+
+    let invoice = MedicalRecordService::assign_invoice(&db, id, skopje_winter("2026-10-25T10:00:00Z")).await.unwrap();
+
+    assert_eq!(invoice.number, "012/2026");
+    assert_eq!(invoice.date, chrono::NaiveDate::from_ymd_opt(2026, 10, 20).unwrap());
+    assert_eq!(stored_invoice_date(&db, id).await.as_deref(), Some("2026-10-20"));
+}
+
 #[tokio::test]
 async fn update_can_clear_discount_manual_total_and_the_last_line_item() {
     let db = create_test_db_with_migrations().await;

@@ -54,10 +54,25 @@ fn row_to_record(row: &QueryResult) -> MedicalRecord {
     }
 }
 
+/// An invoice's number and the date printed on it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Invoice {
+    pub number: String,
+    pub date: chrono::NaiveDate,
+}
+
 // T027: MedicalRecordService with CRUD operations
 pub struct MedicalRecordService;
 
 impl MedicalRecordService {
+    pub async fn assign_invoice<Tz: chrono::TimeZone>(
+        _db: &DatabaseConnection,
+        _record_id: i64,
+        _now: DateTime<Tz>,
+    ) -> Result<Invoice, String> {
+        Err("not implemented".to_string())
+    }
+
     pub async fn get_medical_records(
         db: &DatabaseConnection,
         patient_id: i64,
