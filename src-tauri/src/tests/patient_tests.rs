@@ -7,6 +7,7 @@
 use crate::models::dto::{CreatePatientDto, UpdatePatientDto, MaybeNull};
 use crate::services::patient::PatientService;
 use crate::test_utils::create_test_db_with_migrations;
+use sea_orm::ConnectionTrait;
 
 /// Build a `CreatePatientDto` with mostly-empty defaults so tests can override
 /// only the field(s) they care about.
@@ -817,42 +818,152 @@ async fn update_with_all_undefined_is_no_op_but_succeeds() {
 // Microchip uniqueness pinning (task #20)
 // ---------------------------------------------------------------------------
 
-#[tokio::test]
-async fn microchip_id_is_not_unique_today() {
-    // No UNIQUE index exists on patients.microchip_id (verify via the schema).
-    // If a future migration adds one, this test fails — that's the signal to
-    // either rip out duplicate-microchip data or update this test to assert
-    // the new constraint.
-    let db = create_test_db_with_migrations().await;
+const CHIP: &str = "807010000007678";
 
+fn chip_update(chip: MaybeNull<String>) -> UpdatePatientDto {
+    UpdatePatientDto {
+        name: None,
+        species_id: MaybeNull::Undefined,
+        breed_id: MaybeNull::Undefined,
+        gender: MaybeNull::Undefined,
+        date_of_birth: MaybeNull::Undefined,
+        color: MaybeNull::Undefined,
+        weight: MaybeNull::Undefined,
+        microchip_id: chip,
+        medical_notes: MaybeNull::Undefined,
+        is_active: None,
+    }
+}
+
+async fn create_with_chip(
+    db: &sea_orm::DatabaseConnection,
+    name: &str,
+    chip: &str,
+) -> Result<crate::models::Patient, String> {
     PatientService::create(
-        &db,
+        db,
         CreatePatientDto {
-            name: Some("First".to_string()),
+            name: Some(name.to_string()),
             species_id: Some(1),
-            microchip_id: Some("807010000007678".to_string()),
+            microchip_id: Some(chip.to_string()),
             ..minimal_dto()
         },
     )
     .await
+}
+
+#[tokio::test]
+async fn create_strips_spaces_and_dashes_from_the_chip() {
+    let db = create_test_db_with_migrations().await;
+    let p = create_with_chip(&db, "Rex", " 807 010-000 007678 ").await.unwrap();
+    assert_eq!(p.microchip_id.as_deref(), Some(CHIP));
+}
+
+#[tokio::test]
+async fn create_stores_a_12_hex_chip_as_the_15_digit_number() {
+    let db = create_test_db_with_migrations().await;
+    let p = create_with_chip(&db, "Rex", "C9C2540C01FE").await.unwrap();
+    assert_eq!(p.microchip_id.as_deref(), Some(CHIP));
+}
+
+#[tokio::test]
+async fn update_normalises_the_chip() {
+    let db = create_test_db_with_migrations().await;
+    let p = create_with_chip(&db, "Rex", "111").await.unwrap();
+
+    let updated = PatientService::update(&db, p.id, chip_update(MaybeNull::Value(" 807-010 000007678 ".into())))
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(updated.microchip_id.as_deref(), Some(CHIP));
+}
+
+#[tokio::test]
+async fn update_with_a_blank_chip_clears_it() {
+    let db = create_test_db_with_migrations().await;
+    let p = create_with_chip(&db, "Rex", CHIP).await.unwrap();
+
+    let updated = PatientService::update(&db, p.id, chip_update(MaybeNull::Value("   ".into())))
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(updated.microchip_id, None);
+}
+
+#[tokio::test]
+async fn create_refuses_a_chip_already_on_another_patient() {
+    let db = create_test_db_with_migrations().await;
+    create_with_chip(&db, "Бобо", CHIP).await.unwrap();
+
+    let err = create_with_chip(&db, "Бобо again", "807 010 000 007 678").await.unwrap_err();
+
+    // The frontend maps /microchip.*already/i to its translated message.
+    assert!(err.to_lowercase().contains("microchip"), "{err}");
+    assert!(err.contains("already registered"), "{err}");
+    assert!(err.contains("Бобо"), "names the other patient: {err}");
+}
+
+#[tokio::test]
+async fn duplicate_check_sees_through_legacy_chip_formatting() {
+    let db = create_test_db_with_migrations().await;
+    db.execute_unprepared("INSERT INTO patients (name, microchip_id) VALUES ('Legacy', '807 010-000007678')")
+        .await
+        .unwrap();
+
+    assert!(create_with_chip(&db, "New", CHIP).await.is_err());
+}
+
+#[tokio::test]
+async fn update_refuses_a_chip_already_on_another_patient() {
+    let db = create_test_db_with_migrations().await;
+    create_with_chip(&db, "Бобо", CHIP).await.unwrap();
+    let other = create_with_chip(&db, "Other", "111").await.unwrap();
+
+    let err = PatientService::update(&db, other.id, chip_update(MaybeNull::Value(CHIP.into())))
+        .await
+        .unwrap_err();
+
+    assert!(err.contains("already registered"), "{err}");
+}
+
+#[tokio::test]
+async fn saving_a_patient_with_its_own_chip_is_allowed() {
+    let db = create_test_db_with_migrations().await;
+    let p = create_with_chip(&db, "Бобо", CHIP).await.unwrap();
+
+    let updated = PatientService::update(&db, p.id, chip_update(MaybeNull::Value(CHIP.into()))).await;
+
+    assert!(updated.is_ok(), "{:?}", updated.err());
+}
+
+#[tokio::test]
+async fn an_inactive_patients_chip_does_not_block() {
+    let db = create_test_db_with_migrations().await;
+    let old = create_with_chip(&db, "Old", CHIP).await.unwrap();
+    PatientService::update(
+        &db,
+        old.id,
+        UpdatePatientDto { is_active: Some(false), ..chip_update(MaybeNull::Undefined) },
+    )
+    .await
     .unwrap();
 
-    let dup = PatientService::create(
-        &db,
-        CreatePatientDto {
-            name: Some("Duplicate-chip".to_string()),
-            species_id: Some(1),
-            microchip_id: Some("807010000007678".to_string()),
-            ..minimal_dto()
-        },
-    )
-    .await;
+    assert!(create_with_chip(&db, "New", CHIP).await.is_ok());
+}
 
-    // Pin current behavior — duplicates ARE allowed today. Domain-wise this is
-    // wrong (a chip should be globally unique), but adding a UNIQUE constraint
-    // requires deduplication of existing data first. See: ARC42 §6 / task list.
-    assert!(dup.is_ok(), "duplicates allowed today; revisit if UNIQUE added");
+#[tokio::test]
+async fn existing_duplicate_chips_stay_loadable() {
+    // Duplicates are refused in code, not by a UNIQUE index, so clinic DBs
+    // that already hold duplicates keep migrating and loading.
+    let db = create_test_db_with_migrations().await;
+    db.execute_unprepared(&format!(
+        "INSERT INTO patients (name, microchip_id) VALUES ('A', '{CHIP}'), ('B', '{CHIP}')"
+    ))
+    .await
+    .unwrap();
 
-    let matches = PatientService::search(&db, "807010000007678").await.unwrap();
-    assert_eq!(matches.len(), 2, "both patients share the chip — both findable");
+    let matches = PatientService::search(&db, CHIP).await.unwrap();
+    assert_eq!(matches.len(), 2);
 }
