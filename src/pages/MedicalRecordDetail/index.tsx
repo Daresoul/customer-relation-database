@@ -11,6 +11,7 @@ import { HomeOutlined, ArrowLeftOutlined, EditOutlined, SaveOutlined, CloseOutli
 import { useMedicalRecord, useUpdateMedicalRecord, useCurrencies, useUploadAttachment } from '@/hooks/useMedicalRecords';
 import { usePatientDetail } from '@/hooks/usePatient';
 import { MedicalService } from '@/services/medicalService';
+import { isTauri as detectTauri } from '@/utils/isTauri';
 import PrintReportModal from '@/components/PrintReportModal';
 import type { PatientOverrides, PatientInfo } from '@/types/report';
 import type { MedicalAttachment } from '@/types/medical';
@@ -376,7 +377,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
       if (!previewUrls[key] && getAttachmentPreviewKind(row.mimeType, row.originalName) !== 'html') {
         try {
           const isPdf = (row.mimeType || '').toLowerCase() === 'application/pdf' || String(row.originalName).toLowerCase().endsWith('.pdf');
-          const isTauri = typeof (window as any).__TAURI__ !== 'undefined';
+          const isTauri = detectTauri();
           if (isPdf && isTauri) {
             // Try fast, reliable PDFium PNG preview (requires system PDFium for now)
             try {
@@ -545,7 +546,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
           const url = previewUrls[key];
           const pblob = previewBlobs[key];
           const kind = getAttachmentPreviewKind(row.mimeType, row.originalName);
-          const isTauri = typeof (window as any).__TAURI__ !== 'undefined';
+          const isTauri = detectTauri();
           if (kind === 'none') {
             return <Text type="secondary">{t('medical:detail.previewNotAvailable')}</Text>;
           }

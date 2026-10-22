@@ -9,6 +9,7 @@ import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist/legacy/build/pdf';
 // @ts-ignore
 import workerSrc from 'pdfjs-dist/legacy/build/pdf.worker.min.js?url';
 import { MedicalService } from '@/services/medicalService';
+import { isTauri as detectTauri } from '@/utils/isTauri';
 import styles from './PdfInlineViewer.module.css';
 
 const { Text } = Typography;
@@ -44,7 +45,7 @@ const PdfInlineViewer: React.FC<PdfInlineViewerProps> = ({ blob, fileName, attac
         // Configure pdf.js v3 worker
         GlobalWorkerOptions.workerSrc = workerSrc as any;
         let pdf;
-        const isTauri = typeof (window as any).__TAURI__ !== 'undefined';
+        const isTauri = detectTauri();
         const preferNoWorker = isTauri; // In Tauri WebView, workers/eval often fail — render on main thread.
         try {
           if (preferNoWorker) {
