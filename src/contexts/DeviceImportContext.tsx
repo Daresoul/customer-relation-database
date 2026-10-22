@@ -13,6 +13,9 @@ export interface PendingDeviceFile {
   testResults: any;
   patientId?: number;
   patientIdentifier?: string;
+  // How the backend matched patientIdentifier; ambiguous means 2+ patients and no pick
+  matchMethod?: 'microchip' | 'name' | 'none';
+  matchAmbiguous?: boolean;
   detectedAt: string;
   // If loaded from "Saved For Later", track the pending entry id so we can mark processed on success
   pendingEntryId?: number;
@@ -52,6 +55,8 @@ export interface GroupedDeviceFile {
   testResults: any;
   patientId?: number;
   patientIdentifier?: string;
+  matchMethod?: 'microchip' | 'name' | 'none';
+  matchAmbiguous?: boolean;
   detectedAt: string;
   // Session metadata (only for grouped sessions)
   isSession?: boolean;
