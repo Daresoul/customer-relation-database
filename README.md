@@ -28,6 +28,30 @@
 - The lab-result resolver reports two or more active chip matches as ambiguous
   and picks none.
 
+## Lab devices (read-only)
+- The app only reads from analyzers. It never writes to a serial port.
+- Serial read loop (`services/device_input.rs`): any read error other than a
+  timeout closes the port and reconnects with backoff (Windows unplug codes 22,
+  31, 1167 and 995 included). The backoff starts over after a connection that
+  stayed up for 30 s.
+- Every result goes through `services/device_events.rs`: the copy is saved
+  (`file_access_history`, status `ok`) before `device-data-received` is sent,
+  and the payload carries `fileId` (that row's `file_id`). Bytes that don't
+  parse, empty results, cut-off frames and failed saves are kept as a `failed`
+  row and sent as a `device-event` (`kind`, `messageKey`, `deviceName`,
+  `fileId`), which the frontend shows as a toast.
+- Statuses carry `error_kind` (plain-language text in `devices:health.kinds`),
+  `last_result_at` (also stored in `device_integrations.last_result_at`) and,
+  for serial, `last_byte_at`.
+- Folder watchers (`services/file_watcher.rs`) follow the settings: they
+  restart after any device integration change or Reconnect, a missing folder
+  is checked every 30 s, and a folder that disappears turns the status red.
+- An Exigo per-day file is split per `<sample>`; each sample is offered once,
+  keyed by `SNO:SEQ` in `device_processed_samples`. A file is read only after
+  its size and time stayed the same for 1 s. On start, results that arrived
+  in the last 72 h while the app was closed are offered. The first time a
+  folder is watched, what is already in it is recorded, not offered.
+
 ## Release build secrets
 
 The release workflow (`.github/workflows/release.yml`) reads these GitHub
