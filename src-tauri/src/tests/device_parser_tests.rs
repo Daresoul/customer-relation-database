@@ -456,6 +456,32 @@ OBX|1|NM||GLU|95|mg/dL|74-143|N\r\r",
         assert_eq!(r.get("patient_name").and_then(|v| v.as_str()), Some("olav"));
     }
 
+    /// OBX-18 on a PCR result is the device's threshold line for the curve.
+    /// It is kept only for curve results: on chemistry OBX-18 is something else.
+    #[test]
+    fn real_pcr_capture_carries_device_threshold() {
+        let pcr = DeviceParserService::parse_hl7_data(
+            "mnchip_pcr_analyzer",
+            "MNCHIP",
+            include_bytes!("../../tests/fixtures/real_pcr_com13.bin"),
+            "serial_port",
+        )
+        .unwrap();
+        let r = pcr.test_results.as_object().unwrap();
+        assert_eq!(r.get("TOX_threshold").and_then(|v| v.as_str()), Some("775.2"));
+        assert_eq!(r.get("IC_threshold").and_then(|v| v.as_str()), Some("943.125"));
+
+        let chem = DeviceParserService::parse_hl7_data(
+            "mnchip_pointcare_chemistry",
+            "MNCHIP",
+            include_bytes!("../../tests/fixtures/real_chem_pcv.bin"),
+            "serial_port",
+        )
+        .unwrap();
+        let c = chem.test_results.as_object().unwrap();
+        assert!(c.keys().all(|k| !k.ends_with("_threshold")), "chemistry got a threshold key");
+    }
+
     #[test]
     fn real_chem_clinic_capture_carries_device_units_ranges_flags() {
         // REAL MLLP-framed HL7 chemistry message captured from the clinic PointCare.
@@ -868,6 +894,54 @@ mod exigo_daily_file {
     }
 }
 
+/// A serial parse that yields no analyte values is an error, as it already
+/// is for Exigo: an Ok with only metadata becomes a phantom "result received"
+/// and, later, a header-only table.
+mod zero_value_results {
+    use super::*;
+
+    #[test]
+    fn healvet_messages_without_results_are_errors() {
+        // Result field empty in every message.
+        let empty_results = b"#AFS1000&S1&&06-04-2026 11:00:00&&cCRP&REX&&M&Serum&EE";
+        assert!(DeviceParserService::parse_healvet_serial("H", empty_results, "serial_port").is_err());
+
+        // The tail of a frame split on an "EE" inside a name ("LEELOO").
+        assert!(DeviceParserService::parse_healvet_serial("H", b"LOO&&M&Serum&", "serial_port").is_err());
+
+        // Only the device's keep-alive preamble, as seen at the start of real captures.
+        assert!(DeviceParserService::parse_healvet_serial("H", b"#AFS1000?#1#", "serial_port").is_err());
+    }
+
+    #[test]
+    fn healvet_real_capture_still_parses() {
+        const RAW: &[u8] = include_bytes!("../../tests/fixtures/real_healvet_com12.bin");
+        let d = DeviceParserService::parse_healvet_serial("H", RAW, "serial_port").unwrap();
+        assert_eq!(d.test_results.get("CPSE").and_then(|v| v.as_str()), Some("43.51"));
+    }
+
+    #[test]
+    fn hl7_without_obx_values_is_an_error() {
+        let no_obx = b"MSH|^~\\&|1|PointcareV|||20260115003112|2|ORU^R01|1|p|2.3.1\rPID|1||||dog|tesi\r\r";
+        assert!(DeviceParserService::parse_hl7_data("mnchip_pointcare_chemistry", "M", no_obx, "serial_port").is_err());
+
+        let empty_values = b"MSH|^~\\&|1|P\rPID|1||||dog|tesi\rOBX|1|ST||TBIL||mg/dL|0.1-0.9|\r";
+        assert!(DeviceParserService::parse_hl7_data("mnchip_pointcare_chemistry", "M", empty_values, "serial_port").is_err());
+
+        // LF-only line ends collapse into one MSH line with dozens of keys but no analyte.
+        let lf_only = b"MSH|^~\\&|1|PointcareV|||20260115003112|2|ORU^R01|1|p|2.3.1\nPID|1||||dog|tesi\nOBX|1|ST||GLU|159|mg/dL|70-142|H\n";
+        assert!(DeviceParserService::parse_hl7_data("mnchip_pointcare_chemistry", "M", lf_only, "serial_port").is_err());
+
+        assert!(DeviceParserService::parse_hl7_data("mnchip_pcr_analyzer", "M", b"", "serial_port").is_err());
+    }
+
+    #[test]
+    fn hl7_with_one_value_parses() {
+        let one = b"MSH|^~\\&|1|P\rPID|1||||dog|tesi\rOBX|1|ST||GLU|95|mg/dL|70-142|N\r";
+        assert!(DeviceParserService::parse_hl7_data("mnchip_pointcare_chemistry", "M", one, "serial_port").is_ok());
+    }
+}
+
 /// End-to-end contract: real Rust parsers -> real Java PDF JAR -> a PDF where
 /// EVERY device table has rows. Guards the exact clinic failure (report
 /// generates fine but the hematology table is empty). Skips with a note when
@@ -982,6 +1056,80 @@ mod pdf_end_to_end {
         let chem_rows = param_count("pointcare");
         assert!(exigo_rows >= 15, "Exigo table rendered only {} rows", exigo_rows);
         assert!(chem_rows >= 10, "PointCare table rendered only {} rows", chem_rows);
+    }
+
+    /// The clinic's real cat PCR capture (TOX + internal control) built with
+    /// the app's own Rust->Java contract builder: both codes must render.
+    #[test]
+    fn pcr_real_capture_renders_every_code() {
+        let jar = std::path::Path::new("../pdf-generator-cli/build/libs/pdf-generator-cli-1.0.0.jar");
+        if !jar.exists() {
+            eprintln!("SKIP: JAR not built ({}). Run: cd pdf-generator-cli && ./gradlew build", jar.display());
+            return;
+        }
+        if std::process::Command::new("java").arg("-version").output().is_err() {
+            eprintln!("SKIP: no `java` on PATH");
+            return;
+        }
+
+        let pcr = DeviceParserService::parse_hl7_data(
+            "mnchip_pcr_analyzer",
+            "MNCHIP",
+            include_bytes!("../../tests/fixtures/real_pcr_com13.bin"),
+            "serial_port",
+        )
+        .unwrap();
+        let patient = crate::services::device_pdf_service::PatientData {
+            name: "OLAV".to_string(),
+            owner: "Owner".to_string(),
+            species: "Cat".to_string(),
+            microchip_id: None,
+            gender: "Female".to_string(),
+            date_of_birth: Some("2020-01-15".to_string()),
+        };
+        let device = crate::services::device_pdf_service::DeviceTestData {
+            device_type: pcr.device_type.clone(),
+            device_name: pcr.device_name.clone(),
+            test_results: pcr.test_results.clone(),
+            detected_at: pcr.detected_at,
+            patient_identifier: pcr.patient_identifier.clone(),
+        };
+
+        let out_dir = std::env::temp_dir().join(format!("e2e_pcr_{}", std::process::id()));
+        std::fs::create_dir_all(&out_dir).unwrap();
+        let pdf_path = out_dir.join("pcr.pdf");
+        let input = crate::services::java_pdf_service::JavaPdfService::build_java_input(
+            &patient,
+            &[device],
+            &pdf_path.to_string_lossy(),
+            &chrono::Local,
+        );
+        let input_path = out_dir.join("input.json");
+        std::fs::write(&input_path, serde_json::to_string(&input).unwrap()).unwrap();
+
+        let output = std::process::Command::new("java")
+            .arg("-Djava.awt.headless=true")
+            .arg("-jar")
+            .arg(jar)
+            .arg(&input_path)
+            .output()
+            .expect("java invocation failed");
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success(),
+            "JAR failed: {}\n{}",
+            stdout,
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let params: usize = stdout
+            .lines()
+            .find(|l| l.starts_with("PARSED_SAMPLE device=pcr"))
+            .and_then(|l| l.rsplit("params=").next())
+            .and_then(|n| n.trim().parse().ok())
+            .unwrap_or_else(|| panic!("no PARSED_SAMPLE line for pcr\nstdout: {}", stdout));
+        assert!(params >= 2, "PCR table rendered only {} codes (TOX + IC expected)", params);
+        assert!(pdf_path.exists(), "PDF not created");
+        let _ = std::fs::remove_dir_all(&out_dir);
     }
 
     /// The JAR must refuse (exit non-zero) a grid sample that parses to zero

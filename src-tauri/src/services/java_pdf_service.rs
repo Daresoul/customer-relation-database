@@ -24,7 +24,7 @@ enum JarVersionVerdict {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct JavaPdfInput {
+pub(crate) struct JavaPdfInput {
     patient: JavaPatient,
     samples: Vec<JavaSample>,
     output_path: String,
@@ -132,7 +132,7 @@ impl JavaPdfService {
 
     /// Builds the JSON contract sent to the JAR. Pure (no I/O), so the
     /// Rust side of the Rust/Java contract is unit-testable.
-    fn build_java_input<Tz: chrono::TimeZone>(
+    pub(crate) fn build_java_input<Tz: chrono::TimeZone>(
         patient: &crate::services::device_pdf_service::PatientData,
         device_data_list: &[crate::services::device_pdf_service::DeviceTestData],
         output_path: &str,
