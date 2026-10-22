@@ -262,8 +262,8 @@ mod healvet_serial_parsing {
             "serial_port",
         );
 
-        // Should handle gracefully
-        assert!(result.is_ok());
+        // No analyte value: an error, never a phantom empty result.
+        assert!(result.is_err());
     }
 
     #[test]
@@ -526,9 +526,8 @@ OBX|1|NM||GLU|95|mg/dL|74-143|N\r\r",
             "serial_port",
         );
 
-        assert!(result.is_ok());
-        let data = result.unwrap();
-        assert!(data.patient_identifier.is_none());
+        // No analyte value: an error, never a phantom empty result.
+        assert!(result.is_err());
     }
 
     #[test]
