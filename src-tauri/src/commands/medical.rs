@@ -503,12 +503,12 @@ pub async fn regenerate_pdf_from_attachment(
     let patient_id: i64 = record_row.try_get("", "patient_id")
         .map_err(|e| format!("Failed to get patient_id: {}", e))?;
 
-    // Fetch patient details (simplified query to avoid schema issues)
     let patient_row = pool.query_one(Statement::from_sql_and_values(
         DbBackend::Sqlite,
-        "SELECT id, name, species, breed, microchip_id, gender, date_of_birth \
-         FROM patients \
-         WHERE id = ?",
+        "SELECT p.id, p.name, s.name AS species, p.microchip_id, p.gender, p.date_of_birth \
+         FROM patients p \
+         LEFT JOIN species s ON p.species_id = s.id \
+         WHERE p.id = ?",
         [patient_id.into()]
     ))
     .await
