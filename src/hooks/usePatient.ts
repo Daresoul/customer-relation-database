@@ -45,7 +45,8 @@ export function usePatientDetail(patientId: number) {
   return useQuery({
     queryKey: ['patient', patientId],
     queryFn: async () => {
-      const patient = await PatientService.getPatient(patientId);
+      const patient = await PatientService.findPatient(patientId);
+      if (!patient) return null;
 
       // Transform to PatientDetail with calculated age
       const patientDetail: PatientDetail = {

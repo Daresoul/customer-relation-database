@@ -17,6 +17,7 @@ export function useHouseholdDetail(householdId: number) {
       const result = await invoke<any>('get_household_with_people', {
         householdId
       });
+      if (!result) return null;
 
 
       // Transform the response to match our expected format

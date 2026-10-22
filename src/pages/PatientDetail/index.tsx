@@ -105,12 +105,12 @@ export const PatientDetail: React.FC = () => {
       <Content className={styles.container}>
         <Alert
           message={t('patients:errors.loadingError')}
-          description={error instanceof Error ? error.message : t('patients:errors.loadingErrorDescription')}
+          description={t('patients:errors.loadingErrorDescription')}
           type="error"
           showIcon
           action={
             <Space>
-              <Button onClick={() => window.location.reload()}>
+              <Button onClick={() => refetch()}>
                 {t('common:retry')}
               </Button>
               <Button onClick={() => navigate('/')}>

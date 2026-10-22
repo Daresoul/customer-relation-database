@@ -24,13 +24,20 @@ export class PatientService {
    * Get a single patient by ID
    */
   static async getPatient(id: number): Promise<PatientWithOwners> {
-    const response = await ApiService.invoke<PatientWithOwners | null>('get_patient', { id });
+    const response = await PatientService.findPatient(id);
 
     if (!response) {
       throw new Error('Patient not found');
     }
 
     return response;
+  }
+
+  /**
+   * Get a single patient by ID, or null when no such patient exists
+   */
+  static async findPatient(id: number): Promise<PatientWithOwners | null> {
+    return ApiService.invoke<PatientWithOwners | null>('get_patient', { id });
   }
 
   /**
