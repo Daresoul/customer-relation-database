@@ -939,6 +939,28 @@ async fn saving_a_patient_with_its_own_chip_is_allowed() {
 }
 
 #[tokio::test]
+async fn an_existing_duplicate_can_still_be_saved_with_its_unchanged_chip() {
+    // Clinic DBs may already hold two patients with one chip; editing either
+    // one (which resends its chip) must not be refused.
+    let db = create_test_db_with_migrations().await;
+    db.execute_unprepared(&format!(
+        "INSERT INTO patients (name, microchip_id, is_active) VALUES ('A', '{CHIP}', 1), ('B', '{CHIP}', 1)"
+    ))
+    .await
+    .unwrap();
+    let b = PatientService::search(&db, CHIP)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|p| p.name.as_deref() == Some("B"))
+        .unwrap();
+
+    let updated = PatientService::update(&db, b.id, chip_update(MaybeNull::Value(CHIP.into()))).await;
+
+    assert!(updated.is_ok(), "{:?}", updated.err());
+}
+
+#[tokio::test]
 async fn an_inactive_patients_chip_does_not_block() {
     let db = create_test_db_with_migrations().await;
     let old = create_with_chip(&db, "Old", CHIP).await.unwrap();
