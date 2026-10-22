@@ -60,3 +60,6 @@ pub mod diagnosis_tests;
 
 #[cfg(test)]
 pub mod sql_schema_check;
+
+#[cfg(test)]
+pub mod household_search_index_tests;
