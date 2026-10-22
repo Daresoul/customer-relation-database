@@ -11,3 +11,7 @@ Actions secrets:
   environment variables override the baked values. If any one is missing,
   log shipping stays off and the app logs one line saying so. Use a push-only
   Loki user: anyone with the binary can extract it.
+
+Failed Tauri commands are reported to the log (and so to Loki) with the
+command name, error message and duration only, never their arguments
+(`src/services/invoke.ts`).

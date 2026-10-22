@@ -165,6 +165,12 @@ describe('wrapped invoke', () => {
     expect(durationMs as number).toBeGreaterThanOrEqual(0);
   });
 
+  it('re-throws an undefined rejection unchanged', async () => {
+    setupErrorWithReporting(undefined);
+
+    await expect(invoke('odd_cmd')).rejects.toBeUndefined();
+  });
+
   it('caps very long error messages', async () => {
     setupErrorWithReporting('x'.repeat(50_000));
 
