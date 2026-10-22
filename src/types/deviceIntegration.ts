@@ -82,8 +82,37 @@ export interface DeviceConnectionStatus {
   status: ConnectionState;
   last_connected?: string;
   last_error?: string;
+  error_kind?: DeviceErrorKind | null;
   retry_count: number;
   next_retry?: string;
+  last_result_at?: string | null;
+  last_byte_at?: string | null;
+}
+
+// Why a device or folder can't be reached (plain-language text in i18n `devices:health.kinds`)
+export type DeviceErrorKind =
+  | 'port_missing'
+  | 'port_busy'
+  | 'access_denied'
+  | 'disconnected'
+  | 'folder_missing'
+  | 'folder_lost'
+  | 'not_a_folder'
+  | 'unknown';
+
+// Payload of the `device-event` Tauri event
+export type DeviceEventKind = 'parse_failed' | 'empty_result' | 'cut_off' | 'save_failed' | 'folder_lost';
+
+export interface DeviceEvent {
+  integrationId?: number | null;
+  deviceName: string;
+  deviceType: string;
+  kind: DeviceEventKind;
+  messageKey: string;
+  detail?: string | null;
+  fileName?: string | null;
+  fileId?: string | null;
+  at: string;
 }
 
 // File watcher status types
@@ -95,7 +124,9 @@ export interface FileWatcherStatus {
   watch_directory: string;
   status: FileWatcherState;
   last_error?: string;
+  error_kind?: DeviceErrorKind | null;
   files_processed: number;
+  last_result_at?: string | null;
 }
 
 // Helper function to get display name for device type
