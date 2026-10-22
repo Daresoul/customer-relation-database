@@ -130,6 +130,95 @@ fn remove_file_watcher_status(integration_id: i64) {
     statuses.remove(&integration_id);
 }
 
+/// One complete `<sample>` from an Exigo per-day file, as its own document.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExigoSample {
+    pub key: String,
+    pub seq: Option<String>,
+    pub xml: Vec<u8>,
+}
+
+pub fn split_exigo_samples(_data: &[u8]) -> Vec<ExigoSample> {
+    todo!()
+}
+
+pub fn wait_until_settled(
+    _path: &Path,
+    _stable_for: std::time::Duration,
+    _poll: std::time::Duration,
+    _max_wait: std::time::Duration,
+) -> std::io::Result<()> {
+    todo!()
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WatchConfig {
+    pub integration_id: i64,
+    pub name: String,
+    pub directory: String,
+    pub pattern: String,
+    pub device_type: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DirState {
+    Present,
+    Missing,
+    NotAFolder,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WatchAction {
+    Start(WatchConfig),
+    Stop(i64),
+    Lost(WatchConfig),
+    Unavailable(WatchConfig, DeviceErrorKind),
+}
+
+pub fn plan_watchers(
+    _desired: &[WatchConfig],
+    _active: &HashMap<i64, WatchConfig>,
+    _dir_state: &dyn Fn(&str) -> DirState,
+) -> Vec<WatchAction> {
+    todo!()
+}
+
+pub fn pattern_matches(_pattern: &str, _file_name: &str) -> bool {
+    todo!()
+}
+
+/// What a watched folder's results are delivered with.
+pub struct WatchContext {
+    pub db: Arc<DatabaseConnection>,
+    pub storage_dir: PathBuf,
+    pub config: WatchConfig,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProcessMode {
+    Offer,
+    /// Remember what's there without offering it (first look at a folder).
+    Seed,
+}
+
+pub async fn process_file(
+    _ctx: &WatchContext,
+    _sink: &dyn crate::services::device_events::DeviceSink,
+    _path: &Path,
+    _mode: ProcessMode,
+) -> Result<usize, String> {
+    todo!()
+}
+
+pub const CATCH_UP_WINDOW: std::time::Duration = std::time::Duration::from_secs(72 * 3600);
+
+pub async fn catch_up(
+    _ctx: &WatchContext,
+    _sink: &dyn crate::services::device_events::DeviceSink,
+) -> Result<usize, String> {
+    todo!()
+}
+
 pub struct FileWatcherService {
     db: Arc<DatabaseConnection>,
     watchers: HashMap<i64, notify::RecommendedWatcher>,

@@ -81,3 +81,6 @@ pub mod device_health_tests;
 
 #[cfg(test)]
 pub mod device_delivery_tests;
+
+#[cfg(test)]
+pub mod folder_watch_tests;
