@@ -235,5 +235,11 @@
       "invoice": "Invoice",
       "device_report": "Lab report"
     }
+  },
+  "unsaved": {
+    "title": "Discard your changes?",
+    "body": "What you typed in this record has not been saved.",
+    "discard": "Discard",
+    "keepEditing": "Keep editing"
   }
 }
