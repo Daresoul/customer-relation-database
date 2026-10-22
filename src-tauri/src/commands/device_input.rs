@@ -193,7 +193,7 @@ pub fn list_serial_port_names() -> Result<Vec<String>, String> {
 /// Result of resolving a device-supplied identifier to a clinic patient.
 ///
 /// `method` tells the UI *how* we matched so it can show the right confidence:
-/// a `microchip` hit is authoritative and safe to auto-select; a `name` hit is a
+/// a single `microchip` hit is safe to auto-select (two or more are `ambiguous`); a `name` hit is a
 /// suggestion the tech must verify (names aren't unique). When several patients
 /// match a name we return `ambiguous` with no patient, so the UI forces a manual
 /// pick rather than silently binding a result to one of several same-named pets.
@@ -262,7 +262,7 @@ fn select_name_match(target: &str, names: &[String]) -> NameSelection {
 }
 
 /// Resolve a patient from a device identifier. Tries microchip (exact,
-/// authoritative) then name (suggestion; unique-only, else ambiguous). Returns a
+/// unique-only, else ambiguous) then name (suggestion; unique-only, else ambiguous). Returns a
 /// [`PatientMatch`] describing how it matched so the UI can set confidence.
 #[tauri::command]
 pub async fn resolve_patient_from_identifier(
@@ -276,31 +276,46 @@ pub(crate) async fn resolve_patient(
     pool: &sea_orm::DatabaseConnection,
     identifier: String,
 ) -> Result<PatientMatch, String> {
-    // First try to find by microchip ID (exact match)
-    let microchip_result = pool.query_one(Statement::from_sql_and_values(
+    // First try to find by microchip ID (exact match). Chips aren't unique in
+    // the DB, so two active patients with the chip are ambiguous: no auto-pick.
+    let chip_rows = pool.query_all(Statement::from_sql_and_values(
         DbBackend::Sqlite,
         "SELECT p.id, p.name, p.species_id, p.breed_id, p.gender, p.date_of_birth,
                 p.weight, p.medical_notes, p.is_active, p.created_at,
                 p.updated_at, p.microchip_id, p.color,
                 s.name as species,
-                b.name as breed
+                b.name as breed,
+                (SELECT ph.household_id FROM patient_households ph
+                 WHERE ph.patient_id = p.id
+                 ORDER BY ph.is_primary DESC, ph.id LIMIT 1) as household_id
          FROM patients p
          LEFT JOIN species s ON p.species_id = s.id
          LEFT JOIN breeds b ON p.breed_id = b.id
-         WHERE p.microchip_id = ? AND p.is_active = 1
-         LIMIT 1",
+         WHERE p.microchip_id = ? AND p.is_active = 1",
         [identifier.clone().into()]
     ))
     .await
     .map_err(|e| format!("Database error: {}", e))?;
 
-    if let Some(row) = microchip_result {
-        return Ok(PatientMatch {
-            patient: Some(row_to_patient(&row)?),
-            method: "microchip".to_string(),
-            ambiguous: false,
-            candidate_count: 1,
-        });
+    match chip_rows.len() {
+        0 => {}
+        1 => {
+            return Ok(PatientMatch {
+                patient: Some(row_to_patient(&chip_rows[0])?),
+                method: "microchip".to_string(),
+                ambiguous: false,
+                candidate_count: 1,
+            });
+        }
+        n => {
+            log::warn!("Microchip {} is on {} active patients; not auto-matching", identifier, n);
+            return Ok(PatientMatch {
+                patient: None,
+                method: "microchip".to_string(),
+                ambiguous: true,
+                candidate_count: n as u32,
+            });
+        }
     }
 
     // If not found by microchip, fall back to name matching.
@@ -325,7 +340,10 @@ pub(crate) async fn resolve_patient(
                 p.weight, p.medical_notes, p.is_active, p.created_at,
                 p.updated_at, p.microchip_id, p.color,
                 s.name as species,
-                b.name as breed
+                b.name as breed,
+                (SELECT ph.household_id FROM patient_households ph
+                 WHERE ph.patient_id = p.id
+                 ORDER BY ph.is_primary DESC, ph.id LIMIT 1) as household_id
          FROM patients p
          LEFT JOIN species s ON p.species_id = s.id
          LEFT JOIN breeds b ON p.breed_id = b.id
@@ -398,7 +416,7 @@ fn row_to_patient(row: &sea_orm::QueryResult) -> Result<Patient, String> {
         weight: row.try_get("", "weight").unwrap_or(None),
         medical_notes: row.try_get("", "medical_notes").unwrap_or(None),
         is_active: row.try_get::<i64>("", "is_active").unwrap_or(1) == 1,
-        household_id: None, // Not needed for device data resolution
+        household_id: row.try_get("", "household_id").unwrap_or(None),
         created_at,
         updated_at,
         microchip_id: row.try_get("", "microchip_id").unwrap_or(None),
