@@ -70,7 +70,9 @@
       "managed": "Managed",
       "unnamed": "(unnamed)",
       "add": "Add",
-      "empty": "No HID devices found. Plug in your scanner and click Refresh."
+      "empty": "No HID devices found. Plug in your scanner and click Refresh.",
+      "decimal": "Decimal: {{value}}",
+      "unknown": "Unknown"
     }
   },
   "backups": {
@@ -111,7 +113,8 @@
       "installFailed": "Failed to install the update. Please try again later.",
       "upToDateDescription": "You are running the latest version!",
       "checkFailedDescription": "Error: {{error}}"
-    }
+    },
+    "newVersionAvailable": "A new version is available"
   },
   "googleCalendar": {
     "title": "Google Calendar Integration",
@@ -183,7 +186,18 @@
     "color": "Color",
     "created": "Species created successfully",
     "updated": "Species updated successfully",
-    "deleted": "Species deleted successfully"
+    "deleted": "Species deleted successfully",
+    "title": "Species Management",
+    "addButton": "Add Species",
+    "nameColumn": "Species Name",
+    "confirmDeleteTitle": "Are you sure you want to delete this species?",
+    "confirmDeleteDescription": "This will only deactivate it if patients are using it.",
+    "createTitle": "Create New Species",
+    "createdNamed": "Species \"{{name}}\" created successfully",
+    "createFailed": "Failed to create species",
+    "nameRequired": "Please enter species name",
+    "nameMaxLength": "Name cannot exceed {{max}} characters",
+    "namePlaceholder": "Enter species name"
   },
   "breeds": {
     "title": "Breed Management",
@@ -199,7 +213,8 @@
     "updated": "Breed updated successfully",
     "deleted": "Breed deleted successfully",
     "confirmDeleteTitle": "Are you sure you want to delete this breed?",
-    "confirmDeleteDescription": "This will only deactivate it if patients are using it."
+    "confirmDeleteDescription": "This will only deactivate it if patients are using it.",
+    "nameColumn": "Breed Name"
   },
   "templates": {
     "title": "Record Templates",

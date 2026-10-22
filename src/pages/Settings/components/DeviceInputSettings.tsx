@@ -167,36 +167,36 @@ const DeviceInputSettings: React.FC = () => {
 
   const getPortTypeDisplay = (portType: PortType): { text: string; color: string; tooltip?: string } => {
     if (typeof portType === 'object' && 'SerialUSBPort' in portType) {
-      return { text: t('portTypes.serialUsb'), color: 'blue', tooltip: 'Connected USB Serial Device' };
+      return { text: t('portTypes.serialUsb'), color: 'blue', tooltip: t('portTypeTooltips.serialUsb') };
     }
     if (typeof portType === 'object' && 'HIDDevice' in portType) {
-      return { text: t('portTypes.hid'), color: 'purple', tooltip: 'Connected HID Device' };
+      return { text: t('portTypes.hid'), color: 'purple', tooltip: t('portTypeTooltips.hid') };
     }
     if (typeof portType === 'object' && 'VirtualPort' in portType) {
-      return { text: 'Virtual', color: 'orange', tooltip: 'Virtual/Test Serial Port (socat, pty, etc.)' };
+      return { text: t('portTypes.virtual'), color: 'orange', tooltip: t('portTypeTooltips.virtual') };
     }
     if (typeof portType === 'object' && 'DisconnectedPort' in portType) {
       const devicePath = portType.DisconnectedPort;
       return {
-        text: 'Disconnected',
+        text: t('status.disconnected'),
         color: 'red',
-        tooltip: `Device in registry but not connected: ${devicePath}`
+        tooltip: t('portTypeTooltips.disconnected', { path: devicePath })
       };
     }
     if (portType === 'BuiltInPort') {
-      return { text: 'Built-in', color: 'green', tooltip: 'Motherboard Serial Port (COM1, /dev/ttyS0, etc.)' };
+      return { text: t('portTypes.builtIn'), color: 'green', tooltip: t('portTypeTooltips.builtIn') };
     }
     if (portType === 'SerialPciPort') {
-      return { text: t('portTypes.serialPci'), color: 'green', tooltip: 'PCI Serial Port' };
+      return { text: t('portTypes.serialPci'), color: 'green', tooltip: t('portTypeTooltips.serialPci') };
     }
     if (portType === 'SerialBluetoothPort') {
-      return { text: t('portTypes.serialBluetooth'), color: 'cyan', tooltip: 'Bluetooth Serial Port' };
+      return { text: t('portTypes.serialBluetooth'), color: 'cyan', tooltip: t('portTypeTooltips.serialBluetooth') };
     }
     // SerialUnknown = Could not determine port type
     return {
       text: t('portTypes.unknown'),
       color: 'default',
-      tooltip: 'Unknown port type - may need driver or be unsupported device'
+      tooltip: t('portTypeTooltips.unknown')
     };
   };
 
@@ -226,14 +226,14 @@ const DeviceInputSettings: React.FC = () => {
     if (!portName) return null;
 
     // Virtual ports in /tmp (socat, testing, etc.)
-    if (portName.includes('ttyHealvet')) return 'Healvet HV-FIA 3000 Virtual Port';
-    if (portName.includes('ttyPointcare')) return 'MNCHIP PointCare PCR Virtual Port';
-    if (portName.includes('ttyExigo')) return 'Exigo Eos Vet Virtual Port';
+    if (portName.includes('ttyHealvet')) return t('portDetails.namedVirtual', { device: 'Healvet HV-FIA 3000' });
+    if (portName.includes('ttyPointcare')) return t('portDetails.namedVirtual', { device: 'MNCHIP PointCare PCR' });
+    if (portName.includes('ttyExigo')) return t('portDetails.namedVirtual', { device: 'Exigo Eos Vet' });
 
     // Generic virtual port detection
     if (portName.startsWith('/tmp/tty') || portName.startsWith('/tmp/pty')) {
       const name = portName.replace('/tmp/', '').replace('tty', '').replace('pty', '');
-      return `Virtual Serial Port (${name})`;
+      return t('portDetails.virtualSerial', { name });
     }
 
     // macOS call-out devices
@@ -243,7 +243,7 @@ const DeviceInputSettings: React.FC = () => {
 
     // Linux standard serial
     if (portName.startsWith('/dev/ttyUSB')) {
-      return `Linux USB Serial Adapter #${portName.replace('/dev/ttyUSB', '')}`;
+      return t('portDetails.linuxUsbAdapter', { number: portName.replace('/dev/ttyUSB', '') });
     }
 
     return null;
@@ -315,8 +315,8 @@ const DeviceInputSettings: React.FC = () => {
         const pid = parseInt(vidMatch[2], 16);
         const chipName = getChipName(vid, pid);
         return chipName
-          ? `${chipName} (Disconnected) - VID:${vidMatch[1]} PID:${vidMatch[2]}`
-          : `Disconnected USB Device - VID:${vidMatch[1]} PID:${vidMatch[2]}`;
+          ? t('portDetails.chipDisconnected', { chip: chipName, vid: vidMatch[1], pid: vidMatch[2] })
+          : t('portDetails.usbDisconnected', { vid: vidMatch[1], pid: vidMatch[2] });
       }
 
       // Try generic USB format: VID_xxxx&PID_xxxx
@@ -326,37 +326,37 @@ const DeviceInputSettings: React.FC = () => {
         const pid = parseInt(vidMatch[2], 16);
         const chipName = getChipName(vid, pid);
         return chipName
-          ? `${chipName} (Disconnected) - VID:${vidMatch[1]} PID:${vidMatch[2]}`
-          : `Disconnected USB Device - VID:${vidMatch[1]} PID:${vidMatch[2]}`;
+          ? t('portDetails.chipDisconnected', { chip: chipName, vid: vidMatch[1], pid: vidMatch[2] })
+          : t('portDetails.usbDisconnected', { vid: vidMatch[1], pid: vidMatch[2] });
       }
 
       // Check for known device patterns without VID/PID
       if (devicePath.includes('FTDIBUS')) {
-        return 'FTDI USB Serial (Disconnected)';
+        return t('portDetails.ftdiDisconnected');
       }
       if (devicePath.includes('USBSER')) {
-        return 'USB Serial Device (Disconnected)';
+        return t('portDetails.usbSerialDisconnected');
       }
       if (devicePath.includes('VCP')) {
-        return 'Virtual COM Port (Disconnected)';
+        return t('portDetails.vcpDisconnected');
       }
 
       // Fallback: show abbreviated device path
       const shortPath = devicePath.length > 50
         ? devicePath.substring(0, 47) + '...'
         : devicePath;
-      return `Disconnected: ${shortPath}`;
+      return t('portDetails.disconnectedPath', { path: shortPath });
     }
 
     // BuiltInPort - show helpful description
     if (portType === 'BuiltInPort') {
       if (portName.startsWith('COM') && portName.length <= 4) {
-        return 'Motherboard Serial Port';
+        return t('portDetails.motherboard');
       }
       if (portName.startsWith('/dev/ttyS')) {
-        return `Standard Serial Port (${portName})`;
+        return t('portDetails.standardSerial', { port: portName });
       }
-      return 'Built-in Serial Port';
+      return t('portDetails.builtIn');
     }
 
     // For remaining Unknown ports, try to extract description from port name
@@ -673,7 +673,7 @@ const DeviceInputSettings: React.FC = () => {
           <div style={{ marginBottom: 12 }}>
             <Space>
               <Switch checked={autoOpenGeneratedReport} onChange={handleToggleAutoOpen} />
-              <Text type="secondary">Open generated report automatically after save</Text>
+              <Text type="secondary">{t('messages.autoOpenReport')}</Text>
             </Space>
           </div>
           <Table

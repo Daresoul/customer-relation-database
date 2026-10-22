@@ -29,7 +29,7 @@ const PendingDeviceTable: React.FC<PendingDeviceTableProps> = ({ onItemsLoaded }
       onItemsLoaded?.(res.length);
     } catch (e) {
       console.error(e);
-      message.error('Failed to load saved items');
+      message.error(t('devices:pending.loadFailed'));
     } finally {
       setLoading(false);
     }

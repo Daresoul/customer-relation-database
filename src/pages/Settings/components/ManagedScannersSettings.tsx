@@ -411,7 +411,7 @@ const ManagedScannersSettings: React.FC = () => {
                       key: 'vid',
                       width: 110,
                       render: (_: unknown, d) => (
-                        <Tooltip title={`Decimal: ${d.vendorId}`}>
+                        <Tooltip title={t('settings:managedScanners.detect.decimal', { value: d.vendorId })}>
                           <Tag>0x{d.vendorIdHex}</Tag>
                         </Tooltip>
                       ),
@@ -421,7 +421,7 @@ const ManagedScannersSettings: React.FC = () => {
                       key: 'pid',
                       width: 110,
                       render: (_: unknown, d) => (
-                        <Tooltip title={`Decimal: ${d.productId}`}>
+                        <Tooltip title={t('settings:managedScanners.detect.decimal', { value: d.productId })}>
                           <Tag>0x{d.productIdHex}</Tag>
                         </Tooltip>
                       ),
@@ -451,7 +451,7 @@ const ManagedScannersSettings: React.FC = () => {
                               </Tag>
                             );
                           default:
-                            return <Tag>Unknown</Tag>;
+                            return <Tag>{t('settings:managedScanners.detect.unknown')}</Tag>;
                         }
                       },
                     },

@@ -96,7 +96,7 @@ export function UpdateSettings() {
         // Update available
         const description = result.manifest.notes
           ? result.manifest.notes.split('\n')[0]
-          : 'A new version is available';
+          : t('updates.newVersionAvailable');
 
         notification.info({
           message: t('updates.updateAvailable'),

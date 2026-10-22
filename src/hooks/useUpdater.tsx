@@ -35,7 +35,7 @@ export function useUpdater() {
         // Show non-intrusive notification with install button
         const description = result.manifest.notes
           ? result.manifest.notes.split('\n')[0]
-          : 'A new version is available';
+          : t('updates.newVersionAvailable');
 
         notification.info({
           message: `${t('updates.updateAvailable')}: ${result.manifest.version}`,

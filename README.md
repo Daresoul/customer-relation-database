@@ -106,6 +106,20 @@
   and doses ("1.500" is 1.5). Price fields (`localeMoneyParser`) read one mark
   followed by exactly three digits as thousands, so "1.500" ден is 1500.
 
+## Translations
+- English (`en`) and Macedonian (`mk`) texts live in
+  `src/i18n/locales/<lang>/<namespace>.json`. Every key exists in both
+  languages with the same `{{placeholders}}`.
+- `src/i18n/__tests__/keys.test.ts` fails when the two languages have
+  different keys, or when a literal key in a `t()` call is missing or names a
+  group instead of a text. An unprefixed key resolves in the first namespace
+  given to `useTranslation`; files that get `t` as a parameter name their
+  namespace in the test's `FILE_NAMESPACE` map.
+- Mutation error titles take an operation key from `errors:operations`
+  (`createMutationErrorHandler(notification, 'createAppointment', t)` shows
+  "Неуспешно креирање на термин").
+- The calendar follows the app language, and weeks start on Monday.
+
 ## Release build secrets
 
 The release workflow (`.github/workflows/release.yml`) reads these GitHub

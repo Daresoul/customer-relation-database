@@ -34,8 +34,8 @@ export const useCreateDeviceIntegration = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['device-integrations'] });
       notification.success({
-        message: 'Device Integration Created',
-        description: 'Device integration created successfully',
+        message: t('devices:notifications.integrationCreated'),
+        description: t('devices:notifications.integrationCreatedDesc'),
         placement: 'bottomRight',
         duration: 3,
       });
@@ -56,8 +56,8 @@ export const useUpdateDeviceIntegration = () => {
       queryClient.invalidateQueries({ queryKey: ['device-integrations'] });
       queryClient.invalidateQueries({ queryKey: ['device-integration'] });
       notification.success({
-        message: 'Device Integration Updated',
-        description: 'Device integration updated successfully',
+        message: t('devices:notifications.integrationUpdated'),
+        description: t('devices:notifications.integrationUpdatedDesc'),
         placement: 'bottomRight',
         duration: 3,
       });
@@ -76,8 +76,8 @@ export const useDeleteDeviceIntegration = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['device-integrations'] });
       notification.success({
-        message: 'Device Integration Deleted',
-        description: 'Device integration deleted successfully',
+        message: t('devices:notifications.integrationDeleted'),
+        description: t('devices:notifications.integrationDeletedDesc'),
         placement: 'bottomRight',
         duration: 3,
       });
@@ -96,8 +96,8 @@ export const useToggleDeviceIntegration = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['device-integrations'] });
       notification.success({
-        message: 'Device Integration Toggled',
-        description: 'Device integration enabled/disabled successfully',
+        message: t('devices:notifications.integrationToggled'),
+        description: t('devices:notifications.integrationToggledDesc'),
         placement: 'bottomRight',
         duration: 3,
       });

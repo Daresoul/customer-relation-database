@@ -31,7 +31,9 @@
     "hid": "HID",
     "serialPci": "Сериски PCI",
     "serialBluetooth": "Сериски Bluetooth",
-    "unknown": "Непознат"
+    "unknown": "Непознат",
+    "virtual": "Виртуелен",
+    "builtIn": "Вграден"
   },
   "deviceTypes": {
     "exigoEosVet": "Exigo EOS Vet (хематологија)",
@@ -94,7 +96,15 @@
   "notifications": {
     "reconnectStarted": "Повторно поврзување на уредите",
     "reconnectStartedDesc": "Се обидува повторно да ги поврзе исклучените уреди...",
-    "reconnectFailed": "Неуспешно повторно поврзување"
+    "reconnectFailed": "Неуспешно повторно поврзување",
+    "integrationCreated": "Интеграцијата на уредот е создадена",
+    "integrationCreatedDesc": "Интеграцијата на уредот е успешно создадена",
+    "integrationUpdated": "Интеграцијата на уредот е ажурирана",
+    "integrationUpdatedDesc": "Интеграцијата на уредот е успешно ажурирана",
+    "integrationDeleted": "Интеграцијата на уредот е избришана",
+    "integrationDeletedDesc": "Интеграцијата на уредот е успешно избришана",
+    "integrationToggled": "Интеграцијата на уредот е вклучена/исклучена",
+    "integrationToggledDesc": "Интеграцијата на уредот е успешно вклучена/исклучена"
   },
   "buttons": {
     "refresh": "Освежи",
@@ -117,7 +127,8 @@
     "addSuccess": "Интеграцијата на уредот е успешно додадена",
     "updateSuccess": "Интеграцијата на уредот е успешно ажурирана",
     "deleteSuccess": "Интеграцијата на уредот е успешно избришана",
-    "operationFailed": "Операцијата не успеа"
+    "operationFailed": "Операцијата не успеа",
+    "autoOpenReport": "Автоматски отвори го генерираниот извештај по зачувувањето"
   },
   "labels": {
     "devices": "Уреди:"
@@ -176,5 +187,29 @@
   "recentFiles": {
     "couldNotRead": "Не може да се прочита",
     "couldNotReadHint": "Уредот испрати податоци што не можеме да ги прочитаме. Суровата датотека се чува за поддршката."
+  },
+  "portTypeTooltips": {
+    "serialUsb": "Поврзан USB сериски уред",
+    "hid": "Поврзан HID уред",
+    "virtual": "Виртуелен/тест сериски порт (socat, pty итн.)",
+    "disconnected": "Уредот е во регистарот, но не е поврзан: {{path}}",
+    "builtIn": "Сериски порт на матичната плоча (COM1, /dev/ttyS0 итн.)",
+    "serialPci": "PCI сериски порт",
+    "serialBluetooth": "Bluetooth сериски порт",
+    "unknown": "Непознат тип на порт — можеби е потребен драјвер или уредот не е поддржан"
+  },
+  "portDetails": {
+    "chipDisconnected": "{{chip}} (исклучен) - VID:{{vid}} PID:{{pid}}",
+    "usbDisconnected": "Исклучен USB уред - VID:{{vid}} PID:{{pid}}",
+    "ftdiDisconnected": "FTDI USB сериски (исклучен)",
+    "usbSerialDisconnected": "USB сериски уред (исклучен)",
+    "vcpDisconnected": "Виртуелен COM порт (исклучен)",
+    "disconnectedPath": "Исклучен: {{path}}",
+    "motherboard": "Сериски порт на матичната плоча",
+    "standardSerial": "Стандарден сериски порт ({{port}})",
+    "builtIn": "Вграден сериски порт",
+    "namedVirtual": "Виртуелен порт за {{device}}",
+    "virtualSerial": "Виртуелен сериски порт ({{name}})",
+    "linuxUsbAdapter": "Linux USB сериски адаптер бр. {{number}}"
   }
 }

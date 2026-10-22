@@ -75,10 +75,10 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ isUpdating }) => {
             disabled={isUpdating}
           >
             <Option value="en">
-              <span role="img" aria-label="English">🇬🇧</span> English
+              <span role="img" aria-label={t('entities:languages.en')}>🇬🇧</span> English
             </Option>
             <Option value="mk">
-              <span role="img" aria-label="Macedonian">🇲🇰</span> Македонски
+              <span role="img" aria-label={t('entities:languages.mk')}>🇲🇰</span> Македонски
             </Option>
           </Select>
         </Form.Item>
@@ -102,8 +102,8 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ isUpdating }) => {
             className={styles.fullWidth}
             disabled={isUpdating}
           >
-            <Option value="light">☀️ Light</Option>
-            <Option value="dark">🌙 Dark</Option>
+            <Option value="light">☀️ {t('entities:themes.light')}</Option>
+            <Option value="dark">🌙 {t('entities:themes.dark')}</Option>
           </Select>
         </Form.Item>
 

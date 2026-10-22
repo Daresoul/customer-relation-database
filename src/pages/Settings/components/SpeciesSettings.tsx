@@ -182,18 +182,18 @@ const SpeciesSettings: React.FC<SpeciesSettingsProps> = ({ isUpdating }) => {
   // Breed columns for expanded row
   const breedColumns = [
     {
-      title: 'Breed Name',
+      title: t('settings:breeds.nameColumn'),
       dataIndex: 'name',
       key: 'name',
       render: (text: string, record: Breed) => (
         <span className={record.active ? undefined : styles.roomNameInactive}>
           {text}
-          {!record.active && ' (Inactive)'}
+          {!record.active && ` (${t('common:inactive')})`}
         </span>
       ),
     },
     {
-      title: 'Status',
+      title: t('common:status'),
       dataIndex: 'active',
       key: 'active',
       width: 100,
@@ -206,7 +206,7 @@ const SpeciesSettings: React.FC<SpeciesSettingsProps> = ({ isUpdating }) => {
       ),
     },
     {
-      title: 'Actions',
+      title: t('common:actionsLabel'),
       key: 'actions',
       width: 150,
       render: (_: any, record: Breed) => (
@@ -241,7 +241,7 @@ const SpeciesSettings: React.FC<SpeciesSettingsProps> = ({ isUpdating }) => {
 
   const columns = [
     {
-      title: 'Species Name',
+      title: t('settings:species.nameColumn'),
       dataIndex: 'name',
       key: 'name',
       render: (text: string, record: Species) => (
@@ -257,13 +257,13 @@ const SpeciesSettings: React.FC<SpeciesSettingsProps> = ({ isUpdating }) => {
           />
           <span className={record.active ? undefined : styles.roomNameInactive}>
             {text}
-            {!record.active && ' (Inactive)'}
+            {!record.active && ` (${t('common:inactive')})`}
           </span>
         </Space>
       ),
     },
     {
-      title: 'Status',
+      title: t('common:status'),
       dataIndex: 'active',
       key: 'active',
       width: 100,
@@ -276,7 +276,7 @@ const SpeciesSettings: React.FC<SpeciesSettingsProps> = ({ isUpdating }) => {
       ),
     },
     {
-      title: 'Actions',
+      title: t('common:actionsLabel'),
       key: 'actions',
       width: 250,
       render: (_: any, record: Species) => (
@@ -286,18 +286,18 @@ const SpeciesSettings: React.FC<SpeciesSettingsProps> = ({ isUpdating }) => {
             size="small"
             onClick={() => handleAddBreed(record.id)}
           >
-            Add Breed
+            {t('settings:breeds.addBreed')}
           </Button>
           <Button
             icon={<EditOutlined />}
             size="small"
             onClick={() => handleEditSpecies(record)}
           >
-            Edit
+            {t('common:edit')}
           </Button>
           <Popconfirm
-            title="Are you sure you want to delete this species?"
-            description="This will only deactivate it if patients are using it."
+            title={t('settings:species.confirmDeleteTitle')}
+            description={t('settings:species.confirmDeleteDescription')}
             onConfirm={() => handleDeleteSpecies(record.id)}
             okText={t('common:yes')}
             cancelText={t('common:no')}
@@ -308,7 +308,7 @@ const SpeciesSettings: React.FC<SpeciesSettingsProps> = ({ isUpdating }) => {
               danger
               loading={deleteSpeciesMutation.isPending}
             >
-              Delete
+              {t('common:delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -321,7 +321,7 @@ const SpeciesSettings: React.FC<SpeciesSettingsProps> = ({ isUpdating }) => {
       <Card
         title={
           <span className={styles.cardTitle}>
-            <AppstoreOutlined /> Species Management
+            <AppstoreOutlined /> {t('settings:species.title')}
           </span>
         }
         extra={
@@ -330,7 +330,7 @@ const SpeciesSettings: React.FC<SpeciesSettingsProps> = ({ isUpdating }) => {
             icon={<PlusOutlined />}
             onClick={handleAddSpecies}
           >
-            Add Species
+            {t('settings:species.addButton')}
           </Button>
         }
         className={styles.roomsCard}

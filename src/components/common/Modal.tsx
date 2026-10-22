@@ -11,6 +11,8 @@ import {
   InfoCircleOutlined,
   QuestionCircleOutlined,
 } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
+import i18n from 'i18next';
 import styles from './Common.module.css';
 
 export interface ModalProps extends AntModalProps {
@@ -74,8 +76,8 @@ export const error = AntModal.error;
 
 // Custom confirmation dialogs
 export const confirmDelete = ({
-  title = 'Delete Confirmation',
-  content = 'Are you sure you want to delete this item? This action cannot be undone.',
+  title = i18n.t('common:confirmDialog.deleteTitle'),
+  content = i18n.t('common:confirmDialog.deleteContent'),
   onOk,
   onCancel,
   ...props
@@ -84,9 +86,9 @@ export const confirmDelete = ({
     title,
     icon: <ExclamationCircleOutlined className={styles.modalIconError} />,
     content,
-    okText: 'Delete',
+    okText: i18n.t('common:delete'),
     okType: 'danger',
-    cancelText: 'Cancel',
+    cancelText: i18n.t('common:cancel'),
     onOk,
     onCancel,
     ...props,
@@ -94,8 +96,8 @@ export const confirmDelete = ({
 };
 
 export const confirmAction = ({
-  title = 'Confirm Action',
-  content = 'Are you sure you want to proceed with this action?',
+  title = i18n.t('common:confirmDialog.actionTitle'),
+  content = i18n.t('common:confirmDialog.actionContent'),
   onOk,
   onCancel,
   ...props
@@ -104,8 +106,8 @@ export const confirmAction = ({
     title,
     icon: <QuestionCircleOutlined className={styles.modalIconInfo} />,
     content,
-    okText: 'Confirm',
-    cancelText: 'Cancel',
+    okText: i18n.t('common:confirm'),
+    cancelText: i18n.t('common:cancel'),
     onOk,
     onCancel,
     ...props,
@@ -146,17 +148,18 @@ export interface FormModalProps extends ModalProps {
 }
 
 export const FormModal: React.FC<FormModalProps> = ({
-  submitText = 'Submit',
-  cancelText = 'Cancel',
+  submitText,
+  cancelText,
   onSubmit,
   loading = false,
   children,
   ...props
 }) => {
+  const { t } = useTranslation('common');
   return (
     <Modal
-      okText={submitText}
-      cancelText={cancelText}
+      okText={submitText ?? t('common:buttons.submit')}
+      cancelText={cancelText ?? t('common:cancel')}
       onOk={onSubmit}
       confirmLoading={loading}
       {...props}
