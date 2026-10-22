@@ -38,6 +38,7 @@
     "tauri-plugin-log-api": "github:tauri-apps/tauri-plugin-log#v1"
   },
   "devDependencies": {
+    "@ant-design/cssinjs": "^1.24.0",
     "@playwright/test": "^1.40.0",
     "@tauri-apps/cli": "^1.5.0",
     "@testing-library/jest-dom": "^6.9.1",
