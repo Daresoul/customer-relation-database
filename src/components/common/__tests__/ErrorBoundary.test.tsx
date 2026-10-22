@@ -3,7 +3,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route, Link } from 'react-router-dom';
 
-const logEvent = vi.fn().mockResolvedValue(undefined);
+const logEvent = vi.fn();
 vi.mock('@tauri-apps/api/tauri', () => ({ invoke: (...a: unknown[]) => logEvent(...a) }));
 
 import i18n from '../../../i18n';
@@ -15,6 +15,7 @@ function Boom(): React.ReactElement {
 
 describe('error boundaries', () => {
   beforeEach(async () => {
+    logEvent.mockResolvedValue(undefined);
     vi.spyOn(console, 'error').mockImplementation(() => {});
     await i18n.changeLanguage('mk');
   });
