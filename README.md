@@ -28,6 +28,31 @@
 - The lab-result resolver reports two or more active chip matches as ambiguous
   and picks none.
 
+## Medical records and invoices
+- A record, its line items and its history row are saved in one transaction
+  (`MedicalRecordService::save_new_record` / `save_record_changes`). An edit
+  sends cleared values explicitly: `lineItems: []`, `discountPercent: null`,
+  `manualTotal: null`. A missing field means "unchanged". A manual total only
+  applies to a record without line items.
+- Every create and edit regenerates the medical report, the pharmacy note (if
+  there is a prescription) and the invoice (if there are line items). A new
+  document replaces the old one of its kind only after it is stored; the old
+  one is soft-deleted. A document the record no longer has content for is
+  retired. Create and update return the record plus `pdfs: [{kind, ok,
+  error}]`; the frontend warns about a failed one, and Retry calls
+  `regenerate_record_document` (`report`, `pharmacy_note`, `invoice`) or, for a
+  lab report, `regenerate_pdf_from_medical_record`.
+- The invoice number and date are assigned once, on the first invoice, in
+  local time (`assign_invoice`; columns `invoice_number`, `invoice_date`). Later
+  edits reprint the same number and date. The number's year is the local year.
+- A long invoice continues on another letterhead page with the column headings
+  repeated; long item names wrap.
+- An edit waits for the record's diagnoses to load before it can be saved, and
+  the record modal and page ask before discarding typed text.
+- Number inputs read "," or "." as the decimal mark (`src/utils/localeNumber.ts`):
+  "4,5" is 4.5 and "1.500,50" is 1500.5. A single mark is always decimal, so
+  "1.500" is 1.5; type "1500" for one thousand five hundred.
+
 ## Release build secrets
 
 The release workflow (`.github/workflows/release.yml`) reads these GitHub
