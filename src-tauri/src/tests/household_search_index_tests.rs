@@ -223,3 +223,80 @@ async fn each_household_has_exactly_one_index_row_after_edits() {
 
     assert_eq!(index_rows(&db, h).await, 1);
 }
+
+// ---------------------------------------------------------------------------
+// C2: FTS5 special characters in the query
+// ---------------------------------------------------------------------------
+
+async fn household_with(db: &DatabaseConnection, name: &str, first: &str, last: &str, phone: &str) -> i32 {
+    let h = insert_household(db, name).await;
+    let p = insert_person(db, h, first, last).await;
+    insert_contact(db, p, "phone", phone).await;
+    h as i32
+}
+
+#[tokio::test]
+async fn phone_typed_with_dashes_finds_the_household() {
+    let db = create_test_db_with_migrations().await;
+    let spaced = household_with(&db, "Spaced", "A", "B", "070 123 456").await;
+    let plain = household_with(&db, "Plain", "C", "D", "071987654").await;
+
+    assert!(hits(&db, "070-123-456").await.contains(&spaced));
+    assert!(hits(&db, "071-987-654").await.contains(&plain));
+    assert!(hits(&db, "070123456").await.contains(&spaced));
+}
+
+#[tokio::test]
+async fn hyphenated_surname_finds_the_household() {
+    let db = create_test_db_with_migrations().await;
+    let h = household_with(&db, "Двојни", "Ана", "Петровска-Николовска", "070").await;
+
+    assert_eq!(hits(&db, "Петровска-Николовска").await, vec![h]);
+    assert_eq!(hits(&db, "Петровска-Никол").await, vec![h]);
+}
+
+#[tokio::test]
+async fn apostrophe_in_name_finds_the_household() {
+    let db = create_test_db_with_migrations().await;
+    let h = household_with(&db, "Irish", "Sean", "O'Brien", "070").await;
+
+    assert_eq!(hits(&db, "O'Brien").await, vec![h]);
+}
+
+#[tokio::test]
+async fn fts_syntax_in_the_query_never_errors() {
+    let db = create_test_db_with_migrations().await;
+    household_with(&db, "Syntax", "Not", "Near", "070 111").await;
+
+    for q in [
+        "*", "**", "\"", "\"unclosed", "a\"b", "NOT", "OR", "AND", "NEAR", "not or", "(abc",
+        "abc)", "-abc", "^abc", "a:b", "col:value", "{x}", "+", "--", "a*b", "'", "''",
+    ] {
+        household_search::search_households(&db, q, None, None)
+            .await
+            .unwrap_or_else(|e| panic!("search {q:?}: {e}"));
+        household_search::quick_search_households(&db, q, 10)
+            .await
+            .unwrap_or_else(|e| panic!("quick search {q:?}: {e}"));
+    }
+}
+
+#[tokio::test]
+async fn search_terms_that_are_fts_keywords_match_as_words() {
+    let db = create_test_db_with_migrations().await;
+    let h = household_with(&db, "Syntax", "Not", "Near", "070 111").await;
+
+    assert_eq!(hits(&db, "NOT").await, vec![h]);
+    assert_eq!(hits(&db, "near").await, vec![h]);
+}
+
+#[tokio::test]
+async fn quick_search_handles_dashes_and_empty_queries() {
+    let db = create_test_db_with_migrations().await;
+    let h = household_with(&db, "Quick", "A", "B", "070 123 456").await;
+
+    let found = household_search::quick_search_households(&db, "070-123", 10).await.unwrap();
+    assert_eq!(found.iter().map(|(id, _)| *id).collect::<Vec<_>>(), vec![h]);
+    assert!(household_search::quick_search_households(&db, "", 10).await.unwrap().is_empty());
+    assert!(household_search::quick_search_households(&db, "--", 10).await.unwrap().is_empty());
+}
