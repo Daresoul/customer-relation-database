@@ -291,3 +291,37 @@ impl GoogleCalendarService {
         Ok(())
     }
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct GoogleSyncStatus {
+    pub connected: bool,
+    pub needs_reauth: bool,
+    pub calendar_id: Option<String>,
+    pub sync_enabled: bool,
+    pub last_sync: Option<String>,
+    pub last_sync_error: Option<String>,
+}
+
+pub async fn load_sync_status(_db: &DatabaseConnection) -> Result<GoogleSyncStatus, String> {
+    todo!()
+}
+
+pub async fn mark_needs_reauth(_db: &DatabaseConnection, _reason: &str) -> Result<(), String> {
+    todo!()
+}
+
+pub async fn clear_needs_reauth(_db: &DatabaseConnection) -> Result<(), String> {
+    todo!()
+}
+
+pub async fn record_sync_outcome(_db: &DatabaseConnection, _error: Option<&str>) -> Result<(), String> {
+    todo!()
+}
+
+pub async fn calendar_ready_for_sync(_db: &DatabaseConnection) -> Result<Option<String>, String> {
+    todo!()
+}
+
+pub fn local_time_zone() -> String {
+    todo!()
+}

@@ -75,3 +75,6 @@ pub mod table_rebuild_tests;
 
 #[cfg(test)]
 pub mod command_registration_tests;
+
+#[cfg(test)]
+pub mod google_sync_status_tests;
