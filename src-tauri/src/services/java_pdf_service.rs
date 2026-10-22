@@ -13,7 +13,10 @@ use std::time::Duration;
 const JAVA_TIMEOUT: Duration = Duration::from_secs(60);
 const JAVA_VERSION_TIMEOUT: Duration = Duration::from_secs(15);
 
-/// A PDF job's working folder.
+/// Parent of the per-job folders, inside the system temp folder.
+const PDF_JOBS_DIR: &str = "arkivet-pdf-jobs";
+
+/// A PDF job's own working folder; removed with everything in it on drop.
 struct JobDir {
     path: PathBuf,
 }
@@ -21,6 +24,12 @@ struct JobDir {
 impl JobDir {
     fn path(&self) -> &Path {
         &self.path
+    }
+}
+
+impl Drop for JobDir {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.path);
     }
 }
 
@@ -270,32 +279,74 @@ impl JavaPdfService {
         cmd
     }
 
-    /// Folder for one PDF job's input file.
+    /// A fresh folder for one PDF job, so concurrent jobs never share files.
     fn new_job_dir() -> Result<JobDir, String> {
-        Ok(JobDir { path: std::env::temp_dir() })
+        let path = std::env::temp_dir()
+            .join(PDF_JOBS_DIR)
+            .join(uuid::Uuid::new_v4().to_string());
+        fs::create_dir_all(&path)
+            .map_err(|e| format!("Failed to create PDF job folder {:?}: {}", path, e))?;
+        Ok(JobDir { path })
     }
 
-    /// Run a command and collect its output.
-    fn run_with_timeout(mut cmd: Command, _timeout: Duration) -> Result<JavaOutput, String> {
-        let output = cmd
-            .output()
+    /// Run a command, reading stdout and stderr as it goes (a full pipe would
+    /// stall the child), and stop it once `timeout` has passed.
+    fn run_with_timeout(mut cmd: Command, timeout: Duration) -> Result<JavaOutput, String> {
+        use std::io::Read;
+
+        let mut child = cmd
+            .spawn()
             .map_err(|e| format!("Failed to execute Java: {}", e))?;
+        let drain = |pipe: Option<Box<dyn Read + Send>>| {
+            std::thread::spawn(move || {
+                let mut buf = Vec::new();
+                if let Some(mut p) = pipe {
+                    let _ = p.read_to_end(&mut buf);
+                }
+                String::from_utf8_lossy(&buf).to_string()
+            })
+        };
+        let stdout = drain(child.stdout.take().map(|p| Box::new(p) as Box<dyn Read + Send>));
+        let stderr = drain(child.stderr.take().map(|p| Box::new(p) as Box<dyn Read + Send>));
+
+        let deadline = std::time::Instant::now() + timeout;
+        let status = loop {
+            match child.try_wait() {
+                Ok(Some(status)) => break status,
+                Ok(None) if std::time::Instant::now() >= deadline => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    let stderr = stderr.join().unwrap_or_default();
+                    return Err(format!(
+                        "Java PDF generator timed out after {}s and was stopped. STDERR: {}",
+                        timeout.as_secs_f32(),
+                        stderr
+                    ));
+                }
+                Ok(None) => std::thread::sleep(Duration::from_millis(25)),
+                Err(e) => return Err(format!("Failed to wait for Java: {}", e)),
+            }
+        };
         Ok(JavaOutput {
-            success: output.status.success(),
-            stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-            stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+            success: status.success(),
+            stdout: stdout.join().unwrap_or_default(),
+            stderr: stderr.join().unwrap_or_default(),
         })
     }
 
-    /// One JAR run: write the input JSON, run Java, check the PDF exists.
+    /// One JAR run in its own job folder: Java writes the PDF there, and only
+    /// a finished, non-empty PDF is moved to `output_path`. Java's stderr is
+    /// logged even when it succeeds, so its warnings reach the log.
     pub(crate) fn run_jar_job(
         jar_path: &Path,
-        input: Value,
+        mut input: Value,
         output_path: &str,
         timeout: Duration,
     ) -> Result<(), String> {
         let job_dir = Self::new_job_dir()?;
-        let input_json_path = job_dir.path().join(format!("pdf_input_{}.json", Utc::now().timestamp()));
+        let input_json_path = job_dir.path().join("input.json");
+        let job_pdf = job_dir.path().join("out.pdf");
+        input["output_path"] = Value::String(job_pdf.to_string_lossy().to_string());
         let json_str = serde_json::to_string_pretty(&input)
             .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
         fs::write(&input_json_path, json_str)
@@ -304,12 +355,10 @@ impl JavaPdfService {
         log::info!("   ☕ JAR path: {:?}", jar_path);
         log::info!("   📂 Output path: {}", output_path);
 
-        let result = Self::run_with_timeout(
+        let output = Self::run_with_timeout(
             Self::create_java_command(jar_path, &[input_json_path.as_os_str()]),
             timeout,
-        );
-        let _ = fs::remove_file(&input_json_path);
-        let output = result?;
+        )?;
 
         if !output.success {
             return Err(format!(
@@ -318,9 +367,22 @@ impl JavaPdfService {
             ));
         }
         log::info!("   ✅ Java output: {}", output.stdout);
+        for line in output.stderr.lines().filter(|l| !l.trim().is_empty()) {
+            log::warn!("   ☕ Java stderr: {}", line);
+        }
 
-        if !PathBuf::from(output_path).exists() {
-            return Err(format!("PDF was not created at: {}", output_path));
+        match fs::metadata(&job_pdf) {
+            Ok(m) if m.len() > 0 => {}
+            _ => return Err(format!("PDF was not created at: {}", output_path)),
+        }
+        let dest = Path::new(output_path);
+        if let Some(parent) = dest.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create folder for {}: {}", output_path, e))?;
+        }
+        if fs::rename(&job_pdf, dest).is_err() {
+            fs::copy(&job_pdf, dest)
+                .map_err(|e| format!("Failed to move PDF to {}: {}", output_path, e))?;
         }
         Ok(())
     }
