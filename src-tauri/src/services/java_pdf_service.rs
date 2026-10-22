@@ -46,6 +46,8 @@ struct JavaSample {
     sample_id: String,
     patient_id: String,
     detected_at: String,
+    /// Local wall-clock time of the test, ISO `yyyy-MM-ddTHH:mm:ss`, no offset.
+    analysis_datetime: String,
     test_results: HashMap<String, String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     test_type: Option<String>,
@@ -134,7 +136,7 @@ impl JavaPdfService {
         patient: &crate::services::device_pdf_service::PatientData,
         device_data_list: &[crate::services::device_pdf_service::DeviceTestData],
         output_path: &str,
-        _tz: &Tz,
+        tz: &Tz,
     ) -> JavaPdfInput {
         // Sort samples in the order Java expects: Exigo, Pointcare, Healvet, PCR
         // PCR samples go last as they are rendered on separate pages
@@ -177,6 +179,7 @@ impl JavaPdfService {
                 sample_id,
                 patient_id,
                 detected_at: device_data.detected_at.to_rfc3339(),
+                analysis_datetime: Self::analysis_datetime(device_data, tz),
                 test_results,
                 test_type: None,
             }
@@ -189,7 +192,7 @@ impl JavaPdfService {
             species: patient.species.clone(),
             microchip_id: patient.microchip_id.clone(),
             gender: patient.gender.clone(),
-            date_of_birth: patient.date_of_birth.clone(),
+            date_of_birth: patient.date_of_birth.as_deref().and_then(Self::iso_date_of_birth),
         };
 
         JavaPdfInput {
@@ -197,6 +200,55 @@ impl JavaPdfService {
             samples: java_samples,
             output_path: output_path.to_string(),
         }
+    }
+
+    /// Date of birth as the JAR expects it (`yyyy-MM-dd`), whatever shape the
+    /// database row or a typed override holds; None when it can't be read.
+    fn iso_date_of_birth(raw: &str) -> Option<String> {
+        let raw = raw.trim();
+        if raw.is_empty() {
+            return None;
+        }
+        let date_part = raw.split(|c| c == 'T' || c == ' ').next().unwrap_or(raw);
+        for format in ["%Y-%m-%d", "%d/%m/%Y", "%d.%m.%Y"] {
+            if let Ok(date) = chrono::NaiveDate::parse_from_str(date_part, format) {
+                return Some(date.format("%Y-%m-%d").to_string());
+            }
+        }
+        log::warn!("Date of birth {:?} is not a recognised date; sending none to the PDF", raw);
+        None
+    }
+
+    /// The analyzer's own run time, read from the keys each parser keeps
+    /// (Exigo `DATE`/`DateTime`, HL7 OBR-7 `test_datetime` then MSH-7
+    /// `message_datetime`, Healvet `test_datetime`). Device clocks are local
+    /// wall time, so they pass through unconverted. Without one, the receive
+    /// instant is converted to `tz`.
+    fn analysis_datetime<Tz: chrono::TimeZone>(
+        device_data: &crate::services::device_pdf_service::DeviceTestData,
+        tz: &Tz,
+    ) -> String {
+        const DEVICE_TIME_KEYS: [&str; 4] = ["DATE", "DateTime", "test_datetime", "message_datetime"];
+        const DEVICE_TIME_FORMATS: [&str; 6] = [
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%dT%H:%M:%S",
+            "%Y%m%d%H%M%S",
+            "%d-%m-%Y %H:%M:%S",
+            "%d.%m.%Y %H:%M:%S",
+            "%Y/%m/%d %H:%M:%S",
+        ];
+        let device_time = DEVICE_TIME_KEYS
+            .iter()
+            .filter_map(|k| device_data.test_results.get(*k).and_then(|v| v.as_str()))
+            .find_map(|raw| {
+                DEVICE_TIME_FORMATS
+                    .iter()
+                    .find_map(|f| chrono::NaiveDateTime::parse_from_str(raw.trim(), f).ok())
+            });
+        device_time
+            .unwrap_or_else(|| device_data.detected_at.with_timezone(tz).naive_local())
+            .format("%Y-%m-%dT%H:%M:%S")
+            .to_string()
     }
 
     /// Create a Java command configured to prevent macOS focus-stealing.

@@ -242,6 +242,37 @@ public class PdfGeneratorCLI {
         return patient;
     }
 
+    private static final java.time.format.DateTimeFormatter ANALYSIS_DISPLAY =
+            java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+
+    /**
+     * The analysis time as printed: the analyzer's own clock (`analysis_datetime`,
+     * local wall time) when sent, else the receive instant (`detected_at`)
+     * in this machine's zone. Never a raw ISO/UTC string.
+     */
+    static String analysisDisplayDate(JsonObject sampleJson) {
+        String local = getStr(sampleJson, "analysis_datetime", null);
+        if (local != null) {
+            try {
+                return java.time.LocalDateTime.parse(local).format(ANALYSIS_DISPLAY);
+            } catch (java.time.format.DateTimeParseException e) {
+                System.err.println("PDF_WARN code=bad_analysis_datetime value='" + local + "'");
+            }
+        }
+        String instant = getStr(sampleJson, "detected_at", null);
+        if (instant == null) {
+            return "";
+        }
+        try {
+            return java.time.OffsetDateTime.parse(instant)
+                    .atZoneSameInstant(java.time.ZoneId.systemDefault())
+                    .format(ANALYSIS_DISPLAY);
+        } catch (java.time.format.DateTimeParseException e) {
+            System.err.println("PDF_WARN code=bad_detected_at value='" + instant + "'");
+            return "";
+        }
+    }
+
     static List<Sample> parseSamples(JsonArray samplesJson, PatientType patientType) {
         List<Sample> samples = new ArrayList<>();
 
@@ -303,7 +334,7 @@ public class PdfGeneratorCLI {
         ExigoSample sample = new ExigoSample();
         sample.setSampleId(json.get("sample_id").getAsString());
         sample.setPatientId(json.get("patient_id").getAsString());
-        sample.setAnalysisDateAndTime(json.get("detected_at").getAsString());
+        sample.setAnalysisDateAndTime(analysisDisplayDate(json));
 
         // Parse test results into parameters
         JsonObject testResults = json.getAsJsonObject("test_results");
@@ -386,7 +417,7 @@ public class PdfGeneratorCLI {
         PointcareSample sample = new PointcareSample();
         sample.setSampleId(json.get("sample_id").getAsString());
         sample.setPatientId(json.get("patient_id").getAsString());
-        sample.setAnalysisDateAndTime(json.get("detected_at").getAsString());
+        sample.setAnalysisDateAndTime(analysisDisplayDate(json));
 
         // Set sample type (default to SERUM for biochemistry)
         if (json.has("sample_type")) {
@@ -659,7 +690,7 @@ public class PdfGeneratorCLI {
         HealvetSample sample = new HealvetSample();
         sample.setSampleId(json.get("sample_id").getAsString());
         sample.setPatientId(json.get("patient_id").getAsString());
-        sample.setAnalysisDateAndTime(json.get("detected_at").getAsString());
+        sample.setAnalysisDateAndTime(analysisDisplayDate(json));
 
         // Parse test results - Healvet stores each parameter as a key-value pair
         // where key is the parameter code (e.g., "TSH-1", "T4-1", "cCRP") and value is result
@@ -744,7 +775,7 @@ public class PdfGeneratorCLI {
         PcrSample sample = new PcrSample();
         sample.setSampleId(json.get("sample_id").getAsString());
         sample.setPatientId(json.get("patient_id").getAsString());
-        sample.setAnalysisDateAndTime(json.get("detected_at").getAsString());
+        sample.setAnalysisDateAndTime(analysisDisplayDate(json));
 
         // Set analyzer info from sample_id if not explicitly provided
         if (json.has("analyzer_info") && !json.get("analyzer_info").isJsonNull()) {
