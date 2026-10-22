@@ -23,6 +23,7 @@ import type { Dayjs } from 'dayjs';
 import { getDatePickerFormat } from '../../../utils/dateFormatter';
 import { SearchableSelect } from '../../SearchableSelect';
 import styles from '../Forms.module.css';
+import { localeNumberParser } from '@/utils/localeNumber';
 
 export interface Species {
   id: number;
@@ -227,6 +228,7 @@ export const PatientFieldGroup: React.FC<PatientFieldGroupProps> = ({
               precision={2}
               min={0.01}
               max={500}
+              parser={localeNumberParser}
               disabled={disabled}
             />
           </Form.Item>

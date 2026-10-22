@@ -43,5 +43,10 @@ export function parseLocaleNumber(text: string | number | null | undefined): num
   return Number.isFinite(value) ? value : null;
 }
 
-/** `parser` for antd InputNumber: accepts a decimal comma. */
-export const localeNumberParser = (text?: string): string => normalizeLocaleNumber(text ?? '');
+/**
+ * `parser` for antd InputNumber: accepts a decimal comma. It hands back the
+ * normalized text (InputNumber reads strings too); an empty string keeps
+ * clearing the field possible, where NaN would be ignored.
+ */
+export const localeNumberParser = (text?: string): number =>
+  normalizeLocaleNumber(text ?? '') as unknown as number;

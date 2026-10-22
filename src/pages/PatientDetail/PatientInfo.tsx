@@ -15,6 +15,7 @@ import dayjs from 'dayjs';
 import { formatDateTime, getDatePickerFormat } from '../../utils/dateFormatter';
 import { useThemeColors } from '../../utils/themeStyles';
 import styles from './PatientDetail.module.css';
+import { localeNumberParser } from '@/utils/localeNumber';
 
 const { Text } = Typography;
 
@@ -322,6 +323,7 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
             min={0.01}
             max={500}
             precision={2}
+            parser={localeNumberParser}
             className={styles.fullWidth}
             disabled={isSaving}
             addonAfter="kg"
