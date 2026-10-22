@@ -12,6 +12,7 @@ pub mod species;
 pub mod breed;
 pub mod patient;
 pub mod device_input;
+pub mod device_events;
 pub mod file_watcher;
 pub mod device_integration;
 pub mod device_parser;

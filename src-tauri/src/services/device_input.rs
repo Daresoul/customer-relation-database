@@ -16,6 +16,7 @@ use crate::services::device_capture::throttled_show_and_focus;
 use crate::services::file_storage::FileStorageService;
 use crate::commands::file_history::record_device_file_access_internal_seaorm;
 use crate::database::SeaOrmPool;
+use crate::services::device_events::DeviceErrorKind;
 
 // Thread handle for managing listener lifecycle
 // Stores JoinHandle, shutdown channel, and cleanup data for graceful thread termination
@@ -882,6 +883,42 @@ fn calculate_backoff_delay(attempt: u32) -> Duration {
     };
 
     Duration::from_secs(capped_delay + jitter)
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum ReadErrorAction {
+    NoData,
+    Fatal,
+}
+
+pub(crate) fn classify_read_error(_e: &std::io::Error) -> ReadErrorAction {
+    todo!()
+}
+
+pub(crate) fn classify_open_error(_e: &serialport::Error, _port_present: bool) -> DeviceErrorKind {
+    todo!()
+}
+
+pub(crate) const STABLE_CONNECTION: Duration = Duration::from_secs(30);
+
+pub(crate) fn next_retry_count(_previous: u32, _connected_for: Option<Duration>) -> u32 {
+    todo!()
+}
+
+pub(crate) trait FrameSink {
+    fn on_bytes(&mut self, data: &[u8]);
+    fn on_frame(&mut self, frame: Vec<u8>);
+    fn on_cut_off(&mut self, partial: Vec<u8>);
+}
+
+pub(crate) fn run_read_loop<R: std::io::Read + ?Sized>(
+    _reader: &mut R,
+    _protocol: &DeviceProtocol,
+    _shutdown_rx: &mpsc::Receiver<()>,
+    _idle_flush: Duration,
+    _sink: &mut dyn FrameSink,
+) -> Result<(), String> {
+    todo!()
 }
 
 /// Stop all active listeners - used for graceful shutdown
