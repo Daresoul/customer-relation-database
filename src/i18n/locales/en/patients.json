@@ -90,7 +90,9 @@
     "loadingError": "Error Loading Patient",
     "loadingErrorDescription": "Failed to load patient details",
     "notFound": "Patient Not Found",
-    "notFoundDescription": "The requested patient could not be found."
+    "notFoundDescription": "The requested patient could not be found.",
+    "deleteBlockedTitle": "This patient can't be deleted",
+    "deleteBlocked": "The patient has medical records or appointments, and deleting would erase them. Archive the records or mark the patient inactive instead."
   },
   "tableColumns": {
     "status": "Status",

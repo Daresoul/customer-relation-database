@@ -10,7 +10,7 @@ import { PatientService } from '../services/patientService';
 import { Patient, UpdatePatientInput } from '../types';
 import { PatientDetail, DeletePatientResponse } from '../types/patient';
 import dayjs from 'dayjs';
-import { createMutationErrorHandler } from '../utils/errors';
+import { createMutationErrorHandler, extractErrorMessage } from '../utils/errors';
 import { invalidatePatientData } from './invalidation';
 
 /**
@@ -242,7 +242,18 @@ export function useDeletePatient() {
       });
       navigate(response.redirectTo);
     },
-    onError: createMutationErrorHandler(notification, 'Delete Patient', t, 'usePatient'),
+    onError: (error) => {
+      if (extractErrorMessage(error).startsWith('PATIENT_HAS_HISTORY')) {
+        notification.error({
+          message: t('patients:errors.deleteBlockedTitle'),
+          description: t('patients:errors.deleteBlocked'),
+          placement: 'bottomRight',
+          duration: 8,
+        });
+        return;
+      }
+      createMutationErrorHandler(notification, 'Delete Patient', t, 'usePatient')(error);
+    },
   });
 }
 
@@ -263,7 +274,8 @@ export function useDeleteConfirmation() {
       icon: null, // Icon styling is handled by CSS
       centered: true,
       onOk: async () => {
-        await deletePatient.mutateAsync(patientId);
+        // onError already explains a refusal; close the dialog either way
+        await deletePatient.mutateAsync(patientId).catch(() => {});
       }
     });
   };
