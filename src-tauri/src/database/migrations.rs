@@ -2829,14 +2829,50 @@ fn upgrade_fts5_to_unicode61(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::fu
     })
 }
 
+/// Runs a table rebuild (CREATE new, copy, DROP old, RENAME) without cascading.
+///
+/// Every pooled connection has foreign keys on, and `DROP TABLE` on a parent
+/// then deletes every child row through `ON DELETE CASCADE` (migrations 027,
+/// 031 and 034 did this). This takes one connection, turns foreign keys off
+/// on it (SQLite ignores that pragma inside a transaction, so it happens
+/// first), runs `rebuild` in a transaction, refuses to commit if
+/// `PRAGMA foreign_key_check` finds orphans, and turns foreign keys back on
+/// whatever happened. A rebuild also drops the table's triggers and indexes:
+/// recreate them inside `rebuild`.
 pub async fn rebuild_with_foreign_keys_off<F>(pool: &SqlitePool, rebuild: F) -> Result<(), sqlx::Error>
 where
     F: for<'c> FnOnce(
         &'c mut sqlx::SqliteConnection,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + 'c>>,
 {
+    use sqlx::Connection;
+
     let mut conn = pool.acquire().await?;
-    rebuild(&mut *conn).await
+    sqlx::query("PRAGMA foreign_keys = OFF").execute(&mut *conn).await?;
+
+    let result = async {
+        let off: i64 = sqlx::query("PRAGMA foreign_keys").fetch_one(&mut *conn).await?.get(0);
+        if off != 0 {
+            return Err(sqlx::Error::Protocol("foreign keys could not be turned off for the rebuild".into()));
+        }
+        let mut tx = conn.begin().await?;
+        rebuild(&mut tx).await?;
+        let orphans = sqlx::query("PRAGMA foreign_key_check").fetch_all(&mut *tx).await?;
+        if !orphans.is_empty() {
+            let tables: Vec<String> = orphans.iter().map(|r| r.get::<String, _>(0)).collect();
+            return Err(sqlx::Error::Protocol(format!(
+                "rebuild left {} row(s) with a broken foreign key (tables: {})",
+                orphans.len(),
+                tables.join(", ")
+            )));
+        }
+        tx.commit().await
+    }
+    .await;
+
+    let restored = sqlx::query("PRAGMA foreign_keys = ON").execute(&mut *conn).await;
+    result?;
+    restored.map(|_| ())
 }
 
 // Migration 046: rebuild household_search from the real tables. Migration 044's
