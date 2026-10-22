@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api';
+import { useTranslation } from 'react-i18next';
 import { useDeviceImport, PendingDeviceFile } from '../contexts/DeviceImportContext';
 import { App } from 'antd';
 
@@ -14,23 +15,33 @@ interface DeviceDataPayload {
   fileData: number[];
   mimeType: string;
   detectedAt: string;
+  // Saved file-history id, when the backend stored the file before emitting
+  fileId?: number | string;
+}
+
+interface PatientMatch {
+  patient: { id: number; name?: string | null } | null;
+  method: 'microchip' | 'name' | 'none';
+  ambiguous: boolean;
+  candidateCount: number;
 }
 
 export const useDeviceDataListener = () => {
-  const { addDeviceFile, setSuggestedPatient } = useDeviceImport();
+  const { receiveDeviceResult } = useDeviceImport();
   const { notification } = App.useApp();
+  const { t } = useTranslation(['medical']);
 
   // Use refs to avoid recreating the listener when these functions change
-  const addDeviceFileRef = useRef(addDeviceFile);
-  const setSuggestedPatientRef = useRef(setSuggestedPatient);
+  const receiveRef = useRef(receiveDeviceResult);
   const notificationRef = useRef(notification);
+  const tRef = useRef(t);
 
   // Keep refs up to date
   useEffect(() => {
-    addDeviceFileRef.current = addDeviceFile;
-    setSuggestedPatientRef.current = setSuggestedPatient;
+    receiveRef.current = receiveDeviceResult;
     notificationRef.current = notification;
-  }, [addDeviceFile, setSuggestedPatient, notification]);
+    tRef.current = t;
+  }, [receiveDeviceResult, notification, t]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -38,68 +49,90 @@ export const useDeviceDataListener = () => {
     const setupListener = async () => {
       unlisten = await listen<DeviceDataPayload>('device-data-received', async (event) => {
         const data = event.payload;
+        const t = tRef.current;
+        const toast = notificationRef.current;
+        const device = data.deviceName;
+        const identifier = data.patientIdentifier;
+        const message = t('medical:deviceImport.received', 'Lab result received');
 
-        // Try to resolve patient if identifier is provided
-        let resolvedPatientId: number | undefined;
-        if (data.patientIdentifier) {
+        let match: PatientMatch | undefined;
+        if (identifier) {
           try {
-            const match = await invoke<{
-              patient: { id: number; name?: string | null } | null;
-              method: string;
-              ambiguous: boolean;
-              candidateCount: number;
-            }>('resolve_patient_from_identifier', { identifier: data.patientIdentifier });
-
-            if (match?.patient && match.method === 'microchip') {
-              // Microchip is a unique key — safe to auto-select confidently.
-              resolvedPatientId = match.patient.id;
-              const who = match.patient.name ? `: ${match.patient.name}` : '';
-              notificationRef.current.success({
-                message: 'Lab result received',
-                description: `${data.deviceName} — patient matched by microchip${who}`,
-                placement: 'bottomRight',
-                duration: 4,
-              });
-            } else if (match?.patient && match.method === 'name') {
-              // Name isn't unique — pre-fill as a SUGGESTION but tell the tech to verify.
-              resolvedPatientId = match.patient.id;
-              const who = match.patient.name ? ` "${match.patient.name}"` : '';
-              notificationRef.current.warning({
-                message: 'Lab result received — verify patient',
-                description: `${data.deviceName} — matched by name${who}. Please confirm it's the right patient before saving.`,
-                placement: 'bottomRight',
-                duration: 8,
-              });
-            } else if (match?.ambiguous) {
-              // Several patients share this name — never auto-pick one; force a manual choice.
-              notificationRef.current.warning({
-                message: 'Lab result received — select patient',
-                description: `${data.deviceName} — ${match.candidateCount} patients match "${data.patientIdentifier}". Select the correct patient manually.`,
-                placement: 'bottomRight',
-                duration: 8,
-              });
-            } else {
-              // No match — say what was searched so staff don't create a duplicate.
-              notificationRef.current.warning({
-                message: 'Lab result received',
-                description: `${data.deviceName} — no patient matched "${data.patientIdentifier}". Select the patient manually.`,
-                placement: 'bottomRight',
-                duration: 8,
-              });
-            }
+            match = await invoke<PatientMatch>('resolve_patient_from_identifier', { identifier });
           } catch (_error) {
-            // Silent fail - patient resolution is optional
+            toast.warning({
+              message,
+              description: t('medical:deviceImport.lookupFailed', {
+                defaultValue: '{{device}} — could not look up patient "{{identifier}}". Select the patient manually.',
+                device,
+                identifier,
+              }),
+              placement: 'bottomRight',
+              duration: 8,
+            });
           }
-        } else {
-          notificationRef.current.info({
-            message: 'Lab result received',
-            description: `${data.deviceName} sent a result with no patient ID. Select the patient manually.`,
+        }
+
+        const resolvedPatientId = match?.patient && !match.ambiguous ? match.patient.id : undefined;
+        const who = match?.patient?.name ?? '';
+
+        if (!identifier) {
+          toast.info({
+            message,
+            description: t('medical:deviceImport.receivedNoId', {
+              defaultValue: '{{device}} sent a result with no patient ID. Select the patient manually.',
+              device,
+            }),
             placement: 'bottomRight',
             duration: 6,
           });
+        } else if (match && resolvedPatientId && match.method === 'microchip') {
+          toast.success({
+            message,
+            description: t('medical:deviceImport.receivedChipMatch', {
+              defaultValue: '{{device}} — patient matched by microchip: {{who}}',
+              device,
+              who,
+            }),
+            placement: 'bottomRight',
+            duration: 4,
+          });
+        } else if (match && resolvedPatientId && match.method === 'name') {
+          toast.warning({
+            message: t('medical:deviceImport.receivedVerify', 'Lab result received — verify patient'),
+            description: t('medical:deviceImport.receivedNameMatch', {
+              defaultValue: '{{device}} — matched by name "{{who}}". Please confirm it\'s the right patient before saving.',
+              device,
+              who,
+            }),
+            placement: 'bottomRight',
+            duration: 8,
+          });
+        } else if (match?.ambiguous) {
+          toast.warning({
+            message: t('medical:deviceImport.receivedSelect', 'Lab result received — select patient'),
+            description: t('medical:deviceImport.receivedAmbiguous', {
+              defaultValue: '{{device}} — {{n}} patients match "{{identifier}}". Select the correct patient manually.',
+              device,
+              n: match.candidateCount,
+              identifier,
+            }),
+            placement: 'bottomRight',
+            duration: 8,
+          });
+        } else if (match) {
+          toast.warning({
+            message,
+            description: t('medical:deviceImport.receivedNoMatch', {
+              defaultValue: '{{device}} — no patient matched "{{identifier}}". Select the patient manually.',
+              device,
+              identifier,
+            }),
+            placement: 'bottomRight',
+            duration: 8,
+          });
         }
 
-        // Create pending file object
         const pendingFile: PendingDeviceFile = {
           id: `${data.deviceName}-${Date.now()}-${Math.random()}`,
           deviceType: data.deviceType,
@@ -110,17 +143,15 @@ export const useDeviceDataListener = () => {
           mimeType: data.mimeType,
           testResults: data.testResults,
           patientId: resolvedPatientId,
-          patientIdentifier: data.patientIdentifier,
+          patientIdentifier: identifier,
+          matchMethod: match?.method,
+          matchAmbiguous: match?.ambiguous,
           detectedAt: data.detectedAt,
+          sourceFileId: data.fileId != null ? String(data.fileId) : undefined,
         };
 
-        // Add to context (will auto-open modal on first file)
-        addDeviceFileRef.current(pendingFile);
-
-        // Set suggested patient if this is the first file with a resolved patient
-        if (resolvedPatientId) {
-          setSuggestedPatientRef.current(resolvedPatientId);
-        }
+        // Opens an import, or waits behind the one that is open
+        receiveRef.current(pendingFile);
       });
     };
 

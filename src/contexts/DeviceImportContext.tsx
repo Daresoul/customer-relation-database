@@ -72,9 +72,18 @@ interface DeviceImportState {
   activeSessions: Map<string, DeviceSession>;
   modalOpen: boolean;
   suggestedPatientId?: number;
+  // Results that arrived while an import was open; each gets its own import later
+  waitingResults: PendingDeviceFile[];
+  // Changes whenever a new import starts, so the modal can start fresh
+  importId: number;
 }
 
-interface DeviceImportContextType extends DeviceImportState {
+interface DeviceImportContextType extends Omit<DeviceImportState, 'waitingResults'> {
+  waitingCount: number;
+  // A result from a machine: opens an import, or waits behind the open one
+  receiveDeviceResult: (file: PendingDeviceFile) => void;
+  // The current import was saved, parked or cancelled: open the next waiting result
+  finishImport: () => void;
   addDeviceFile: (file: PendingDeviceFile) => void;
   removeDeviceFile: (fileId: string) => void;
   clearAllFiles: () => void;
@@ -106,12 +115,30 @@ const getSessionKey = (file: PendingDeviceFile): string => {
   return `${file.deviceType}-${patientKey}`;
 };
 
+const fileKey = (file: PendingDeviceFile): string =>
+  `${file.deviceName}-${file.fileName}-${file.fileData.length}`;
+
+const startImport = (
+  prev: DeviceImportState,
+  file: PendingDeviceFile,
+  waitingResults: PendingDeviceFile[],
+): DeviceImportState => ({
+  ...prev,
+  pendingFiles: [file],
+  waitingResults,
+  modalOpen: true,
+  suggestedPatientId: file.patientId,
+  importId: prev.importId + 1,
+});
+
 export const DeviceImportProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [state, setState] = useState<DeviceImportState>({
     pendingFiles: [],
     activeSessions: new Map(),
     modalOpen: false,
     suggestedPatientId: undefined,
+    waitingResults: [],
+    importId: 0,
   });
 
   const sessionTimeoutRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
@@ -200,12 +227,7 @@ export const DeviceImportProvider: React.FC<{ children: ReactNode }> = ({ childr
       }
 
       // Non-session devices: use original logic
-      const fileKey = `${file.deviceName}-${file.fileName}-${file.fileData.length}`;
-
-      const isDuplicate = prev.pendingFiles.some((existing) => {
-        const existingKey = `${existing.deviceName}-${existing.fileName}-${existing.fileData.length}`;
-        return existingKey === fileKey;
-      });
+      const isDuplicate = prev.pendingFiles.some((existing) => fileKey(existing) === fileKey(file));
 
       if (isDuplicate) {
         return prev;
@@ -225,7 +247,32 @@ export const DeviceImportProvider: React.FC<{ children: ReactNode }> = ({ childr
         pendingFiles: updatedFiles,
         modalOpen: shouldOpenModal ? true : prev.modalOpen,
         suggestedPatientId,
+        importId: shouldOpenModal ? prev.importId + 1 : prev.importId,
       };
+    });
+  }, []);
+
+  const receiveDeviceResult = useCallback((file: PendingDeviceFile) => {
+    setState((prev) => {
+      const key = fileKey(file);
+      if ([...prev.pendingFiles, ...prev.waitingResults].some((f) => fileKey(f) === key)) {
+        return prev;
+      }
+      if (prev.modalOpen || prev.pendingFiles.length > 0) {
+        return { ...prev, waitingResults: [...prev.waitingResults, file] };
+      }
+      return startImport(prev, file, prev.waitingResults);
+    });
+  }, []);
+
+  const finishImport = useCallback(() => {
+    sessionTimeoutRef.current.forEach((timeout) => clearTimeout(timeout));
+    sessionTimeoutRef.current.clear();
+    setState((prev) => {
+      const cleared = { ...prev, pendingFiles: [], activeSessions: new Map(), suggestedPatientId: undefined };
+      const [next, ...rest] = prev.waitingResults;
+      if (!next) return { ...cleared, modalOpen: false };
+      return startImport(cleared, next, rest);
     });
   }, []);
 
@@ -348,7 +395,14 @@ export const DeviceImportProvider: React.FC<{ children: ReactNode }> = ({ childr
   return (
     <DeviceImportContext.Provider
       value={{
-        ...state,
+        pendingFiles: state.pendingFiles,
+        activeSessions: state.activeSessions,
+        modalOpen: state.modalOpen,
+        suggestedPatientId: state.suggestedPatientId,
+        importId: state.importId,
+        waitingCount: state.waitingResults.length,
+        receiveDeviceResult,
+        finishImport,
         addDeviceFile,
         removeDeviceFile,
         clearAllFiles,

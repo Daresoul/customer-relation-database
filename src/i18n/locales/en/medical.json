@@ -215,7 +215,16 @@
     "detectedFromFiles": "Detected from files",
     "patientMatched": "Patient matched",
     "noPatientMatch": "No patient found",
-    "noPatientMatchDesc": "Create a new patient — microchip ID has been prefilled."
+    "noPatientMatchDesc": "Create a new patient — microchip ID has been prefilled.",
+    "received": "Lab result received",
+    "receivedVerify": "Lab result received — verify patient",
+    "receivedSelect": "Lab result received — select patient",
+    "receivedNoId": "{{device}} sent a result with no patient ID. Select the patient manually.",
+    "receivedChipMatch": "{{device}} — patient matched by microchip: {{who}}",
+    "receivedNameMatch": "{{device}} — matched by name \"{{who}}\". Please confirm it's the right patient before saving.",
+    "receivedAmbiguous": "{{device}} — {{n}} patients match \"{{identifier}}\". Select the correct patient manually.",
+    "receivedNoMatch": "{{device}} — no patient matched \"{{identifier}}\". Select the patient manually.",
+    "lookupFailed": "{{device}} — could not look up patient \"{{identifier}}\". Select the patient manually."
   },
   "autocomplete": {
     "typeToSearch": "Type at least 2 characters to search templates",
