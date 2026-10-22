@@ -401,29 +401,18 @@ fn main() {
                 }
             });
 
-            // Run startup backup if a destination is configured. Spawned in
-            // a background task so a slow or failing backup never blocks app
-            // boot — the user can also trigger it manually from settings.
+            // Backup at start and then on a timer, in the background so a slow
+            // or failing backup never blocks boot. See services::backup.
             let sea_orm_pool_for_backup = sea_orm_pool.clone();
-            let app_handle_for_backup = app.handle();
-            tauri::async_runtime::spawn(async move {
-                let Some(app_data) = app_handle_for_backup
-                    .path_resolver()
-                    .app_data_dir()
-                else {
-                    log::warn!("Backup: could not resolve app_data_dir, skipping");
-                    return;
-                };
-                let cfg = services::backup::BackupService::load_config(&app_data);
-                if cfg.directory.is_none() {
-                    log::info!("Backup: no destination configured, skipping startup backup");
-                    return;
+            match app.path_resolver().app_data_dir() {
+                Some(app_data) => {
+                    tauri::async_runtime::spawn(services::backup::run_backup_schedule(
+                        app_data,
+                        sea_orm_pool_for_backup,
+                    ));
                 }
-                match services::backup::BackupService::run_backup(&app_data, &sea_orm_pool_for_backup).await {
-                    Ok(c) => log::info!("Backup: completed at {}", c.last_backup_at.unwrap_or_default()),
-                    Err(e) => log::error!("Backup: failed: {}", e),
-                }
-            });
+                None => log::warn!("Backup: could not resolve app_data_dir, skipping"),
+            }
 
             // Initialize serial port listeners for device integrations
             let sea_orm_pool_for_serial = sea_orm_pool.clone();

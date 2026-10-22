@@ -55,8 +55,50 @@ pub fn is_pre_update_snapshot(file_name: &str) -> bool {
 
 /// True when a backup folder is set and the last successful backup is
 /// older than the scheduled interval (or there never was one).
-pub fn is_backup_due(_cfg: &BackupConfig, _now: DateTime<Utc>) -> bool {
-    false
+pub fn is_backup_due(cfg: &BackupConfig, now: DateTime<Utc>) -> bool {
+    if cfg.directory.is_none() {
+        return false;
+    }
+    match cfg
+        .last_backup_at
+        .as_deref()
+        .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
+    {
+        Some(last) => now.signed_duration_since(last) >= chrono::Duration::hours(BACKUP_INTERVAL_HOURS),
+        None => true,
+    }
+}
+
+const BACKUP_INTERVAL_HOURS: i64 = 24;
+/// How often the running app checks whether a backup is due. Also the retry
+/// delay after a failure (e.g. a backup drive that wasn't mounted yet at login).
+const BACKUP_CHECK_INTERVAL: std::time::Duration = std::time::Duration::from_secs(30 * 60);
+
+/// Backup at start, then whenever one is due while the app keeps running.
+/// The app lives in the tray for weeks, so a start-only backup goes stale.
+pub async fn run_backup_schedule(app_data_dir: PathBuf, db: std::sync::Arc<DatabaseConnection>) {
+    if BackupService::load_config(&app_data_dir).directory.is_none() {
+        log::info!("Backup: no destination configured, skipping startup backup");
+    } else {
+        run_logged(&app_data_dir, &db, "startup").await;
+    }
+    loop {
+        tokio::time::sleep(BACKUP_CHECK_INTERVAL).await;
+        if is_backup_due(&BackupService::load_config(&app_data_dir), Utc::now()) {
+            run_logged(&app_data_dir, &db, "scheduled").await;
+        }
+    }
+}
+
+async fn run_logged(app_data_dir: &Path, db: &DatabaseConnection, trigger: &str) {
+    match BackupService::run_backup(app_data_dir, db).await {
+        Ok(c) => log::info!(
+            "Backup ({}): completed at {}",
+            trigger,
+            c.last_backup_at.unwrap_or_default()
+        ),
+        Err(e) => log::error!("Backup ({}): failed: {}", trigger, e),
+    }
 }
 
 impl BackupService {

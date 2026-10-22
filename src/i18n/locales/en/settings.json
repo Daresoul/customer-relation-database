@@ -75,7 +75,7 @@
   },
   "backups": {
     "title": "Backups",
-    "description": "The application snapshots the database (one per day, kept for 30 days) and mirrors stored files to the destination you choose. A backup runs automatically each time the app starts.",
+    "description": "The application snapshots the database (one per day, kept for 30 days) and mirrors stored files to the destination you choose. A backup runs automatically when the app starts and again every 24 hours while it keeps running. Before an update, a separate copy is kept that daily backups never replace.",
     "destination": "Destination",
     "notConfigured": "Not configured",
     "lastRun": "Last backup",
