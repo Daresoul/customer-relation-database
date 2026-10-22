@@ -21,7 +21,16 @@ fn row_to_file_access_history(row: &sea_orm::QueryResult) -> Result<FileAccessHi
         first_attached_at: row.try_get::<Option<DateTime<Utc>>>("", "first_attached_at").ok().flatten(),
         attachment_count: row.try_get("", "attachment_count").unwrap_or(0),
         last_accessed_at: row.try_get("", "last_accessed_at").map_err(|e| format!("Failed to get last_accessed_at: {}", e))?,
+        status: row.try_get("", "status").unwrap_or_else(|_| "ok".to_string()),
+        error: row.try_get::<Option<String>>("", "error").ok().flatten(),
     })
+}
+
+pub async fn recent_device_files(
+    _db: &DatabaseConnection,
+    _days: i64,
+) -> Result<Vec<FileAccessHistoryWithRecord>, String> {
+    todo!()
 }
 
 /// Get recent device files from the last 14 days

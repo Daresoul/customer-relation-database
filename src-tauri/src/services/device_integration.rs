@@ -209,6 +209,14 @@ impl DeviceIntegrationService {
         Self::get_by_id(db, id).await
     }
 
+    pub async fn record_last_result(_db: &DatabaseConnection, _id: i64, _at: &str) -> Result<(), String> {
+        todo!()
+    }
+
+    pub async fn last_result_times(_db: &DatabaseConnection) -> Result<std::collections::HashMap<i64, String>, String> {
+        todo!()
+    }
+
     /// Update last_connected_at timestamp
     #[allow(dead_code)]
     pub async fn update_last_connected(db: &DatabaseConnection, id: i64) -> Result<(), String> {

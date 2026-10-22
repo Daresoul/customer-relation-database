@@ -78,3 +78,6 @@ pub mod command_registration_tests;
 
 #[cfg(test)]
 pub mod device_health_tests;
+
+#[cfg(test)]
+pub mod device_delivery_tests;
