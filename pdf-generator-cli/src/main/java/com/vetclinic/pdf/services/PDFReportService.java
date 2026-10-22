@@ -136,9 +136,8 @@ public class PDFReportService {
                 }
             }
             if (healvetSample == null) {
-                logger.severe("There is something wrong with the logic, there should be at least one Healvet" +
-                        " sample when the case is that tables are too large to fit one page");
-                return;
+                throw new GeneratingPDFReportException("Tables do not fit one page and there is no Healvet "
+                        + "table to move to a second page — refusing to emit a report with missing tables");
             }
 
             try {
@@ -163,8 +162,8 @@ public class PDFReportService {
                 return;
 
             } catch (TablesCannotFitPageException ex) {
-                logger.severe("Undefined behaviour: Two tables shouldn't be too large to fit one page.");
-                return;
+                throw new GeneratingPDFReportException("Two tables do not fit one page — refusing to emit "
+                        + "a report with missing tables");
             }
         }
 

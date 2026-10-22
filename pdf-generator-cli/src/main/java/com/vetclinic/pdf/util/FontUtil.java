@@ -9,8 +9,6 @@ import com.vetclinic.pdf.constants.Constants;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
  * Loads the Macedonian-capable font used to render Cyrillic text in PDFs.
@@ -41,9 +39,8 @@ import java.util.logging.Logger;
  *   - Use Identity-H encoding — iText's name for "use the font's CID
  *     Unicode mappings". Supports every codepoint the .otf has glyphs
  *     for, not just the Cp1251 subset.
- *   - Log a SEVERE error if the font fails to load, instead of silently
- *     falling back. Future regressions will surface in logs / Sentry
- *     rather than as mystery missing glyphs in customer PDFs.
+ *   - Throw if the font fails to load, so the job exits non-zero instead
+ *     of producing a PDF with missing Cyrillic glyphs.
  */
 public class FontUtil {
 
@@ -62,8 +59,6 @@ public class FontUtil {
     private static final String MACEDONIAN_FONT_CLASSPATH =
         "/com/vetclinic/pdf/" + Constants.PROBA_PRO_FONT;
 
-    private static final Logger logger = Logger.getLogger(FontUtil.class.getName());
-
     public static Font getMacedonianFont() {
         return getMacedonianFont(15);
     }
@@ -77,19 +72,7 @@ public class FontUtil {
             return new Font(MACEDONIAN_FONT, size, Font.UNDEFINED, color);
         }
 
-        BaseFont loaded = loadFont(MACEDONIAN_FONT_CLASSPATH);
-        if (loaded == null) {
-            // Loud, recoverable fallback. iText's Font(size) returns a
-            // Helvetica with no embedded font program — Cyrillic glyphs
-            // will be missing in the resulting PDF, but the rest of the
-            // document still renders so the user gets *something* to
-            // hand to the vet, plus a clear log line for triage.
-            logger.severe("Macedonian font unavailable — rendering with default font; "
-                + "Cyrillic glyphs will be missing.");
-            return new Font(Font.FontFamily.HELVETICA, size, Font.NORMAL, color);
-        }
-
-        MACEDONIAN_FONT = loaded;
+        MACEDONIAN_FONT = loadFont(MACEDONIAN_FONT_CLASSPATH);
         return new Font(MACEDONIAN_FONT, size, Font.UNDEFINED, color);
     }
 
@@ -100,12 +83,14 @@ public class FontUtil {
      * the moment the resource is inside a jar:// URL because not every
      * iText version handles those URLs end-to-end.
      */
+    /**
+     * Without this font every Cyrillic letter would be missing from the PDF,
+     * so a load failure throws (the CLI exits 1) instead of falling back.
+     */
     static BaseFont loadFont(String classpath) {
         try (InputStream in = FontUtil.class.getResourceAsStream(classpath)) {
             if (in == null) {
-                logger.severe("Macedonian font not found on classpath: "
-                    + classpath);
-                return null;
+                throw new IllegalStateException("Macedonian font not found on classpath: " + classpath);
             }
 
             byte[] fontBytes = readAllBytes(in);
@@ -129,9 +114,7 @@ public class FontUtil {
                 null
             );
         } catch (IOException | DocumentException e) {
-            logger.log(Level.SEVERE, "Failed to load Macedonian font from "
-                + classpath, e);
-            return null;
+            throw new IllegalStateException("Failed to load Macedonian font from " + classpath, e);
         }
     }
 
