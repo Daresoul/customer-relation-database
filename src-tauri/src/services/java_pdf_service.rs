@@ -69,68 +69,7 @@ impl JavaPdfService {
         // and diagnosably instead of producing a silently empty medical report.
         Self::reject_empty_samples(device_data_list)?;
 
-        // Sort samples in the order Java expects: Exigo, Pointcare, Healvet, PCR
-        // PCR samples go last as they are rendered on separate pages
-        // This is critical for correct PDF layout (Java PDF code line 273)
-        let mut sorted_samples = device_data_list.to_vec();
-        sorted_samples.sort_by_key(|device| {
-            match device.device_type.as_str() {
-                "exigo_eos_vet" => 0,              // Exigo first
-                "mnchip_pointcare_chemistry" => 1, // Pointcare chemistry second
-                "healvet_hv_fia_3000" => 2,        // Healvet third
-                "mnchip_pcr_analyzer" => 3,        // PCR last (separate page)
-                _ => 99,                            // Unknown devices last
-            }
-        });
-
-        log::debug!("   📋 Sorted samples order:");
-        for (i, device) in sorted_samples.iter().enumerate() {
-            log::debug!("      {}. {} ({})", i + 1, device.device_name, device.device_type);
-        }
-
-        // Convert all device data to Java samples
-        let java_samples: Vec<JavaSample> = sorted_samples.iter().map(|device_data| {
-            let test_results = Self::value_to_hashmap(&device_data.test_results);
-
-            let sample_id = device_data.test_results.get("SNO")
-                .or_else(|| device_data.test_results.get("ID1"))
-                .or_else(|| device_data.test_results.get("sample_id"))
-                .and_then(|v| v.as_str())
-                .unwrap_or("AUTO-GEN")
-                .to_string();
-
-            let patient_id = device_data.patient_identifier
-                .clone()
-                .unwrap_or_else(|| "N/A".to_string());
-
-            let java_device_type = Self::map_device_type(&device_data.device_type);
-
-            JavaSample {
-                device_type: java_device_type,
-                sample_id,
-                patient_id,
-                detected_at: device_data.detected_at.to_rfc3339(),
-                test_results,
-                test_type: None,
-            }
-        }).collect();
-
-        // Create Java patient
-        let java_patient = JavaPatient {
-            name: patient.name.clone(),
-            owner: patient.owner.clone(),
-            species: patient.species.clone(),
-            microchip_id: patient.microchip_id.clone(),
-            gender: patient.gender.clone(),
-            date_of_birth: patient.date_of_birth.clone(),
-        };
-
-        // Create Java PDF input
-        let java_input = JavaPdfInput {
-            patient: java_patient,
-            samples: java_samples,
-            output_path: output_path.to_string(),
-        };
+        let java_input = Self::build_java_input(patient, device_data_list, output_path, &chrono::Local);
 
         // Create temp JSON file for input
         let temp_dir = std::env::temp_dir();
@@ -187,6 +126,77 @@ impl JavaPdfService {
 
         log::info!("✅ Java PDF generated successfully");
         Ok(())
+    }
+
+    /// Builds the JSON contract sent to the JAR. Pure (no I/O), so the
+    /// Rust side of the Rust/Java contract is unit-testable.
+    fn build_java_input<Tz: chrono::TimeZone>(
+        patient: &crate::services::device_pdf_service::PatientData,
+        device_data_list: &[crate::services::device_pdf_service::DeviceTestData],
+        output_path: &str,
+        _tz: &Tz,
+    ) -> JavaPdfInput {
+        // Sort samples in the order Java expects: Exigo, Pointcare, Healvet, PCR
+        // PCR samples go last as they are rendered on separate pages
+        // This is critical for correct PDF layout (Java PDF code line 273)
+        let mut sorted_samples = device_data_list.to_vec();
+        sorted_samples.sort_by_key(|device| {
+            match device.device_type.as_str() {
+                "exigo_eos_vet" => 0,              // Exigo first
+                "mnchip_pointcare_chemistry" => 1, // Pointcare chemistry second
+                "healvet_hv_fia_3000" => 2,        // Healvet third
+                "mnchip_pcr_analyzer" => 3,        // PCR last (separate page)
+                _ => 99,                            // Unknown devices last
+            }
+        });
+
+        log::debug!("   📋 Sorted samples order:");
+        for (i, device) in sorted_samples.iter().enumerate() {
+            log::debug!("      {}. {} ({})", i + 1, device.device_name, device.device_type);
+        }
+
+        // Convert all device data to Java samples
+        let java_samples: Vec<JavaSample> = sorted_samples.iter().map(|device_data| {
+            let test_results = Self::value_to_hashmap(&device_data.test_results);
+
+            let sample_id = device_data.test_results.get("SNO")
+                .or_else(|| device_data.test_results.get("ID1"))
+                .or_else(|| device_data.test_results.get("sample_id"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("AUTO-GEN")
+                .to_string();
+
+            let patient_id = device_data.patient_identifier
+                .clone()
+                .unwrap_or_else(|| "N/A".to_string());
+
+            let java_device_type = Self::map_device_type(&device_data.device_type);
+
+            JavaSample {
+                device_type: java_device_type,
+                sample_id,
+                patient_id,
+                detected_at: device_data.detected_at.to_rfc3339(),
+                test_results,
+                test_type: None,
+            }
+        }).collect();
+
+        // Create Java patient
+        let java_patient = JavaPatient {
+            name: patient.name.clone(),
+            owner: patient.owner.clone(),
+            species: patient.species.clone(),
+            microchip_id: patient.microchip_id.clone(),
+            gender: patient.gender.clone(),
+            date_of_birth: patient.date_of_birth.clone(),
+        };
+
+        JavaPdfInput {
+            patient: java_patient,
+            samples: java_samples,
+            output_path: output_path.to_string(),
+        }
     }
 
     /// Create a Java command configured to prevent macOS focus-stealing.
@@ -787,6 +797,89 @@ mod tests {
             sample("exigo_eos_vet", serde_json::json!({"WBC": "10.4", "HGB": "17.4"})),
         ])
         .expect("non-empty samples must pass");
+    }
+
+    fn patient_with_dob(dob: Option<&str>) -> crate::services::device_pdf_service::PatientData {
+        crate::services::device_pdf_service::PatientData {
+            name: "REX".to_string(),
+            owner: "Owner".to_string(),
+            species: "Dog".to_string(),
+            microchip_id: None,
+            gender: "Male".to_string(),
+            date_of_birth: dob.map(str::to_string),
+        }
+    }
+
+    fn contract_json(
+        patient: &crate::services::device_pdf_service::PatientData,
+        samples: &[crate::services::device_pdf_service::DeviceTestData],
+    ) -> serde_json::Value {
+        let skopje_summer = chrono::FixedOffset::east_opt(2 * 3600).unwrap();
+        let input = JavaPdfService::build_java_input(patient, samples, "/tmp/out.pdf", &skopje_summer);
+        serde_json::to_value(&input).unwrap()
+    }
+
+    // The JAR parses date_of_birth as ISO yyyy-MM-dd. Whatever shape the
+    // database or a typed override holds, the contract carries ISO or null.
+    #[test]
+    fn date_of_birth_is_sent_as_iso_date() {
+        let exigo = sample("exigo_eos_vet", serde_json::json!({"WBC": "10.4"}));
+        for (stored, sent) in [
+            ("2020-01-15", serde_json::json!("2020-01-15")),
+            ("2020-01-15T00:00:00Z", serde_json::json!("2020-01-15")),
+            ("2020-01-15 00:00:00", serde_json::json!("2020-01-15")),
+            ("15/01/2020", serde_json::json!("2020-01-15")),
+            ("15.01.2020", serde_json::json!("2020-01-15")),
+            ("", serde_json::Value::Null),
+            ("sometime in spring", serde_json::Value::Null),
+        ] {
+            let json = contract_json(&patient_with_dob(Some(stored)), &[exigo.clone()]);
+            assert_eq!(json["patient"]["date_of_birth"], sent, "stored {:?}", stored);
+        }
+    }
+
+    fn analysis_datetime(device_type: &str, results: serde_json::Value) -> serde_json::Value {
+        let mut s = sample(device_type, results);
+        s.detected_at = chrono::DateTime::parse_from_rfc3339("2026-07-12T07:30:12Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let json = contract_json(&patient_with_dob(None), &[s]);
+        json["samples"][0]["analysis_datetime"].clone()
+    }
+
+    // The test time is the analyzer's own clock (local wall time, sent as
+    // ISO without offset); only when the device gave none does the receive
+    // time stand in, converted to local time. Never raw UTC.
+    #[test]
+    fn analysis_datetime_is_the_device_time_in_local_wall_clock() {
+        assert_eq!(
+            analysis_datetime("exigo_eos_vet", serde_json::json!({"WBC": "10.4", "DATE": "2026-07-10 14:52:11"})),
+            "2026-07-10T14:52:11"
+        );
+        assert_eq!(
+            analysis_datetime("mnchip_pcr_analyzer", serde_json::json!({"IC": "32.03", "test_datetime": "20260604101801"})),
+            "2026-06-04T10:18:01"
+        );
+        assert_eq!(
+            analysis_datetime("mnchip_pointcare_chemistry", serde_json::json!({"GLU": "95", "message_datetime": "20260115003112"})),
+            "2026-01-15T00:31:12"
+        );
+        assert_eq!(
+            analysis_datetime("healvet_hv_fia_3000", serde_json::json!({"cCRP": "12.5", "test_datetime": "06-04-2026 11:49:53"})),
+            "2026-04-06T11:49:53"
+        );
+    }
+
+    #[test]
+    fn analysis_datetime_falls_back_to_receive_time_in_local_zone() {
+        assert_eq!(
+            analysis_datetime("exigo_eos_vet", serde_json::json!({"WBC": "10.4"})),
+            "2026-07-12T09:30:12"
+        );
+        assert_eq!(
+            analysis_datetime("exigo_eos_vet", serde_json::json!({"WBC": "10.4", "DATE": "garbled"})),
+            "2026-07-12T09:30:12"
+        );
     }
 
     #[test]
