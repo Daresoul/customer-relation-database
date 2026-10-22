@@ -77,7 +77,7 @@ public class FontUtil {
             return new Font(MACEDONIAN_FONT, size, Font.UNDEFINED, color);
         }
 
-        BaseFont loaded = loadMacedonianFontFromClasspath();
+        BaseFont loaded = loadFont(MACEDONIAN_FONT_CLASSPATH);
         if (loaded == null) {
             // Loud, recoverable fallback. iText's Font(size) returns a
             // Helvetica with no embedded font program — Cyrillic glyphs
@@ -100,11 +100,11 @@ public class FontUtil {
      * the moment the resource is inside a jar:// URL because not every
      * iText version handles those URLs end-to-end.
      */
-    private static BaseFont loadMacedonianFontFromClasspath() {
-        try (InputStream in = FontUtil.class.getResourceAsStream(MACEDONIAN_FONT_CLASSPATH)) {
+    static BaseFont loadFont(String classpath) {
+        try (InputStream in = FontUtil.class.getResourceAsStream(classpath)) {
             if (in == null) {
                 logger.severe("Macedonian font not found on classpath: "
-                    + MACEDONIAN_FONT_CLASSPATH);
+                    + classpath);
                 return null;
             }
 
@@ -130,7 +130,7 @@ public class FontUtil {
             );
         } catch (IOException | DocumentException e) {
             logger.log(Level.SEVERE, "Failed to load Macedonian font from "
-                + MACEDONIAN_FONT_CLASSPATH, e);
+                + classpath, e);
             return null;
         }
     }
