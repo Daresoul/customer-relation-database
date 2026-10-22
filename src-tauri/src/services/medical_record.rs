@@ -292,11 +292,12 @@ impl MedicalRecordService {
         input: CreateMedicalRecordInput,
     ) -> Result<MedicalRecord, String> {
         let now = Utc::now();
+        let txn = db.begin().await.map_err(|e| format!("Failed to start saving the record: {}", e))?;
 
         // Development: do not populate procedure_name; use name as the single source of truth
         let procedure_name: Option<String> = None;
 
-        let result = db
+        let result = txn
             .execute(Statement::from_sql_and_values(
                 DbBackend::Sqlite,
                 "INSERT INTO medical_records \
@@ -327,7 +328,7 @@ impl MedicalRecordService {
         // Create line items if provided
         let line_items = if let Some(items) = input.line_items.clone() {
             if !items.is_empty() {
-                let created_items = crate::services::line_item::LineItemService::create_line_items_for_record(db, id, items)
+                let created_items = crate::services::line_item::LineItemService::create_line_items_for_record_in(&txn, id, items)
                     .await
                     .map_err(|e| format!("Failed to create line items: {}", e))?;
                 Some(created_items)
@@ -375,7 +376,7 @@ impl MedicalRecordService {
             "is_archived": record.is_archived
         });
 
-        let _ = db
+        txn
             .execute(Statement::from_sql_and_values(
                 DbBackend::Sqlite,
                 "INSERT INTO medical_record_history (medical_record_id, version, changed_fields, old_values, new_values, changed_by) VALUES (?, ?, ?, ?, ?, ?)",
@@ -388,7 +389,10 @@ impl MedicalRecordService {
                     Value::String(None),
                 ],
             ))
-            .await;
+            .await
+            .map_err(|e| format!("Failed to write record history: {}", e))?;
+
+        txn.commit().await.map_err(|e| format!("Failed to save the record: {}", e))?;
 
         log::debug!("History snapshot insert (create): rec_id={}, version=1, fields=created, new={}", id, new_snapshot);
 
@@ -1034,9 +1038,10 @@ impl MedicalRecordService {
         updates: UpdateMedicalRecordInput,
     ) -> Result<MedicalRecord, String> {
         let now = Utc::now();
+        let txn = db.begin().await.map_err(|e| format!("Failed to start saving the record: {}", e))?;
 
         // Fetch current record for diffing/history
-        let old_row = db
+        let old_row = txn
             .query_one(Statement::from_sql_and_values(
                 DbBackend::Sqlite,
                 &format!("SELECT {} FROM medical_records WHERE id = ?", RECORD_COLUMNS),
@@ -1138,27 +1143,27 @@ impl MedicalRecordService {
                 update_parts.join(", ")
             );
 
-            db.execute(Statement::from_sql_and_values(DbBackend::Sqlite, &query, params))
+            txn.execute(Statement::from_sql_and_values(DbBackend::Sqlite, &query, params))
                 .await
                 .map_err(|e| format!("Failed to update medical record: {}", e))?;
         }
 
         // Handle line items replacement if provided
         let line_items = if let Some(items) = updates.line_items {
-            let replaced_items = crate::services::line_item::LineItemService::replace_line_items_for_record(db, record_id, items)
+            let replaced_items = crate::services::line_item::LineItemService::replace_line_items_for_record_in(&txn, record_id, items)
                 .await
                 .map_err(|e| format!("Failed to update line items: {}", e))?;
             if replaced_items.is_empty() { None } else { Some(replaced_items) }
         } else {
             // Fetch existing line items
-            let existing = crate::services::line_item::LineItemService::get_line_items_for_record(db, record_id)
+            let existing = crate::services::line_item::LineItemService::get_line_items_for_record_in(&txn, record_id)
                 .await
                 .unwrap_or_default();
             if existing.is_empty() { None } else { Some(existing) }
         };
 
         // Fetch the updated record
-        let row = db
+        let row = txn
             .query_one(Statement::from_sql_and_values(
                 DbBackend::Sqlite,
                 &format!("SELECT {} FROM medical_records WHERE id = ?", RECORD_COLUMNS),
@@ -1230,7 +1235,7 @@ impl MedicalRecordService {
         if old_snapshot.get("is_archived") != new_snapshot.get("is_archived") { changed_fields.push("is_archived"); }
 
         log::debug!("History snapshot insert (update): rec_id={}, version={}, fields={}", record_id, updated_record.version, changed_fields.join(","));
-        let _ = db
+        txn
             .execute(Statement::from_sql_and_values(
                 DbBackend::Sqlite,
                 "INSERT INTO medical_record_history (medical_record_id, version, changed_fields, old_values, new_values, changed_by) VALUES (?, ?, ?, ?, ?, ?)",
@@ -1243,7 +1248,10 @@ impl MedicalRecordService {
                     Value::String(updated_record.updated_by.clone().map(Box::new)),
                 ],
             ))
-            .await;
+            .await
+            .map_err(|e| format!("Failed to write record history: {}", e))?;
+
+        txn.commit().await.map_err(|e| format!("Failed to save the record: {}", e))?;
 
         Ok(updated_record)
     }
