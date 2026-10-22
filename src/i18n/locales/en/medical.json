@@ -225,5 +225,15 @@
   },
   "errors": {
     "templateSearchFailed": "Failed to search templates"
+  },
+  "documents": {
+    "someFailed": "Record saved, but a document could not be made",
+    "retrySucceeded": "{{document}} is ready",
+    "kinds": {
+      "report": "Medical report",
+      "pharmacy_note": "Pharmacy note",
+      "invoice": "Invoice",
+      "device_report": "Lab report"
+    }
   }
 }

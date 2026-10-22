@@ -3,6 +3,7 @@ import { MedicalService } from '@/services/medicalService';
 import { App } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { createMutationErrorHandler } from '@/utils/errors';
+import { useDocumentStatusNotice, type SavedRecordDocuments } from './useDocumentStatusNotice';
 import type {
   MedicalRecordFilter,
   UpdateMedicalRecordInput,
@@ -59,17 +60,13 @@ export function useCreateMedicalRecord() {
   const queryClient = useQueryClient();
   const { notification } = App.useApp();
   const { t } = useTranslation('errors');
+  const reportDocuments = useDocumentStatusNotice();
 
   return useMutation({
     mutationFn: (input: CreateMedicalRecordInput) =>
       MedicalService.createMedicalRecord(input),
     onSuccess: (data, variables) => {
-      notification.success({
-        message: 'Medical Record Created',
-        description: 'Medical record created successfully',
-        placement: 'bottomRight',
-        duration: 3,
-      });
+      reportDocuments(data as SavedRecordDocuments, t('medical:messages.createSuccess'));
       // Invalidate ALL medical records queries for this patient (regardless of filters)
       queryClient.invalidateQueries({
         queryKey: ['medical-records', variables.patientId],
@@ -89,6 +86,7 @@ export function useUpdateMedicalRecord() {
   const queryClient = useQueryClient();
   const { notification } = App.useApp();
   const { t } = useTranslation('errors');
+  const reportDocuments = useDocumentStatusNotice();
 
   return useMutation({
     mutationFn: ({
@@ -99,12 +97,7 @@ export function useUpdateMedicalRecord() {
       updates: UpdateMedicalRecordInput;
     }) => MedicalService.updateMedicalRecord(recordId, updates),
     onSuccess: (data) => {
-      notification.success({
-        message: 'Medical record updated successfully',
-        description: 'Medical record updated successfully',
-        placement: 'bottomRight',
-        duration: 3,
-      });
+      reportDocuments(data as SavedRecordDocuments, t('medical:messages.updateSuccess'));
       // Invalidate medical records list for this patient (with any filters)
       queryClient.invalidateQueries({
         queryKey: ['medical-records', data.patientId],

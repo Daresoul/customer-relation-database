@@ -225,5 +225,15 @@
   },
   "errors": {
     "templateSearchFailed": "Неуспешно пребарување на шаблони"
+  },
+  "documents": {
+    "someFailed": "Записот е зачуван, но еден документ не можеше да се направи",
+    "retrySucceeded": "{{document}} е подготвен",
+    "kinds": {
+      "report": "Медицински извештај",
+      "pharmacy_note": "Рецепт за аптека",
+      "invoice": "Фактура",
+      "device_report": "Лабораториски извештај"
+    }
   }
 }
