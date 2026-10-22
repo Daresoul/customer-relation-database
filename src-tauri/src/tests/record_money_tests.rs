@@ -85,3 +85,174 @@ async fn record_at_version_carries_invoice_number() {
 
     assert_eq!(r.invoice_number.as_deref(), Some("009/2026"));
 }
+
+// ---------------------------------------------------------------------------
+// D5: a record and its line items are written together or not at all
+// (D2/D1 contract checks ride along: clearing values, keeping the number)
+// ---------------------------------------------------------------------------
+
+use crate::models::dto::MaybeNull;
+use crate::models::line_item::CreateLineItemInput;
+use crate::models::medical::{CreateMedicalRecordInput, UpdateMedicalRecordInput};
+
+fn item(name: &str, price: f64) -> CreateLineItemInput {
+    CreateLineItemInput {
+        template_id: None,
+        name: name.to_string(),
+        description: None,
+        unit_price: price,
+        currency_id: 1,
+        quantity: 1,
+    }
+}
+
+fn new_record(patient_id: i64, items: Vec<CreateLineItemInput>) -> CreateMedicalRecordInput {
+    CreateMedicalRecordInput {
+        patient_id,
+        record_type: "procedure".to_string(),
+        name: "Visit".to_string(),
+        procedure_name: None,
+        description: "Notes".to_string(),
+        prescription_notes: None,
+        price: None,
+        currency_id: None,
+        discount_percent: Some(10.0),
+        manual_total: None,
+        device_test_data: None,
+        device_type: None,
+        device_name: None,
+        device_data_list: None,
+        line_items: Some(items),
+    }
+}
+
+fn no_changes() -> UpdateMedicalRecordInput {
+    UpdateMedicalRecordInput {
+        name: None,
+        procedure_name: None,
+        description: None,
+        prescription_notes: None,
+        price: MaybeNull::Undefined,
+        currency_id: MaybeNull::Undefined,
+        discount_percent: MaybeNull::Undefined,
+        manual_total: MaybeNull::Undefined,
+        is_archived: None,
+        line_items: None,
+    }
+}
+
+async fn count(db: &DatabaseConnection, sql: &str) -> i64 {
+    let row = db
+        .query_one(Statement::from_string(DbBackend::Sqlite, sql.to_string()))
+        .await
+        .unwrap()
+        .unwrap();
+    row.try_get_by_index::<i64>(0).unwrap()
+}
+
+#[tokio::test]
+async fn create_saves_record_items_and_first_history_row() {
+    let db = create_test_db_with_migrations().await;
+    let patient_id = seed_patient(&db).await;
+
+    let record = MedicalRecordService::save_new_record(&db, new_record(patient_id, vec![item("Exam", 1500.0), item("Vaccine", 800.0)]))
+        .await
+        .unwrap();
+
+    assert_eq!(record.line_items.as_ref().map(|v| v.len()), Some(2));
+    assert_eq!(count(&db, &format!("SELECT COUNT(*) FROM medical_record_line_items WHERE medical_record_id = {}", record.id)).await, 2);
+    assert_eq!(count(&db, &format!("SELECT COUNT(*) FROM medical_record_history WHERE medical_record_id = {}", record.id)).await, 1);
+}
+
+#[tokio::test]
+async fn create_with_a_bad_line_item_leaves_nothing_behind() {
+    let db = create_test_db_with_migrations().await;
+    let patient_id = seed_patient(&db).await;
+
+    let result = MedicalRecordService::save_new_record(&db, new_record(patient_id, vec![item("Exam", 1500.0), item("  ", 1.0)])).await;
+
+    assert!(result.is_err());
+    assert_eq!(count(&db, "SELECT COUNT(*) FROM medical_records").await, 0);
+    assert_eq!(count(&db, "SELECT COUNT(*) FROM medical_record_line_items").await, 0);
+    assert_eq!(count(&db, "SELECT COUNT(*) FROM medical_record_history").await, 0);
+}
+
+#[tokio::test]
+async fn update_with_a_bad_line_item_changes_nothing() {
+    let db = create_test_db_with_migrations().await;
+    let patient_id = seed_patient(&db).await;
+    let record = MedicalRecordService::save_new_record(&db, new_record(patient_id, vec![item("Exam", 1500.0)]))
+        .await
+        .unwrap();
+
+    let mut changes = no_changes();
+    changes.name = Some("Renamed".to_string());
+    changes.discount_percent = MaybeNull::Value(50.0);
+    changes.line_items = Some(vec![item("Vaccine", 800.0), item("", 1.0)]);
+    let result = MedicalRecordService::save_record_changes(&db, record.id, changes).await;
+
+    assert!(result.is_err());
+    let after = MedicalRecordService::get_medical_record(&db, record.id, true).await.unwrap();
+    assert_eq!(after.record.name, "Visit");
+    assert_eq!(after.record.discount_percent, Some(10.0));
+    assert_eq!(after.record.version, 1);
+    let items = after.record.line_items.unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].name, "Exam");
+    assert_eq!(after.history.unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn update_keeps_the_invoice_number() {
+    let db = create_test_db_with_migrations().await;
+    let patient_id = seed_patient(&db).await;
+    let id = insert_record_with_invoice(&db, patient_id, "011/2026").await;
+
+    let mut changes = no_changes();
+    changes.description = Some("Fixed typo".to_string());
+    let updated = MedicalRecordService::save_record_changes(&db, id, changes).await.unwrap();
+
+    assert_eq!(updated.invoice_number.as_deref(), Some("011/2026"));
+}
+
+#[tokio::test]
+async fn editing_name_and_description_keeps_the_search_index_healthy() {
+    let db = create_test_db_with_migrations().await;
+    let patient_id = seed_patient(&db).await;
+    let record = MedicalRecordService::save_new_record(&db, new_record(patient_id, vec![])).await.unwrap();
+
+    for (name, description) in [("Renamed", "Fixed typo"), ("Again", "Another wording")] {
+        let mut changes = no_changes();
+        changes.name = Some(name.to_string());
+        changes.description = Some(description.to_string());
+        MedicalRecordService::save_record_changes(&db, record.id, changes).await.unwrap();
+    }
+
+    db.execute_unprepared("INSERT INTO medical_records_fts(medical_records_fts) VALUES('integrity-check')")
+        .await
+        .expect("search index is corrupt");
+    let hits = count(&db, "SELECT COUNT(*) FROM medical_records_fts WHERE medical_records_fts MATCH 'wording'").await;
+    assert_eq!(hits, 1);
+    let stale = count(&db, "SELECT COUNT(*) FROM medical_records_fts WHERE medical_records_fts MATCH 'typo'").await;
+    assert_eq!(stale, 0);
+}
+
+#[tokio::test]
+async fn update_can_clear_discount_manual_total_and_the_last_line_item() {
+    let db = create_test_db_with_migrations().await;
+    let patient_id = seed_patient(&db).await;
+    let mut input = new_record(patient_id, vec![item("Exam", 1500.0)]);
+    input.manual_total = Some(2000.0);
+    let record = MedicalRecordService::save_new_record(&db, input).await.unwrap();
+
+    let mut changes = no_changes();
+    changes.discount_percent = MaybeNull::Null;
+    changes.manual_total = MaybeNull::Null;
+    changes.line_items = Some(vec![]);
+    let updated = MedicalRecordService::save_record_changes(&db, record.id, changes).await.unwrap();
+
+    assert_eq!(updated.discount_percent, None);
+    assert_eq!(updated.manual_total, None);
+    assert!(updated.line_items.is_none());
+    assert_eq!(count(&db, &format!("SELECT COUNT(*) FROM medical_record_line_items WHERE medical_record_id = {}", record.id)).await, 0);
+}
