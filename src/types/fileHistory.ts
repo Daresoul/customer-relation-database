@@ -32,6 +32,9 @@ export interface FileAccessHistoryWithRecord {
   firstAttachedAt?: string;
   attachmentCount: number;
   lastAccessedAt: string;
+  /** 'failed' when the device sent bytes that couldn't be read as a result */
+  status?: 'ok' | 'failed';
+  error?: string | null;
   // Enriched fields
   patientName?: string;
   recordName?: string;

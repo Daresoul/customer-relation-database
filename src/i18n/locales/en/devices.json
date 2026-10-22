@@ -121,5 +121,60 @@
   },
   "labels": {
     "devices": "Devices:"
+  },
+  "health": {
+    "lastResult": "Last result {{time}}",
+    "lastResultOn": "Last result {{date}} {{time}}",
+    "details": "Details",
+    "kinds": {
+      "port_missing": {
+        "title": "Not connected: {{port}} is gone from this PC",
+        "action": "Check the USB cable between the analyzer and this PC. We reconnect by ourselves."
+      },
+      "port_busy": {
+        "title": "Another program is using {{port}}",
+        "action": "Close the analyzer's own PC software or a second Arkivet window, then press Reconnect."
+      },
+      "access_denied": {
+        "title": "This computer user can't open {{port}}",
+        "action": "Ask whoever set up this PC to allow access to the port, then press Reconnect."
+      },
+      "disconnected": {
+        "title": "Lost the connection on {{port}}",
+        "action": "Check that the analyzer is on and the cable is plugged in. We reconnect by ourselves."
+      },
+      "folder_missing": {
+        "title": "Can't find the results folder ({{directory}})",
+        "action": "Is the lab PC on and the folder shared? We keep checking every 30 seconds."
+      },
+      "folder_lost": {
+        "title": "Lost the results folder ({{directory}})",
+        "action": "Check the lab PC and the network. We start again as soon as the folder is back."
+      },
+      "not_a_folder": {
+        "title": "The results path is a file, not a folder ({{directory}})",
+        "action": "Pick the folder in Settings → Devices."
+      },
+      "unknown": {
+        "title": "Can't reach the device",
+        "action": "Press Reconnect. If it keeps happening, send the details below to support."
+      }
+    }
+  },
+  "events": {
+    "parseFailed": "Couldn't read a result from {{device}}",
+    "parseFailedAction": "The raw data is kept in Recent Device Files. Send the result again from the analyzer, or tell support.",
+    "emptyResult": "{{device}} sent a result with no values",
+    "emptyResultAction": "Check the test on the analyzer and send it again.",
+    "cutOff": "A result from {{device}} was cut off",
+    "cutOffAction": "Send it again from the analyzer.",
+    "saveFailed": "A result from {{device}} arrived but couldn't be saved as a backup",
+    "saveFailedAction": "Import it now. If this repeats, check the disk space and tell support.",
+    "folderLost": "Lost the results folder of {{device}}",
+    "folderLostAction": "Check the lab PC and the network. We start again as soon as the folder is back."
+  },
+  "recentFiles": {
+    "couldNotRead": "Couldn't read",
+    "couldNotReadHint": "The device sent data we couldn't read. The raw file is kept for support."
   }
 }

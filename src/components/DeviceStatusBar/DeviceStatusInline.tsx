@@ -5,6 +5,8 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useDeviceIntegrations, useDeviceConnectionStatus, useFileWatcherStatus } from '../../hooks/useDeviceIntegrations';
 import { ConnectionState, FileWatcherState, getDeviceTypeDisplayName } from '../../types/deviceIntegration';
+import { describeFolderStatus, describeSerialStatus, formatLastResult } from './deviceHealth';
+import { HealthLines } from './HealthLines';
 import styles from './DeviceStatusInline.module.css';
 
 const { Text } = Typography;
@@ -59,34 +61,6 @@ export const DeviceStatusInline: React.FC = () => {
     }
   };
 
-  const getSerialStatusText = (state?: ConnectionState, retryCount?: number, lastError?: string): string => {
-    switch (state) {
-      case 'Connected':
-        return t('status.connected');
-      case 'Connecting':
-        return retryCount ? t('status.connectingAttempt', { count: retryCount + 1 }) : t('status.connecting');
-      case 'Disconnected':
-        return t('status.disconnectedRetrying');
-      case 'Error':
-        return t('status.errorRetrying', { message: lastError || t('status.unknown') });
-      default:
-        return t('status.unknown');
-    }
-  };
-
-  const getFileWatcherStatusText = (state?: FileWatcherState, lastError?: string): string => {
-    switch (state) {
-      case 'Watching':
-        return t('status.watching');
-      case 'Error':
-        return t('status.errorWithMessage', { message: lastError || t('status.unknown') });
-      case 'Stopped':
-        return t('status.stopped');
-      default:
-        return t('status.unknown');
-    }
-  };
-
   return (
     <div className={styles.inlineStatus}>
       {hasIntegrations && (
@@ -95,7 +69,7 @@ export const DeviceStatusInline: React.FC = () => {
           {serialPortIntegrations.map((integration) => {
           const status = getSerialStatus(integration.id);
           const statusColor = getSerialStatusColor(status?.status);
-          const statusText = getSerialStatusText(status?.status, status?.retry_count, status?.last_error);
+          const lastResult = formatLastResult(status?.last_result_at, new Date(), t);
 
           return (
             <Tooltip
@@ -105,7 +79,7 @@ export const DeviceStatusInline: React.FC = () => {
                   <div><strong>{integration.name}</strong></div>
                   <div>{getDeviceTypeDisplayName(integration.deviceType as any)}</div>
                   <div>{t('tooltips.port', { port: integration.serialPortName })}</div>
-                  <div>{t('tooltips.status', { status: statusText })}</div>
+                  <HealthLines health={describeSerialStatus(status, t)} lastResult={lastResult} />
                 </div>
               }
             >
@@ -116,6 +90,7 @@ export const DeviceStatusInline: React.FC = () => {
                   style={{ backgroundColor: statusColor }}
                 />
                 <Text className={styles.deviceName}>{integration.name}</Text>
+                {lastResult && <Text type="secondary" className={styles.lastResult}>{lastResult}</Text>}
               </div>
             </Tooltip>
           );
@@ -125,7 +100,7 @@ export const DeviceStatusInline: React.FC = () => {
         {fileWatchIntegrations.map((integration) => {
           const status = getFileWatcherStatus(integration.id);
           const statusColor = getFileWatcherStatusColor(status?.status);
-          const statusText = getFileWatcherStatusText(status?.status, status?.last_error);
+          const lastResult = formatLastResult(status?.last_result_at, new Date(), t);
 
           return (
             <Tooltip
@@ -136,7 +111,7 @@ export const DeviceStatusInline: React.FC = () => {
                   <div>{getDeviceTypeDisplayName(integration.deviceType as any)}</div>
                   <div>{t('tooltips.directory', { directory: integration.watchDirectory })}</div>
                   <div>{t('tooltips.pattern', { pattern: integration.filePattern })}</div>
-                  <div>{t('tooltips.status', { status: statusText })}</div>
+                  <HealthLines health={describeFolderStatus(status, t)} lastResult={lastResult} />
                 </div>
               }
             >
@@ -147,6 +122,7 @@ export const DeviceStatusInline: React.FC = () => {
                   style={{ backgroundColor: statusColor }}
                 />
                 <Text className={styles.deviceName}>{integration.name}</Text>
+                {lastResult && <Text type="secondary" className={styles.lastResult}>{lastResult}</Text>}
               </div>
             </Tooltip>
           );
