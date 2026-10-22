@@ -805,6 +805,10 @@ public class PDFReportService {
         return sampleInfoWrapperTable;
     }
 
+    private static String displayOrDash(String value) {
+        return (value == null || value.trim().isEmpty()) ? "—" : value;
+    }
+
     private PdfPCell createOkayResultCell(String name) {
         PdfPCell parameterCell = Util.createDefaultCell(
                 name,
@@ -992,7 +996,7 @@ public class PDFReportService {
 
         PdfPCell patientId = Util.createDefaultCellWithLeftRightAlignment(
                 "Микрочип: ",
-                patient.getPatientIdMicrochip(),
+                displayOrDash(patient.getPatientIdMicrochip()),
                 CELL_FONT_SIZE,
                 FontUtil.MACEDONIAN);
         patientId.setColspan(2);

@@ -1,6 +1,5 @@
 package com.vetclinic.pdf.models;
 
-import com.vetclinic.pdf.constants.Constants;
 import com.vetclinic.pdf.constants.Gender;
 import com.vetclinic.pdf.constants.PatientType;
 
@@ -23,10 +22,10 @@ public class Patient {
         this.id = -1;
         this.name = "";
         this.owner = "";
-        this.patientIdMicrochip = Constants.DEFAULT_MICRO_CHIP;
+        this.patientIdMicrochip = "";
         this.patientType = PatientType.DOG;
         this.dateOfBirth = null;
-        this.gender = Gender.MALE;
+        this.gender = Gender.UNKNOWN;
     }
 
     public Patient(int id, String name, PatientType patientType, String owner, String patientIdMicrochip,

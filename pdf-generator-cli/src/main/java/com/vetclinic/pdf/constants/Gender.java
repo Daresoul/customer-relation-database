@@ -10,7 +10,13 @@ public enum Gender {
     MALE("M", "мажјак"),
     MALE_V2("male", "мажјак"),
     FEMALE("F", "женка"),
-    FEMALE_V2("female", "женка");
+    FEMALE_V2("female", "женка"),
+    UNKNOWN("", "непознат");
+
+    private static final java.util.Set<String> MALE_VALUES = new java.util.HashSet<>(java.util.Arrays.asList(
+            "male", "m", "м", "мажјак", "машко", "маж"));
+    private static final java.util.Set<String> FEMALE_VALUES = new java.util.HashSet<>(java.util.Arrays.asList(
+            "female", "f", "ж", "женка", "женско"));
 
     private String genderCode;
     private String genderTranslated;
@@ -65,6 +71,21 @@ public enum Gender {
             }
         }
         return null;
+    }
+
+    /** Exact match on the stored sex value (English or Macedonian); anything else is UNKNOWN. */
+    public static Gender fromPatientValue(String value) {
+        if (value == null) {
+            return UNKNOWN;
+        }
+        String v = value.trim().toLowerCase(java.util.Locale.ROOT);
+        if (FEMALE_VALUES.contains(v)) {
+            return FEMALE;
+        }
+        if (MALE_VALUES.contains(v)) {
+            return MALE;
+        }
+        return UNKNOWN;
     }
 
     @Override

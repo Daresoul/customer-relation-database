@@ -230,15 +230,9 @@ public class PdfGeneratorCLI {
             patient.setPatientIdMicrochip(json.get("microchip_id").getAsString());
         }
 
-        // Map gender string to Gender enum
-        String gender = json.get("gender").getAsString().toUpperCase();
-        if (gender.contains("MALE") || gender.equals("М")) {
-            patient.setGender(Gender.MALE);
-        } else if (gender.contains("FEMALE") || gender.equals("Ж")) {
-            patient.setGender(Gender.FEMALE);
-        } else {
-            patient.setGender(Gender.MALE); // Default to MALE
-        }
+        String gender = json.has("gender") && !json.get("gender").isJsonNull()
+                ? json.get("gender").getAsString() : null;
+        patient.setGender(Gender.fromPatientValue(gender));
 
         if (json.has("date_of_birth") && !json.get("date_of_birth").isJsonNull()) {
             String dobString = json.get("date_of_birth").getAsString();
