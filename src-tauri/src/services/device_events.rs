@@ -96,6 +96,11 @@ pub fn note_result(integration_id: i64, at: &str) {
     times(&LAST_RESULT).insert(integration_id, at.to_string());
 }
 
+/// Keep a stored time from an earlier run unless this run already has one.
+pub fn seed_last_result(integration_id: i64, at: &str) {
+    times(&LAST_RESULT).entry(integration_id).or_insert_with(|| at.to_string());
+}
+
 pub fn last_result(integration_id: i64) -> Option<String> {
     times(&LAST_RESULT).get(&integration_id).cloned()
 }

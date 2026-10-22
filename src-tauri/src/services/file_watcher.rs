@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::Manager;
 use serde::{Serialize, Deserialize};
-use crate::services::device_events::{deliver_result, AppSink, DeviceErrorKind, ResultSource};
+use crate::services::device_events::{deliver_result, last_result, AppSink, DeviceErrorKind, ResultSource};
 use crate::services::file_storage::FileStorageService;
 
 /// Read a file only once its size has stabilised, to avoid grabbing a
@@ -89,7 +89,7 @@ fn update_file_watcher_status(
         last_error: error,
         error_kind: None,
         files_processed: 0,
-        last_result_at: None,
+        last_result_at: last_result(integration_id),
     };
 
     // Store in global state
@@ -117,7 +117,8 @@ pub fn get_all_file_watcher_statuses() -> Vec<FileWatcherStatus> {
 /// Re-send a watcher's status, e.g. after its last-result time changed.
 pub fn emit_status_for(app_handle: &tauri::AppHandle, integration_id: i64) {
     let status = get_file_watcher_status().lock().unwrap().get(&integration_id).cloned();
-    if let Some(status) = status {
+    if let Some(mut status) = status {
+        status.last_result_at = last_result(integration_id);
         let _ = app_handle.emit_all("file-watcher-status", &status);
     }
 }

@@ -14,7 +14,8 @@ use crate::services::device_input::PortType::HIDDevice;
 use crate::services::file_storage::FileStorageService;
 use crate::database::SeaOrmPool;
 use crate::services::device_events::{
-    deliver_result, note_bytes, report_cut_off, AppSink, DeviceErrorKind, ResultSource,
+    deliver_result, last_bytes, last_result, note_bytes, report_cut_off, AppSink, DeviceErrorKind,
+    ResultSource,
 };
 
 // Thread handle for managing listener lifecycle
@@ -196,8 +197,8 @@ fn update_connection_status(app_handle: &AppHandle, integration_id: i64, port_na
         error_kind,
         retry_count,
         next_retry,
-        last_result_at: None,
-        last_byte_at: None,
+        last_result_at: last_result(integration_id),
+        last_byte_at: last_bytes(integration_id),
     };
 
     // Store in global state, only emit to frontend if status actually changed
@@ -222,7 +223,9 @@ fn update_connection_status(app_handle: &AppHandle, integration_id: i64, port_na
 
 /// Re-send an integration's status, e.g. after its last-result time changed.
 pub fn emit_status_for(app_handle: &AppHandle, integration_id: i64) {
-    for status in get_all_connection_statuses().into_iter().filter(|s| s.integration_id == integration_id) {
+    for mut status in get_all_connection_statuses().into_iter().filter(|s| s.integration_id == integration_id) {
+        status.last_result_at = last_result(integration_id);
+        status.last_byte_at = last_bytes(integration_id);
         let _ = app_handle.emit_all("device-connection-status", &status);
     }
 }
