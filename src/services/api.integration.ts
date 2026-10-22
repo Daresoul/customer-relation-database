@@ -126,37 +126,32 @@ export const patientApi = {
 // Household API methods
 export const householdApi = {
   search: async (query: string, limit?: number): Promise<HouseholdTableRecord[]> => {
-    try {
-      // Empty query: list every household (no limit unless the caller pages)
-      if (!query || query.trim().length === 0) {
-        try {
-          const results = await invoke<any[]>('get_all_households', { limit });
-          // Transform nested household data to flat structure
-          return results.map(r => {
-            if (r.household) {
-              const primaryPerson = r.people?.find((p: any) => p.is_primary) || r.people?.[0];
-              const primaryContact = primaryPerson?.contacts?.find((c: any) => c.is_primary) || primaryPerson?.contacts?.[0];
+    // Empty query: list every household (no limit unless the caller pages).
+    // A failure is a page-load error the caller shows inline, so no toast here.
+    if (!query || query.trim().length === 0) {
+      const results = await invoke<any[]>('get_all_households', { limit });
+      // Transform nested household data to flat structure
+      return results.map(r => {
+        if (r.household) {
+          const primaryPerson = r.people?.find((p: any) => p.is_primary) || r.people?.[0];
 
-              return {
-                id: r.household.id,
-                lastName: r.household.household_name || r.household.name,
-                primaryContact: primaryPerson ? `${primaryPerson.first_name} ${primaryPerson.last_name}` : null,
-                phone: primaryPerson?.contacts?.find((c: any) => c.contact_type === 'phone')?.contact_value || null,
-                email: primaryPerson?.contacts?.find((c: any) => c.contact_type === 'email')?.contact_value || null,
-                address: r.household.address,
-                petCount: r.pet_count || 0,
-                lastActivity: r.household.updated_at || r.household.created_at,
-                status: 'active'
-              };
-            }
-            return r; // Return as-is if not nested
-          });
-        } catch {
-          // If get_all_households doesn't exist, return empty
-          return [];
+          return {
+            id: r.household.id,
+            lastName: r.household.household_name || r.household.name,
+            primaryContact: primaryPerson ? `${primaryPerson.first_name} ${primaryPerson.last_name}` : null,
+            phone: primaryPerson?.contacts?.find((c: any) => c.contact_type === 'phone')?.contact_value || null,
+            email: primaryPerson?.contacts?.find((c: any) => c.contact_type === 'email')?.contact_value || null,
+            address: r.household.address,
+            petCount: r.pet_count || 0,
+            lastActivity: r.household.updated_at || r.household.created_at,
+            status: 'active'
+          };
         }
-      }
+        return r; // Return as-is if not nested
+      });
+    }
 
+    try {
       // For short queries (1 char), return empty to avoid FTS5 errors
       if (query.trim().length < 2) {
         return [];

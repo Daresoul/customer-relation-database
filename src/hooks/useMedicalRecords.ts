@@ -20,7 +20,11 @@ export function useMedicalRecords(
     queryKey: ['medical-records', patientId, filter, pagination],
     queryFn: () => MedicalService.getMedicalRecords(patientId, filter, pagination),
     enabled: !!patientId,
-    retry: 1
+    retry: 1,
+    // Keep the shown records while "load more" or a filter change fetches,
+    // but never carry one patient's records onto another patient's page.
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[1] === patientId ? previous : undefined,
   });
 }
 

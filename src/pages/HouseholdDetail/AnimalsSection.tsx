@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Table, Typography, Tag, Empty, Button, Modal, App } from 'antd';
+import { Table, Typography, Tag, Empty, Button, Modal, App, Skeleton } from 'antd';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Patient } from '../../types/household';
 import { PlusOutlined } from '@ant-design/icons';
 import PatientFormWithOwner from '../../components/forms/PatientFormWithOwner';
+import { LoadError } from '../../components/common/LoadError';
 import { PatientService } from '../../services/patientService';
 import type { CreatePatientInput, UpdatePatientInput } from '../../types';
 import styles from './HouseholdDetail.module.css';
@@ -14,9 +15,20 @@ const { Title } = Typography;
 interface AnimalsSectionProps {
   patients: Patient[];
   householdId: number;
+  loading?: boolean;
+  loadFailed?: boolean;
+  retrying?: boolean;
+  onRetry?: () => void;
 }
 
-export const AnimalsSection: React.FC<AnimalsSectionProps> = ({ patients, householdId }) => {
+export const AnimalsSection: React.FC<AnimalsSectionProps> = ({
+  patients,
+  householdId,
+  loading = false,
+  loadFailed = false,
+  retrying = false,
+  onRetry = () => {},
+}) => {
   const { t } = useTranslation('households');
   const navigate = useNavigate();
   const { notification } = App.useApp();
@@ -129,7 +141,16 @@ export const AnimalsSection: React.FC<AnimalsSectionProps> = ({ patients, househ
         </Button>
       </div>
 
-      {patients.length > 0 ? (
+      {loadFailed ? (
+        <LoadError
+          title={t('detail.animals.loadFailed')}
+          onRetry={onRetry}
+          retrying={retrying}
+          className={styles.marginBottom24}
+        />
+      ) : loading ? (
+        <Skeleton active className={styles.marginBottom24} />
+      ) : patients.length > 0 ? (
         <Table
           columns={columns}
           dataSource={patients}

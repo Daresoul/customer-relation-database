@@ -5,11 +5,14 @@ import { useTranslation } from 'react-i18next';
 import { useMedicalRecords } from '@/hooks/useMedicalRecords';
 import MedicalRecordCards from './MedicalRecordCards';
 import MedicalRecordModal from '@/components/MedicalRecordModal/MedicalRecordModal';
+import { LoadError } from '@/components/common/LoadError';
 import type { MedicalRecordFilter } from '@/types/medical';
 import styles from './MedicalHistory.module.css';
 
 const { Search } = Input;
 const { Option } = Select;
+
+const PAGE_SIZE = 50;
 
 interface MedicalHistorySectionProps {
   patientId: number;
@@ -26,11 +29,22 @@ const MedicalHistorySection: React.FC<MedicalHistorySectionProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedRecordId, setSelectedRecordId] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filter, setFilter] = useState<MedicalRecordFilter>({
+  const [filter, setFilterState] = useState<MedicalRecordFilter>({
     isArchived: false,
   });
+  // "Load more" grows one page instead of adding page 2, so the list stays one query.
+  const [shownLimit, setShownLimit] = useState(PAGE_SIZE);
+  const setFilter: typeof setFilterState = (next) => {
+    setShownLimit(PAGE_SIZE);
+    setFilterState(next);
+  };
 
-  const { data, isLoading, refetch } = useMedicalRecords(patientId, filter);
+  const { data, isLoading, isError, isFetching, refetch } = useMedicalRecords(patientId, filter, {
+    page: 1,
+    pageSize: shownLimit,
+  });
+  const shownCount = data?.records?.length ?? 0;
+  const totalCount = data?.total ?? shownCount;
 
   const handleCreateNew = () => {
     setSelectedRecordId(null);
@@ -117,17 +131,33 @@ const MedicalHistorySection: React.FC<MedicalHistorySectionProps> = ({
         </div>
 
         {/* Medical Records */}
-        {isLoading ? (
+        {isError ? (
+          <LoadError
+            title={t('detail.medicalHistory.loadFailed')}
+            onRetry={() => refetch()}
+            retrying={isFetching}
+          />
+        ) : isLoading ? (
           <div className={styles.loadingContainer}>
             <Spin size="large" />
           </div>
         ) : data?.records && data.records.length > 0 ? (
-          <MedicalRecordCards
-            records={data.records}
-            onRefresh={refetch}
-            patientId={patientId}
-            onNavigateToRecord={onNavigateToRecord}
-          />
+          <>
+            <MedicalRecordCards
+              records={data.records}
+              onRefresh={refetch}
+              patientId={patientId}
+              onNavigateToRecord={onNavigateToRecord}
+            />
+            {totalCount > shownCount && (
+              <div className={styles.loadMoreRow}>
+                <span>{t('detail.medicalHistory.showing', { shown: shownCount, total: totalCount })}</span>
+                <Button onClick={() => setShownLimit(shownLimit + PAGE_SIZE)} loading={isFetching}>
+                  {t('detail.medicalHistory.loadMore')}
+                </Button>
+              </div>
+            )}
+          </>
         ) : (
           <Empty
             description={

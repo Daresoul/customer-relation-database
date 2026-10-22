@@ -108,7 +108,8 @@
         "months_other": "{{count}} months",
         "years_one": "{{count}} year",
         "years_other": "{{count}} years"
-      }
+      },
+      "loadFailed": "Could not load this household's pets"
     }
   }
 }

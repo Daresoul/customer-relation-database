@@ -112,7 +112,7 @@ export function usePatientDetail(patientId: number) {
           };
         } catch (error) {
           console.error('Failed to fetch household details:', error);
-          // Continue without household data
+          patientDetail.householdLoadFailed = true;
         }
       }
 

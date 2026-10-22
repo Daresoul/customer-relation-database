@@ -182,7 +182,8 @@
       "contactNameIncomplete": "Primary contact needs both first and last name",
       "contactNameIncompleteDesc": "Fill in both first and last name, or clear them both.",
       "contactNameRequired": "Primary contact name required",
-      "contactNameRequiredDesc": "Enter a first and last name for the primary contact, or clear the phone/email fields."
+      "contactNameRequiredDesc": "Enter a first and last name for the primary contact, or clear the phone/email fields.",
+      "loadFailed": "Could not load the owner"
     },
     "medicalHistory": {
       "title": "Medical History",
@@ -201,7 +202,13 @@
       "empty": {
         "noRecords": "No medical records yet",
         "noMatchingRecords": "No records found matching your filters"
-      }
+      },
+      "loadFailed": "Could not load the medical history",
+      "showing": "Showing {{shown}} of {{total}} records",
+      "loadMore": "Load more"
     }
+  },
+  "dashboard": {
+    "loadFailed": "Could not load patients and households"
   }
 }

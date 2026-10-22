@@ -20,7 +20,13 @@ export const HouseholdDetail: React.FC = () => {
   const householdId = parseInt(id || '0', 10);
 
   const { data, isLoading, error } = useHouseholdDetail(householdId);
-  const { data: patients = [], isLoading: patientsLoading, error: patientsError } = useHouseholdPatients(householdId);
+  const {
+    data: patients = [],
+    isLoading: patientsLoading,
+    error: patientsError,
+    refetch: refetchPatients,
+    isFetching: patientsFetching,
+  } = useHouseholdPatients(householdId);
 
 
   if (!id || isNaN(householdId)) {
@@ -129,6 +135,10 @@ export const HouseholdDetail: React.FC = () => {
         <AnimalsSection
           patients={patients}
           householdId={householdId}
+          loading={patientsLoading}
+          loadFailed={!!patientsError}
+          retrying={patientsFetching}
+          onRetry={() => refetchPatients()}
         />
       </div>
     </Content>

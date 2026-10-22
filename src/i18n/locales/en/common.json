@@ -88,5 +88,8 @@
     "add": "Add",
     "close": "Close",
     "submit": "Submit"
+  },
+  "loadFailed": {
+    "description": "Your data is safe. Try again in a moment."
   }
 }
