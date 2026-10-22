@@ -57,3 +57,6 @@ pub mod file_storage_tests;
 
 #[cfg(test)]
 pub mod diagnosis_tests;
+
+#[cfg(test)]
+pub mod command_registration_tests;
