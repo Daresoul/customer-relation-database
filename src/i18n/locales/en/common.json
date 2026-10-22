@@ -91,5 +91,11 @@
   },
   "loadFailed": {
     "description": "Your data is safe. Try again in a moment."
+  },
+  "crash": {
+    "title": "Something went wrong",
+    "description": "This page hit an error. Your data is safe and the error has been logged.",
+    "reload": "Reload",
+    "goToDashboard": "Go to dashboard"
   }
 }

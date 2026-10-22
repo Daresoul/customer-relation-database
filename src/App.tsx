@@ -22,6 +22,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { ViewProvider } from './contexts';
 import { DeviceImportProvider } from './contexts/DeviceImportContext';
 import { AppWrapper } from './components/AppWrapper';
+import { RouteErrorBoundary } from './components/common/ErrorBoundary';
 import DeviceImportModal from './components/DeviceImportModal/DeviceImportModal';
 import { useDeviceDataListener } from './hooks/useDeviceDataListener';
 import { listen } from '@tauri-apps/api/event';
@@ -126,14 +127,16 @@ function AppContent() {
               <DeviceImportModal />
               <Router>
                 <AppWrapper>
-                  <Routes>
-                    <Route path="/" element={<MainDashboard />} />
-                    <Route path="/households/:id" element={<HouseholdDetail />} />
-                    <Route path="/patients/:id" element={<PatientDetail />} />
-                    <Route path="/medical-records/:id" element={<MedicalRecordDetailPage />} />
-                    <Route path="/appointments" element={<Appointments />} />
-                    <Route path="/settings" element={<Settings />} />
-                  </Routes>
+                  <RouteErrorBoundary>
+                    <Routes>
+                      <Route path="/" element={<MainDashboard />} />
+                      <Route path="/households/:id" element={<HouseholdDetail />} />
+                      <Route path="/patients/:id" element={<PatientDetail />} />
+                      <Route path="/medical-records/:id" element={<MedicalRecordDetailPage />} />
+                      <Route path="/appointments" element={<Appointments />} />
+                      <Route path="/settings" element={<Settings />} />
+                    </Routes>
+                  </RouteErrorBoundary>
                 </AppWrapper>
               </Router>
             </AntApp>
