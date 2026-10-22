@@ -2028,32 +2028,28 @@ public class PDFReportService {
         PdfReader reader = new PdfReader(templateStream);
         PdfStamper stamper = new PdfStamper(reader, new FileOutputStream(pdfFile));
 
-        PdfContentByte canvas = stamper.getOverContent(1);
-
         Rectangle pageSize = reader.getPageSize(1);
         float pageWidth = pageSize.getWidth();
-        float pageHeight = pageSize.getHeight();
+        PdfImportedPage letterhead = stamper.getImportedPage(reader, 1);
 
-        // --- Fill in form field VALUES only (labels already in template) ---
-        // Template label positions (PDF coords from bottom):
-        //   "Датум:" value space at X≈96, Y≈657
-        //   "Фактура бр." value space at X≈117, Y≈637
-        //   "ЗА" value space at X≈516, Y≈664
         Font fieldFont = FontUtil.getMacedonianFont(10, FontUtil.DEFAULT_FONT_COLOR);
+        Font headerFont = FontUtil.getMacedonianFont(9, FontUtil.CYAN_DARK_FONT_COLOR);
+        Font cellFont = FontUtil.getMacedonianFont(10, FontUtil.DEFAULT_FONT_COLOR);
+        Font totalLabelFont = FontUtil.getMacedonianFont(11, FontUtil.CYAN_DARK_FONT_COLOR);
+        totalLabelFont.setStyle(Font.BOLD);
+        Font totalValueFont = FontUtil.getMacedonianFont(11, FontUtil.DEFAULT_FONT_COLOR);
+        totalValueFont.setStyle(Font.BOLD);
 
-        ColumnText.showTextAligned(canvas, Element.ALIGN_LEFT,
-                new Phrase(date, fieldFont), 96f, 657f, 0);
-        ColumnText.showTextAligned(canvas, Element.ALIGN_LEFT,
-                new Phrase(invoiceNumber, fieldFont), 117f, 637.3f, 0);
-        ColumnText.showTextAligned(canvas, Element.ALIGN_LEFT,
-                new Phrase(recipient, fieldFont), 350f, 650f, 0);
+        // Light teal for alternating rows (lighter than brand color)
+        BaseColor lightTeal = new BaseColor(220, 245, 243);
 
-        // --- Draw the table dynamically ---
         float tableLeft = 42;
         float tableRight = pageWidth - 42;
         float tableWidth = tableRight - tableLeft;
         float tableStartY = 612;
-        float rowHeight = 22f;
+        float minRowHeight = 22f;
+        // The letterhead's footer (clinic address) ends at y≈42.
+        float bottomLimit = 60f;
 
         // Column widths (proportional)
         float colNum = 55;       // РЕД. БРОЈ
@@ -2070,59 +2066,28 @@ public class PDFReportService {
             tableLeft + colNum + colDesc + colQty + colPrice
         };
 
-        Font headerFont = FontUtil.getMacedonianFont(9, FontUtil.CYAN_DARK_FONT_COLOR);
-        Font cellFont = FontUtil.getMacedonianFont(10, FontUtil.DEFAULT_FONT_COLOR);
-        Font boldFont = FontUtil.getMacedonianFont(10, FontUtil.DEFAULT_FONT_COLOR);
-        boldFont.setStyle(Font.BOLD);
-        Font totalLabelFont = FontUtil.getMacedonianFont(11, FontUtil.CYAN_DARK_FONT_COLOR);
-        totalLabelFont.setStyle(Font.BOLD);
-        Font totalValueFont = FontUtil.getMacedonianFont(11, FontUtil.DEFAULT_FONT_COLOR);
-        totalValueFont.setStyle(Font.BOLD);
+        int pageNumber = 1;
+        PdfContentByte canvas = stamper.getOverContent(pageNumber);
+        drawInvoiceFields(canvas, fieldFont, date, invoiceNumber, recipient);
+        float currentY = drawInvoiceHeaderRow(canvas, headerFont, colX, tableStartY, tableLeft, tableRight, minRowHeight);
 
-        // Light teal for alternating rows (lighter than brand color)
-        BaseColor lightTeal = new BaseColor(220, 245, 243);
-
-        float currentY = tableStartY;
-
-        // --- Header row ---
-        // Header background
-        canvas.saveState();
-        canvas.setColorFill(BaseColor.WHITE);
-        canvas.rectangle(tableLeft, currentY - rowHeight, tableWidth, rowHeight);
-        canvas.fill();
-        canvas.restoreState();
-
-        // Draw thin line under header
-        canvas.saveState();
-        canvas.setColorStroke(Util.CYAN_COLOR);
-        canvas.setLineWidth(0.5f);
-        canvas.moveTo(tableLeft, currentY - rowHeight);
-        canvas.lineTo(tableRight, currentY - rowHeight);
-        canvas.stroke();
-        canvas.restoreState();
-
-        String[] headers = {"РЕД. БРОЈ", "ОПИС", "КОЛИЧИНА", "ЕД. ЦЕНА", "ВКУПНО"};
-        int[] headerAligns = {Element.ALIGN_LEFT, Element.ALIGN_LEFT, Element.ALIGN_CENTER, Element.ALIGN_CENTER, Element.ALIGN_CENTER};
-        float[] headerXLeft = {colX[0] + 4, colX[1] + 4, colX[2], colX[3], colX[4]};
-        float[] headerXRight = {colX[0] + colNum, colX[1] + colDesc, colX[2] + colQty, colX[3] + colPrice, colX[4] + colTotal};
-
-        for (int i = 0; i < headers.length; i++) {
-            ColumnText ct = new ColumnText(canvas);
-            ct.setSimpleColumn(headerXLeft[i], currentY - rowHeight, headerXRight[i], currentY);
-            Paragraph p = new Paragraph(headers[i], headerFont);
-            p.setAlignment(headerAligns[i]);
-            ct.addElement(p);
-            ct.go();
-        }
-
-        currentY -= rowHeight;
-
-        // --- Line item rows ---
+        // --- Line item rows: a row that doesn't fit starts a new letterhead page ---
         double subtotal = 0;
         for (int i = 0; i < lineItems.size(); i++) {
             InvoiceLineItem item = lineItems.get(i);
             double rowTotal = item.getTotal();
             subtotal += rowTotal;
+
+            Paragraph nameP = new Paragraph(item.name, cellFont);
+            float rowHeight = Math.max(minRowHeight, measureHeight(nameP, colDesc - 8) + 8);
+
+            if (currentY - rowHeight < bottomLimit) {
+                drawInvoiceRule(canvas, tableLeft, tableRight, currentY);
+                pageNumber++;
+                canvas = newLetterheadPage(stamper, letterhead, pageNumber, pageSize);
+                drawInvoiceFields(canvas, fieldFont, date, invoiceNumber, recipient);
+                currentY = drawInvoiceHeaderRow(canvas, headerFont, colX, tableStartY, tableLeft, tableRight, minRowHeight);
+            }
 
             // Alternating row background
             if (i % 2 == 0) {
@@ -2133,55 +2098,32 @@ public class PDFReportService {
                 canvas.restoreState();
             }
 
-            // Row number
-            ColumnText numCol = new ColumnText(canvas);
-            numCol.setSimpleColumn(colX[0] + 4, currentY - rowHeight, colX[0] + colNum, currentY);
-            numCol.addElement(new Paragraph(String.valueOf(i + 1), cellFont));
-            numCol.go();
+            float rowBottom = currentY - rowHeight;
+            drawCell(canvas, new Paragraph(String.valueOf(i + 1), cellFont), Element.ALIGN_LEFT,
+                    colX[0] + 4, rowBottom, colX[0] + colNum, currentY);
+            drawCell(canvas, nameP, Element.ALIGN_LEFT,
+                    colX[1] + 4, rowBottom, colX[1] + colDesc - 4, currentY);
+            drawCell(canvas, new Paragraph(String.valueOf(item.quantity), cellFont), Element.ALIGN_CENTER,
+                    colX[2], rowBottom, colX[2] + colQty, currentY);
+            drawCell(canvas, new Paragraph(formatAmount(item.unitPrice), cellFont), Element.ALIGN_CENTER,
+                    colX[3], rowBottom, colX[3] + colPrice, currentY);
+            drawCell(canvas, new Paragraph(formatAmount(rowTotal), cellFont), Element.ALIGN_CENTER,
+                    colX[4], rowBottom, colX[4] + colTotal, currentY);
 
-            // Description (name)
-            ColumnText descCol = new ColumnText(canvas);
-            descCol.setSimpleColumn(colX[1] + 4, currentY - rowHeight, colX[1] + colDesc - 4, currentY);
-            descCol.addElement(new Paragraph(item.name, cellFont));
-            descCol.go();
-
-            // Quantity
-            ColumnText qtyCol = new ColumnText(canvas);
-            qtyCol.setSimpleColumn(colX[2], currentY - rowHeight, colX[2] + colQty, currentY);
-            Paragraph qtyP = new Paragraph(String.valueOf(item.quantity), cellFont);
-            qtyP.setAlignment(Element.ALIGN_CENTER);
-            qtyCol.addElement(qtyP);
-            qtyCol.go();
-
-            // Unit Price
-            ColumnText priceCol = new ColumnText(canvas);
-            priceCol.setSimpleColumn(colX[3], currentY - rowHeight, colX[3] + colPrice, currentY);
-            Paragraph priceP = new Paragraph(formatAmount(item.unitPrice), cellFont);
-            priceP.setAlignment(Element.ALIGN_CENTER);
-            priceCol.addElement(priceP);
-            priceCol.go();
-
-            // Row Total
-            ColumnText totalCol = new ColumnText(canvas);
-            totalCol.setSimpleColumn(colX[4], currentY - rowHeight, colX[4] + colTotal, currentY);
-            Paragraph totalP = new Paragraph(formatAmount(rowTotal), cellFont);
-            totalP.setAlignment(Element.ALIGN_CENTER);
-            totalCol.addElement(totalP);
-            totalCol.go();
-
-            currentY -= rowHeight;
+            currentY = rowBottom;
         }
 
-        // Draw line under the last row
-        canvas.saveState();
-        canvas.setColorStroke(Util.CYAN_COLOR);
-        canvas.setLineWidth(0.5f);
-        canvas.moveTo(tableLeft, currentY);
-        canvas.lineTo(tableRight, currentY);
-        canvas.stroke();
-        canvas.restoreState();
+        drawInvoiceRule(canvas, tableLeft, tableRight, currentY);
 
-        // --- Totals section ---
+        // --- Totals section: kept whole, on a new page if it doesn't fit ---
+        float totalsHeight = discountPercent > 0 ? 90f : 40f;
+        if (currentY - totalsHeight < bottomLimit) {
+            pageNumber++;
+            canvas = newLetterheadPage(stamper, letterhead, pageNumber, pageSize);
+            drawInvoiceFields(canvas, fieldFont, date, invoiceNumber, recipient);
+            currentY = tableStartY;
+        }
+
         float totalsLabelRight = colX[3] + colPrice;
         float totalsValueLeft = colX[4];
         float totalsValueRight = colX[4] + colTotal;
@@ -2260,6 +2202,76 @@ public class PDFReportService {
         reader.close();
 
         return pdfFile;
+    }
+
+    /** Date, invoice number and recipient, written onto one letterhead page. */
+    private void drawInvoiceFields(PdfContentByte canvas, Font fieldFont,
+                                   String date, String invoiceNumber, String recipient) {
+        // Template label positions (PDF coords from bottom):
+        //   "Датум:" value space at X≈96, Y≈657
+        //   "Фактура бр." value space at X≈117, Y≈637
+        //   "ЗА" value space at X≈516, Y≈664
+        ColumnText.showTextAligned(canvas, Element.ALIGN_LEFT,
+                new Phrase(date, fieldFont), 96f, 657f, 0);
+        ColumnText.showTextAligned(canvas, Element.ALIGN_LEFT,
+                new Phrase(invoiceNumber, fieldFont), 117f, 637.3f, 0);
+        ColumnText.showTextAligned(canvas, Element.ALIGN_LEFT,
+                new Phrase(recipient, fieldFont), 350f, 650f, 0);
+    }
+
+    /** The column headings and the rule under them; returns the y below them. */
+    private float drawInvoiceHeaderRow(PdfContentByte canvas, Font headerFont, float[] colX,
+                                       float topY, float tableLeft, float tableRight, float rowHeight)
+            throws DocumentException {
+        drawInvoiceRule(canvas, tableLeft, tableRight, topY - rowHeight);
+
+        String[] headers = {"РЕД. БРОЈ", "ОПИС", "КОЛИЧИНА", "ЕД. ЦЕНА", "ВКУПНО"};
+        int[] aligns = {Element.ALIGN_LEFT, Element.ALIGN_LEFT, Element.ALIGN_CENTER, Element.ALIGN_CENTER, Element.ALIGN_CENTER};
+        float[] left = {colX[0] + 4, colX[1] + 4, colX[2], colX[3], colX[4]};
+        float[] right = {colX[1], colX[2], colX[3], colX[4], tableRight};
+        for (int i = 0; i < headers.length; i++) {
+            drawCell(canvas, new Paragraph(headers[i], headerFont), aligns[i],
+                    left[i], topY - rowHeight, right[i], topY);
+        }
+        return topY - rowHeight;
+    }
+
+    private void drawInvoiceRule(PdfContentByte canvas, float left, float right, float y) {
+        canvas.saveState();
+        canvas.setColorStroke(Util.CYAN_COLOR);
+        canvas.setLineWidth(0.5f);
+        canvas.moveTo(left, y);
+        canvas.lineTo(right, y);
+        canvas.stroke();
+        canvas.restoreState();
+    }
+
+    private void drawCell(PdfContentByte canvas, Paragraph p, int align,
+                          float llx, float lly, float urx, float ury) throws DocumentException {
+        p.setAlignment(align);
+        ColumnText ct = new ColumnText(canvas);
+        ct.setSimpleColumn(llx, lly, urx, ury);
+        ct.addElement(p);
+        ct.go();
+    }
+
+    /** Height a paragraph needs in a column of the given width. */
+    private float measureHeight(Paragraph p, float width) throws DocumentException {
+        float top = 10000f;
+        ColumnText ct = new ColumnText(null);
+        ct.setSimpleColumn(0, 0, width, top);
+        ct.addElement(new Paragraph(p));
+        ct.go(true);
+        return top - ct.getYLine();
+    }
+
+    /** Appends a page carrying the letterhead and returns its canvas. */
+    private PdfContentByte newLetterheadPage(PdfStamper stamper, PdfImportedPage letterhead,
+                                             int pageNumber, Rectangle pageSize) {
+        stamper.insertPage(pageNumber, pageSize);
+        PdfContentByte canvas = stamper.getOverContent(pageNumber);
+        canvas.addTemplate(letterhead, 0, 0);
+        return canvas;
     }
 
     /**
