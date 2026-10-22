@@ -177,6 +177,8 @@
     "showDifferences": "Show differences",
     "previewNotAvailable": "Preview not available for this file type",
     "loadingPreview": "Loading preview...",
+    "htmlNotPreviewed": "Web pages (HTML) are not shown inside the app for safety.",
+    "openExternally": "Open externally",
     "file": "File",
     "size": "Size",
     "uploaded": "Uploaded",
