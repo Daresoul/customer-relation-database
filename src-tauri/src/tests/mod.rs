@@ -75,3 +75,6 @@ pub mod table_rebuild_tests;
 
 #[cfg(test)]
 pub mod command_registration_tests;
+
+#[cfg(test)]
+pub mod record_money_tests;
