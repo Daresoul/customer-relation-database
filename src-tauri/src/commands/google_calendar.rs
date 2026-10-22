@@ -83,7 +83,8 @@ pub async fn complete_oauth_flow(
         .map_err(|e| format!("Failed to save settings: {}", e))?;
     }
 
-    // Return response
+    crate::services::google_calendar::clear_needs_reauth(&pool).await?;
+
     log::info!("OAuth flow completed successfully");
     Ok(GoogleCalendarSettingsResponse {
         connected: true,
@@ -91,6 +92,8 @@ pub async fn complete_oauth_flow(
         calendar_id: Some(calendar_id),
         sync_enabled: false,
         last_sync: None,
+        needs_reauth: false,
+        last_sync_error: None,
     })
 }
 
@@ -114,48 +117,37 @@ pub fn check_oauth_callback() -> Option<(String, String)> {
 pub async fn get_google_calendar_settings(
     pool: State<'_, SeaOrmPool>,
 ) -> Result<GoogleCalendarSettingsResponse, String> {
-    let row = pool
-        .query_one(Statement::from_string(
-            DbBackend::Sqlite,
-            "SELECT access_token, refresh_token, calendar_id, sync_enabled, last_sync, token_expires_at FROM google_calendar_settings WHERE user_id = 'default'".to_string(),
-        ))
-        .await
-        .map_err(|e| format!("Failed to query settings: {}", e))?;
+    settings_response(&pool).await
+}
 
-    if let Some(row) = row {
-        let access_token: Option<String> = row.try_get("", "access_token").ok();
-        let calendar_id: Option<String> = row.try_get("", "calendar_id").ok();
-        let sync_enabled: bool = row.try_get::<i32>("", "sync_enabled").map(|v| v != 0).unwrap_or(false);
-        let last_sync: Option<String> = row.try_get("", "last_sync").ok();
-
-        let connected = access_token.is_some();
-        let connected_email = if connected {
-            if let Some(ref token) = access_token {
-                get_user_email(token).await.ok()
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
-        Ok(GoogleCalendarSettingsResponse {
-            connected,
-            connected_email,
-            calendar_id,
-            sync_enabled,
-            last_sync,
-        })
+async fn settings_response(db: &DatabaseConnection) -> Result<GoogleCalendarSettingsResponse, String> {
+    let status = crate::services::google_calendar::load_sync_status(db).await?;
+    let connected_email = if status.connected {
+        let token: Option<String> = db
+            .query_one(Statement::from_string(
+                DbBackend::Sqlite,
+                "SELECT access_token FROM google_calendar_settings WHERE user_id = 'default'".to_string(),
+            ))
+            .await
+            .map_err(|e| format!("Failed to query settings: {}", e))?
+            .and_then(|r| r.try_get::<Option<String>>("", "access_token").ok().flatten());
+        match token {
+            Some(t) => get_user_email(&t).await.ok(),
+            None => None,
+        }
     } else {
-        // Return default not-connected state
-        Ok(GoogleCalendarSettingsResponse {
-            connected: false,
-            connected_email: None,
-            calendar_id: None,
-            sync_enabled: false,
-            last_sync: None,
-        })
-    }
+        None
+    };
+
+    Ok(GoogleCalendarSettingsResponse {
+        connected: status.connected,
+        connected_email,
+        calendar_id: status.calendar_id,
+        sync_enabled: status.sync_enabled,
+        last_sync: status.last_sync,
+        needs_reauth: status.needs_reauth,
+        last_sync_error: status.last_sync_error,
+    })
 }
 
 #[tauri::command]
@@ -187,39 +179,7 @@ pub async fn update_sync_enabled(
     .await
     .map_err(|e| format!("Failed to update settings: {}", e))?;
 
-    // TODO: If enabling, trigger initial sync
-
-    // Fetch updated settings
-    let row = pool
-        .query_one(Statement::from_string(
-            DbBackend::Sqlite,
-            "SELECT access_token, calendar_id, sync_enabled, last_sync FROM google_calendar_settings WHERE user_id = 'default'".to_string(),
-        ))
-        .await
-        .map_err(|e| format!("Failed to query updated settings: {}", e))?;
-
-    if let Some(row) = row {
-        let access_token: Option<String> = row.try_get("", "access_token").ok();
-        let calendar_id: Option<String> = row.try_get("", "calendar_id").ok();
-        let sync_enabled: bool = row.try_get::<i32>("", "sync_enabled").map(|v| v != 0).unwrap_or(false);
-        let last_sync: Option<String> = row.try_get("", "last_sync").ok();
-
-        let connected_email = if let Some(ref token) = access_token {
-            get_user_email(token).await.ok()
-        } else {
-            None
-        };
-
-        Ok(GoogleCalendarSettingsResponse {
-            connected: access_token.is_some(),
-            connected_email,
-            calendar_id,
-            sync_enabled,
-            last_sync,
-        })
-    } else {
-        Err("Settings not found after update".to_string())
-    }
+    settings_response(&pool).await
 }
 
 #[tauri::command]
@@ -231,7 +191,8 @@ pub async fn disconnect_google_calendar(
         DbBackend::Sqlite,
         "UPDATE google_calendar_settings
          SET access_token = NULL, refresh_token = NULL, sync_enabled = 0,
-             token_expires_at = NULL, updated_at = CURRENT_TIMESTAMP
+             token_expires_at = NULL, needs_reauth = 0, last_sync_error = NULL,
+             updated_at = CURRENT_TIMESTAMP
          WHERE user_id = 'default'".to_string(),
     ))
     .await
@@ -272,7 +233,8 @@ pub async fn revoke_google_access(
         DbBackend::Sqlite,
         "UPDATE google_calendar_settings
          SET access_token = NULL, refresh_token = NULL, sync_enabled = 0,
-             token_expires_at = NULL, updated_at = CURRENT_TIMESTAMP
+             token_expires_at = NULL, needs_reauth = 0, last_sync_error = NULL,
+             updated_at = CURRENT_TIMESTAMP
          WHERE user_id = 'default'".to_string(),
     ))
     .await
@@ -302,8 +264,13 @@ pub async fn trigger_manual_sync(
     let calendar_id: String = row.try_get("", "calendar_id")
         .map_err(|_| "No calendar ID configured".to_string())?;
 
-    // Get valid access token (will refresh if needed)
-    let access_token = get_valid_access_token(&pool).await?;
+    let access_token = match get_valid_access_token(&pool).await {
+        Ok(token) => token,
+        Err(e) => {
+            let _ = crate::services::google_calendar::record_sync_outcome(&pool, Some(&e)).await;
+            return Err(e);
+        }
+    };
 
     // Create sync log
     let result = pool.execute(Statement::from_string(
@@ -392,11 +359,11 @@ pub async fn trigger_manual_sync(
             "description": event_description,
             "start": {
                 "dateTime": start_time,
-                "timeZone": "America/New_York"
+                "timeZone": crate::services::google_calendar::local_time_zone()
             },
             "end": {
                 "dateTime": end_time,
-                "timeZone": "America/New_York"
+                "timeZone": crate::services::google_calendar::local_time_zone()
             }
         });
 
@@ -433,6 +400,12 @@ pub async fn trigger_manual_sync(
                     }
                 }
             }
+            Ok(resp) if resp.status() == reqwest::StatusCode::UNAUTHORIZED => {
+                let error = resp.text().await.unwrap_or_default();
+                crate::services::google_calendar::mark_needs_reauth(&pool, &format!("{}: {}", crate::services::oauth::REAUTH_REQUIRED, error)).await?;
+                items_failed += 1;
+                break;
+            }
             Ok(resp) => {
                 let error = resp.text().await.unwrap_or_else(|_| "Unknown error".to_string());
                 log::error!("Failed to sync appointment {}: {}", appt_id, error);
@@ -445,14 +418,17 @@ pub async fn trigger_manual_sync(
         }
     }
 
-    // Update sync log
+    let status = if items_failed > 0 { "partial" } else { "success" };
     pool.execute(Statement::from_sql_and_values(
         DbBackend::Sqlite,
-        "UPDATE sync_logs SET status = 'success', items_synced = ?, items_failed = ?, completed_at = CURRENT_TIMESTAMP WHERE id = ?",
-        [items_synced.into(), items_failed.into(), sync_log_id.into()]
+        "UPDATE sync_logs SET status = ?, items_synced = ?, items_failed = ?, completed_at = CURRENT_TIMESTAMP WHERE id = ?",
+        [status.into(), items_synced.into(), items_failed.into(), sync_log_id.into()]
     ))
     .await
     .map_err(|e| format!("Failed to update sync log: {}", e))?;
+
+    let failure = (items_failed > 0).then(|| format!("{} appointments failed to sync", items_failed));
+    crate::services::google_calendar::record_sync_outcome(&pool, failure.as_deref()).await?;
 
     // Update last_sync timestamp
     pool.execute(Statement::from_string(
@@ -574,7 +550,7 @@ async fn create_clinic_calendar(access_token: &str) -> Result<String, String> {
         .json(&serde_json::json!({
             "summary": "Clinic Appointments",
             "description": "Veterinary clinic appointments synced from desktop app",
-            "timeZone": "America/New_York"
+            "timeZone": crate::services::google_calendar::local_time_zone()
         }))
         .send()
         .await
@@ -628,6 +604,7 @@ fn row_to_sync_log(row: &sea_orm::QueryResult) -> Result<SyncLog, String> {
         "success" => SyncStatus::Success,
         "failed" => SyncStatus::Failed,
         "in_progress" => SyncStatus::InProgress,
+        "partial" => SyncStatus::Partial,
         _ => SyncStatus::Success,
     };
 

@@ -63,6 +63,7 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, "045_add_attachment_deleted_at", add_attachment_deleted_at_column).await?;
     run_migration(pool, "046_rebuild_household_search", rebuild_household_search).await?;
     run_migration(pool, "047_device_health", add_device_health_columns).await?;
+    run_migration(pool, "048_google_sync_status", add_google_sync_status_columns).await?;
 
     Ok(())
 }
@@ -2989,6 +2990,30 @@ fn add_device_health_columns(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::fu
         .execute(pool)
         .await?;
 
+        Ok(())
+    })
+}
+
+// 048: Google Calendar status. `needs_reauth` is set when Google rejects the
+// stored login, so Settings shows "Reconnect" instead of "Connected";
+// `last_sync_error` keeps the last failure until a sync succeeds.
+fn add_google_sync_status_columns(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        let columns = [
+            ("needs_reauth", "ALTER TABLE google_calendar_settings ADD COLUMN needs_reauth INTEGER NOT NULL DEFAULT 0"),
+            ("last_sync_error", "ALTER TABLE google_calendar_settings ADD COLUMN last_sync_error TEXT"),
+        ];
+        for (column, ddl) in columns {
+            let exists: (i64,) = sqlx::query_as(
+                "SELECT COUNT(*) FROM pragma_table_info('google_calendar_settings') WHERE name = ?",
+            )
+            .bind(column)
+            .fetch_one(pool)
+            .await?;
+            if exists.0 == 0 {
+                sqlx::query(ddl).execute(pool).await?;
+            }
+        }
         Ok(())
     })
 }

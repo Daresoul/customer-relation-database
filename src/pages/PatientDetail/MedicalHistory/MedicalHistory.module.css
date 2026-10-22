@@ -236,3 +236,11 @@
 .marginBottom16 {
   margin-bottom: 16px;
 }
+.loadMoreRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 16px;
+  color: var(--text-secondary);
+}

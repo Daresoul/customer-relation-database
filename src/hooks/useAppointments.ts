@@ -67,12 +67,6 @@ export const useAppointments = (filter: AppointmentFilter = {}) => {
       appointmentService.createAppointment(input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [APPOINTMENTS_KEY] });
-      notification.success({
-        message: 'Appointment Created',
-        description: 'Appointment scheduled successfully',
-        placement: 'bottomRight',
-        duration: 3,
-      });
     },
     onError: createMutationErrorHandler(notification, 'Create Appointment', t, 'useAppointments'),
   });
@@ -83,12 +77,6 @@ export const useAppointments = (filter: AppointmentFilter = {}) => {
       appointmentService.updateAppointment(id, input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [APPOINTMENTS_KEY] });
-      notification.success({
-        message: 'Appointment Updated',
-        description: 'Appointment updated successfully',
-        placement: 'bottomRight',
-        duration: 3,
-      });
     },
     onError: createMutationErrorHandler(notification, 'Update Appointment', t, 'useAppointments'),
   });
@@ -98,12 +86,6 @@ export const useAppointments = (filter: AppointmentFilter = {}) => {
     mutationFn: (id: number) => appointmentService.deleteAppointment(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [APPOINTMENTS_KEY] });
-      notification.success({
-        message: 'Appointment Cancelled',
-        description: 'Appointment has been cancelled',
-        placement: 'bottomRight',
-        duration: 3,
-      });
     },
     onError: createMutationErrorHandler(notification, 'Cancel Appointment', t, 'useAppointments'),
   });
@@ -114,12 +96,6 @@ export const useAppointments = (filter: AppointmentFilter = {}) => {
       appointmentService.duplicateAppointment(input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [APPOINTMENTS_KEY] });
-      notification.success({
-        message: 'Appointment Duplicated',
-        description: 'Appointment has been duplicated',
-        placement: 'bottomRight',
-        duration: 3,
-      });
     },
     onError: createMutationErrorHandler(notification, 'Duplicate Appointment', t, 'useAppointments'),
   });
@@ -149,10 +125,10 @@ export const useAppointments = (filter: AppointmentFilter = {}) => {
     isFetchingNextPage,
     fetchNextPage,
     refetch,
-    createAppointment: createMutation.mutate,
-    updateAppointment: updateMutation.mutate,
-    deleteAppointment: deleteMutation.mutate,
-    duplicateAppointment: duplicateMutation.mutate,
+    createAppointment: createMutation.mutateAsync,
+    updateAppointment: updateMutation.mutateAsync,
+    deleteAppointment: deleteMutation.mutateAsync,
+    duplicateAppointment: duplicateMutation.mutateAsync,
     checkConflicts,
     updateFilter,
     filter: currentFilter,

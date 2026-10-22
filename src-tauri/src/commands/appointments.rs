@@ -182,11 +182,11 @@ async fn trigger_sync_after_create(
         "description": event_description,
         "start": {
             "dateTime": appointment.appointment.start_time,
-            "timeZone": "America/New_York"
+            "timeZone": crate::services::google_calendar::local_time_zone()
         },
         "end": {
             "dateTime": appointment.appointment.end_time,
-            "timeZone": "America/New_York"
+            "timeZone": crate::services::google_calendar::local_time_zone()
         }
     });
 
@@ -305,11 +305,11 @@ async fn trigger_sync_after_update(
         "description": event_description,
         "start": {
             "dateTime": appointment.appointment.start_time,
-            "timeZone": "America/New_York"
+            "timeZone": crate::services::google_calendar::local_time_zone()
         },
         "end": {
             "dateTime": appointment.appointment.end_time,
-            "timeZone": "America/New_York"
+            "timeZone": crate::services::google_calendar::local_time_zone()
         }
     });
 

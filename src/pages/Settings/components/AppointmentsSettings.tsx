@@ -3,7 +3,8 @@ import { Card, Form, Switch, Button, Typography, Alert, Space, App } from 'antd'
 import { CalendarOutlined, GoogleOutlined, LinkOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors } from '../../../utils/themeStyles';
-import { invoke } from '@tauri-apps/api';
+import { invoke } from '@/services/invoke';
+import { formatDateTime } from '../../../utils/dateFormatter';
 import styles from '../Settings.module.css';
 
 const { Text, Paragraph } = Typography;
@@ -18,7 +19,17 @@ interface GoogleCalendarSettings {
   calendar_id?: string;
   sync_enabled: boolean;
   last_sync?: string;
+  needs_reauth?: boolean;
+  last_sync_error?: string;
 }
+
+interface SyncResult {
+  items_synced: number;
+  items_failed: number;
+}
+
+// SQLite CURRENT_TIMESTAMP is UTC without a zone marker.
+const fromSqliteUtc = (value: string) => (/[zZ]|[+-]\d\d:\d\d$/.test(value) ? value : `${value.replace(' ', 'T')}Z`);
 
 const AppointmentsSettings: React.FC<AppointmentsSettingsProps> = ({ isUpdating }) => {
   const { t } = useTranslation(['common', 'forms', 'settings']);
@@ -39,6 +50,7 @@ const AppointmentsSettings: React.FC<AppointmentsSettingsProps> = ({ isUpdating 
     try {
       console.log('Loading Google Calendar settings...');
       const result = await invoke<GoogleCalendarSettings>('get_google_calendar_settings');
+      if (!result) return;
       console.log('Settings loaded:', result);
       setSettings(result);
     } catch (error) {
@@ -226,7 +238,9 @@ const AppointmentsSettings: React.FC<AppointmentsSettingsProps> = ({ isUpdating 
         <Space direction="vertical" className={styles.fullWidth}>
           <Paragraph className={styles.connectionStatus}>
             <strong>{t('settings:googleCalendar.connectionStatus')}:</strong>{' '}
-            {settings.connected ? (
+            {settings.needs_reauth ? (
+              <span className={styles.statusDisconnected}>{t('settings:googleCalendar.reconnectNeeded')}</span>
+            ) : settings.connected ? (
               <>
                 <span className={styles.statusConnected}>{t('settings:googleCalendar.connected')}</span>
                 {settings.connected_email && <> ({settings.connected_email})</>}
@@ -236,8 +250,45 @@ const AppointmentsSettings: React.FC<AppointmentsSettingsProps> = ({ isUpdating 
             )}
           </Paragraph>
 
+          {(settings.connected || settings.needs_reauth) && (
+            <Text type="secondary">
+              {settings.last_sync
+                ? t('settings:googleCalendar.lastSynced', { when: formatDateTime(fromSqliteUtc(settings.last_sync)) })
+                : t('settings:googleCalendar.neverSynced')}
+            </Text>
+          )}
+
+          {settings.connected && settings.last_sync_error && (
+            <Alert
+              type="warning"
+              showIcon
+              message={t('settings:googleCalendar.lastSyncFailed')}
+              description={t('settings:googleCalendar.lastSyncFailedHint')}
+            />
+          )}
+
           <Space>
-            {!settings.connected ? (
+            {settings.needs_reauth ? (
+              <>
+                <Button
+                  type="primary"
+                  icon={<GoogleOutlined />}
+                  onClick={handleConnectGoogle}
+                  disabled={isUpdating || loading}
+                  loading={loading}
+                >
+                  {t('settings:googleCalendar.reconnectButton')}
+                </Button>
+                <Button
+                  danger
+                  icon={<LinkOutlined />}
+                  onClick={handleDisconnectGoogle}
+                  disabled={isUpdating || loading}
+                >
+                  {t('settings:googleCalendar.disconnectButton')}
+                </Button>
+              </>
+            ) : !settings.connected ? (
               <Button
                 type="primary"
                 icon={<GoogleOutlined />}
@@ -254,12 +305,21 @@ const AppointmentsSettings: React.FC<AppointmentsSettingsProps> = ({ isUpdating 
                   onClick={async () => {
                     try {
                       setLoading(true);
-                      await invoke('trigger_manual_sync');
-                      notification.success({ message: t('settings:googleCalendar.messages.manualSyncStarted'), description: t('settings:googleCalendar.messages.manualSyncStartedDescription') });
-                    } catch (error) {
-                      notification.error({ message: t('settings:googleCalendar.messages.syncFailed'), description: `${error}` });
+                      const result = await invoke<SyncResult>('trigger_manual_sync');
+                      const counts = { synced: result?.items_synced ?? 0, failed: result?.items_failed ?? 0 };
+                      if (counts.failed > 0) {
+                        notification.warning({ message: t('settings:googleCalendar.messages.syncPartial', counts) });
+                      } else {
+                        notification.success({ message: t('settings:googleCalendar.messages.syncDone', counts) });
+                      }
+                    } catch {
+                      notification.error({
+                        message: t('settings:googleCalendar.messages.syncFailed'),
+                        description: t('settings:googleCalendar.lastSyncFailedHint'),
+                      });
                     } finally {
                       setLoading(false);
+                      await loadSettings();
                     }
                   }}
                   disabled={isUpdating || loading}

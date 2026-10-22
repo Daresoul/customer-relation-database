@@ -18,4 +18,10 @@ describe('household list', () => {
 
     expect(invokeMock).toHaveBeenCalledWith('get_all_households', { limit: undefined });
   });
+
+  it('lets a failed list load reach the caller instead of returning no households', async () => {
+    invokeMock.mockRejectedValue(new Error('database is locked'));
+
+    await expect(householdApi.search('')).rejects.toThrow('database is locked');
+  });
 });

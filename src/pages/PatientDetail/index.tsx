@@ -45,7 +45,7 @@ export const PatientDetail: React.FC = () => {
   }, [savedActiveTab, patientId]);
 
   const queryClient = useQueryClient();
-  const { data: patient, isLoading, error } = usePatientDetail(patientId);
+  const { data: patient, isLoading, error, refetch } = usePatientDetail(patientId);
   const { showDeleteConfirm, isDeleting } = useDeleteConfirmation();
 
   // Callback when household assignment changes
@@ -105,12 +105,12 @@ export const PatientDetail: React.FC = () => {
       <Content className={styles.container}>
         <Alert
           message={t('patients:errors.loadingError')}
-          description={error instanceof Error ? error.message : t('patients:errors.loadingErrorDescription')}
+          description={t('patients:errors.loadingErrorDescription')}
           type="error"
           showIcon
           action={
             <Space>
-              <Button onClick={() => window.location.reload()}>
+              <Button onClick={() => refetch()}>
                 {t('common:retry')}
               </Button>
               <Button onClick={() => navigate('/')}>
@@ -186,6 +186,8 @@ export const PatientDetail: React.FC = () => {
               household={patient.household}
               patientId={patient.id}
               onHouseholdChanged={handleHouseholdChanged}
+              loadFailed={patient.householdLoadFailed}
+              onRetry={() => refetch()}
             />
         </div>
       ),

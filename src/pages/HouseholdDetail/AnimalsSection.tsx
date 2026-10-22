@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { Table, Typography, Tag, Empty, Button, Modal, App } from 'antd';
+import { Table, Typography, Tag, Empty, Button, Modal, App, Skeleton } from 'antd';
 import { Link, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { invalidatePatientData } from '../../hooks/invalidation';
 import { useTranslation } from 'react-i18next';
-import { knownErrorMessage } from '@/utils/errors';
 import { Patient } from '../../types/household';
 import { PlusOutlined } from '@ant-design/icons';
 import PatientFormWithOwner from '../../components/forms/PatientFormWithOwner';
+import { LoadError } from '../../components/common/LoadError';
 import { PatientService } from '../../services/patientService';
 import type { CreatePatientInput, UpdatePatientInput } from '../../types';
 import styles from './HouseholdDetail.module.css';
@@ -15,39 +17,45 @@ const { Title } = Typography;
 interface AnimalsSectionProps {
   patients: Patient[];
   householdId: number;
+  loading?: boolean;
+  loadFailed?: boolean;
+  retrying?: boolean;
+  onRetry?: () => void;
 }
 
-export const AnimalsSection: React.FC<AnimalsSectionProps> = ({ patients, householdId }) => {
+export const AnimalsSection: React.FC<AnimalsSectionProps> = ({
+  patients,
+  householdId,
+  loading = false,
+  loadFailed = false,
+  retrying = false,
+  onRetry = () => {},
+}) => {
   const { t } = useTranslation('households');
   const navigate = useNavigate();
   const { notification } = App.useApp();
+  const queryClient = useQueryClient();
   const [isPatientModalOpen, setIsPatientModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  // A failure goes back to PatientFormWithOwner, which keeps the input and shows why.
   const handleCreatePatient = async (data: CreatePatientInput | UpdatePatientInput) => {
     setSubmitting(true);
     try {
-      // Ensure the patient is linked to this household
       const patientData = {
         ...data,
         householdId: householdId,
       } as CreatePatientInput;
 
       const newPatient = await PatientService.createPatient(patientData);
+      invalidatePatientData(queryClient);
       notification.success({
         message: t('common:success'),
         description: t('detail.animals.patientCreated'),
         placement: 'bottomRight',
       });
       setIsPatientModalOpen(false);
-      // Navigate to the new patient's page
       navigate(`/patients/${newPatient.id}`);
-    } catch (error: any) {
-      notification.error({
-        message: t('common:error'),
-        description: knownErrorMessage(error, t) || error?.message || t('detail.animals.patientCreateFailed'),
-        placement: 'bottomRight',
-      });
     } finally {
       setSubmitting(false);
     }
@@ -137,7 +145,16 @@ export const AnimalsSection: React.FC<AnimalsSectionProps> = ({ patients, househ
         </Button>
       </div>
 
-      {patients.length > 0 ? (
+      {loadFailed ? (
+        <LoadError
+          title={t('detail.animals.loadFailed')}
+          onRetry={onRetry}
+          retrying={retrying}
+          className={styles.marginBottom24}
+        />
+      ) : loading ? (
+        <Skeleton active className={styles.marginBottom24} />
+      ) : patients.length > 0 ? (
         <Table
           columns={columns}
           dataSource={patients}

@@ -44,6 +44,8 @@ export interface HouseholdSummary {
 // Complete patient detail with related data
 export interface PatientDetail extends PatientWithAge {
   household?: HouseholdSummary;
+  /** The patient has a household but it could not be read. */
+  householdLoadFailed?: boolean;
 }
 
 

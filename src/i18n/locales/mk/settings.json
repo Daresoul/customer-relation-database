@@ -152,8 +152,16 @@
       "updateSyncFailedDescription": "Не може да се ажурира поставката за синхронизација: {{error}}",
       "manualSyncStarted": "Рачната синхронизација е започната",
       "manualSyncStartedDescription": "Се синхронизираат термините со Google Calendar...",
-      "syncFailed": "Синхронизацијата не успеа"
-    }
+      "syncFailed": "Синхронизацијата не успеа",
+      "syncDone": "Синхронизирани {{synced}} термини во Google Calendar",
+      "syncPartial": "Синхронизирани {{synced}} термини, {{failed}} не успеаја"
+    },
+    "reconnectNeeded": "Најавата на Google истече. Поврзете се повторно за синхронизацијата да продолжи.",
+    "reconnectButton": "Поврзи повторно",
+    "lastSynced": "Последна синхронизација: {{when}}",
+    "neverSynced": "Сè уште не е синхронизирано",
+    "lastSyncFailed": "Последната синхронизација со Google Calendar не успеа",
+    "lastSyncFailedHint": "Можеби некои термини недостасуваат во Google Calendar. Обидете се со „Синхронизирај сега“; ако и понатаму не успева, поврзете се повторно."
   },
   "rooms": {
     "confirmDelete": "Дали сте сигурни дека сакате да ја избришете оваа соба?",

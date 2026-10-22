@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { invoke } from '@tauri-apps/api';
+import { invoke } from '@/services/invoke';
+import { invalidateHouseholdData } from './invalidation';
 import {
   HouseholdDetailView,
   Household,
@@ -17,6 +18,7 @@ export function useHouseholdDetail(householdId: number) {
       const result = await invoke<any>('get_household_with_people', {
         householdId
       });
+      if (!result) return null;
 
 
       // Transform the response to match our expected format
@@ -66,12 +68,15 @@ export function useUpdateHousehold() {
       householdId: number;
       updates: Partial<Household>
     }) => {
-      // Use camelCase parameters (Tauri handles the conversion)
+      // undefined leaves a field alone; null or '' clears it
+      const clearable = (v: string | null | undefined) => (v === undefined ? undefined : v ?? '');
       return await invoke<Household>('update_household', {
         householdId,
-        householdName: updates.householdName,
-        address: updates.address,
-        notes: updates.notes
+        householdName: updates.householdName || undefined,
+        address: clearable(updates.address),
+        city: clearable(updates.city),
+        postalCode: clearable(updates.postalCode),
+        notes: clearable(updates.notes)
       });
     },
     onMutate: async ({ householdId, updates }) => {
@@ -100,9 +105,8 @@ export function useUpdateHousehold() {
         queryClient.setQueryData(['household', variables.householdId], context.previousHousehold);
       }
     },
-    onSettled: (data, error, variables) => {
-      // Refetch after mutation
-      queryClient.invalidateQueries({ queryKey: ['household', variables.householdId] });
+    onSettled: () => {
+      invalidateHouseholdData(queryClient);
     },
   });
 }
@@ -124,8 +128,8 @@ export function useAddPerson() {
         person
       });
     },
-    onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['household', variables.householdId] });
+    onSuccess: () => {
+      invalidateHouseholdData(queryClient);
     },
   });
 }
@@ -174,8 +178,8 @@ export function useUpdatePerson() {
         queryClient.setQueryData(['household', variables.householdId], context.previousHousehold);
       }
     },
-    onSettled: (data, error, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['household', variables.householdId] });
+    onSettled: () => {
+      invalidateHouseholdData(queryClient);
     },
   });
 }
@@ -194,8 +198,8 @@ export function useDeletePerson() {
     }) => {
       return await invoke('delete_person', { personId });
     },
-    onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['household', variables.householdId] });
+    onSuccess: () => {
+      invalidateHouseholdData(queryClient);
     },
   });
 }
@@ -226,8 +230,8 @@ export function useUpdatePersonContacts() {
         contacts: transformedContacts
       });
     },
-    onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['household', variables.householdId] });
+    onSuccess: () => {
+      invalidateHouseholdData(queryClient);
     },
   });
 }

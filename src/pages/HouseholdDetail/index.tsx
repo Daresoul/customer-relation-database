@@ -19,8 +19,14 @@ export const HouseholdDetail: React.FC = () => {
   const { t } = useTranslation('households');
   const householdId = parseInt(id || '0', 10);
 
-  const { data, isLoading, error } = useHouseholdDetail(householdId);
-  const { data: patients = [], isLoading: patientsLoading, error: patientsError } = useHouseholdPatients(householdId);
+  const { data, isLoading, error, refetch } = useHouseholdDetail(householdId);
+  const {
+    data: patients = [],
+    isLoading: patientsLoading,
+    error: patientsError,
+    refetch: refetchPatients,
+    isFetching: patientsFetching,
+  } = useHouseholdPatients(householdId);
 
 
   if (!id || isNaN(householdId)) {
@@ -55,12 +61,12 @@ export const HouseholdDetail: React.FC = () => {
       <Content className={styles.contentPadding}>
         <Alert
           message={t('detail.errorLoading')}
-          description={error instanceof Error ? error.message : t('detail.failedToLoad')}
+          description={t('detail.failedToLoad')}
           type="error"
           showIcon
           action={
             <Space>
-              <Button onClick={() => window.location.reload()}>
+              <Button onClick={() => refetch()}>
                 {t('detail.retry')}
               </Button>
               <Button onClick={() => navigate('/')}>
@@ -129,6 +135,10 @@ export const HouseholdDetail: React.FC = () => {
         <AnimalsSection
           patients={patients}
           householdId={householdId}
+          loading={patientsLoading}
+          loadFailed={!!patientsError}
+          retrying={patientsFetching}
+          onRetry={() => refetchPatients()}
         />
       </div>
     </Content>

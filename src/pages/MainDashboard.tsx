@@ -20,8 +20,11 @@ import { PatientFormWithOwner } from '../components/forms/PatientFormWithOwner';
 import { HouseholdForm } from '../components/forms/HouseholdForm';
 import { Loading, PageLoader } from '../components/common/Loading';
 import { NoData } from '../components/common/EmptyState';
+import { LoadError } from '../components/common/LoadError';
 import AppointmentsTab from './Appointments/AppointmentsTab';
 import { useViewContext } from '../contexts/ViewContext';
+import { useQueryClient } from '@tanstack/react-query';
+import { invalidatePatientData, invalidateHouseholdData } from '../hooks/invalidation';
 import api, { setAppInstance } from '../services/api.integration';
 import { PatientService } from '../services';
 import type { Patient, PatientWithHousehold } from '../types';
@@ -35,6 +38,7 @@ import styles from './MainDashboard.module.css';
 
 export const MainDashboard: React.FC = () => {
   const { notification, modal } = App.useApp();
+  const queryClient = useQueryClient();
   const { t } = useTranslation(['patients', 'common', 'navigation']);
   const { currentView, setCurrentView } = useViewContext();
   const app = App.useApp();
@@ -62,6 +66,7 @@ export const MainDashboard: React.FC = () => {
     return () => clearInterval(interval);
   }, [loadPendingCount]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<unknown>(null);
   const [patients, setPatients] = useState<PatientWithHousehold[]>([]);
   const [households, setHouseholds] = useState<HouseholdTableRecord[]>([]);
   const [filteredPatients, setFilteredPatients] = useState<PatientWithHousehold[]>([]);
@@ -138,18 +143,11 @@ export const MainDashboard: React.FC = () => {
         activePatients: statsData.active_patients,
         totalHouseholds: statsData.total_households,
       });
+      setLoadError(null);
     } catch (error) {
       console.error('Failed to load data:', error);
-      // Use empty data on error
-      setPatients([]);
-      setHouseholds([]);
-      setFilteredPatients([]);
-      setFilteredHouseholds([]);
-      setStats({
-        totalPatients: 0,
-        activePatients: 0,
-        totalHouseholds: 0,
-      });
+      // Keep whatever was shown before; a failure must never look like an empty clinic.
+      setLoadError(error);
     } finally {
       setLoading(false);
     }
@@ -335,6 +333,7 @@ export const MainDashboard: React.FC = () => {
       return;
     }
     await api.patient.delete(patient.id);
+    invalidatePatientData(queryClient);
     loadData();
   };
 
@@ -344,6 +343,7 @@ export const MainDashboard: React.FC = () => {
     } else {
       await api.patient.create(values);
     }
+    invalidatePatientData(queryClient);
     setShowPatientForm(false);
     setSelectedPatient(null);
     // Clear any scan-prefill so subsequent "Add patient" clicks start blank.
@@ -367,6 +367,7 @@ export const MainDashboard: React.FC = () => {
       return;
     }
     await api.household.delete(household.id);
+    invalidateHouseholdData(queryClient);
     loadData();
   };
 
@@ -376,6 +377,7 @@ export const MainDashboard: React.FC = () => {
     } else {
       await api.household.create(values);
     }
+    invalidateHouseholdData(queryClient);
     setShowHouseholdForm(false);
     setSelectedHousehold(null);
     loadData();
@@ -385,13 +387,17 @@ export const MainDashboard: React.FC = () => {
     return <PageLoader message={t('common:loading')} />;
   }
 
-  // Simplified layout without header
+  const loadErrorAlert = loadError ? (
+    <LoadError title={t('patients:dashboard.loadFailed')} onRetry={loadData} />
+  ) : null;
+  const hasLoaded = !loadError || patients.length > 0 || households.length > 0;
 
   return (
     <div className={styles.dashboard}>
       <Space direction="vertical" size="large" className={styles.contentWrapper}>
+        {loadErrorAlert}
         {/* Statistics Cards */}
-        <Row gutter={16}>
+        {hasLoaded && <Row gutter={16}>
           <Col span={8}>
             <Card>
               <Statistic
@@ -422,7 +428,7 @@ export const MainDashboard: React.FC = () => {
               />
             </Card>
           </Col>
-        </Row>
+        </Row>}
 
         {/* Data Tables with integrated search */}
         <Card>
@@ -473,7 +479,7 @@ export const MainDashboard: React.FC = () => {
                     {t('navigation:patients')}
                   </span>
                 ),
-                children: filteredPatients.length > 0 || patients.length > 0 ? (
+                children: !hasLoaded ? null : filteredPatients.length > 0 || patients.length > 0 ? (
                   <PatientTable
                     patients={filteredPatients}
                     onView={handleViewPatient}
@@ -505,7 +511,7 @@ export const MainDashboard: React.FC = () => {
                     {t('navigation:households')}
                   </span>
                 ),
-                children: filteredHouseholds.length > 0 || households.length > 0 ? (
+                children: !hasLoaded ? null : filteredHouseholds.length > 0 || households.length > 0 ? (
                   <HouseholdTable
                     households={filteredHouseholds}
                     onView={handleViewHousehold}

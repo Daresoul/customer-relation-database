@@ -8,6 +8,8 @@ import { HouseholdSummary } from '../../types/patient';
 import { PatientService } from '../../services/patientService';
 import { invoke } from '@/services/invoke';
 import { CreateHouseholdInline, type CreatedHousehold } from '../../components/forms/CreateHouseholdInline';
+import { LoadError } from '../../components/common/LoadError';
+import { invalidatePatientData, invalidateHouseholdData } from '../../hooks/invalidation';
 import styles from './PatientDetail.module.css';
 
 const { Title, Text } = Typography;
@@ -26,9 +28,18 @@ interface HouseholdSectionProps {
   household?: HouseholdSummary;
   patientId?: number;
   onHouseholdChanged?: () => void;
+  /** The owner exists but could not be read; never offer "assign" then. */
+  loadFailed?: boolean;
+  onRetry?: () => void;
 }
 
-export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household, patientId, onHouseholdChanged }) => {
+export const HouseholdSection: React.FC<HouseholdSectionProps> = ({
+  household,
+  patientId,
+  onHouseholdChanged,
+  loadFailed = false,
+  onRetry = () => {},
+}) => {
   const { t } = useTranslation('patients');
   const { notification } = App.useApp();
   const queryClient = useQueryClient();
@@ -43,7 +54,7 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household, p
   const { data: allHouseholds = [], isLoading: isLoadingHouseholds } = useQuery({
     queryKey: ['all-households'],
     queryFn: () => invoke<any[]>('get_all_households', {}),
-    enabled: !household && mode === 'pick',
+    enabled: !household && !loadFailed && mode === 'pick',
   });
 
   const resetForm = () => {
@@ -60,8 +71,8 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household, p
       duration: 3,
     });
     resetForm();
-    queryClient.invalidateQueries({ queryKey: ['patient', patientId] });
-    queryClient.invalidateQueries({ queryKey: ['all-households'] });
+    invalidatePatientData(queryClient);
+    invalidateHouseholdData(queryClient);
     onHouseholdChanged?.();
   };
 
@@ -120,7 +131,8 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household, p
         placement: 'bottomRight',
         duration: 3,
       });
-      queryClient.invalidateQueries({ queryKey: ['patient', patientId] });
+      invalidatePatientData(queryClient);
+      invalidateHouseholdData(queryClient);
       onHouseholdChanged?.();
     } catch (error) {
       notification.error({
@@ -133,6 +145,22 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({ household, p
       setIsLoading(false);
     }
   };
+
+  if (loadFailed) {
+    return (
+      <Card
+        className={styles.householdCard}
+        title={
+          <Title level={4} className={styles.householdTitle}>
+            <HomeOutlined className={styles.householdIcon} />
+            {t('detail.householdInfo.title')}
+          </Title>
+        }
+      >
+        <LoadError title={t('detail.householdInfo.loadFailed')} onRetry={onRetry} />
+      </Card>
+    );
+  }
 
   if (!household) {
     return (

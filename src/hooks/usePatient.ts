@@ -10,7 +10,8 @@ import { PatientService } from '../services/patientService';
 import { Patient, UpdatePatientInput } from '../types';
 import { PatientDetail, DeletePatientResponse } from '../types/patient';
 import dayjs from 'dayjs';
-import { createMutationErrorHandler } from '../utils/errors';
+import { createMutationErrorHandler, extractErrorMessage } from '../utils/errors';
+import { invalidatePatientData } from './invalidation';
 
 /**
  * Calculate age from date of birth
@@ -45,7 +46,8 @@ export function usePatientDetail(patientId: number) {
   return useQuery({
     queryKey: ['patient', patientId],
     queryFn: async () => {
-      const patient = await PatientService.getPatient(patientId);
+      const patient = await PatientService.findPatient(patientId);
+      if (!patient) return null;
 
       // Transform to PatientDetail with calculated age
       const patientDetail: PatientDetail = {
@@ -112,7 +114,7 @@ export function usePatientDetail(patientId: number) {
           };
         } catch (error) {
           console.error('Failed to fetch household details:', error);
-          // Continue without household data
+          patientDetail.householdLoadFailed = true;
         }
       }
 
@@ -197,13 +199,7 @@ export function useUpdatePatient() {
         return updated;
       });
 
-      // Invalidate related queries
-      queryClient.invalidateQueries({ queryKey: ['patients'] });
-      if (updatedPatient.householdId) {
-        queryClient.invalidateQueries({
-          queryKey: ['household', updatedPatient.householdId, 'patients']
-        });
-      }
+      invalidatePatientData(queryClient);
 
       notification.success({
         message: 'Patient Updated',
@@ -236,7 +232,7 @@ export function useDeletePatient() {
     onSuccess: (response, patientId) => {
       // Invalidate and remove from cache
       queryClient.removeQueries({ queryKey: ['patient', patientId] });
-      queryClient.invalidateQueries({ queryKey: ['patients'] });
+      invalidatePatientData(queryClient);
 
       notification.success({
         message: 'Patient Deleted',
@@ -246,7 +242,18 @@ export function useDeletePatient() {
       });
       navigate(response.redirectTo);
     },
-    onError: createMutationErrorHandler(notification, 'Delete Patient', t, 'usePatient'),
+    onError: (error) => {
+      if (extractErrorMessage(error).startsWith('PATIENT_HAS_HISTORY')) {
+        notification.error({
+          message: t('patients:errors.deleteBlockedTitle'),
+          description: t('patients:errors.deleteBlocked'),
+          placement: 'bottomRight',
+          duration: 8,
+        });
+        return;
+      }
+      createMutationErrorHandler(notification, 'Delete Patient', t, 'usePatient')(error);
+    },
   });
 }
 
@@ -267,7 +274,8 @@ export function useDeleteConfirmation() {
       icon: null, // Icon styling is handled by CSS
       centered: true,
       onOk: async () => {
-        await deletePatient.mutateAsync(patientId);
+        // onError already explains a refusal; close the dialog either way
+        await deletePatient.mutateAsync(patientId).catch(() => {});
       }
     });
   };

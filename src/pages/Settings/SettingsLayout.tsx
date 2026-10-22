@@ -50,7 +50,7 @@ interface MenuItem {
 }
 
 const SettingsLayout: React.FC = () => {
-  const { notification } = App.useApp();
+  const { message } = App.useApp();
   const { t } = useTranslation(['common', 'entities', 'navigation', 'forms', 'settings']);
   const navigate = useNavigate();
   const { themeMode, setThemeMode } = useTheme();
@@ -172,17 +172,15 @@ const SettingsLayout: React.FC = () => {
 
     try {
       await updateSettings(completeValues);
-
-      // Update the theme context when theme changes
-      if (completeValues.theme && completeValues.theme !== themeMode) {
-        setThemeMode(completeValues.theme as 'light' | 'dark');
-      }
-
-      notification.success({ message: "Success", description: t('common:saveSuccess'), placement: "bottomRight", duration: 3 });
-    } catch (error) {
-      console.error('Settings update error:', error);
-      notification.error({ message: "Error", description: t('common:operationFailed'), placement: "bottomRight", duration: 5 });
+    } catch {
+      // useAppSettings already reported the failure
+      return;
     }
+
+    if (completeValues.theme && completeValues.theme !== themeMode) {
+      setThemeMode(completeValues.theme as 'light' | 'dark');
+    }
+    message.success(t('common:saveSuccess'));
   };
 
   const handleCancel = () => {

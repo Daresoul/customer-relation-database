@@ -117,9 +117,8 @@ export class HouseholdService {
   /**
    * Update household information.
    *
-   * Each field is independently optional. Passing `undefined` for a
-   * field leaves the existing value untouched (COALESCE on the Rust
-   * side). Passing `null` clears it explicitly.
+   * Each field is independently optional. Passing `undefined` leaves the
+   * existing value untouched; an empty string clears it.
    */
   static async updateHousehold(
     householdId: number,

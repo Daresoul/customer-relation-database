@@ -6,6 +6,7 @@ import { PersonWithContacts, CreatePersonWithContactsDto } from '../../../types/
 import { PersonCard } from './PersonCard';
 import { AddPersonModal } from './AddPersonModal';
 import { useAddPerson } from '../../../hooks/useHousehold';
+import { knownErrorMessage } from '@/utils/errors';
 import styles from '../HouseholdDetail.module.css';
 
 const { Title } = Typography;
@@ -21,18 +22,24 @@ export const PeopleSection: React.FC<PeopleSectionProps> = ({ people, householdI
   const [isAddingPerson, setIsAddingPerson] = useState(false);
   const addPerson = useAddPerson();
 
+  // Rethrows so AddPersonModal keeps what was typed.
   const handleAddPerson = async (personData: CreatePersonWithContactsDto) => {
     try {
       await addPerson.mutateAsync({
         householdId,
         person: personData
       });
-      setIsAddingPerson(false);
-      notification.success({ message: "Success", description: t('detail.people.personAdded'), placement: "bottomRight", duration: 3 });
     } catch (error) {
-      notification.error({ message: "Error", description: t('detail.people.failedToAdd'), placement: "bottomRight", duration: 5 });
-      console.error('Add person failed:', error);
+      notification.error({
+        message: t('common:error'),
+        description: knownErrorMessage(error, t) || t('detail.people.failedToAdd'),
+        placement: 'bottomRight',
+        duration: 5,
+      });
+      throw error;
     }
+    setIsAddingPerson(false);
+    notification.success({ message: t('common:success'), description: t('detail.people.personAdded'), placement: 'bottomRight', duration: 3 });
   };
 
   const handlePrimaryChange = (personId: number) => {

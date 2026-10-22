@@ -127,6 +127,11 @@ pub async fn create_patient_with_household(
     db: &DatabaseConnection,
     dto: CreatePatientWithHouseholdDto,
 ) -> Result<(HouseholdWithPeople, i64), String> {
+    let microchip_id = dto.patient.microchip_id.as_deref().and_then(crate::services::patient::normalize_microchip);
+    if let Some(chip) = &microchip_id {
+        crate::services::patient::ensure_chip_free(db, chip, None).await?;
+    }
+
     let txn = db.begin().await.map_err(|e| format!("Failed to begin transaction: {}", e))?;
 
     // First create the household with people (inline, not calling the other function to share transaction)
@@ -220,13 +225,16 @@ pub async fn create_patient_with_household(
     // Create patient
     let result = txn.execute(Statement::from_sql_and_values(
         DbBackend::Sqlite,
-        "INSERT INTO patients (name, species_id, breed_id, date_of_birth, weight, medical_notes) VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO patients (name, species_id, breed_id, gender, date_of_birth, color, weight, microchip_id, medical_notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
             dto.patient.name.clone().into(),
             dto.patient.species_id.into(),
             sea_orm::Value::BigInt(dto.patient.breed_id),
+            sea_orm::Value::String(dto.patient.gender.clone().map(Box::new)),
             sea_orm::Value::String(dto.patient.date_of_birth.map(|d| Box::new(d.to_string()))),
+            sea_orm::Value::String(dto.patient.color.clone().map(Box::new)),
             sea_orm::Value::Double(dto.patient.weight),
+            sea_orm::Value::String(microchip_id.map(Box::new)),
             sea_orm::Value::String(dto.patient.medical_notes.clone().map(Box::new)),
         ]
     ))
@@ -369,11 +377,9 @@ pub async fn get_household_with_people(
     }))
 }
 
-// Update household. Every field is Option<String>; None means "leave
-// unchanged" (COALESCE keeps the existing value), Some("") means
-// "clear to empty string". `city` and `postal_code` were added so the
-// inline create form's address columns can be edited after creation
-// without going through the full HouseholdForm.
+// Update household. None leaves a field unchanged. For the optional columns
+// an empty or blank string clears the field to NULL; the name is required, so
+// it only ever changes to a new value.
 pub async fn update_household(
     db: &DatabaseConnection,
     household_id: i32,
@@ -383,15 +389,30 @@ pub async fn update_household(
     postal_code: Option<String>,
     notes: Option<String>,
 ) -> Result<(), String> {
+    fn change(v: Option<String>) -> [sea_orm::Value; 2] {
+        let set = v.is_some();
+        let value = v.filter(|s| !s.trim().is_empty());
+        [set.into(), sea_orm::Value::String(value.map(Box::new))]
+    }
+    let [address_set, address] = change(address);
+    let [city_set, city] = change(city);
+    let [postal_code_set, postal_code] = change(postal_code);
+    let [notes_set, notes] = change(notes);
+
     db.execute(Statement::from_sql_and_values(
         DbBackend::Sqlite,
-        "UPDATE households SET household_name = COALESCE(?, household_name), address = COALESCE(?, address), city = COALESCE(?, city), postal_code = COALESCE(?, postal_code), notes = COALESCE(?, notes), updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        "UPDATE households SET household_name = COALESCE(?, household_name), \
+         address = CASE WHEN ? THEN ? ELSE address END, \
+         city = CASE WHEN ? THEN ? ELSE city END, \
+         postal_code = CASE WHEN ? THEN ? ELSE postal_code END, \
+         notes = CASE WHEN ? THEN ? ELSE notes END, \
+         updated_at = CURRENT_TIMESTAMP WHERE id = ?",
         [
             sea_orm::Value::String(household_name.map(Box::new)),
-            sea_orm::Value::String(address.map(Box::new)),
-            sea_orm::Value::String(city.map(Box::new)),
-            sea_orm::Value::String(postal_code.map(Box::new)),
-            sea_orm::Value::String(notes.map(Box::new)),
+            address_set, address,
+            city_set, city,
+            postal_code_set, postal_code,
+            notes_set, notes,
             household_id.into(),
         ]
     ))

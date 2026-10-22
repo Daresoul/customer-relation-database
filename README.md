@@ -27,6 +27,34 @@
   UNIQUE index, because clinic databases may already hold duplicates.
 - The lab-result resolver reports two or more active chip matches as ambiguous
   and picks none.
+- `create_patient_with_household` follows the same rules as patient create.
+
+## Patients and households
+- Deleting a patient is refused (`PATIENT_HAS_HISTORY`) while it has medical
+  records or appointments, because those would cascade away. Only an empty
+  patient can be hard-deleted.
+- `update_household`: a field left out (`None`) is kept; an empty string clears
+  address, city, postal code or notes to NULL. The name can't be cleared.
+
+## Frontend states and caching
+- A failed load shows `components/common/LoadError` (message plus Retry that
+  refetches), never an empty list or zero counters.
+- Saves report success only after the backend confirms (`mutateAsync`), with one
+  message; a failed save keeps the form filled.
+- After a patient or household write, call `invalidatePatientData` or
+  `invalidateHouseholdData` (`hooks/invalidation.ts`). The file lists which
+  cache keys show that data.
+- Routed pages sit inside `RouteErrorBoundary`; a crash shows a translated
+  screen with Reload and Go to dashboard, and leaving the page clears it.
+
+## Google Calendar
+- When Google refuses the stored login (refresh rejected or a 401), the app
+  sets `google_calendar_settings.needs_reauth` (migration 048). Settings then
+  shows "Reconnect", and the background sync stops until the user reconnects.
+- `last_sync_error` keeps the last sync failure until a sync succeeds; Settings
+  shows it with the last-synced time.
+- Events and the created calendar use this computer's time zone
+  (`services::google_calendar::local_time_zone`, fallback Europe/Skopje).
 
 ## Lab devices (read-only)
 - The app only reads from analyzers. It never writes to a serial port.

@@ -84,3 +84,6 @@ pub mod device_delivery_tests;
 
 #[cfg(test)]
 pub mod folder_watch_tests;
+
+#[cfg(test)]
+pub mod google_sync_status_tests;

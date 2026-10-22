@@ -474,6 +474,57 @@ async fn delete_nonexistent_returns_false() {
     assert!(!deleted);
 }
 
+async fn rex(db: &sea_orm::DatabaseConnection) -> i64 {
+    PatientService::create(
+        db,
+        CreatePatientDto {
+            name: Some("Rex".to_string()),
+            species_id: Some(1),
+            ..minimal_dto()
+        },
+    )
+    .await
+    .unwrap()
+    .id
+}
+
+#[tokio::test]
+async fn delete_is_refused_while_the_patient_has_medical_records() {
+    let db = create_test_db_with_migrations().await;
+    let id = rex(&db).await;
+    db.execute(sea_orm::Statement::from_sql_and_values(
+        sea_orm::DbBackend::Sqlite,
+        "INSERT INTO medical_records (patient_id, record_type, name, description) VALUES (?, 'procedure', 'Vaccine', 'x')",
+        vec![id.into()],
+    ))
+    .await
+    .unwrap();
+
+    let err = PatientService::delete(&db, id).await.unwrap_err();
+
+    assert!(err.starts_with("PATIENT_HAS_HISTORY"), "{}", err);
+    assert!(PatientService::get_by_id(&db, id).await.unwrap().is_some(), "chart must survive");
+}
+
+#[tokio::test]
+async fn delete_is_refused_while_the_patient_has_appointments() {
+    let db = create_test_db_with_migrations().await;
+    let id = rex(&db).await;
+    db.execute(sea_orm::Statement::from_sql_and_values(
+        sea_orm::DbBackend::Sqlite,
+        "INSERT INTO appointments (patient_id, title, start_time, end_time, created_by) \
+         VALUES (?, 'Check-up', '2030-01-10T09:00:00Z', '2030-01-10T09:30:00Z', 'test')",
+        vec![id.into()],
+    ))
+    .await
+    .unwrap();
+
+    let err = PatientService::delete(&db, id).await.unwrap_err();
+
+    assert!(err.starts_with("PATIENT_HAS_HISTORY"), "{}", err);
+    assert!(PatientService::get_by_id(&db, id).await.unwrap().is_some());
+}
+
 // ---------------------------------------------------------------------------
 // search
 // ---------------------------------------------------------------------------

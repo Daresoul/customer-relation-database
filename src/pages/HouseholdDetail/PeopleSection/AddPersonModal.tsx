@@ -47,8 +47,8 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({
 
       await onAdd(personData);
       form.resetFields();
-    } catch (error) {
-      console.error('Validation failed:', error);
+    } catch {
+      // Field errors show inline; a failed save was reported by the caller.
     }
   };
 
