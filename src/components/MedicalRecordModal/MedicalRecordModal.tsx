@@ -123,14 +123,14 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
           try {
             await Promise.all(uploadPromises);
             notification.success({
-              message: "Success",
+              message: t('common:success'),
               description: t('messages.uploadSuccess'),
               placement: "bottomRight",
               duration: 3
             });
           } catch (uploadError) {
             notification.error({
-              message: "Error",
+              message: t('common:error'),
               description: t('messages.uploadFailed'),
               placement: "bottomRight",
               duration: 5
@@ -218,7 +218,7 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
                 ? error
                 : (error && (error as any).message)
                   ? String((error as any).message)
-                  : 'An error occurred while loading the record.'
+                  : t('messages.loadErrorDetail')
             }
             action={
               <Button size="small" onClick={() => refetch()}>
@@ -255,6 +255,7 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
 const { Text } = Typography;
 
 const HistoryList: React.FC<{ history: MedicalRecordHistory[] }> = ({ history }) => {
+  const { t } = useTranslation('medical');
   // Deduplicate obvious duplicates (same version and timestamp)
   const seen = new Set<string>();
   // Normalize and sort by changedAt desc (fallback to version desc)
@@ -272,7 +273,7 @@ const HistoryList: React.FC<{ history: MedicalRecordHistory[] }> = ({ history })
 
   return (
     <div>
-      <Text strong className={styles.changeHistoryTitle}>Change History</Text>
+      <Text strong className={styles.changeHistoryTitle}>{t('history.title')}</Text>
       <List
         size="small"
         dataSource={items}
@@ -280,11 +281,11 @@ const HistoryList: React.FC<{ history: MedicalRecordHistory[] }> = ({ history })
           <List.Item>
             <Space direction="vertical" size={0} className={styles.fullWidth}>
               <div className={styles.flexBetween}>
-                <Text>Version {item.version}</Text>
+                <Text>{t('versionLabel', { version: item.version })}</Text>
                 <Text type="secondary">{new Date(item.changedAt).toLocaleString()}</Text>
               </div>
               {item.changedBy && (
-                <Text type="secondary">by {item.changedBy}</Text>
+                <Text type="secondary">{t('history.by', { name: item.changedBy })}</Text>
               )}
               {(() => {
                 // Prefer showing exact diffs if available
@@ -321,9 +322,9 @@ const HistoryList: React.FC<{ history: MedicalRecordHistory[] }> = ({ history })
                   fields = cf.split(',').map((s: string) => s.trim()).filter(Boolean);
                 }
                 return fields && fields.length > 0 ? (
-                  <Text type="secondary">Changed: {fields.join(', ')}</Text>
+                  <Text type="secondary">{t('history.changed', { fields: fields.join(', ') })}</Text>
                 ) : (
-                  <Text type="secondary">No field-level details recorded</Text>
+                  <Text type="secondary">{t('history.noFieldDetails')}</Text>
                 );
               })()}
             </Space>

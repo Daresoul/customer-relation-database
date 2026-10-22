@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Typography, Button, App } from 'antd';
 import { PrinterOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 // pdf.js v3 imports — use legacy build for wider WebView compatibility
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
@@ -23,6 +24,7 @@ interface PdfInlineViewerProps {
 // Best-effort inline PDF viewer using pdfjs-dist if available.
 // Falls back to a helpful message if the lib is not installed.
 const PdfInlineViewer: React.FC<PdfInlineViewerProps> = ({ blob, fileName, attachmentId }) => {
+  const { t } = useTranslation(['medical', 'common']);
   const { notification } = App.useApp();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -90,7 +92,7 @@ const PdfInlineViewer: React.FC<PdfInlineViewerProps> = ({ blob, fileName, attac
           if (active && !rendered) {
             console.warn('[PDF Viewer] Render timeout after', Date.now() - start, 'ms, falling back to embed');
             try { renderTaskRef.current?.cancel?.(); } catch {}
-            setError('Inline PDF viewing timed out.');
+            setError(t('medical:pdfPreview.inlineTimedOut'));
           }
         }, 10000);
         await renderTask.promise;
@@ -103,7 +105,7 @@ const PdfInlineViewer: React.FC<PdfInlineViewerProps> = ({ blob, fileName, attac
           return; // don't show an error for expected cancellations
         }
         console.error('PDF inline viewer error:', e);
-        setError(`Inline PDF viewing failed. ${e?.message || ''}`.trim());
+        setError(t('medical:pdfPreview.inlineFailed', { error: e?.message || '' }).trim());
       } finally {
         if (active) setLoading(false);
       }
@@ -143,8 +145,8 @@ const PdfInlineViewer: React.FC<PdfInlineViewerProps> = ({ blob, fileName, attac
       } catch (e: any) {
         console.error('[PdfInlineViewer] Print failed:', e);
         notification.error({
-          message: 'Print failed',
-          description: e?.message || 'Failed to open print dialog',
+          message: t('medical:pdfPreview.printFailed'),
+          description: e?.message || t('medical:pdfPreview.printDialogFailed'),
           placement: 'bottomRight',
           duration: 5,
         });
@@ -166,17 +168,17 @@ const PdfInlineViewer: React.FC<PdfInlineViewerProps> = ({ blob, fileName, attac
               <iframe src={fallbackUrl} title={fileName} className={styles.iframe} />
             </object>
             <div className={styles.fallbackLink}>
-              <a href={fallbackUrl} download={fileName}>Download PDF</a>
+              <a href={fallbackUrl} download={fileName}>{t('medical:pdfPreview.downloadPdf')}</a>
             </div>
           </>
         ) : (
-          <Text type="secondary">Unable to display PDF here.</Text>
+          <Text type="secondary">{t('medical:pdfPreview.unableToDisplay')}</Text>
         )}
       </div>
     );
   }
   if (loading) {
-    return <Text type="secondary">Loading preview...</Text>;
+    return <Text type="secondary">{t('medical:detail.loadingPreview')}</Text>;
   }
   return (
     <div>
@@ -186,7 +188,7 @@ const PdfInlineViewer: React.FC<PdfInlineViewerProps> = ({ blob, fileName, attac
           icon={<PrinterOutlined />}
           onClick={handlePrint}
         >
-          Print
+          {t('common:print')}
         </Button>
       </div>
       <canvas ref={canvasRef} className={styles.canvas} />

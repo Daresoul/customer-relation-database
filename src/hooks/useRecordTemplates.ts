@@ -41,8 +41,8 @@ export function useCreateRecordTemplate() {
       TemplateService.createRecordTemplate(input),
     onSuccess: () => {
       notification.success({
-        message: 'Template Created',
-        description: 'Record template created successfully',
+        message: t('medical:templates.created'),
+        description: t('medical:templates.createdDesc'),
         placement: 'bottomRight',
         duration: 3,
       });
@@ -76,8 +76,8 @@ export function useUpdateRecordTemplate() {
     }) => TemplateService.updateRecordTemplate(templateId, input),
     onSuccess: () => {
       notification.success({
-        message: 'Template Updated',
-        description: 'Record template updated successfully',
+        message: t('medical:templates.updated'),
+        description: t('medical:templates.updatedDesc'),
         placement: 'bottomRight',
         duration: 3,
       });
@@ -105,8 +105,8 @@ export function useDeleteRecordTemplate() {
     mutationFn: (templateId: number) => TemplateService.deleteRecordTemplate(templateId),
     onSuccess: () => {
       notification.success({
-        message: 'Template Deleted',
-        description: 'Record template deleted successfully',
+        message: t('medical:templates.deleted'),
+        description: t('medical:templates.deletedDesc'),
         placement: 'bottomRight',
         duration: 3,
       });

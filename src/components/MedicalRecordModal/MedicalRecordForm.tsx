@@ -291,7 +291,7 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
         } else {
           notification.warning({
             message: t('common:warning'),
-            description: `Could not read test results from "${originalName}" — it will be attached as a plain file, without a device report table.`,
+            description: t('medical:recentFiles.couldNotReadResults', { name: originalName }),
             placement: 'bottomRight',
             duration: 8,
           });
@@ -300,7 +300,7 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
 
       notification.success({
         message: t('common:success'),
-        description: `Added ${originalName} to pending files`,
+        description: t('medical:recentFiles.addedToPending', { name: originalName }),
         placement: 'bottomRight',
         duration: 3,
       });
@@ -310,7 +310,7 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
       console.error('[MedicalRecordForm] Failed to add recent file:', error);
       notification.error({
         message: t('common:error'),
-        description: 'Failed to add file from history',
+        description: t('medical:recentFiles.addFromHistoryFailed'),
         placement: 'bottomRight',
         duration: 5,
       });
@@ -471,13 +471,13 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
                   onClick={() => setRecentFilesDrawerOpen(true)}
                   style={{ marginBottom: 8, paddingLeft: 0 }}
                 >
-                  Browse Recent Device Files
+                  {t('medical:actions.browseRecentDeviceFiles')}
                 </Button>
                 <Dragger
                   beforeUpload={(file) => {
                     const error = MedicalService.validateFile(file);
                     if (error) {
-                      notification.error({ message: "Error", description: error, placement: "bottomRight", duration: 5 });
+                      notification.error({ message: t('common:error'), description: error, placement: "bottomRight", duration: 5 });
                       return Upload.LIST_IGNORE;
                     }
                     return false;
@@ -561,7 +561,7 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
 
       {/* Recent Files Drawer */}
       <Drawer
-        title="Recent Device Files (Last 14 Days)"
+        title={t('medical:deviceImport.recentFilesTitle')}
         placement="right"
         width={800}
         onClose={() => setRecentFilesDrawerOpen(false)}

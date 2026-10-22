@@ -64,7 +64,7 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
       onRefresh();
     } catch (error) {
       notification.error({
-        message: "Error",
+        message: t('common:error'),
         description: selectedRecord.isArchived ? t('messages.restoreFailed') : t('messages.archiveFailed'),
         placement: "bottomRight",
         duration: 5
@@ -79,7 +79,7 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
         fileName,
       });
     } catch (error) {
-      notification.error({ message: "Error", description: t('messages.downloadFailed'), placement: "bottomRight", duration: 5 });
+      notification.error({ message: t('common:error'), description: t('messages.downloadFailed'), placement: "bottomRight", duration: 5 });
     }
   };
 
@@ -216,7 +216,7 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
           <Descriptions.Item label={t('fields.createdAt')}>
             <Text type="secondary">{new Date(record.createdAt).toLocaleString()}</Text>
             {record.createdBy && (
-              <Text type="secondary"> by {record.createdBy}</Text>
+              <Text type="secondary"> {t('history.by', { name: record.createdBy })}</Text>
             )}
           </Descriptions.Item>
 
@@ -284,7 +284,7 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
           <Descriptions.Item label={t('fields.updatedAt')}>
             <Text type="secondary">{new Date(record.updatedAt).toLocaleString()}</Text>
             {record.updatedBy && (
-              <Text type="secondary"> by {record.updatedBy}</Text>
+              <Text type="secondary"> {t('history.by', { name: record.updatedBy })}</Text>
             )}
           </Descriptions.Item>
 

@@ -234,10 +234,13 @@ const DeviceImportDialog: React.FC = () => {
 
     if (pendingFiles.length > 0) {
       const deviceNames = [...new Set(pendingFiles.map(f => f.deviceName))].join(', ');
-      defaults.name = `${deviceNames} - Device Data`;
+      defaults.name = t('medical:deviceImport.defaultTitle', { devices: deviceNames });
 
       const fileList = pendingFiles.map(f => `${f.fileName} (${f.deviceName})`).join('\n  - ');
-      defaults.description = `Device data imported from:\n  - ${fileList}\n\nDetected at: ${new Date(pendingFiles[0].detectedAt).toLocaleString()}`;
+      defaults.description = t('medical:deviceImport.defaultDescription', {
+        files: fileList,
+        detectedAt: new Date(pendingFiles[0].detectedAt).toLocaleString(),
+      });
     }
 
     return defaults;
@@ -344,7 +347,7 @@ const DeviceImportDialog: React.FC = () => {
         // report generated later will not include a table for this file.
         notification.warning({
           message: t('common:warning'),
-          description: `Could not read test results from "${originalName}" — it will be attached as a plain file, without a device report table.`,
+          description: t('medical:recentFiles.couldNotReadResults', { name: originalName }),
           placement: 'bottomRight',
           duration: 8,
         });
@@ -364,7 +367,7 @@ const DeviceImportDialog: React.FC = () => {
       });
       notification.success({
         message: t('common:success'),
-        description: `Added "${originalName}" to this import.`,
+        description: t('medical:deviceImport.addedToImport', { name: originalName }),
         placement: 'bottomRight',
         duration: 3,
       });
@@ -373,7 +376,7 @@ const DeviceImportDialog: React.FC = () => {
       console.error('Add recent file failed:', e);
       notification.error({
         message: t('common:error'),
-        description: e?.message || `Failed to add "${originalName}"`,
+        description: e?.message || t('medical:deviceImport.addFailed', { name: originalName }),
         placement: 'bottomRight',
       });
     }
@@ -532,7 +535,7 @@ const DeviceImportDialog: React.FC = () => {
         if (successes.length > 0) {
           notification.success({
             message: t('common:success'),
-            description: `${successes.length}/${pendingFiles.length} files uploaded` + (failures.length ? `, ${failures.length} failed` : ''),
+            description: t('medical:deviceImport.filesUploaded', { done: successes.length, total: pendingFiles.length }) + (failures.length ? t('medical:deviceImport.filesFailedSuffix', { failed: failures.length }) : ''),
             placement: 'bottomRight',
             duration: 3,
           });

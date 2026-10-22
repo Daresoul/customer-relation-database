@@ -31,7 +31,7 @@ interface PrintReportModalProps {
 }
 
 // Map device type to readable name
-const getDeviceDisplayName = (deviceType?: string): string => {
+const getDeviceDisplayName = (deviceType: string | undefined, unknownLabel: string): string => {
   switch (deviceType) {
     case 'exigo_eos_vet':
       return 'Exigo Eos Vet';
@@ -40,7 +40,7 @@ const getDeviceDisplayName = (deviceType?: string): string => {
     case 'mnchip_pointcare_pcr_v1':
       return 'PointCare Chemistry';
     default:
-      return deviceType || 'Unknown Device';
+      return deviceType || unknownLabel;
   }
 };
 
@@ -66,7 +66,7 @@ const PrintReportModal: React.FC<PrintReportModalProps> = ({
   patientInfo,
   onGenerate,
 }) => {
-  const { t } = useTranslation(['medical', 'common']);
+  const { t } = useTranslation(['medical', 'common', 'patients']);
   const { notification } = App.useApp();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
@@ -135,7 +135,7 @@ const PrintReportModal: React.FC<PrintReportModalProps> = ({
     if (selectedIds.length === 0) {
       notification.warning({
         message: t('common:warning'),
-        description: 'Please select at least one device file to include in the report.',
+        description: t('medical:printReport.selectAtLeastOne'),
         placement: 'bottomRight',
         duration: 4,
       });
@@ -172,7 +172,7 @@ const PrintReportModal: React.FC<PrintReportModalProps> = ({
     } catch (error: any) {
       notification.error({
         message: t('common:error'),
-        description: error?.toString() || 'Failed to generate report',
+        description: error?.toString() || t('medical:printReport.generateFailed'),
         placement: 'bottomRight',
         duration: 5,
       });
@@ -183,7 +183,7 @@ const PrintReportModal: React.FC<PrintReportModalProps> = ({
 
   return (
     <Modal
-      title="Print Report Configuration"
+      title={t('medical:printReport.title')}
       open={open}
       onCancel={onClose}
       footer={null}
@@ -191,37 +191,37 @@ const PrintReportModal: React.FC<PrintReportModalProps> = ({
       destroyOnHidden
     >
       <div className={styles.sectionTitle}>
-        Patient Information (for this print only)
+        {t('medical:printReport.patientInfo')}
       </div>
       <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
-        Changes here only affect this print and will not be saved to the database.
+        {t('medical:printReport.patientInfoHint')}
       </Text>
 
       <Form form={form} layout="vertical">
         <div className={styles.formRow}>
-          <Form.Item name="owner" label="Owner" className={styles.formItem}>
-            <Input placeholder="Owner name" />
+          <Form.Item name="owner" label={t('patients:fields.owner')} className={styles.formItem}>
+            <Input placeholder={t('medical:printReport.ownerPlaceholder')} />
           </Form.Item>
-          <Form.Item name="patientName" label="Patient Name" className={styles.formItem}>
-            <Input placeholder="Patient name" />
-          </Form.Item>
-        </div>
-
-        <div className={styles.formRow}>
-          <Form.Item name="species" label="Species" className={styles.formItem}>
-            <Input placeholder="Species" />
-          </Form.Item>
-          <Form.Item name="gender" label="Gender" className={styles.formItem}>
-            <Input placeholder="Gender" />
+          <Form.Item name="patientName" label={t('medical:printReport.patientName')} className={styles.formItem}>
+            <Input placeholder={t('medical:printReport.patientNamePlaceholder')} />
           </Form.Item>
         </div>
 
         <div className={styles.formRow}>
-          <Form.Item name="dateOfBirth" label="Date of Birth" className={styles.formItem}>
+          <Form.Item name="species" label={t('patients:fields.species')} className={styles.formItem}>
+            <Input placeholder={t('patients:fields.species')} />
+          </Form.Item>
+          <Form.Item name="gender" label={t('patients:fields.gender')} className={styles.formItem}>
+            <Input placeholder={t('patients:fields.gender')} />
+          </Form.Item>
+        </div>
+
+        <div className={styles.formRow}>
+          <Form.Item name="dateOfBirth" label={t('patients:fields.dateOfBirth')} className={styles.formItem}>
             <Input placeholder="YYYY-MM-DD" />
           </Form.Item>
-          <Form.Item name="microchipId" label="Microchip ID" className={styles.formItem}>
-            <Input placeholder="Microchip ID" />
+          <Form.Item name="microchipId" label={t('patients:fields.microchipId')} className={styles.formItem}>
+            <Input placeholder={t('patients:fields.microchipId')} />
           </Form.Item>
         </div>
       </Form>
@@ -237,21 +237,21 @@ const PrintReportModal: React.FC<PrintReportModalProps> = ({
         }}
       >
         <div className={styles.sectionTitle} style={{ marginBottom: 0 }}>
-          Select Files to Include
+          {t('medical:printReport.selectFiles')}
         </div>
         <Space>
           <Button size="small" onClick={handleSelectAll}>
-            Select All
+            {t('medical:printReport.selectAll')}
           </Button>
           <Button size="small" onClick={handleDeselectAll}>
-            Deselect All
+            {t('medical:printReport.deselectAll')}
           </Button>
         </Space>
       </div>
 
       {deviceFiles.length === 0 ? (
         <div className={styles.emptyMessage}>
-          No device test result files found for this medical record.
+          {t('medical:printReport.noDeviceFiles')}
         </div>
       ) : (
         <div className={styles.deviceFileList}>
@@ -266,7 +266,7 @@ const PrintReportModal: React.FC<PrintReportModalProps> = ({
                   <div className={styles.fileName}>{file.originalName}</div>
                   <div className={styles.deviceMeta}>
                     <Tag color={getDeviceTypeColor(file.deviceType)}>
-                      {getDeviceDisplayName(file.deviceType)}
+                      {getDeviceDisplayName(file.deviceType, t('medical:printReport.unknownDevice'))}
                     </Tag>
                     <Text type="secondary">
                       {new Date(file.uploadedAt).toLocaleString()}
@@ -280,7 +280,7 @@ const PrintReportModal: React.FC<PrintReportModalProps> = ({
       )}
 
       <div className={styles.footerButtons}>
-        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={onClose}>{t('common:cancel')}</Button>
         <Button
           type="primary"
           icon={<FilePdfOutlined />}
@@ -288,7 +288,7 @@ const PrintReportModal: React.FC<PrintReportModalProps> = ({
           loading={loading}
           disabled={selectedIds.length === 0}
         >
-          Generate & Print
+          {t('medical:printReport.generateAndPrint')}
         </Button>
       </div>
     </Modal>

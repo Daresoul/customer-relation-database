@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { App, Button, Typography, Spin } from 'antd';
 import { ReloadOutlined, PrinterOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { MedicalService } from '@/services/medicalService';
 import styles from './PdfMultiPagePreview.module.css';
 
@@ -18,6 +19,7 @@ interface Props {
 // Tauri-only multi-page PDF preview using PDFium-rendered PNGs.
 // Renders page 1 immediately, loads subsequent pages on demand with infinite scroll.
 const PdfMultiPagePreview: React.FC<Props> = ({ attachmentId, initialPageUrl }) => {
+  const { t } = useTranslation(['medical', 'common']);
   const { notification } = App.useApp();
   const [pageCount, setPageCount] = useState<number | null>(null);
   const [pages, setPages] = useState<Array<{ page: number; url: string }>>(
@@ -60,7 +62,7 @@ const PdfMultiPagePreview: React.FC<Props> = ({ attachmentId, initialPageUrl }) 
       } catch (e: any) {
         if (!active) return;
         console.warn('[PdfMultiPagePreview] Failed to init page count / first page:', e);
-        setError(e?.message || 'Failed to load PDF preview');
+        setError(e?.message || t('medical:pdfPreview.loadFailed'));
       }
     })();
     return () => {
@@ -105,7 +107,7 @@ const PdfMultiPagePreview: React.FC<Props> = ({ attachmentId, initialPageUrl }) 
       });
     } catch (e: any) {
       console.warn('[PdfMultiPagePreview] Load more failed:', e);
-      notification.error({ message: "Error", description: e?.message || 'Failed to load more pages', placement: "bottomRight", duration: 5 });
+      notification.error({ message: t('common:error'), description: e?.message || t('medical:pdfPreview.loadMoreFailed'), placement: "bottomRight", duration: 5 });
     } finally {
       setLoadingMore(false);
       loadingRef.current = false;
@@ -125,14 +127,14 @@ const PdfMultiPagePreview: React.FC<Props> = ({ attachmentId, initialPageUrl }) 
 
       setPages(results);
       notification.success({
-        message: 'Previews regenerated successfully',
-        description: 'Previews regenerated successfully',
+        message: t('medical:pdfPreview.regenerated'),
+        description: t('medical:pdfPreview.regenerated'),
         placement: 'bottomRight',
         duration: 3,
       });
     } catch (e: any) {
       console.error('[PdfMultiPagePreview] Regenerate failed:', e);
-      notification.error({ message: "Error", description: e?.message || 'Failed to regenerate previews', placement: "bottomRight", duration: 5 });
+      notification.error({ message: t('common:error'), description: e?.message || t('medical:pdfPreview.regenerateFailed'), placement: "bottomRight", duration: 5 });
     } finally {
       setRegenerating(false);
     }
@@ -168,8 +170,8 @@ const PdfMultiPagePreview: React.FC<Props> = ({ attachmentId, initialPageUrl }) 
     } catch (e: any) {
       console.error('[PdfMultiPagePreview] Print failed:', e);
       notification.error({
-        message: 'Print failed',
-        description: e?.message || 'Failed to open print dialog',
+        message: t('medical:pdfPreview.printFailed'),
+        description: e?.message || t('medical:pdfPreview.printDialogFailed'),
         placement: 'bottomRight',
         duration: 5,
       });
@@ -180,7 +182,7 @@ const PdfMultiPagePreview: React.FC<Props> = ({ attachmentId, initialPageUrl }) 
     return (
       <div className={styles.loadingContainer}>
         <Spin />
-        <Text type="secondary" className={styles.loadingText}>Loading preview...</Text>
+        <Text type="secondary" className={styles.loadingText}>{t('medical:detail.loadingPreview')}</Text>
       </div>
     );
   }
@@ -193,7 +195,7 @@ const PdfMultiPagePreview: React.FC<Props> = ({ attachmentId, initialPageUrl }) 
     <div>
       <div className={styles.headerRow}>
         <Text>
-          {pageCount && `${pages.length} of ${pageCount} pages loaded`}
+          {pageCount && t('medical:pdfPreview.pagesLoaded', { loaded: pages.length, total: pageCount })}
         </Text>
         <div style={{ display: 'flex', gap: '8px' }}>
           <Button
@@ -202,7 +204,7 @@ const PdfMultiPagePreview: React.FC<Props> = ({ attachmentId, initialPageUrl }) 
             onClick={handlePrint}
             disabled={!pages.length}
           >
-            Print
+            {t('common:print')}
           </Button>
           <Button
             size="small"
@@ -210,7 +212,7 @@ const PdfMultiPagePreview: React.FC<Props> = ({ attachmentId, initialPageUrl }) 
             onClick={regenerateAll}
             loading={regenerating}
           >
-            Regenerate
+            {t('medical:pdfPreview.regenerate')}
           </Button>
         </div>
       </div>
@@ -223,7 +225,7 @@ const PdfMultiPagePreview: React.FC<Props> = ({ attachmentId, initialPageUrl }) 
           <div key={p.page} className={styles.pageContainer}>
             <img
               src={p.url}
-              alt={`Page ${p.page}`}
+              alt={t('medical:pdfPreview.pageAlt', { page: p.page })}
               className={styles.pageImage}
             />
           </div>
@@ -232,13 +234,13 @@ const PdfMultiPagePreview: React.FC<Props> = ({ attachmentId, initialPageUrl }) 
         {loadingMore && (
           <div className={styles.loadingContainer}>
             <Spin size="small" />
-            <Text type="secondary" className={styles.loadingText}>Loading more pages...</Text>
+            <Text type="secondary" className={styles.loadingText}>{t('medical:pdfPreview.loadingMore')}</Text>
           </div>
         )}
 
         {canLoadMore && !loadingMore && (
           <div className={styles.loadingContainer}>
-            <Text type="secondary">Scroll down to load more pages</Text>
+            <Text type="secondary">{t('medical:pdfPreview.scrollForMore')}</Text>
           </div>
         )}
       </div>

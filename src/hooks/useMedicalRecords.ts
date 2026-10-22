@@ -138,10 +138,10 @@ export function useArchiveMedicalRecord() {
     }) => MedicalService.archiveMedicalRecord(recordId, archive),
     onSuccess: (_, variables) => {
       notification.success({
-        message: variables.archive ? 'Medical Record Archived' : 'Medical Record Restored',
+        message: variables.archive ? t('medical:messages.archivedTitle') : t('medical:messages.restoredTitle'),
         description: variables.archive
-          ? 'Medical record archived successfully'
-          : 'Medical record restored successfully',
+          ? t('medical:messages.archiveSuccess')
+          : t('medical:messages.restoreSuccess'),
         placement: 'bottomRight',
         duration: 3,
       });
@@ -196,8 +196,8 @@ export function useUploadAttachment() {
     },
     onSuccess: (data, variables) => {
       notification.success({
-        message: 'File uploaded successfully',
-        description: 'File uploaded successfully',
+        message: t('medical:messages.uploadSuccess'),
+        description: t('medical:messages.uploadSuccess'),
         placement: 'bottomRight',
         duration: 3,
       });
@@ -233,8 +233,8 @@ export function useDeleteAttachment() {
     }) => MedicalService.deleteAttachment(attachmentId),
     onSuccess: (_, variables) => {
       notification.success({
-        message: 'Attachment deleted successfully',
-        description: 'Attachment deleted successfully',
+        message: t('medical:messages.attachmentDeleteSuccess'),
+        description: t('medical:messages.attachmentDeleteSuccess'),
         placement: 'bottomRight',
         duration: 3,
       });
@@ -268,8 +268,8 @@ export function useDownloadAttachment() {
     }) => MedicalService.downloadAndOpenAttachment(attachmentId, fileName),
     onSuccess: () => {
       notification.success({
-        message: 'File downloaded successfully',
-        description: 'File downloaded successfully',
+        message: t('medical:messages.downloadSuccess'),
+        description: t('medical:messages.downloadSuccess'),
         placement: 'bottomRight',
         duration: 3,
       });
@@ -310,16 +310,18 @@ export function useBulkArchiveMedicalRecords() {
 
       if (successCount > 0) {
         notification.success({
-          message: 'Bulk Operation Complete',
-          description: `${successCount} record(s) ${variables.archive ? 'archived' : 'restored'} successfully`,
+          message: t('medical:messages.bulkComplete'),
+          description: variables.archive
+            ? t('medical:messages.bulkArchived', { count: successCount })
+            : t('medical:messages.bulkRestored', { count: successCount }),
           placement: 'bottomRight',
           duration: 3,
         });
       }
       if (failCount > 0) {
         notification.warning({
-          message: 'Partial Failure',
-          description: `Failed to process ${failCount} record(s)`,
+          message: t('medical:messages.partialFailure'),
+          description: t('medical:messages.bulkFailed', { count: failCount }),
           placement: 'bottomRight',
           duration: 4,
         });

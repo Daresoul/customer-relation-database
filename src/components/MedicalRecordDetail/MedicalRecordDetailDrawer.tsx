@@ -1,5 +1,6 @@
 import React from 'react';
 import { Drawer, Descriptions, Typography, Space, Button, List, App } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { useMedicalRecord } from '@/hooks/useMedicalRecords';
 import { MedicalService } from '@/services/medicalService';
 import type { MedicalRecordHistory } from '@/types/medical';
@@ -15,6 +16,7 @@ interface MedicalRecordDetailDrawerProps {
 }
 
 export const MedicalRecordDetailDrawer: React.FC<MedicalRecordDetailDrawerProps> = ({ recordId, open, onClose, onChanged }) => {
+  const { t } = useTranslation(['medical', 'common']);
   const { notification } = App.useApp();
   const { data, isLoading, refetch } = useMedicalRecord(recordId, true);
 
@@ -22,8 +24,8 @@ export const MedicalRecordDetailDrawer: React.FC<MedicalRecordDetailDrawerProps>
     try {
       await MedicalService.revertMedicalRecord(recordId);
       notification.success({
-        message: 'Reverted to previous version',
-        description: 'Reverted to previous version',
+        message: t('medical:history.reverted'),
+        description: t('medical:history.reverted'),
         placement: 'bottomRight',
         duration: 3,
       });
@@ -31,8 +33,8 @@ export const MedicalRecordDetailDrawer: React.FC<MedicalRecordDetailDrawerProps>
       onChanged?.();
     } catch (e: any) {
       notification.error({
-        message: "Error",
-        description: typeof e === 'string' ? e : (e?.message || 'Failed to revert'),
+        message: t('common:error'),
+        description: typeof e === 'string' ? e : (e?.message || t('medical:history.revertFailed')),
         placement: "bottomRight",
         duration: 5
       });
@@ -60,31 +62,31 @@ export const MedicalRecordDetailDrawer: React.FC<MedicalRecordDetailDrawerProps>
   const parsedHistory = formatHistory(history);
 
   return (
-    <Drawer title="Medical Record Details" open={open} onClose={onClose} width={720}>
+    <Drawer title={t('medical:detail.recordDetails')} open={open} onClose={onClose} width={720}>
       {record && (
         <Descriptions bordered size="small" column={1} className={styles.marginBottom16}>
-          <Descriptions.Item label="Type">{record.recordType}</Descriptions.Item>
-          <Descriptions.Item label="Name">{record.name}</Descriptions.Item>
+          <Descriptions.Item label={t('medical:fields.recordType')}>{record.recordType}</Descriptions.Item>
+          <Descriptions.Item label={t('medical:fields.name')}>{record.name}</Descriptions.Item>
           {record.procedureName && (
-            <Descriptions.Item label="Procedure">{record.procedureName}</Descriptions.Item>
+            <Descriptions.Item label={t('medical:recordTypes.procedure')}>{record.procedureName}</Descriptions.Item>
           )}
           {record.price !== undefined && (
-            <Descriptions.Item label="Price">{record.price}</Descriptions.Item>
+            <Descriptions.Item label={t('medical:fields.price')}>{record.price}</Descriptions.Item>
           )}
-          <Descriptions.Item label="Description">
+          <Descriptions.Item label={t('medical:fields.description')}>
             <Paragraph className={styles.preWrapNoMargin}>{record.description}</Paragraph>
           </Descriptions.Item>
-          <Descriptions.Item label="Created">{new Date(record.createdAt).toLocaleString()}</Descriptions.Item>
-          <Descriptions.Item label="Updated">{new Date(record.updatedAt).toLocaleString()}</Descriptions.Item>
-          <Descriptions.Item label="Version">{record.version}</Descriptions.Item>
+          <Descriptions.Item label={t('medical:fields.createdAt')}>{new Date(record.createdAt).toLocaleString()}</Descriptions.Item>
+          <Descriptions.Item label={t('medical:fields.updatedAt')}>{new Date(record.updatedAt).toLocaleString()}</Descriptions.Item>
+          <Descriptions.Item label={t('medical:fields.version')}>{record.version}</Descriptions.Item>
         </Descriptions>
       )}
 
       <Space className={styles.marginBottom16}>
-        <Button onClick={handleRevert} disabled={parsedHistory.length === 0}>Revert to Previous Version</Button>
+        <Button onClick={handleRevert} disabled={parsedHistory.length === 0}>{t('medical:history.revertPrevious')}</Button>
       </Space>
 
-      <Typography.Title level={5}>Change History</Typography.Title>
+      <Typography.Title level={5}>{t('medical:history.title')}</Typography.Title>
       <List
         size="small"
         dataSource={parsedHistory}
@@ -92,7 +94,7 @@ export const MedicalRecordDetailDrawer: React.FC<MedicalRecordDetailDrawerProps>
           <List.Item>
             <Space direction="vertical" size={0} className={styles.fullWidth}>
               <div className={styles.flexSpaceBetween}>
-                <Text>Version {item.version}</Text>
+                <Text>{t('medical:versionLabel', { version: item.version })}</Text>
                 <Text type="secondary">{new Date(item.changedAt).toLocaleString()}</Text>
               </div>
               {(() => {
@@ -120,9 +122,9 @@ export const MedicalRecordDetailDrawer: React.FC<MedicalRecordDetailDrawerProps>
                   }
                 }
                 const cf: any = (item as any).changedFields;
-                if (Array.isArray(cf) && cf.length > 0) return <Text type="secondary">Changed: {cf.join(', ')}</Text>;
-                if (typeof cf === 'string' && cf.trim().length > 0) return <Text type="secondary">Changed: {cf}</Text>;
-                return <Text type="secondary">No field-level details recorded</Text>;
+                if (Array.isArray(cf) && cf.length > 0) return <Text type="secondary">{t('medical:history.changed', { fields: cf.join(', ') })}</Text>;
+                if (typeof cf === 'string' && cf.trim().length > 0) return <Text type="secondary">{t('medical:history.changed', { fields: cf })}</Text>;
+                return <Text type="secondary">{t('medical:history.noFieldDetails')}</Text>;
               })()}
             </Space>
           </List.Item>
