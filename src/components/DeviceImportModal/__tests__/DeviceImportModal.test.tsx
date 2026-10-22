@@ -225,6 +225,46 @@ describe('DeviceImportModal — recent files', () => {
     await screen.findByText('record page 99');
     expect(mocks.upload).toHaveBeenCalledWith(expect.objectContaining({ sourceFileId: 'hist-abc' }));
   });
+
+  it('adding a file keeps the patient chosen by a chip scan', async () => {
+    const user = userEvent.setup({ delay: 5 });
+    renderModal();
+    receive(maxResult());
+    await screen.findByText('Max - Dog');
+
+    await user.keyboard(`${BELLA.microchipId}{Enter}`);
+    await waitFor(() => expect(dialog().getByText('Bella - Dog')).toBeInTheDocument());
+    act(() => ctx.addDeviceFile(result({ fileName: 'extra.xml', fileData: [5, 5] })));
+
+    await waitFor(() => expect(dialog().getByText('extra.xml')).toBeInTheDocument());
+    expect(dialog().getByText('Bella - Dog')).toBeInTheDocument();
+  });
+
+  it('adding a file updates the default description', async () => {
+    renderModal();
+    receive(maxResult());
+    await screen.findByText('Max - Dog');
+
+    act(() => ctx.addDeviceFile(result({ fileName: 'extra.xml', fileData: [5, 5] })));
+
+    await waitFor(() =>
+      expect((screen.getByLabelText('record-description') as HTMLInputElement).value).toContain('extra.xml'),
+    );
+  });
+
+  it('adding a file keeps a description the user wrote', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    receive(maxResult());
+    const description = await screen.findByLabelText('record-description');
+    await user.clear(description);
+    await user.type(description, 'Pre-op bloods');
+
+    act(() => ctx.addDeviceFile(result({ fileName: 'extra.xml', fileData: [5, 5] })));
+
+    await waitFor(() => expect(dialog().getByText('extra.xml')).toBeInTheDocument());
+    expect(description).toHaveValue('Pre-op bloods');
+  });
 });
 
 describe('DeviceImportModal — save for later', () => {
