@@ -1,6 +1,43 @@
 use sea_orm::{DatabaseConnection, ConnectionTrait, Statement, DbBackend};
 use crate::models::household::*;
 
+/// `INSERT INTO household_search` of one row per household matching `filter`
+/// (an SQL condition on `h`, e.g. `h.id = NEW.id`), built from the live
+/// households / people / person_contacts tables. Phone contacts are indexed
+/// twice: as typed and with separators removed, so "070123456" finds
+/// "070 123 456".
+///
+/// Migration 046 bakes this into its triggers. Changing it only changes the
+/// triggers through a new migration that recreates them.
+pub(crate) fn index_rows_sql(filter: &str) -> String {
+    format!(
+        r#"
+        INSERT INTO household_search
+            (household_id, household_name, address, people_names, contact_values, display_name)
+        SELECT
+            h.id,
+            COALESCE(h.household_name, ''),
+            TRIM(COALESCE(h.address, '') || ' ' || COALESCE(h.city, '') || ' ' || COALESCE(h.postal_code, '')),
+            COALESCE((SELECT GROUP_CONCAT(p.first_name || ' ' || p.last_name, ' ')
+                      FROM people p WHERE p.household_id = h.id), ''),
+            COALESCE((SELECT GROUP_CONCAT(
+                          CASE WHEN pc.contact_type IN ('phone', 'mobile', 'work_phone')
+                               THEN pc.contact_value || ' ' ||
+                                    REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+                                        pc.contact_value, ' ', ''), '-', ''), '/', ''), '(', ''), ')', ''), '.', '')
+                               ELSE pc.contact_value END, ' ')
+                      FROM person_contacts pc
+                      JOIN people p ON pc.person_id = p.id
+                      WHERE p.household_id = h.id), ''),
+            COALESCE(NULLIF(TRIM(h.household_name), ''),
+                     (SELECT GROUP_CONCAT(p.first_name || ' ' || p.last_name, ' & ')
+                      FROM people p WHERE p.household_id = h.id),
+                     'Household ' || h.id)
+        FROM households h
+        WHERE {filter}"#
+    )
+}
+
 // Sanitize query for FTS5 to prevent syntax errors.
 //
 // FTS5 treats `@`, `.`, `:`, and several other ASCII punctuation chars as
@@ -497,86 +534,11 @@ pub async fn search_households_by_contact(
 
 // Rebuild FTS5 index (for maintenance)
 pub async fn rebuild_search_index(db: &DatabaseConnection) -> Result<(), String> {
-    // Clear existing index
-    db.execute(Statement::from_sql_and_values(
-        DbBackend::Sqlite,
-        "DELETE FROM household_search",
-        []
-    ))
-    .await
-    .map_err(|e| format!("Failed to clear search index: {}", e))?;
-
-    // Rebuild from households
-    let household_rows = db.query_all(Statement::from_sql_and_values(
-        DbBackend::Sqlite,
-        r#"
-        SELECT
-            h.id,
-            h.household_name,
-            h.address,
-            -- SQLite GROUP_CONCAT cannot combine DISTINCT with a custom separator
-            -- ("DISTINCT aggregates must have exactly one argument"). Drop the
-            -- DISTINCT here: duplicate names/contacts within a household are
-            -- very unlikely, and even if present, FTS5 tokenization dedupes.
-            GROUP_CONCAT(p.first_name || ' ' || p.last_name, ' ') as people_names,
-            GROUP_CONCAT(pc.contact_value, ' ') as contact_values
-        FROM households h
-        LEFT JOIN people p ON p.household_id = h.id
-        LEFT JOIN person_contacts pc ON pc.person_id = p.id
-        GROUP BY h.id
-        "#,
-        []
-    ))
-    .await
-    .map_err(|e| format!("Failed to fetch households for reindex: {}", e))?;
-
-    for household_row in household_rows {
-        let id: i64 = household_row.try_get("", "id")
-            .map_err(|e| format!("Failed to get id: {}", e))?;
-        let household_name: Option<String> = household_row.try_get("", "household_name").ok();
-        let address: Option<String> = household_row.try_get("", "address").ok();
-        let people_names: Option<String> = household_row.try_get("", "people_names").ok();
-        let contact_values: Option<String> = household_row.try_get("", "contact_values").ok();
-
-        // Generate display name
-        let display_name = if let Some(name) = &household_name {
-            name.clone()
-        } else if let Some(people) = &people_names {
-            let names: Vec<&str> = people.split(' ').collect();
-            if names.len() == 2 {
-                format!("{} & {}", names[0], names[1])
-            } else {
-                people.clone()
-            }
-        } else {
-            format!("Household {}", id)
-        };
-
-        db.execute(Statement::from_sql_and_values(
-            DbBackend::Sqlite,
-            r#"
-            INSERT INTO household_search (
-                household_id,
-                household_name,
-                address,
-                people_names,
-                contact_values,
-                display_name
-            )
-            VALUES (?, ?, ?, ?, ?, ?)
-            "#,
-            [
-                id.into(),
-                sea_orm::Value::String(household_name.map(Box::new)),
-                sea_orm::Value::String(address.map(Box::new)),
-                sea_orm::Value::String(people_names.map(Box::new)),
-                sea_orm::Value::String(contact_values.map(Box::new)),
-                display_name.into(),
-            ]
-        ))
+    db.execute_unprepared("DELETE FROM household_search")
         .await
-        .map_err(|e| format!("Failed to insert into search index: {}", e))?;
-    }
-
+        .map_err(|e| format!("Failed to clear search index: {}", e))?;
+    db.execute_unprepared(&index_rows_sql("1 = 1"))
+        .await
+        .map_err(|e| format!("Failed to rebuild search index: {}", e))?;
     Ok(())
 }

@@ -61,6 +61,7 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, "043_create_diagnoses_tables", create_diagnoses_tables).await?;
     run_migration(pool, "044_fts5_unicode61_tokenizer", upgrade_fts5_to_unicode61).await?;
     run_migration(pool, "045_add_attachment_deleted_at", add_attachment_deleted_at_column).await?;
+    run_migration(pool, "046_rebuild_household_search", rebuild_household_search).await?;
 
     Ok(())
 }
@@ -2823,6 +2824,81 @@ fn upgrade_fts5_to_unicode61(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::fu
         sqlx::query("INSERT INTO medical_records_fts(medical_records_fts) VALUES('rebuild')")
             .execute(pool)
             .await?;
+
+        Ok(())
+    })
+}
+
+// Migration 046: rebuild household_search from the real tables. Migration 044's
+// back-fill joined a table that never existed and swallowed the error, so every
+// household created before it was unsearchable. The old triggers only covered
+// inserts; these re-index a household on any insert, update or delete of the
+// household, its people or their contacts.
+fn rebuild_household_search(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        use crate::database::queries::household_search::index_rows_sql;
+
+        fn reindex(household_id: &str) -> String {
+            format!(
+                "DELETE FROM household_search WHERE household_id = {household_id};\n{};",
+                index_rows_sql(&format!("h.id = {household_id}"))
+            )
+        }
+        let person_household = |row: &str| format!("(SELECT household_id FROM people WHERE id = {row}.person_id)");
+
+        for old in [
+            "household_search_insert",
+            "household_search_delete",
+            "people_update_search_insert",
+            "contacts_update_search_insert",
+        ] {
+            sqlx::query(&format!("DROP TRIGGER IF EXISTS {old}")).execute(pool).await?;
+        }
+
+        let triggers = [
+            ("household_search_households_ai", "AFTER INSERT ON households", reindex("NEW.id")),
+            (
+                "household_search_households_au",
+                "AFTER UPDATE OF household_name, address, city, postal_code ON households",
+                reindex("NEW.id"),
+            ),
+            (
+                "household_search_households_ad",
+                "AFTER DELETE ON households",
+                "DELETE FROM household_search WHERE household_id = OLD.id;".to_string(),
+            ),
+            ("household_search_people_ai", "AFTER INSERT ON people", reindex("NEW.household_id")),
+            (
+                "household_search_people_au",
+                "AFTER UPDATE OF first_name, last_name, household_id ON people",
+                format!("{}\n{}", reindex("OLD.household_id"), reindex("NEW.household_id")),
+            ),
+            ("household_search_people_ad", "AFTER DELETE ON people", reindex("OLD.household_id")),
+            (
+                "household_search_contacts_ai",
+                "AFTER INSERT ON person_contacts",
+                reindex(&person_household("NEW")),
+            ),
+            (
+                "household_search_contacts_au",
+                "AFTER UPDATE OF contact_value, contact_type, person_id ON person_contacts",
+                format!("{}\n{}", reindex(&person_household("OLD")), reindex(&person_household("NEW"))),
+            ),
+            (
+                "household_search_contacts_ad",
+                "AFTER DELETE ON person_contacts",
+                reindex(&person_household("OLD")),
+            ),
+        ];
+        for (name, event, body) in triggers {
+            sqlx::query(&format!("DROP TRIGGER IF EXISTS {name}")).execute(pool).await?;
+            sqlx::query(&format!("CREATE TRIGGER {name} {event} BEGIN\n{body}\nEND"))
+                .execute(pool)
+                .await?;
+        }
+
+        sqlx::query("DELETE FROM household_search").execute(pool).await?;
+        sqlx::query(&index_rows_sql("1 = 1")).execute(pool).await?;
 
         Ok(())
     })
