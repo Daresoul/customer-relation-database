@@ -63,3 +63,6 @@ pub mod sql_schema_check;
 
 #[cfg(test)]
 pub mod household_search_index_tests;
+
+#[cfg(test)]
+pub mod owner_lookup_tests;
