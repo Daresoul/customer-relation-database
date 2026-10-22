@@ -33,15 +33,16 @@ import java.util.Map;
  *     "owner": "John Doe",
  *     "species": "Dog",
  *     "microchip_id": "123456",
- *     "gender": "MALE",
- *     "date_of_birth": "2020-01-15"
+ *     "gender": "Female",                 // Male/Female (en or mk); anything else prints as unknown
+ *     "date_of_birth": "2020-01-15"       // ISO yyyy-MM-dd or null
  *   },
  *   "samples": [
  *     {
  *       "device_type": "exigo_eos_vet",
  *       "sample_id": "12345",
  *       "test_results": { "RBC": "5.2", "HGB": "14.5", ... },
- *       "detected_at": "2025-10-14T10:30:00Z",
+ *       "detected_at": "2025-10-14T10:30:00Z",          // receive instant (fallback)
+ *       "analysis_datetime": "2025-10-14T12:28:41",     // analyzer clock, local wall time
  *       "patient_id": "123456"
  *     }
  *   ],
