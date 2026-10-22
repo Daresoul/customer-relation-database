@@ -226,6 +226,9 @@ pub async fn reconnect_device_listeners(
         }
     }
 
+    // Folders too: a missing folder that is back starts watching right away.
+    crate::services::file_watcher::reload_file_watchers().await;
+
     Ok(get_all_connection_statuses())
 }
 
