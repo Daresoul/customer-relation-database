@@ -65,12 +65,82 @@ pub struct Invoice {
 pub struct MedicalRecordService;
 
 impl MedicalRecordService {
+    /// The record's invoice number and date, assigned on first use and kept
+    /// from then on. `now` carries the clinic's time zone: the date and the
+    /// number's year are the local calendar date, not UTC's.
     pub async fn assign_invoice<Tz: chrono::TimeZone>(
-        _db: &DatabaseConnection,
-        _record_id: i64,
-        _now: DateTime<Tz>,
+        db: &DatabaseConnection,
+        record_id: i64,
+        now: DateTime<Tz>,
     ) -> Result<Invoice, String> {
-        Err("not implemented".to_string())
+        let txn = db.begin().await.map_err(|e| format!("Failed to start invoice numbering: {}", e))?;
+        let row = txn
+            .query_one(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "SELECT invoice_number, invoice_date, created_at FROM medical_records WHERE id = ?",
+                [record_id.into()],
+            ))
+            .await
+            .map_err(|e| format!("Failed to read the invoice number: {}", e))?
+            .ok_or("Medical record not found".to_string())?;
+        let number: Option<String> = row.try_get("", "invoice_number").ok().flatten();
+        let stored_date = row
+            .try_get::<Option<String>>("", "invoice_date")
+            .ok()
+            .flatten()
+            .and_then(|d| chrono::NaiveDate::parse_from_str(&d, "%Y-%m-%d").ok());
+
+        if let (Some(number), Some(date)) = (number.clone(), stored_date) {
+            return Ok(Invoice { number, date });
+        }
+
+        let invoice = match number {
+            // Numbered before dates were stored: the visit's own local date.
+            Some(number) => {
+                let date = row
+                    .try_get::<String>("", "created_at")
+                    .ok()
+                    .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                    .map(|dt| dt.with_timezone(&now.timezone()).date_naive())
+                    .unwrap_or_else(|| now.date_naive());
+                Invoice { number, date }
+            }
+            None => {
+                let date = now.date_naive();
+                let year = date.format("%Y").to_string();
+                let last = txn
+                    .query_one(Statement::from_sql_and_values(
+                        DbBackend::Sqlite,
+                        "SELECT invoice_number FROM medical_records \
+                         WHERE invoice_number LIKE ? \
+                         ORDER BY CAST(SUBSTR(invoice_number, 1, INSTR(invoice_number, '/') - 1) AS INTEGER) DESC \
+                         LIMIT 1",
+                        [format!("%/{}", year).into()],
+                    ))
+                    .await
+                    .map_err(|e| format!("Failed to query max invoice number: {}", e))?
+                    .and_then(|r| r.try_get::<String>("", "invoice_number").ok())
+                    .and_then(|l| l.split('/').next().and_then(|n| n.parse::<i64>().ok()))
+                    .unwrap_or(0);
+                Invoice { number: format!("{:03}/{}", last + 1, year), date }
+            }
+        };
+
+        txn.execute(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "UPDATE medical_records SET invoice_number = ?, invoice_date = ? WHERE id = ?",
+            [
+                invoice.number.clone().into(),
+                invoice.date.format("%Y-%m-%d").to_string().into(),
+                record_id.into(),
+            ],
+        ))
+        .await
+        .map_err(|e| format!("Failed to store invoice number: {}", e))?;
+        txn.commit().await.map_err(|e| format!("Failed to store invoice number: {}", e))?;
+
+        log::info!("📝 Invoice {} dated {} for record {}", invoice.number, invoice.date, record_id);
+        Ok(invoice)
     }
 
     pub async fn get_medical_records(
@@ -545,13 +615,6 @@ impl MedicalRecordService {
         chrono::Utc::now().format("%Y-%m-%d %H-%M").to_string()
     }
 
-    /// Just the date portion of `pdf_timestamp()`. Used for the
-    /// invoice filename where the invoice number already provides
-    /// sub-day uniqueness.
-    fn pdf_date_only() -> String {
-        chrono::Utc::now().format("%Y-%m-%d").to_string()
-    }
-
     /// Generate a simple report PDF using the template with medical record title and description
     async fn generate_simple_report_pdf(
         app_handle: &tauri::AppHandle,
@@ -709,55 +772,9 @@ impl MedicalRecordService {
             })
             .collect();
 
-        // Format date
-        let date = chrono::Utc::now().format("%d/%m/%Y").to_string();
-
-        // Sequential invoice number: reuse existing or assign next
-        let year = chrono::Utc::now().format("%Y").to_string();
-        let invoice_number = if let Some(ref existing) = record.invoice_number {
-            existing.clone()
-        } else {
-            // Get the highest invoice number for this year
-            let pattern = format!("%/{}", year);
-            let max_row = db.query_one(Statement::from_sql_and_values(
-                DbBackend::Sqlite,
-                "SELECT invoice_number FROM medical_records \
-                 WHERE invoice_number LIKE ? \
-                 ORDER BY CAST(SUBSTR(invoice_number, 1, INSTR(invoice_number, '/') - 1) AS INTEGER) DESC \
-                 LIMIT 1",
-                [pattern.into()],
-            ))
-            .await
-            .map_err(|e| format!("Failed to query max invoice number: {}", e))?;
-
-            let next_num = match max_row {
-                Some(row) => {
-                    let last: Option<String> = row.try_get("", "invoice_number").ok();
-                    match last {
-                        Some(l) => {
-                            let num_str = l.split('/').next().unwrap_or("0");
-                            num_str.parse::<i64>().unwrap_or(0) + 1
-                        }
-                        None => 1,
-                    }
-                }
-                None => 1,
-            };
-
-            let new_invoice_number = format!("{:03}/{}", next_num, year);
-
-            // Store it in the database
-            db.execute(Statement::from_sql_and_values(
-                DbBackend::Sqlite,
-                "UPDATE medical_records SET invoice_number = ? WHERE id = ?",
-                [new_invoice_number.clone().into(), medical_record_id.into()],
-            ))
-            .await
-            .map_err(|e| format!("Failed to store invoice number: {}", e))?;
-
-            log::info!("📝 Assigned invoice number {} to record {}", new_invoice_number, medical_record_id);
-            new_invoice_number
-        };
+        let invoice = Self::assign_invoice(db, medical_record_id, chrono::Local::now()).await?;
+        let invoice_number = invoice.number.clone();
+        let date = invoice.date.format("%d/%m/%Y").to_string();
 
         // Discount from record
         let discount = record.discount_percent.unwrap_or(0.0);
@@ -782,7 +799,7 @@ impl MedicalRecordService {
             "Invoice {} - {} - {}.pdf",
             invoice_part,
             recipient_part,
-            Self::pdf_date_only(),
+            invoice.date.format("%Y-%m-%d"),
         );
         let pdf_path = reports_dir.join(&pdf_filename);
 

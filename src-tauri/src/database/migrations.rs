@@ -63,6 +63,7 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, "045_add_attachment_deleted_at", add_attachment_deleted_at_column).await?;
     run_migration(pool, "046_rebuild_household_search", rebuild_household_search).await?;
     run_migration(pool, "047_fix_medical_records_fts_triggers", fix_medical_records_fts_triggers).await?;
+    run_migration(pool, "048_add_invoice_date", add_invoice_date_column).await?;
 
     Ok(())
 }
@@ -2976,6 +2977,24 @@ fn fix_medical_records_fts_triggers(pool: &SqlitePool) -> std::pin::Pin<Box<dyn 
         sqlx::query("INSERT INTO medical_records_fts(medical_records_fts) VALUES('rebuild')")
             .execute(pool)
             .await?;
+        Ok(())
+    })
+}
+
+// Migration 048: the invoice date (local calendar date, `YYYY-MM-DD`), stored
+// once when the invoice number is assigned so later edits reprint the same date.
+fn add_invoice_date_column(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        let exists: (i32,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM pragma_table_info('medical_records') WHERE name = 'invoice_date'"
+        )
+        .fetch_one(pool)
+        .await?;
+        if exists.0 == 0 {
+            sqlx::query("ALTER TABLE medical_records ADD COLUMN invoice_date TEXT")
+                .execute(pool)
+                .await?;
+        }
         Ok(())
     })
 }
