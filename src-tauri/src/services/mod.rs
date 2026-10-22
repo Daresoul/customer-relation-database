@@ -21,6 +21,7 @@ pub mod java_pdf_service;
 pub mod device_capture;
 pub mod line_item;
 pub mod backup;
+pub mod attachment_purge;
 pub mod managed_hid_scanner;
 pub mod raw_input_capture;
 pub mod diagnosis;
