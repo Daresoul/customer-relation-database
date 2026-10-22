@@ -57,7 +57,7 @@ export function useCreateRecordTemplate() {
         exact: false,
       });
     },
-    onError: createMutationErrorHandler(notification, 'Create Template', t, 'useRecordTemplates'),
+    onError: createMutationErrorHandler(notification, 'createTemplate', t, 'useRecordTemplates'),
   });
 }
 
@@ -92,7 +92,7 @@ export function useUpdateRecordTemplate() {
         exact: false,
       });
     },
-    onError: createMutationErrorHandler(notification, 'Update Template', t, 'useRecordTemplates'),
+    onError: createMutationErrorHandler(notification, 'updateTemplate', t, 'useRecordTemplates'),
   });
 }
 
@@ -121,6 +121,6 @@ export function useDeleteRecordTemplate() {
         exact: false,
       });
     },
-    onError: createMutationErrorHandler(notification, 'Delete Template', t, 'useRecordTemplates'),
+    onError: createMutationErrorHandler(notification, 'deleteTemplate', t, 'useRecordTemplates'),
   });
 }

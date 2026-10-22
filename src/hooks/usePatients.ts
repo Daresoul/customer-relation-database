@@ -40,7 +40,7 @@ export function usePatients() {
         duration: 3,
       });
     },
-    onError: createMutationErrorHandler(notification, 'Create Patient', t, 'usePatients'),
+    onError: createMutationErrorHandler(notification, 'createPatient', t, 'usePatients'),
   });
 
   // Update patient mutation
@@ -56,7 +56,7 @@ export function usePatients() {
         duration: 3,
       });
     },
-    onError: createMutationErrorHandler(notification, 'Update Patient', t, 'usePatients'),
+    onError: createMutationErrorHandler(notification, 'updatePatient', t, 'usePatients'),
   });
 
   // Delete patient mutation
@@ -71,7 +71,7 @@ export function usePatients() {
         duration: 3,
       });
     },
-    onError: createMutationErrorHandler(notification, 'Delete Patient', t, 'usePatients'),
+    onError: createMutationErrorHandler(notification, 'deletePatient', t, 'usePatients'),
   });
 
   // Add owner to patient mutation
@@ -90,7 +90,7 @@ export function usePatients() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [PATIENTS_KEY] });
     },
-    onError: createMutationErrorHandler(notification, 'Add Owner', t, 'usePatients'),
+    onError: createMutationErrorHandler(notification, 'addOwner', t, 'usePatients'),
   });
 
   // Remove owner from patient mutation
@@ -100,7 +100,7 @@ export function usePatients() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [PATIENTS_KEY] });
     },
-    onError: createMutationErrorHandler(notification, 'Remove Owner', t, 'usePatients'),
+    onError: createMutationErrorHandler(notification, 'removeOwner', t, 'usePatients'),
   });
 
   // Set primary owner mutation
@@ -110,7 +110,7 @@ export function usePatients() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [PATIENTS_KEY] });
     },
-    onError: createMutationErrorHandler(notification, 'Set Primary Owner', t, 'usePatients'),
+    onError: createMutationErrorHandler(notification, 'setPrimaryOwner', t, 'usePatients'),
   });
 
   // Get single patient (not cached, for one-off fetches)

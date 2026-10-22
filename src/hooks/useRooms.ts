@@ -37,7 +37,7 @@ export const useCreateRoom = () => {
         duration: 3,
       });
     },
-    onError: createMutationErrorHandler(notification, 'Create Room', t, 'useRooms'),
+    onError: createMutationErrorHandler(notification, 'createRoom', t, 'useRooms'),
   });
 };
 
@@ -59,7 +59,7 @@ export const useUpdateRoom = () => {
         duration: 3,
       });
     },
-    onError: createMutationErrorHandler(notification, 'Update Room', t, 'useRooms'),
+    onError: createMutationErrorHandler(notification, 'updateRoom', t, 'useRooms'),
   });
 };
 
@@ -79,6 +79,6 @@ export const useDeleteRoom = () => {
         duration: 3,
       });
     },
-    onError: createMutationErrorHandler(notification, 'Delete Room', t, 'useRooms'),
+    onError: createMutationErrorHandler(notification, 'deleteRoom', t, 'useRooms'),
   });
 };

@@ -40,7 +40,7 @@ export const useCreateDeviceIntegration = () => {
         duration: 3,
       });
     },
-    onError: createMutationErrorHandler(notification, 'Create Device Integration', t, 'useDeviceIntegrations'),
+    onError: createMutationErrorHandler(notification, 'createDeviceIntegration', t, 'useDeviceIntegrations'),
   });
 };
 
@@ -62,7 +62,7 @@ export const useUpdateDeviceIntegration = () => {
         duration: 3,
       });
     },
-    onError: createMutationErrorHandler(notification, 'Update Device Integration', t, 'useDeviceIntegrations'),
+    onError: createMutationErrorHandler(notification, 'updateDeviceIntegration', t, 'useDeviceIntegrations'),
   });
 };
 
@@ -82,7 +82,7 @@ export const useDeleteDeviceIntegration = () => {
         duration: 3,
       });
     },
-    onError: createMutationErrorHandler(notification, 'Delete Device Integration', t, 'useDeviceIntegrations'),
+    onError: createMutationErrorHandler(notification, 'deleteDeviceIntegration', t, 'useDeviceIntegrations'),
   });
 };
 
@@ -102,7 +102,7 @@ export const useToggleDeviceIntegration = () => {
         duration: 3,
       });
     },
-    onError: createMutationErrorHandler(notification, 'Toggle Device Integration', t, 'useDeviceIntegrations'),
+    onError: createMutationErrorHandler(notification, 'toggleDeviceIntegration', t, 'useDeviceIntegrations'),
   });
 };
 

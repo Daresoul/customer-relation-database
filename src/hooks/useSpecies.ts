@@ -37,7 +37,7 @@ export const useCreateSpecies = () => {
         duration: 3,
       });
     },
-    onError: createMutationErrorHandler(notification, 'Create Species', t, 'useSpecies'),
+    onError: createMutationErrorHandler(notification, 'createSpecies', t, 'useSpecies'),
   });
 };
 
@@ -58,7 +58,7 @@ export const useUpdateSpecies = () => {
         duration: 3,
       });
     },
-    onError: createMutationErrorHandler(notification, 'Update Species', t, 'useSpecies'),
+    onError: createMutationErrorHandler(notification, 'updateSpecies', t, 'useSpecies'),
   });
 };
 
@@ -79,6 +79,6 @@ export const useDeleteSpecies = () => {
         duration: 3,
       });
     },
-    onError: createMutationErrorHandler(notification, 'Delete Species', t, 'useSpecies'),
+    onError: createMutationErrorHandler(notification, 'deleteSpecies', t, 'useSpecies'),
   });
 };

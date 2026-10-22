@@ -82,7 +82,7 @@ export function useCreateMedicalRecord() {
         exact: false,
       });
     },
-    onError: createMutationErrorHandler(notification, 'Create Medical Record', t, 'useMedicalRecords'),
+    onError: createMutationErrorHandler(notification, 'createMedicalRecord', t, 'useMedicalRecords'),
   });
 }
 
@@ -117,7 +117,7 @@ export function useUpdateMedicalRecord() {
         queryKey: ['medical-record', data.id],
       });
     },
-    onError: createMutationErrorHandler(notification, 'Update Medical Record', t, 'useMedicalRecords'),
+    onError: createMutationErrorHandler(notification, 'updateMedicalRecord', t, 'useMedicalRecords'),
   });
 }
 
@@ -160,7 +160,7 @@ export function useArchiveMedicalRecord() {
         queryKey: ['medical-record', variables.recordId],
       });
     },
-    onError: createMutationErrorHandler(notification, 'Archive Medical Record', t, 'useMedicalRecords'),
+    onError: createMutationErrorHandler(notification, 'archiveMedicalRecord', t, 'useMedicalRecords'),
   });
 }
 
@@ -214,7 +214,7 @@ export function useUploadAttachment() {
         },
       });
     },
-    onError: createMutationErrorHandler(notification, 'Upload File', t, 'useMedicalRecords'),
+    onError: createMutationErrorHandler(notification, 'uploadFile', t, 'useMedicalRecords'),
   });
 }
 
@@ -250,7 +250,7 @@ export function useDeleteAttachment() {
         },
       });
     },
-    onError: createMutationErrorHandler(notification, 'Delete Attachment', t, 'useMedicalRecords'),
+    onError: createMutationErrorHandler(notification, 'deleteAttachment', t, 'useMedicalRecords'),
   });
 }
 
@@ -274,7 +274,7 @@ export function useDownloadAttachment() {
         duration: 3,
       });
     },
-    onError: createMutationErrorHandler(notification, 'Download File', t, 'useMedicalRecords'),
+    onError: createMutationErrorHandler(notification, 'downloadFile', t, 'useMedicalRecords'),
   });
 }
 
@@ -330,6 +330,6 @@ export function useBulkArchiveMedicalRecords() {
         queryKey: ['medical-records']
       });
     },
-    onError: createMutationErrorHandler(notification, 'Bulk Archive', t, 'useMedicalRecords'),
+    onError: createMutationErrorHandler(notification, 'bulkArchive', t, 'useMedicalRecords'),
   });
 }

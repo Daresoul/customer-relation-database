@@ -185,7 +185,7 @@ export function useUpdatePatient() {
       if (context?.previousPatient) {
         queryClient.setQueryData(['patient', patientId], context.previousPatient);
       }
-      createMutationErrorHandler(notification, 'Update Patient', t, 'usePatient')(error);
+      createMutationErrorHandler(notification, 'updatePatient', t, 'usePatient')(error);
     },
     onSuccess: (updatedPatient, { patientId }) => {
       // Update cache with server response
@@ -252,7 +252,7 @@ export function useDeletePatient() {
         });
         return;
       }
-      createMutationErrorHandler(notification, 'Delete Patient', t, 'usePatient')(error);
+      createMutationErrorHandler(notification, 'deletePatient', t, 'usePatient')(error);
     },
   });
 }

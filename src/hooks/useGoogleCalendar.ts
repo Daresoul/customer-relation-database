@@ -37,7 +37,7 @@ export function useStartOAuth() {
       // OAuth flow started, settings may change after completion
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.settings });
     },
-    onError: createMutationErrorHandler(notification, 'Start Google Sign-In', t, 'useGoogleCalendar'),
+    onError: createMutationErrorHandler(notification, 'startGoogleSignIn', t, 'useGoogleCalendar'),
   });
 }
 
@@ -62,7 +62,7 @@ export function useCompleteOAuth() {
       // Update cache with new settings
       queryClient.setQueryData(QUERY_KEYS.settings, data);
     },
-    onError: createMutationErrorHandler(notification, 'Connect Google Calendar', t, 'useGoogleCalendar'),
+    onError: createMutationErrorHandler(notification, 'connectGoogleCalendar', t, 'useGoogleCalendar'),
   });
 }
 
@@ -88,7 +88,7 @@ export function useUpdateSyncEnabled() {
       // Update cache with new settings
       queryClient.setQueryData(QUERY_KEYS.settings, data);
     },
-    onError: createMutationErrorHandler(notification, 'Update Sync Settings', t, 'useGoogleCalendar'),
+    onError: createMutationErrorHandler(notification, 'updateSyncSettings', t, 'useGoogleCalendar'),
   });
 }
 
@@ -112,7 +112,7 @@ export function useDisconnectGoogleCalendar() {
       // Invalidate settings to refetch
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.settings });
     },
-    onError: createMutationErrorHandler(notification, 'Disconnect Google Calendar', t, 'useGoogleCalendar'),
+    onError: createMutationErrorHandler(notification, 'disconnectGoogleCalendar', t, 'useGoogleCalendar'),
   });
 }
 
@@ -135,7 +135,7 @@ export function useRevokeGoogleAccess() {
       });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.settings });
     },
-    onError: createMutationErrorHandler(notification, 'Revoke Google Access', t, 'useGoogleCalendar'),
+    onError: createMutationErrorHandler(notification, 'revokeGoogleAccess', t, 'useGoogleCalendar'),
   });
 }
 
@@ -161,7 +161,7 @@ export function useTriggerSync() {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.syncStatus });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.settings });
     },
-    onError: createMutationErrorHandler(notification, 'Start Sync', t, 'useGoogleCalendar'),
+    onError: createMutationErrorHandler(notification, 'startSync', t, 'useGoogleCalendar'),
   });
 }
 
