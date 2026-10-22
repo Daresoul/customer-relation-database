@@ -38,33 +38,34 @@ pub(crate) fn index_rows_sql(filter: &str) -> String {
     )
 }
 
-// Sanitize query for FTS5 to prevent syntax errors.
-//
-// FTS5 treats `@`, `.`, `:`, and several other ASCII punctuation chars as
-// query syntax. We can't keep them in the term even though they're common in
-// emails and phone numbers — the FTS5 tokenizer already splits source content
-// on those boundaries when indexing, so a search for "alice" still finds
-// "alice@example.com".
+// Turns free text into a safe FTS5 query: each typed word becomes a quoted
+// prefix phrase of its alphanumeric parts, so punctuation and FTS5 syntax
+// (`-`, `"`, `*`, `:`, NOT, OR, ...) are never parsed as operators. The
+// tokenizer splits stored text on the same punctuation, so "070-123-456"
+// matches "070 123 456" and "Петровска-Николовска" matches as a phrase. A
+// word made only of digit groups also matches the digits run together.
+// Words are OR-ed; bm25 ranks households matching more words first.
 fn sanitize_fts5_query(query: &str) -> String {
-    let terms: Vec<String> = query
-        .chars()
-        // Replace anything that isn't alphanumeric, whitespace, or `-` with a
-        // space so the splitter handles it as a token boundary.
-        .map(|c| if c.is_alphanumeric() || c.is_whitespace() || c == '-' { c } else { ' ' })
-        .collect::<String>()
+    query
         .split_whitespace()
-        .filter(|s| !s.is_empty())
-        .map(|s| format!("{}*", s)) // wildcard for prefix matching
-        .collect();
-
-    // Join with OR operator, but only if we have multiple terms
-    if terms.is_empty() {
-        String::new()
-    } else if terms.len() == 1 {
-        terms[0].clone()
-    } else {
-        terms.join(" OR ")
-    }
+        .filter_map(|word| {
+            let parts: Vec<&str> = word
+                .split(|c: char| !c.is_alphanumeric())
+                .filter(|p| !p.is_empty())
+                .collect();
+            if parts.is_empty() {
+                return None;
+            }
+            let phrase = format!("\"{}\"*", parts.join(" "));
+            let all_digits = parts.iter().all(|p| p.chars().all(|c| c.is_ascii_digit()));
+            if parts.len() > 1 && all_digits {
+                Some(format!("({} OR \"{}\"*)", phrase, parts.concat()))
+            } else {
+                Some(phrase)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" OR ")
 }
 
 // Helper function to get all households without search
@@ -228,6 +229,9 @@ pub async fn search_households(
     }
 
     let fts_query = sanitize_fts5_query(query);
+    if fts_query.is_empty() {
+        return Ok(SearchHouseholdsResponse { results: Vec::new(), total: 0, has_more: false });
+    }
 
     // Search using FTS5
     let search_results = db.query_all(Statement::from_sql_and_values(
@@ -381,6 +385,9 @@ pub async fn quick_search_households(
     limit: i32,
 ) -> Result<Vec<(i32, String)>, String> {
     let fts_query = sanitize_fts5_query(query);
+    if fts_query.is_empty() {
+        return Ok(Vec::new());
+    }
     let limit = limit.min(20);
 
     let results = db.query_all(Statement::from_sql_and_values(
