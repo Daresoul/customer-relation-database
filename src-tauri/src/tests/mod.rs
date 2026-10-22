@@ -66,3 +66,6 @@ pub mod household_search_index_tests;
 
 #[cfg(test)]
 pub mod owner_lookup_tests;
+
+#[cfg(test)]
+pub mod device_patient_match_tests;
