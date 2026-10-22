@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Table, Typography, Tag, Empty, Button, Modal, App } from 'antd';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { knownErrorMessage } from '@/utils/errors';
 import { Patient } from '../../types/household';
 import { PlusOutlined } from '@ant-design/icons';
 import PatientFormWithOwner from '../../components/forms/PatientFormWithOwner';
@@ -24,10 +23,10 @@ export const AnimalsSection: React.FC<AnimalsSectionProps> = ({ patients, househ
   const [isPatientModalOpen, setIsPatientModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  // A failure goes back to PatientFormWithOwner, which keeps the input and shows why.
   const handleCreatePatient = async (data: CreatePatientInput | UpdatePatientInput) => {
     setSubmitting(true);
     try {
-      // Ensure the patient is linked to this household
       const patientData = {
         ...data,
         householdId: householdId,
@@ -40,14 +39,7 @@ export const AnimalsSection: React.FC<AnimalsSectionProps> = ({ patients, househ
         placement: 'bottomRight',
       });
       setIsPatientModalOpen(false);
-      // Navigate to the new patient's page
       navigate(`/patients/${newPatient.id}`);
-    } catch (error: any) {
-      notification.error({
-        message: t('common:error'),
-        description: knownErrorMessage(error, t) || error?.message || t('detail.animals.patientCreateFailed'),
-        placement: 'bottomRight',
-      });
     } finally {
       setSubmitting(false);
     }

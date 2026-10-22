@@ -215,12 +215,6 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
       // on this form. By the time we get here, householdId already
       // points at a real row.
       await onSubmit(formData);
-      notification.success({
-        message: "Success",
-        description: patient ? 'Patient updated successfully!' : 'Patient created successfully!',
-        placement: "bottomRight",
-        duration: 3
-      });
       form.resetFields();
     } catch (error: any) {
       console.error('Form submission error:', error);
