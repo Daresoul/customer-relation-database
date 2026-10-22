@@ -365,6 +365,45 @@ async fn update_household_none_preserves_existing_via_coalesce() {
     assert_eq!(fetched.household.notes.as_deref(), Some("Added notes"));
 }
 
+#[tokio::test]
+async fn update_household_empty_string_clears_the_field() {
+    let test_db = create_test_db_with_migrations().await;
+    let created = q::create_household_with_people(
+        &test_db,
+        CreateHouseholdWithPeopleDto {
+            household: CreateHouseholdDto {
+                household_name: Some("Clear me".to_string()),
+                address: Some("Ulica 1".to_string()),
+                city: Some("Bitola".to_string()),
+                postal_code: Some("7000".to_string()),
+                notes: Some("cash only".to_string()),
+            },
+            people: vec![person("A", "B", true)],
+        },
+    )
+    .await
+    .unwrap();
+
+    q::update_household(
+        &test_db,
+        created.household.id as i32,
+        None,
+        Some(String::new()),
+        Some("  ".to_string()),
+        Some(String::new()),
+        Some(String::new()),
+    )
+    .await
+    .unwrap();
+
+    let fetched = q::get_household_with_people(&test_db, created.household.id as i32).await.unwrap().expect("Some(household)");
+    assert_eq!(fetched.household.household_name.as_deref(), Some("Clear me"));
+    assert_eq!(fetched.household.address, None);
+    assert_eq!(fetched.household.city, None);
+    assert_eq!(fetched.household.postal_code, None);
+    assert_eq!(fetched.household.notes, None);
+}
+
 // ---------------------------------------------------------------------------
 // delete_household
 // ---------------------------------------------------------------------------
