@@ -286,14 +286,11 @@ impl MedicalRecordService {
         Ok(history)
     }
 
-    pub async fn create_medical_record(
-        app_handle: &tauri::AppHandle,
+    /// Write a new record, its line items and its first history row.
+    pub async fn save_new_record(
         db: &DatabaseConnection,
         input: CreateMedicalRecordInput,
     ) -> Result<MedicalRecord, String> {
-        log::debug!("Creating medical record with input: device_test_data={:?}, device_type={:?}, device_name={:?}",
-            input.device_test_data.is_some(), input.device_type, input.device_name);
-
         let now = Utc::now();
 
         // Development: do not populate procedure_name; use name as the single source of truth
@@ -394,6 +391,21 @@ impl MedicalRecordService {
             .await;
 
         log::debug!("History snapshot insert (create): rec_id={}, version=1, fields=created, new={}", id, new_snapshot);
+
+        Ok(record)
+    }
+
+    pub async fn create_medical_record(
+        app_handle: &tauri::AppHandle,
+        db: &DatabaseConnection,
+        input: CreateMedicalRecordInput,
+    ) -> Result<MedicalRecord, String> {
+        log::debug!("Creating medical record with input: device_test_data={:?}, device_type={:?}, device_name={:?}",
+            input.device_test_data.is_some(), input.device_type, input.device_name);
+
+        let now = Utc::now();
+        let record = Self::save_new_record(db, input.clone()).await?;
+        let id = record.id;
 
         // Generate PDFs if device test data is present
         log::debug!("[PDF] Checking for device data: device_test_data (legacy)={}, device_data_list={}",
@@ -1015,8 +1027,8 @@ impl MedicalRecordService {
         Ok(())
     }
 
-    pub async fn update_medical_record(
-        app_handle: &tauri::AppHandle,
+    /// Apply an edit: the record's fields, its line items and a history row.
+    pub async fn save_record_changes(
         db: &DatabaseConnection,
         record_id: i64,
         updates: UpdateMedicalRecordInput,
@@ -1232,6 +1244,17 @@ impl MedicalRecordService {
                 ],
             ))
             .await;
+
+        Ok(updated_record)
+    }
+
+    pub async fn update_medical_record(
+        app_handle: &tauri::AppHandle,
+        db: &DatabaseConnection,
+        record_id: i64,
+        updates: UpdateMedicalRecordInput,
+    ) -> Result<MedicalRecord, String> {
+        let updated_record = Self::save_record_changes(db, record_id, updates).await?;
 
         // Regenerate invoice PDF on update (line items or discount may have changed)
         log::info!("📝 Regenerating invoice PDF for updated record {}", record_id);
