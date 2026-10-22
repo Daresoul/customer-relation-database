@@ -62,7 +62,7 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, "044_fts5_unicode61_tokenizer", upgrade_fts5_to_unicode61).await?;
     run_migration(pool, "045_add_attachment_deleted_at", add_attachment_deleted_at_column).await?;
     run_migration(pool, "046_rebuild_household_search", rebuild_household_search).await?;
-    run_migration(pool, "047_google_sync_status", add_google_sync_status_columns).await?;
+    run_migration(pool, "048_google_sync_status", add_google_sync_status_columns).await?;
 
     Ok(())
 }
@@ -2951,7 +2951,7 @@ fn rebuild_household_search(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::fut
     })
 }
 
-// 047: Google Calendar status. `needs_reauth` is set when Google rejects the
+// 048: Google Calendar status. `needs_reauth` is set when Google rejects the
 // stored login, so Settings shows "Reconnect" instead of "Connected";
 // `last_sync_error` keeps the last failure until a sync succeeds.
 fn add_google_sync_status_columns(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {

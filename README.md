@@ -49,7 +49,7 @@
 
 ## Google Calendar
 - When Google refuses the stored login (refresh rejected or a 401), the app
-  sets `google_calendar_settings.needs_reauth` (migration 047). Settings then
+  sets `google_calendar_settings.needs_reauth` (migration 048). Settings then
   shows "Reconnect", and the background sync stops until the user reconnects.
 - `last_sync_error` keeps the last sync failure until a sync succeeds; Settings
   shows it with the last-synced time.
