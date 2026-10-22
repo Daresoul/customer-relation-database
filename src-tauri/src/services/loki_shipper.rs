@@ -719,6 +719,68 @@ async fn push(
 mod tests {
     use super::*;
 
+    // ----- credential resolution -----
+
+    fn env_of(pairs: &'static [(&'static str, &'static str)]) -> impl Fn(&str) -> Option<String> {
+        move |key| pairs.iter().find(|(k, _)| *k == key).map(|(_, v)| v.to_string())
+    }
+
+    const BAKED: BakedCredentials = BakedCredentials {
+        url: Some("https://baked.example/push"),
+        user: Some("baked-user"),
+        password: Some("baked-pass"),
+    };
+
+    #[test]
+    fn credentials_from_runtime_env_override_baked_values() {
+        let env = env_of(&[
+            ("ARKIVET_LOKI_URL", "https://env.example/push"),
+            ("ARKIVET_LOKI_USER", "env-user"),
+            ("ARKIVET_LOKI_PASSWORD", "env-pass"),
+        ]);
+        let creds = resolve_credentials(env, &BAKED).unwrap();
+        assert_eq!(creds.url, "https://env.example/push");
+        assert_eq!(creds.user, "env-user");
+        assert_eq!(creds.password, "env-pass");
+    }
+
+    #[test]
+    fn credentials_fall_back_to_baked_values() {
+        let creds = resolve_credentials(env_of(&[]), &BAKED).unwrap();
+        assert_eq!(creds.url, "https://baked.example/push");
+        assert_eq!(creds.user, "baked-user");
+        assert_eq!(creds.password, "baked-pass");
+    }
+
+    #[test]
+    fn credentials_missing_any_part_disable_the_shipper() {
+        let none = BakedCredentials { url: None, user: None, password: None };
+        assert!(resolve_credentials(env_of(&[]), &none).is_none());
+
+        let no_password = BakedCredentials { password: None, ..BAKED };
+        assert!(resolve_credentials(env_of(&[]), &no_password).is_none());
+
+        let empty_env_password = env_of(&[("ARKIVET_LOKI_PASSWORD", "")]);
+        assert!(resolve_credentials(empty_env_password, &no_password).is_none());
+    }
+
+    #[test]
+    fn source_has_no_hard_coded_credentials() {
+        let src = include_str!("loki_shipper.rs");
+        let non_test = src.split("#[cfg(test)]\nmod tests").next().unwrap();
+        assert!(
+            !non_test.contains("Some(\"https://"),
+            "Loki URL must come from build-time env, not a literal"
+        );
+        for name in ["ARKIVET_LOKI_URL", "ARKIVET_LOKI_USER", "ARKIVET_LOKI_PASSWORD"] {
+            assert!(
+                non_test.contains(&format!("option_env!(\"{name}\")")),
+                "{name} must be read with option_env! at build time"
+            );
+        }
+        assert!(!non_test.contains("fn prod_password"));
+    }
+
     // ----- timestamp parsing -----
 
     #[test]
