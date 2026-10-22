@@ -8,10 +8,8 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::Manager;
 use serde::{Serialize, Deserialize};
-use crate::services::device_parser::DeviceParserService;
-use crate::services::device_capture::throttled_show_and_focus;
+use crate::services::device_events::{deliver_result, AppSink, ResultSource};
 use crate::services::file_storage::FileStorageService;
-use crate::commands::file_history::record_device_file_access_internal_seaorm;
 
 /// Read a file only once its size has stabilised, to avoid grabbing a
 /// half-written file. Some analyzers (e.g. the Exigo) create the result file
@@ -110,6 +108,14 @@ fn update_file_watcher_status(
 pub fn get_all_file_watcher_statuses() -> Vec<FileWatcherStatus> {
     let statuses = get_file_watcher_status().lock().unwrap();
     statuses.values().cloned().collect()
+}
+
+/// Re-send a watcher's status, e.g. after its last-result time changed.
+pub fn emit_status_for(app_handle: &tauri::AppHandle, integration_id: i64) {
+    let status = get_file_watcher_status().lock().unwrap().get(&integration_id).cloned();
+    if let Some(status) = status {
+        let _ = app_handle.emit_all("file-watcher-status", &status);
+    }
 }
 
 /// Remove file watcher status when stopped
@@ -321,111 +327,27 @@ impl FileWatcherService {
                                                 continue;
                                             }
 
-                                            log::info!("   🔍 Parsing file data - Device: {}, Name: '{}'",
-                                                device_type_clone, name_clone);
-
-                                            // Parse the file based on device type
-                                            match DeviceParserService::parse_device_data(
-                                                &device_type_clone,
-                                                &name_clone,
-                                                &file_name_str,
-                                                &file_data,
-                                                "file_watch",
-                                            ) {
-                                                Ok(device_data) => {
-                                                    log::info!("   ✅ File parsed successfully - Patient ID: {:?}, File: {}",
-                                                        device_data.patient_identifier, file_name_str);
-
-                                                    // Emit device data to frontend
-                                                    if let Some(ref app_handle) = app_handle_clone {
-                                                        match app_handle.emit_all("device-data-received", &device_data) {
-                                                            Ok(_) => {
-                                                                log::info!("   📡 Emitted device-data-received event for '{}'", name_clone);
-
-                                                                // Update cache AFTER successful emission to prevent duplicate processing.
-                                                                // Keyed by content fingerprint so a re-fired event for the same bytes
-                                                                // is skipped, while genuinely new/appended content still imports.
-                                                                let mut cache = processed_files_clone.lock().unwrap();
-                                                                cache.insert(path_str.clone(), (now, fingerprint));
-                                                                log::info!("   📝 Updated deduplication cache for {}", file_name_str);
-                                                                // Retain for 24h so a per-day file that grows over the clinic day
-                                                                // stays deduped (the old 30s window forgot almost immediately).
-                                                                cache.retain(|_, &mut (timestamp, _)| now - timestamp < 86_400);
-                                                            }
-                                                            Err(e) => log::error!("   ❌ Failed to emit event for '{}': {}", name_clone, e),
-                                                        }
-
-                                                        log::info!("   💾 Starting async file save and tracking for {}", file_name_str);
-
-                                                        // Save file and track access (async)
-                                                        let app_handle_track = app_handle.clone();
-                                                        let db_track = db_clone.clone();
-                                                        let file_name_track = file_name_str.clone();
-                                                        let file_data_track = file_data.clone();
-                                                        let device_type_track = device_type_clone.clone();
-                                                        let device_name_track = name_clone.clone();
-                                                        let mime_type_track = device_data.mime_type.clone();
-
-                                                        tauri::async_runtime::spawn(async move {
-                                                            // Save file to storage
-                                                            match FileStorageService::save_device_file(&app_handle_track, &file_name_track, &file_data_track) {
-                                                                Ok((file_id, file_path)) => {
-                                                                    log::info!("   ✅ File saved - ID: {}, Path: {}", file_id, file_path);
-
-                                                                    // Track file access
-                                                                    let file_size = file_data_track.len() as i64;
-                                                                    log::info!("   📊 Recording file access - Size: {} bytes", file_size);
-
-                                                                    if let Err(e) = record_device_file_access_internal_seaorm(
-                                                                        &*db_track,
-                                                                        file_id,
-                                                                        file_name_track.clone(),
-                                                                        file_path,
-                                                                        Some(file_size),
-                                                                        Some(mime_type_track),
-                                                                        device_type_track.clone(),
-                                                                        device_name_track.clone(),
-                                                                        Some("file_watch".to_string()),
-                                                                    ).await {
-                                                                        log::error!("   ❌ Failed to record file access for {}: {}", file_name_track, e);
-                                                                    } else {
-                                                                        log::info!("   ✅ File access recorded for {}", file_name_track);
-                                                                        // Wake the app window (only if hidden) and emit an event so UI can open the import modal
-                                                                        let is_hidden = app_handle_track.get_window("main")
-                                                                            .map(|w| !w.is_visible().unwrap_or(true))
-                                                                            .unwrap_or(false);
-
-                                                                        if is_hidden {
-                                                                            throttled_show_and_focus(&app_handle_track);
-                                                                        }
-                                                                        // Clone strings for JSON payload
-                                                                        let device_name_for_evt = device_name_track.clone();
-                                                                        let device_type_for_evt = device_type_track.clone();
-                                                                        // Only emit wake-from-tray if window was hidden
-                                                                        if is_hidden {
-                                                                            let _ = app_handle_track.emit_all(
-                                                                                "wake-from-tray",
-                                                                                serde_json::json!({
-                                                                                    "cause": "file",
-                                                                                    "fileName": file_name_track,
-                                                                                    "device": device_name_for_evt,
-                                                                                    "deviceType": device_type_for_evt
-                                                                                })
-                                                                            );
-                                                                        }
-                                                                    }
-                                                                }
-                                                                Err(e) => {
-                                                                    log::error!("   ❌ Failed to save device file {}: {}", file_name_track, e);
-                                                                }
-                                                            }
-                                                        });
-                                                    }
-                                                }
+                                            let Some(ref app_handle) = app_handle_clone else { continue };
+                                            let storage_dir = match FileStorageService::get_storage_dir(app_handle) {
+                                                Ok(dir) => dir,
                                                 Err(e) => {
-                                                    log::error!("   ❌ Failed to parse file {} for '{}': {}", file_name_str, name_clone, e);
+                                                    log::error!("   ❌ No storage folder for device results: {}", e);
+                                                    continue;
                                                 }
-                                            }
+                                            };
+                                            let source = ResultSource {
+                                                integration_id: id,
+                                                device_name: name_clone.clone(),
+                                                device_type: device_type_clone.clone(),
+                                                connection_method: "file_watch".to_string(),
+                                            };
+                                            let sink = AppSink { app: app_handle.clone() };
+                                            tauri::async_runtime::block_on(deliver_result(
+                                                &db_clone, &storage_dir, &sink, &source, &file_name_str, &file_data,
+                                            ));
+                                            let mut cache = processed_files_clone.lock().unwrap();
+                                            cache.insert(path_str.clone(), (now, fingerprint));
+                                            cache.retain(|_, &mut (timestamp, _)| now - timestamp < 86_400);
                                         }
                                         Err(e) => {
                                             log::error!("   ❌ Failed to read file {}: {}", path.display(), e);

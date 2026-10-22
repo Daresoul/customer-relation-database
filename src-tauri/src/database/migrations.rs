@@ -62,6 +62,7 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, "044_fts5_unicode61_tokenizer", upgrade_fts5_to_unicode61).await?;
     run_migration(pool, "045_add_attachment_deleted_at", add_attachment_deleted_at_column).await?;
     run_migration(pool, "046_rebuild_household_search", rebuild_household_search).await?;
+    run_migration(pool, "047_device_health", add_device_health_columns).await?;
 
     Ok(())
 }
@@ -2945,6 +2946,48 @@ fn rebuild_household_search(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::fut
 
         sqlx::query("DELETE FROM household_search").execute(pool).await?;
         sqlx::query(&index_rows_sql("1 = 1")).execute(pool).await?;
+
+        Ok(())
+    })
+}
+
+// Migration 047: device health. Failed reads keep a history row with their
+// error, the last good result time survives a restart, and folder samples
+// already offered are remembered so a re-read never offers them again.
+fn add_device_health_columns(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        let columns = [
+            ("file_access_history", "status", "ALTER TABLE file_access_history ADD COLUMN status TEXT NOT NULL DEFAULT 'ok'"),
+            ("file_access_history", "error", "ALTER TABLE file_access_history ADD COLUMN error TEXT"),
+            ("device_integrations", "last_result_at", "ALTER TABLE device_integrations ADD COLUMN last_result_at TEXT"),
+        ];
+        for (table, column, alter) in columns {
+            let exists: (i64,) = sqlx::query_as(
+                "SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?"
+            )
+            .bind(table)
+            .bind(column)
+            .fetch_one(pool)
+            .await?;
+            if exists.0 == 0 {
+                sqlx::query(alter).execute(pool).await?;
+            }
+        }
+
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS device_processed_samples (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                integration_id INTEGER NOT NULL,
+                sample_key TEXT NOT NULL,
+                file_name TEXT,
+                processed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(integration_id, sample_key)
+            )
+            "#,
+        )
+        .execute(pool)
+        .await?;
 
         Ok(())
     })

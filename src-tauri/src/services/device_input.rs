@@ -11,12 +11,11 @@ use tauri::{AppHandle, Manager};
 use chrono::Utc;
 use rand::Rng;
 use crate::services::device_input::PortType::HIDDevice;
-use crate::services::device_parser::DeviceParserService;
-use crate::services::device_capture::throttled_show_and_focus;
 use crate::services::file_storage::FileStorageService;
-use crate::commands::file_history::record_device_file_access_internal_seaorm;
 use crate::database::SeaOrmPool;
-use crate::services::device_events::DeviceErrorKind;
+use crate::services::device_events::{
+    deliver_result, note_bytes, report_cut_off, AppSink, DeviceErrorKind, ResultSource,
+};
 
 // Thread handle for managing listener lifecycle
 // Stores JoinHandle, shutdown channel, and cleanup data for graceful thread termination
@@ -214,6 +213,13 @@ fn update_connection_status(app_handle: &AppHandle, integration_id: i64, port_na
             Ok(_) => log::info!("📡 Emitted device-connection-status event to frontend for {} ({})", device_type, port_name),
             Err(e) => log::error!("❌ Failed to emit device-connection-status event: {}", e),
         }
+    }
+}
+
+/// Re-send an integration's status, e.g. after its last-result time changed.
+pub fn emit_status_for(app_handle: &AppHandle, integration_id: i64) {
+    for status in get_all_connection_statuses().into_iter().filter(|s| s.integration_id == integration_id) {
+        let _ = app_handle.emit_all("device-connection-status", &status);
     }
 }
 
@@ -1282,135 +1288,6 @@ pub fn stop_listen(port_name: &str, device_type: &str) {
     }
 }
 
-/// Handle incoming device data: parse and emit to frontend
-fn handle_device_data(app_handle: &AppHandle, data: &[u8], device_name: &str, device_type: &str) {
-    log::info!("📥 Received device data - Device: {} ({}), Data size: {} bytes",
-        device_name, device_type, data.len());
-
-    // Parse the device data based on device type
-    let result = match device_type {
-        "healvet_hv_fia_3000" => {
-            log::info!("🔍 Parsing Healvet HV-FIA-3000 data from {}", device_name);
-            DeviceParserService::parse_healvet_serial(device_name, data, "serial_port")
-        }
-        "mnchip_pointcare_chemistry" => {
-            log::info!("🔍 Parsing MNCHIP PointCare Chemistry data from {}", device_name);
-            DeviceParserService::parse_mnchip_data("mnchip_pointcare_chemistry", device_name, "serial_data", data, "serial_port")
-        }
-        "mnchip_pcr_analyzer" => {
-            log::info!("🔍 Parsing MNCHIP PCR Analyzer data from {}", device_name);
-            DeviceParserService::parse_mnchip_data("mnchip_pcr_analyzer", device_name, "serial_data", data, "serial_port")
-        }
-        _ => {
-            log::error!("❌ Unknown device type: {} (from {})", device_type, device_name);
-            return;
-        }
-    };
-
-    match result {
-        Ok(device_data) => {
-            log::info!("✅ Successfully parsed device data from {} ({})", device_name, device_type);
-            log::info!("   📋 Patient ID: {:?}, Sample ID: {:?}, File: {}",
-                device_data.patient_identifier,
-                device_data.test_results.get("SNO")
-                    .or_else(|| device_data.test_results.get("ID1"))
-                    .or_else(|| device_data.test_results.get("sample_id")),
-                device_data.original_file_name);
-
-            // Emit to frontend
-            match app_handle.emit_all("device-data-received", &device_data) {
-                Ok(_) => {
-                    log::info!("📡 Emitted device-data-received event to frontend for {} ({})",
-                        device_name, device_type);
-                }
-                Err(e) => {
-                    log::error!("❌ Failed to emit device data to frontend: {}", e);
-                }
-            }
-
-            // Wake from tray when device data is received (only if window is hidden)
-            let is_hidden = app_handle.get_window("main")
-                .map(|w| !w.is_visible().unwrap_or(true))
-                .unwrap_or(false);
-
-            if is_hidden {
-                throttled_show_and_focus(&app_handle);
-
-                let cause = if let Some(ref code) = device_data.patient_identifier {
-                    let is_digits = code.chars().all(|c| c.is_ascii_digit());
-                    let len = code.len();
-                    if is_digits && (len == 15 || len == 10) { "scan" } else { "device_data" }
-                } else {
-                    "device_data"
-                };
-
-                let _ = app_handle.emit_all(
-                    "wake-from-tray",
-                    serde_json::json!({
-                        "cause": cause,
-                        "code": device_data.patient_identifier.clone().unwrap_or_default(),
-                        "device": device_name,
-                        "deviceType": device_type
-                    }),
-                );
-            }
-
-            // Save file and track access (async)
-            let app_handle_track = app_handle.clone();
-            let file_name = device_data.original_file_name.clone();
-            let file_data_vec = device_data.file_data.clone();
-            let device_type_str = device_data.device_type.clone();
-            let device_name_str = device_data.device_name.clone();
-            let mime_type = device_data.mime_type.clone();
-
-            log::info!("💾 Starting async file save and tracking for {} from {} ({})",
-                file_name, device_name_str, device_type_str);
-
-            tauri::async_runtime::spawn(async move {
-                // Get database connection from Tauri state
-                if let Some(db) = app_handle_track.try_state::<SeaOrmPool>() {
-                    log::info!("   ✅ Database connection retrieved for file tracking");
-
-                    // Save file to storage
-                    match FileStorageService::save_device_file(&app_handle_track, &file_name, &file_data_vec) {
-                        Ok((file_id, file_path)) => {
-                            log::info!("   ✅ File saved successfully - ID: {}, Path: {}", file_id, file_path);
-
-                            // Track file access
-                            let file_size = file_data_vec.len() as i64;
-                            log::info!("   📊 Recording file access - Size: {} bytes, Type: {}", file_size, mime_type);
-
-                            if let Err(e) = record_device_file_access_internal_seaorm(
-                                &**db,
-                                file_id,
-                                file_name.clone(),
-                                file_path,
-                                Some(file_size),
-                                Some(mime_type),
-                                device_type_str,
-                                device_name_str,
-                                Some("serial_port".to_string()),
-                            ).await {
-                                log::error!("   ❌ Failed to record file access for {}: {}", file_name, e);
-                            } else {
-                                log::info!("   ✅ File access recorded successfully for {}", file_name);
-                            }
-                        }
-                        Err(e) => {
-                            log::error!("   ❌ Failed to save device file {}: {}", file_name, e);
-                        }
-                    }
-                } else {
-                    log::error!("   ❌ Failed to get database connection from app state for file tracking");
-                }
-            });
-        }
-        Err(e) => {
-            log::error!("❌ Failed to parse device data from {} ({}): {}", device_name, device_type, e);
-        }
-    }
-}
-
 fn handle_listening_serial(
     port_name: &str,
     app_handle: &AppHandle,
@@ -1499,20 +1376,49 @@ struct SerialSink<'a> {
     integration_id: i64,
 }
 
+impl SerialSink<'_> {
+    fn source(&self) -> ResultSource {
+        ResultSource {
+            integration_id: self.integration_id,
+            device_name: self.port_name.to_string(),
+            device_type: self.device_type.to_string(),
+            connection_method: "serial_port".to_string(),
+        }
+    }
+
+    fn storage(&self) -> Option<(SeaOrmPool, std::path::PathBuf)> {
+        let db = self.app_handle.try_state::<SeaOrmPool>()?.inner().clone();
+        match FileStorageService::get_storage_dir(self.app_handle) {
+            Ok(dir) => Some((db, dir)),
+            Err(e) => {
+                log::error!("❌ No storage folder for device results: {}", e);
+                None
+            }
+        }
+    }
+}
+
 impl FrameSink for SerialSink<'_> {
     fn on_bytes(&mut self, data: &[u8]) {
         write_raw_log(self.app_handle, self.port_name, data);
+        note_bytes(self.integration_id);
     }
 
     fn on_frame(&mut self, frame: Vec<u8>) {
         log::info!("📦 Complete message received from {} ({}) - Size: {} bytes",
             self.device_type, self.port_name, frame.len());
-        handle_device_data(self.app_handle, &frame, self.port_name, self.device_type);
+        let Some((db, dir)) = self.storage() else { return };
+        let sink = AppSink { app: self.app_handle.clone() };
+        let raw_name = format!("{}_{}.txt", self.device_type, Utc::now().format("%Y%m%d_%H%M%S"));
+        tauri::async_runtime::block_on(deliver_result(&db, &dir, &sink, &self.source(), &raw_name, &frame));
     }
 
     fn on_cut_off(&mut self, partial: Vec<u8>) {
-        log::warn!("🧹 Discarded {}-byte stalled partial frame from {} ({}), integration {}",
+        log::warn!("🧹 Stalled partial frame ({} bytes) from {} ({}), integration {}",
             partial.len(), self.device_type, self.port_name, self.integration_id);
+        let Some((db, dir)) = self.storage() else { return };
+        let sink = AppSink { app: self.app_handle.clone() };
+        tauri::async_runtime::block_on(report_cut_off(&db, &dir, &sink, &self.source(), &partial));
     }
 }
 

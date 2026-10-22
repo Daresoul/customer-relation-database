@@ -209,12 +209,33 @@ impl DeviceIntegrationService {
         Self::get_by_id(db, id).await
     }
 
-    pub async fn record_last_result(_db: &DatabaseConnection, _id: i64, _at: &str) -> Result<(), String> {
-        todo!()
+    pub async fn record_last_result(db: &DatabaseConnection, id: i64, at: &str) -> Result<(), String> {
+        db.execute(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "UPDATE device_integrations SET last_result_at = ? WHERE id = ?",
+            [at.into(), id.into()],
+        ))
+        .await
+        .map_err(|e| format!("Failed to record last result time: {}", e))?;
+        Ok(())
     }
 
-    pub async fn last_result_times(_db: &DatabaseConnection) -> Result<std::collections::HashMap<i64, String>, String> {
-        todo!()
+    pub async fn last_result_times(db: &DatabaseConnection) -> Result<std::collections::HashMap<i64, String>, String> {
+        let rows = db
+            .query_all(Statement::from_string(
+                DbBackend::Sqlite,
+                "SELECT id, last_result_at FROM device_integrations WHERE last_result_at IS NOT NULL",
+            ))
+            .await
+            .map_err(|e| format!("Failed to read last result times: {}", e))?;
+        Ok(rows
+            .iter()
+            .filter_map(|row| {
+                let id: i64 = row.try_get("", "id").ok()?;
+                let at: String = row.try_get("", "last_result_at").ok()?;
+                Some((id, at))
+            })
+            .collect())
     }
 
     /// Update last_connected_at timestamp
