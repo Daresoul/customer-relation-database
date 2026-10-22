@@ -250,10 +250,18 @@ const DeviceImportDialog: React.FC = () => {
     }
   }, [modalOpen]);
 
-  // Defaults for this result; a file added later never overwrites a field the user edited
+  // Defaults for this result. A field only follows a new default while it still holds
+  // the previous one (antd counts setFieldsValue as "touched", so that flag can't tell).
+  const appliedDefaultsRef = useRef<Record<string, unknown>>({});
   useEffect(() => {
-    const defaults = Object.entries(getDefaultFormValues()).filter(([field]) => !form.isFieldTouched(field));
-    form.setFieldsValue(Object.fromEntries(defaults));
+    const updates = Object.fromEntries(
+      Object.entries(getDefaultFormValues()).filter(([field]) => {
+        const value = form.getFieldValue(field);
+        return value === undefined || value === '' || value === appliedDefaultsRef.current[field];
+      }),
+    );
+    appliedDefaultsRef.current = { ...appliedDefaultsRef.current, ...updates };
+    form.setFieldsValue(updates);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [suggestedPatientId, pendingFiles.length]);
 
