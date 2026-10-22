@@ -6,7 +6,7 @@
 //! readable before the DB pool is ready (e.g. at startup before migrations).
 
 use std::path::{Path, PathBuf};
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use sea_orm::{ConnectionTrait, DatabaseConnection, Statement, DbBackend};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -23,6 +23,83 @@ pub struct BackupConfig {
 pub struct BackupService;
 
 const DB_SNAPSHOT_RETENTION: usize = 30;
+const PRE_UPDATE_SNAPSHOT_RETENTION: usize = 10;
+const PRE_UPDATE_MARKER: &str = "_pre-update-";
+
+/// Which snapshot a backup run writes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SnapshotKind {
+    /// One per UTC day; a rerun the same day replaces it.
+    Daily,
+    /// Taken right before installing an update. Never replaced by a daily
+    /// run, and pruned on its own count, so the post-update startup backup
+    /// can't erase the last copy from before the new migrations ran.
+    PreUpdate { app_version: String },
+}
+
+pub fn snapshot_file_name(kind: &SnapshotKind, now: DateTime<Utc>) -> String {
+    match kind {
+        SnapshotKind::Daily => format!("vet_clinic_{}.db", now.format("%Y-%m-%d")),
+        SnapshotKind::PreUpdate { app_version } => format!(
+            "vet_clinic_{}{}{}.db",
+            now.format("%Y-%m-%d_%H-%M-%S"),
+            PRE_UPDATE_MARKER,
+            app_version
+        ),
+    }
+}
+
+pub fn is_pre_update_snapshot(file_name: &str) -> bool {
+    file_name.contains(PRE_UPDATE_MARKER)
+}
+
+/// True when a backup folder is set and the last successful backup is
+/// older than the scheduled interval (or there never was one).
+pub fn is_backup_due(cfg: &BackupConfig, now: DateTime<Utc>) -> bool {
+    if cfg.directory.is_none() {
+        return false;
+    }
+    match cfg
+        .last_backup_at
+        .as_deref()
+        .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
+    {
+        Some(last) => now.signed_duration_since(last) >= chrono::Duration::hours(BACKUP_INTERVAL_HOURS),
+        None => true,
+    }
+}
+
+const BACKUP_INTERVAL_HOURS: i64 = 24;
+/// How often the running app checks whether a backup is due. Also the retry
+/// delay after a failure (e.g. a backup drive that wasn't mounted yet at login).
+const BACKUP_CHECK_INTERVAL: std::time::Duration = std::time::Duration::from_secs(30 * 60);
+
+/// Backup at start, then whenever one is due while the app keeps running.
+/// The app lives in the tray for weeks, so a start-only backup goes stale.
+pub async fn run_backup_schedule(app_data_dir: PathBuf, db: std::sync::Arc<DatabaseConnection>) {
+    if BackupService::load_config(&app_data_dir).directory.is_none() {
+        log::info!("Backup: no destination configured, skipping startup backup");
+    } else {
+        run_logged(&app_data_dir, &db, "startup").await;
+    }
+    loop {
+        tokio::time::sleep(BACKUP_CHECK_INTERVAL).await;
+        if is_backup_due(&BackupService::load_config(&app_data_dir), Utc::now()) {
+            run_logged(&app_data_dir, &db, "scheduled").await;
+        }
+    }
+}
+
+async fn run_logged(app_data_dir: &Path, db: &DatabaseConnection, trigger: &str) {
+    match BackupService::run_backup(app_data_dir, db).await {
+        Ok(c) => log::info!(
+            "Backup ({}): completed at {}",
+            trigger,
+            c.last_backup_at.unwrap_or_default()
+        ),
+        Err(e) => log::error!("Backup ({}): failed: {}", trigger, e),
+    }
+}
 
 impl BackupService {
     fn config_path(app_data_dir: &Path) -> PathBuf {
@@ -68,6 +145,14 @@ impl BackupService {
         app_data_dir: &Path,
         db: &DatabaseConnection,
     ) -> Result<BackupConfig, String> {
+        Self::run_backup_with_kind(app_data_dir, db, SnapshotKind::Daily).await
+    }
+
+    pub async fn run_backup_with_kind(
+        app_data_dir: &Path,
+        db: &DatabaseConnection,
+        kind: SnapshotKind,
+    ) -> Result<BackupConfig, String> {
         let mut cfg = Self::load_config(app_data_dir);
         let backup_dir = cfg
             .directory
@@ -75,7 +160,7 @@ impl BackupService {
             .map(PathBuf::from)
             .ok_or_else(|| "No backup directory configured".to_string())?;
 
-        let result = Self::do_backup(app_data_dir, &backup_dir, db).await;
+        let result = Self::do_backup(app_data_dir, &backup_dir, db, &kind).await;
         match result {
             Ok(()) => {
                 cfg.last_backup_at = Some(Utc::now().to_rfc3339());
@@ -95,6 +180,7 @@ impl BackupService {
         app_data_dir: &Path,
         backup_dir: &Path,
         db: &DatabaseConnection,
+        kind: &SnapshotKind,
     ) -> Result<(), String> {
         if !backup_dir.exists() {
             return Err(format!("Backup directory does not exist: {}", backup_dir.display()));
@@ -105,11 +191,9 @@ impl BackupService {
         std::fs::create_dir_all(&db_dir).map_err(|e| format!("Create db dir: {}", e))?;
         std::fs::create_dir_all(&files_dest).map_err(|e| format!("Create files dir: {}", e))?;
 
-        // DB snapshot — one per day, overwriting today's if rerun. VACUUM INTO
-        // produces a consistent point-in-time copy that doesn't require
-        // quiescing other writers (unlike a raw file copy + WAL).
-        let today = Utc::now().format("%Y-%m-%d").to_string();
-        let db_target = db_dir.join(format!("vet_clinic_{}.db", today));
+        // VACUUM INTO produces a consistent point-in-time copy that doesn't
+        // require quiescing other writers (unlike a raw file copy + WAL).
+        let db_target = db_dir.join(snapshot_file_name(kind, Utc::now()));
         if db_target.exists() {
             std::fs::remove_file(&db_target).map_err(|e| format!("Remove old snapshot: {}", e))?;
         }
@@ -128,8 +212,11 @@ impl BackupService {
                 .map_err(|e| format!("Files mirror failed: {}", e))?;
         }
 
-        // Keep the last N daily snapshots, drop the rest
-        prune_old_snapshots(&db_dir, DB_SNAPSHOT_RETENTION)
+        let (keep, pre_update) = match kind {
+            SnapshotKind::Daily => (DB_SNAPSHOT_RETENTION, false),
+            SnapshotKind::PreUpdate { .. } => (PRE_UPDATE_SNAPSHOT_RETENTION, true),
+        };
+        prune_old_snapshots(&db_dir, keep, pre_update)
             .map_err(|e| format!("Prune failed: {}", e))?;
 
         Ok(())
@@ -169,7 +256,9 @@ fn copy_dir_additive(src: &Path, dest: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-fn prune_old_snapshots(db_dir: &Path, keep: usize) -> std::io::Result<()> {
+/// Keeps the newest `keep` snapshots of one kind: pre-update snapshots when
+/// `pre_update` is true, every other `.db` file otherwise.
+fn prune_old_snapshots(db_dir: &Path, keep: usize, pre_update: bool) -> std::io::Result<()> {
     let mut files: Vec<(std::time::SystemTime, PathBuf)> = Vec::new();
     for entry in std::fs::read_dir(db_dir)? {
         let entry = entry?;
@@ -179,7 +268,8 @@ fn prune_old_snapshots(db_dir: &Path, keep: usize) -> std::io::Result<()> {
             .and_then(|e| e.to_str())
             .map(|s| s.eq_ignore_ascii_case("db"))
             .unwrap_or(false);
-        if !is_db {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if !is_db || is_pre_update_snapshot(&name) != pre_update {
             continue;
         }
         if let Ok(modified) = entry.metadata().and_then(|m| m.modified()) {

@@ -122,8 +122,8 @@ fn main() {
     let bundle_config = &context.config().tauri.bundle;
     let package_info = context.package_info();
     let main_log_dir = tauri::api::path::app_log_dir(context.config());
-    let raw_serial_log_dir = tauri::api::path::app_data_dir(context.config())
-        .map(|d| d.join("raw_serial_logs"));
+    let app_data_dir = tauri::api::path::app_data_dir(context.config());
+    let raw_serial_log_dir = app_data_dir.as_ref().map(|d| d.join("raw_serial_logs"));
     // Touch the unused references to avoid future warnings if a refactor
     // drops them — kept around because we may add log-prefix derivation
     // (from package name) here later.
@@ -138,6 +138,8 @@ fn main() {
         // so no startup-rename pass is needed — just the retention sweep.
         services::log_rotation::prune_old_logs(dir, 30);
     }
+
+    let (log_rotation_strategy, log_max_file_size) = services::log_rotation::main_log_rotation();
 
     // Configure logging based on build type
     #[cfg(debug_assertions)]
@@ -176,10 +178,23 @@ fn main() {
         .add_item(quit_item);
     let tray = SystemTray::new().with_menu(tray_menu);
 
-    tauri::Builder::default()
+    let run_result = tauri::Builder::default()
+        // First plugin, so a second copy exits before the other plugins start.
+        // Two copies would import every device file twice and fight over COM
+        // ports; the second launch brings the running window forward instead.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            if let Some(window) = app.get_window("main") {
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+            log::info!("Second launch: showed the running window instead");
+        }))
         .plugin(Builder::default()
             .targets(log_targets)
             .level(LevelFilter::Info)
+            .rotation_strategy(log_rotation_strategy)
+            .max_file_size(log_max_file_size)
             .build())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
@@ -401,29 +416,18 @@ fn main() {
                 }
             });
 
-            // Run startup backup if a destination is configured. Spawned in
-            // a background task so a slow or failing backup never blocks app
-            // boot — the user can also trigger it manually from settings.
+            // Backup at start and then on a timer, in the background so a slow
+            // or failing backup never blocks boot. See services::backup.
             let sea_orm_pool_for_backup = sea_orm_pool.clone();
-            let app_handle_for_backup = app.handle();
-            tauri::async_runtime::spawn(async move {
-                let Some(app_data) = app_handle_for_backup
-                    .path_resolver()
-                    .app_data_dir()
-                else {
-                    log::warn!("Backup: could not resolve app_data_dir, skipping");
-                    return;
-                };
-                let cfg = services::backup::BackupService::load_config(&app_data);
-                if cfg.directory.is_none() {
-                    log::info!("Backup: no destination configured, skipping startup backup");
-                    return;
+            match app.path_resolver().app_data_dir() {
+                Some(app_data) => {
+                    tauri::async_runtime::spawn(services::backup::run_backup_schedule(
+                        app_data,
+                        sea_orm_pool_for_backup,
+                    ));
                 }
-                match services::backup::BackupService::run_backup(&app_data, &sea_orm_pool_for_backup).await {
-                    Ok(c) => log::info!("Backup: completed at {}", c.last_backup_at.unwrap_or_default()),
-                    Err(e) => log::error!("Backup: failed: {}", e),
-                }
-            });
+                None => log::warn!("Backup: could not resolve app_data_dir, skipping"),
+            }
 
             // Initialize serial port listeners for device integrations
             let sea_orm_pool_for_serial = sea_orm_pool.clone();
@@ -658,6 +662,17 @@ fn main() {
             // the same Arkivet.log → Loki pipeline.
             commands::log_event,
         ])
-        .run(context)
-        .expect("error while running tauri application");
+        .run(context);
+
+    // A setup error (database won't open, migration fails) or a plugin that
+    // can't start lands here. The window is already hidden, so without this
+    // the app would just vanish.
+    if let Err(e) = run_result {
+        services::startup_failure::report(
+            &e.to_string(),
+            main_log_dir.as_deref(),
+            app_data_dir.as_deref(),
+        );
+        std::process::exit(1);
+    }
 }

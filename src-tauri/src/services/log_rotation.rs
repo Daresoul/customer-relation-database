@@ -15,9 +15,12 @@
 //!      without any extra plumbing. This module only contributes the
 //!      retention sweep for that directory.
 //!
-//! Both surfaces share [`prune_old_logs`] which deletes files matching
-//! `<base>-YYYY-MM-DD.log` whose embedded date is older than the
-//! retention window.
+//! The plugin itself never deletes the main log (see [`main_log_rotation`]);
+//! past 50 MB it renames it at startup to `<base>_YYYY-MM-DD_HH-MM-SS.log`.
+//!
+//! All surfaces share [`prune_old_logs`] which deletes files matching
+//! `<base>-YYYY-MM-DD.log` or `<base>_YYYY-MM-DD_HH-MM-SS.log` whose
+//! embedded date is older than the retention window.
 //!
 //! Failures here are logged to stderr and otherwise swallowed — log
 //! rotation is best-effort housekeeping, never a reason to refuse to
@@ -26,6 +29,17 @@
 
 use chrono::{Local, NaiveDate};
 use std::path::Path;
+use tauri_plugin_log::RotationStrategy;
+
+/// Rotation settings for `tauri-plugin-log`'s main log file.
+///
+/// The plugin's default (KeepOne, 40 KB) deletes the live log at startup once
+/// it passes 40 KB, so a same-day restart lost the day's log. KeepAll renames
+/// an oversized file to `<name>_YYYY-MM-DD_HH-MM-SS.log` instead; this module
+/// recognises that name and prunes it with the other archives.
+pub fn main_log_rotation() -> (RotationStrategy, u128) {
+    (RotationStrategy::KeepAll, 50 * 1024 * 1024)
+}
 
 /// Rotate any `<name>.log` files in `dir` whose last-modified date is
 /// not today. The file is renamed in place to `<name>-YYYY-MM-DD.log`
@@ -131,9 +145,25 @@ fn is_already_archived(stem: &str) -> bool {
     parse_date_suffix(stem).is_some()
 }
 
-/// Extract the trailing `-YYYY-MM-DD` from a filename stem, if present.
-/// Returns `None` if the suffix is absent or unparseable.
+/// Extract the archive date from a filename stem: our own trailing
+/// `-YYYY-MM-DD`, or the plugin's size-rotation `_YYYY-MM-DD_HH-MM-SS`.
+/// Returns `None` if neither is present or parseable.
 fn parse_date_suffix(stem: &str) -> Option<NaiveDate> {
+    parse_daily_suffix(stem).or_else(|| parse_plugin_rotated_suffix(stem))
+}
+
+fn parse_plugin_rotated_suffix(stem: &str) -> Option<NaiveDate> {
+    // `x_YYYY-MM-DD_HH-MM-SS` → 1 base char + `_` + 19.
+    let len = stem.len();
+    if len < 21 || !stem.is_char_boundary(len - 19) || !stem[..len - 19].ends_with('_') {
+        return None;
+    }
+    chrono::NaiveDateTime::parse_from_str(&stem[len - 19..], "%Y-%m-%d_%H-%M-%S")
+        .ok()
+        .map(|dt| dt.date())
+}
+
+fn parse_daily_suffix(stem: &str) -> Option<NaiveDate> {
     // Need at least `x-YYYY-MM-DD` → 12 chars (1 base char + dash + 10).
     let len = stem.len();
     if len < 12 {
@@ -202,6 +232,22 @@ mod tests {
     }
 
     #[test]
+    fn parses_plugin_size_rotated_archive_name() {
+        assert_eq!(
+            parse_date_suffix("Arkivet_2026-06-02_10-11-12"),
+            Some(NaiveDate::from_ymd_opt(2026, 6, 2).unwrap()),
+        );
+        assert_eq!(parse_date_suffix("Arkivet_2026-06-02_10-11-1x"), None);
+    }
+
+    #[test]
+    fn main_log_plugin_never_deletes_and_allows_large_files() {
+        let (strategy, max_size) = main_log_rotation();
+        assert!(matches!(strategy, RotationStrategy::KeepAll));
+        assert!(max_size >= 10 * 1024 * 1024, "cap too small: {}", max_size);
+    }
+
+    #[test]
     fn is_already_archived_agrees_with_parse() {
         assert!(is_already_archived("vet-clinic-2026-06-02"));
         assert!(!is_already_archived("vet-clinic"));
@@ -255,6 +301,48 @@ mod tests {
     fn prune_handles_missing_dir() {
         // Should not panic on nonexistent dir — first-launch case.
         prune_old_logs(Path::new("/nonexistent/path/that/does/not/exist"), 30);
+    }
+
+    fn touch_days_ago(dir: &Path, name: &str, days: u64) {
+        let f = File::create(dir.join(name)).unwrap();
+        let t = std::time::SystemTime::now() - std::time::Duration::from_secs(86400 * days);
+        f.set_modified(t).unwrap();
+    }
+
+    #[test]
+    fn startup_rotation_leaves_plugin_rotated_archives_alone() {
+        let tmp = tempfile::tempdir().unwrap();
+        touch_days_ago(tmp.path(), "Arkivet_2026-06-02_10-11-12.log", 5);
+
+        rotate_main_log_at_startup(tmp.path());
+
+        assert!(tmp.path().join("Arkivet_2026-06-02_10-11-12.log").exists());
+        assert_eq!(std::fs::read_dir(tmp.path()).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn startup_rotation_keeps_todays_live_log() {
+        let tmp = tempfile::tempdir().unwrap();
+        touch(tmp.path(), "Arkivet.log");
+
+        rotate_main_log_at_startup(tmp.path());
+
+        assert!(tmp.path().join("Arkivet.log").exists());
+    }
+
+    #[test]
+    fn prune_deletes_old_plugin_rotated_archives_only() {
+        let tmp = tempfile::tempdir().unwrap();
+        let today = Local::now().date_naive();
+        let old = format!("Arkivet_{}_10-11-12.log", today - chrono::Duration::days(100));
+        let recent = format!("Arkivet_{}_10-11-12.log", today - chrono::Duration::days(5));
+        touch(tmp.path(), &old);
+        touch(tmp.path(), &recent);
+
+        prune_old_logs(tmp.path(), 30);
+
+        assert!(!tmp.path().join(&old).exists());
+        assert!(tmp.path().join(&recent).exists());
     }
 
     #[test]

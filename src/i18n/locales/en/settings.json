@@ -75,7 +75,7 @@
   },
   "backups": {
     "title": "Backups",
-    "description": "The application snapshots the database (one per day, kept for 30 days) and mirrors stored files to the destination you choose. A backup runs automatically each time the app starts.",
+    "description": "The application snapshots the database (one per day, kept for 30 days) and mirrors stored files to the destination you choose. A backup runs automatically when the app starts and again every 24 hours while it keeps running. Before an update, a separate copy is kept that daily backups never replace.",
     "destination": "Destination",
     "notConfigured": "Not configured",
     "lastRun": "Last backup",
@@ -98,6 +98,12 @@
     "updateCheckFailed": "Update Check Failed",
     "updateInstallationFailed": "Update Installation Failed",
     "installAndRestart": "Install & Restart",
+    "backupFailed": {
+      "title": "The backup before the update failed",
+      "content": "The app could not make a backup before updating ({{reason}}). If the update goes wrong, there is no copy from right before it. Update anyway?",
+      "updateAnyway": "Update anyway",
+      "cancel": "Cancel"
+    },
     "messages": {
       "loadSettingsFailed": "Failed to load update settings",
       "settingsSaved": "Update settings saved",
