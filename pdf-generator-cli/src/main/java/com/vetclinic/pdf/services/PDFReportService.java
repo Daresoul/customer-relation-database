@@ -1327,11 +1327,7 @@ public class PDFReportService {
         table.addCell(createPcrInfoCell("Сопственик:" + (patient.getOwner() != null ? patient.getOwner() : "")));
         String genderVal = patient.getGender() != null ? patient.getGender().getGenderTranslated() : "";
         table.addCell(createPcrInfoCell("Пол:" + genderVal));
-        String ageStr = "0 Години";
-        if (patient.getDateOfBirth() != null) {
-            java.time.Period age = java.time.Period.between(patient.getDateOfBirth(), java.time.LocalDate.now());
-            ageStr = age.getYears() + " Години";
-        }
+        String ageStr = Util.formatAge(patient.getDateOfBirth(), java.time.LocalDate.now());
         table.addCell(createPcrInfoCell("Возраст:" + ageStr));
 
         // Row 3: Analyzer Information, Diagnosis note (Macedonian)

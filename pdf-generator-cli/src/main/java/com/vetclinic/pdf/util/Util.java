@@ -54,6 +54,13 @@ public class Util {
         }
     }
 
+    public static String formatAge(LocalDate dateOfBirth, LocalDate today) {
+        if (dateOfBirth == null) {
+            return "0 Години";
+        }
+        return java.time.Period.between(dateOfBirth, today).getYears() + " Години";
+    }
+
     public static String formatDate(LocalDate date) {
         if (date == null) {
             return "";
