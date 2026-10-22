@@ -377,7 +377,34 @@ impl PatientService {
         Self::get_by_id(db, id).await
     }
 
+    /// Hard delete, only for a patient with no history. Records (and the
+    /// invoices on them) and appointments would cascade away with the row.
     pub async fn delete(db: &DatabaseConnection, id: i64) -> Result<bool, String> {
+        let history = db
+            .query_one(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "SELECT \
+                   (SELECT COUNT(*) FROM medical_records WHERE patient_id = ?) AS records, \
+                   (SELECT COUNT(*) FROM appointments WHERE patient_id = ? AND deleted_at IS NULL) AS appointments",
+                [id.into(), id.into()],
+            ))
+            .await
+            .map_err(|e| format!("Failed to check patient history: {}", e))?;
+        let (records, appointments) = history
+            .map(|r| {
+                (
+                    r.try_get::<i64>("", "records").unwrap_or(0),
+                    r.try_get::<i64>("", "appointments").unwrap_or(0),
+                )
+            })
+            .unwrap_or((0, 0));
+        if records > 0 || appointments > 0 {
+            return Err(format!(
+                "PATIENT_HAS_HISTORY: {} medical records, {} appointments",
+                records, appointments
+            ));
+        }
+
         let result = PatientEntity::delete_by_id(id)
             .exec(db)
             .await
