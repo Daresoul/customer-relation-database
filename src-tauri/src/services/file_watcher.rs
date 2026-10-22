@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::Manager;
 use serde::{Serialize, Deserialize};
-use crate::services::device_events::{deliver_result, AppSink, ResultSource};
+use crate::services::device_events::{deliver_result, AppSink, DeviceErrorKind, ResultSource};
 use crate::services::file_storage::FileStorageService;
 
 /// Read a file only once its size has stabilised, to avoid grabbing a
@@ -53,7 +53,9 @@ pub struct FileWatcherStatus {
     pub watch_directory: String,
     pub status: FileWatcherState,
     pub last_error: Option<String>,
+    pub error_kind: Option<DeviceErrorKind>,
     pub files_processed: u32,
+    pub last_result_at: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
@@ -85,7 +87,9 @@ fn update_file_watcher_status(
         watch_directory: watch_directory.to_string(),
         status: status.clone(),
         last_error: error,
+        error_kind: None,
         files_processed: 0,
+        last_result_at: None,
     };
 
     // Store in global state

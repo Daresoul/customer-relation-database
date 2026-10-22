@@ -147,6 +147,8 @@ pub struct DeviceConnectionStatus {
     pub error_kind: Option<DeviceErrorKind>,
     pub retry_count: u32,
     pub next_retry: Option<String>,
+    pub last_result_at: Option<String>,
+    pub last_byte_at: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
@@ -194,6 +196,8 @@ fn update_connection_status(app_handle: &AppHandle, integration_id: i64, port_na
         error_kind,
         retry_count,
         next_retry,
+        last_result_at: None,
+        last_byte_at: None,
     };
 
     // Store in global state, only emit to frontend if status actually changed

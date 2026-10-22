@@ -1,10 +1,13 @@
 //! Device health: the serial read loop, reconnect counting and error kinds.
 
-use crate::services::device_events::DeviceErrorKind;
+use crate::commands::device_input::{fill_connection_health, fill_watcher_health};
+use crate::services::device_events::{note_bytes, note_result, DeviceErrorKind};
 use crate::services::device_input::{
-    classify_open_error, classify_read_error, next_retry_count, run_read_loop, DeviceProtocol,
-    FrameSink, ReadErrorAction, STABLE_CONNECTION,
+    classify_open_error, classify_read_error, next_retry_count, run_read_loop, ConnectionState,
+    DeviceConnectionStatus, DeviceProtocol, FrameSink, ReadErrorAction, STABLE_CONNECTION,
 };
+use crate::services::file_watcher::{FileWatcherState, FileWatcherStatus};
+use std::collections::HashMap;
 use std::io::{self, ErrorKind, Read};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -185,6 +188,68 @@ fn retry_count_keeps_growing_when_the_connection_dropped_at_once() {
     // A port that opens and fails its first read must still back off,
     // or it would retry every two seconds forever.
     assert_eq!(next_retry_count(6, Some(Duration::from_millis(50))), 7);
+}
+
+// ---- G3: last result / last byte on the status ----
+
+fn serial_status(integration_id: i64) -> DeviceConnectionStatus {
+    DeviceConnectionStatus {
+        integration_id,
+        port_name: "COM3".to_string(),
+        device_type: "mnchip_pointcare_chemistry".to_string(),
+        status: ConnectionState::Connected,
+        last_connected: None,
+        last_error: None,
+        error_kind: None,
+        retry_count: 0,
+        next_retry: None,
+        last_result_at: None,
+        last_byte_at: None,
+    }
+}
+
+fn watcher_status(integration_id: i64) -> FileWatcherStatus {
+    FileWatcherStatus {
+        integration_id,
+        name: "Exigo".to_string(),
+        watch_directory: "/x".to_string(),
+        status: FileWatcherState::Watching,
+        last_error: None,
+        error_kind: None,
+        files_processed: 0,
+        last_result_at: None,
+    }
+}
+
+#[test]
+fn status_shows_the_stored_last_result_after_a_restart() {
+    let persisted = HashMap::from([(910_001, "2026-10-23T08:42:00+00:00".to_string())]);
+    let filled = fill_connection_health(vec![serial_status(910_001)], &persisted);
+    assert_eq!(filled[0].last_result_at.as_deref(), Some("2026-10-23T08:42:00+00:00"));
+}
+
+#[test]
+fn status_prefers_this_session_result_and_shows_last_byte() {
+    note_result(910_002, "2026-10-23T10:42:00+00:00");
+    note_bytes(910_002);
+    let persisted = HashMap::from([(910_002, "2026-10-22T08:00:00+00:00".to_string())]);
+    let filled = fill_connection_health(vec![serial_status(910_002)], &persisted);
+    assert_eq!(filled[0].last_result_at.as_deref(), Some("2026-10-23T10:42:00+00:00"));
+    assert!(filled[0].last_byte_at.is_some());
+}
+
+#[test]
+fn folder_status_shows_the_last_result_too() {
+    let persisted = HashMap::from([(910_003, "2026-10-23T09:10:00+00:00".to_string())]);
+    let filled = fill_watcher_health(vec![watcher_status(910_003)], &persisted);
+    assert_eq!(filled[0].last_result_at.as_deref(), Some("2026-10-23T09:10:00+00:00"));
+}
+
+#[test]
+fn status_without_any_result_stays_empty() {
+    let filled = fill_connection_health(vec![serial_status(910_004)], &HashMap::new());
+    assert!(filled[0].last_result_at.is_none());
+    assert!(filled[0].last_byte_at.is_none());
 }
 
 // ---- G8: open errors ----

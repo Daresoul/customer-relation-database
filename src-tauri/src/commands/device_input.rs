@@ -6,6 +6,7 @@ use crate::database::SeaOrmPool;
 use crate::models::Patient;
 use tauri::{State, AppHandle};
 use sea_orm::{ConnectionTrait, Statement, DbBackend};
+use std::collections::HashMap;
 
 #[tauri::command]
 pub async fn get_available_ports() -> Result<Vec<PortInfo>, String> {
@@ -13,6 +14,20 @@ pub async fn get_available_ports() -> Result<Vec<PortInfo>, String> {
     // Enrich with USB device names (hybrid: embedded DB + web fallback)
     let enriched_ports = enrich_port_info_with_device_names(ports).await;
     Ok(enriched_ports)
+}
+
+pub fn fill_connection_health(
+    _statuses: Vec<DeviceConnectionStatus>,
+    _persisted: &HashMap<i64, String>,
+) -> Vec<DeviceConnectionStatus> {
+    todo!()
+}
+
+pub fn fill_watcher_health(
+    _statuses: Vec<FileWatcherStatus>,
+    _persisted: &HashMap<i64, String>,
+) -> Vec<FileWatcherStatus> {
+    todo!()
 }
 
 /// Get all device connection statuses
