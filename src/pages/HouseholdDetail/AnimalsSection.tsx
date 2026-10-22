@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Table, Typography, Tag, Empty, Button, Modal, App, Skeleton } from 'antd';
 import { Link, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { invalidatePatientData } from '../../hooks/invalidation';
 import { useTranslation } from 'react-i18next';
 import { Patient } from '../../types/household';
 import { PlusOutlined } from '@ant-design/icons';
@@ -32,6 +34,7 @@ export const AnimalsSection: React.FC<AnimalsSectionProps> = ({
   const { t } = useTranslation('households');
   const navigate = useNavigate();
   const { notification } = App.useApp();
+  const queryClient = useQueryClient();
   const [isPatientModalOpen, setIsPatientModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -45,6 +48,7 @@ export const AnimalsSection: React.FC<AnimalsSectionProps> = ({
       } as CreatePatientInput;
 
       const newPatient = await PatientService.createPatient(patientData);
+      invalidatePatientData(queryClient);
       notification.success({
         message: t('common:success'),
         description: t('detail.animals.patientCreated'),

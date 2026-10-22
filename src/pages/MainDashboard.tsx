@@ -23,6 +23,8 @@ import { NoData } from '../components/common/EmptyState';
 import { LoadError } from '../components/common/LoadError';
 import AppointmentsTab from './Appointments/AppointmentsTab';
 import { useViewContext } from '../contexts/ViewContext';
+import { useQueryClient } from '@tanstack/react-query';
+import { invalidatePatientData, invalidateHouseholdData } from '../hooks/invalidation';
 import api, { setAppInstance } from '../services/api.integration';
 import { PatientService } from '../services';
 import type { Patient, PatientWithHousehold } from '../types';
@@ -36,6 +38,7 @@ import styles from './MainDashboard.module.css';
 
 export const MainDashboard: React.FC = () => {
   const { notification, modal } = App.useApp();
+  const queryClient = useQueryClient();
   const { t } = useTranslation(['patients', 'common', 'navigation']);
   const { currentView, setCurrentView } = useViewContext();
   const app = App.useApp();
@@ -330,6 +333,7 @@ export const MainDashboard: React.FC = () => {
       return;
     }
     await api.patient.delete(patient.id);
+    invalidatePatientData(queryClient);
     loadData();
   };
 
@@ -339,6 +343,7 @@ export const MainDashboard: React.FC = () => {
     } else {
       await api.patient.create(values);
     }
+    invalidatePatientData(queryClient);
     setShowPatientForm(false);
     setSelectedPatient(null);
     // Clear any scan-prefill so subsequent "Add patient" clicks start blank.
@@ -362,6 +367,7 @@ export const MainDashboard: React.FC = () => {
       return;
     }
     await api.household.delete(household.id);
+    invalidateHouseholdData(queryClient);
     loadData();
   };
 
@@ -371,6 +377,7 @@ export const MainDashboard: React.FC = () => {
     } else {
       await api.household.create(values);
     }
+    invalidateHouseholdData(queryClient);
     setShowHouseholdForm(false);
     setSelectedHousehold(null);
     loadData();

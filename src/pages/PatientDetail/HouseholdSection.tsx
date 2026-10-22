@@ -9,6 +9,7 @@ import { PatientService } from '../../services/patientService';
 import { invoke } from '@/services/invoke';
 import { CreateHouseholdInline, type CreatedHousehold } from '../../components/forms/CreateHouseholdInline';
 import { LoadError } from '../../components/common/LoadError';
+import { invalidatePatientData, invalidateHouseholdData } from '../../hooks/invalidation';
 import styles from './PatientDetail.module.css';
 
 const { Title, Text } = Typography;
@@ -70,8 +71,8 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({
       duration: 3,
     });
     resetForm();
-    queryClient.invalidateQueries({ queryKey: ['patient', patientId] });
-    queryClient.invalidateQueries({ queryKey: ['all-households'] });
+    invalidatePatientData(queryClient);
+    invalidateHouseholdData(queryClient);
     onHouseholdChanged?.();
   };
 
@@ -130,7 +131,8 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({
         placement: 'bottomRight',
         duration: 3,
       });
-      queryClient.invalidateQueries({ queryKey: ['patient', patientId] });
+      invalidatePatientData(queryClient);
+      invalidateHouseholdData(queryClient);
       onHouseholdChanged?.();
     } catch (error) {
       notification.error({

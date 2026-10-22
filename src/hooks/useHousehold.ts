@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { invoke } from '@/services/invoke';
+import { invalidateHouseholdData } from './invalidation';
 import {
   HouseholdDetailView,
   Household,
@@ -104,9 +105,8 @@ export function useUpdateHousehold() {
         queryClient.setQueryData(['household', variables.householdId], context.previousHousehold);
       }
     },
-    onSettled: (data, error, variables) => {
-      // Refetch after mutation
-      queryClient.invalidateQueries({ queryKey: ['household', variables.householdId] });
+    onSettled: () => {
+      invalidateHouseholdData(queryClient);
     },
   });
 }
@@ -128,8 +128,8 @@ export function useAddPerson() {
         person
       });
     },
-    onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['household', variables.householdId] });
+    onSuccess: () => {
+      invalidateHouseholdData(queryClient);
     },
   });
 }
@@ -178,8 +178,8 @@ export function useUpdatePerson() {
         queryClient.setQueryData(['household', variables.householdId], context.previousHousehold);
       }
     },
-    onSettled: (data, error, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['household', variables.householdId] });
+    onSettled: () => {
+      invalidateHouseholdData(queryClient);
     },
   });
 }
@@ -198,8 +198,8 @@ export function useDeletePerson() {
     }) => {
       return await invoke('delete_person', { personId });
     },
-    onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['household', variables.householdId] });
+    onSuccess: () => {
+      invalidateHouseholdData(queryClient);
     },
   });
 }
@@ -230,8 +230,8 @@ export function useUpdatePersonContacts() {
         contacts: transformedContacts
       });
     },
-    onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['household', variables.householdId] });
+    onSuccess: () => {
+      invalidateHouseholdData(queryClient);
     },
   });
 }

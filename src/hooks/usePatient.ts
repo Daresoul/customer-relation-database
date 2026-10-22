@@ -11,6 +11,7 @@ import { Patient, UpdatePatientInput } from '../types';
 import { PatientDetail, DeletePatientResponse } from '../types/patient';
 import dayjs from 'dayjs';
 import { createMutationErrorHandler } from '../utils/errors';
+import { invalidatePatientData } from './invalidation';
 
 /**
  * Calculate age from date of birth
@@ -198,13 +199,7 @@ export function useUpdatePatient() {
         return updated;
       });
 
-      // Invalidate related queries
-      queryClient.invalidateQueries({ queryKey: ['patients'] });
-      if (updatedPatient.householdId) {
-        queryClient.invalidateQueries({
-          queryKey: ['household', updatedPatient.householdId, 'patients']
-        });
-      }
+      invalidatePatientData(queryClient);
 
       notification.success({
         message: 'Patient Updated',
@@ -237,7 +232,7 @@ export function useDeletePatient() {
     onSuccess: (response, patientId) => {
       // Invalidate and remove from cache
       queryClient.removeQueries({ queryKey: ['patient', patientId] });
-      queryClient.invalidateQueries({ queryKey: ['patients'] });
+      invalidatePatientData(queryClient);
 
       notification.success({
         message: 'Patient Deleted',

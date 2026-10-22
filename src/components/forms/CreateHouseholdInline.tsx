@@ -1,6 +1,8 @@
 import React from 'react';
 import { Form, Input, Button, Space, App, Row, Col, Divider, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { useQueryClient } from '@tanstack/react-query';
+import { invalidateHouseholdData } from '../../hooks/invalidation';
 import { invoke } from '@/services/invoke';
 import { HouseholdService } from '../../services/householdService';
 import type {
@@ -85,6 +87,7 @@ export const CreateHouseholdInline: React.FC<CreateHouseholdInlineProps> = ({
 }) => {
   const { t } = useTranslation(['patients', 'forms', 'common']);
   const { notification } = App.useApp();
+  const queryClient = useQueryClient();
   const [form] = Form.useForm<FormValues>();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
@@ -196,6 +199,7 @@ export const CreateHouseholdInline: React.FC<CreateHouseholdInlineProps> = ({
         }
       }
 
+      invalidateHouseholdData(queryClient);
       await onCreated(newHousehold);
       form.resetFields();
     } catch (error) {
