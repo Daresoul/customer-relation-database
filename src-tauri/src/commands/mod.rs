@@ -2,7 +2,9 @@ pub mod patient;
 pub mod database;
 pub mod view_preference;
 pub mod household;
+#[cfg(debug_assertions)]
 pub mod debug;
+#[cfg(debug_assertions)]
 pub mod database_reset;
 pub mod medical;
 pub mod stats;
@@ -17,6 +19,7 @@ pub mod device_input;
 pub mod device_integration;
 pub mod file_history;
 pub mod pending;
+#[cfg(debug_assertions)]
 pub mod dev_tools;
 pub mod line_item;
 pub mod backup;
@@ -29,7 +32,9 @@ pub use patient::*;
 pub use database::*;
 pub use view_preference::*;
 pub use household::*;
+#[cfg(debug_assertions)]
 pub use debug::*;
+#[cfg(debug_assertions)]
 pub use database_reset::*;
 pub use medical::*;
 pub use stats::*;
@@ -44,6 +49,7 @@ pub use device_input::*;
 pub use device_integration::*;
 pub use file_history::*;
 pub use pending::*;
+#[cfg(debug_assertions)]
 pub use dev_tools::*;
 pub use line_item::*;
 pub use backup::*;
