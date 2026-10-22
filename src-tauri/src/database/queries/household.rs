@@ -127,6 +127,11 @@ pub async fn create_patient_with_household(
     db: &DatabaseConnection,
     dto: CreatePatientWithHouseholdDto,
 ) -> Result<(HouseholdWithPeople, i64), String> {
+    let microchip_id = dto.patient.microchip_id.as_deref().and_then(crate::services::patient::normalize_microchip);
+    if let Some(chip) = &microchip_id {
+        crate::services::patient::ensure_chip_free(db, chip, None).await?;
+    }
+
     let txn = db.begin().await.map_err(|e| format!("Failed to begin transaction: {}", e))?;
 
     // First create the household with people (inline, not calling the other function to share transaction)
@@ -220,13 +225,16 @@ pub async fn create_patient_with_household(
     // Create patient
     let result = txn.execute(Statement::from_sql_and_values(
         DbBackend::Sqlite,
-        "INSERT INTO patients (name, species_id, breed_id, date_of_birth, weight, medical_notes) VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO patients (name, species_id, breed_id, gender, date_of_birth, color, weight, microchip_id, medical_notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
             dto.patient.name.clone().into(),
             dto.patient.species_id.into(),
             sea_orm::Value::BigInt(dto.patient.breed_id),
+            sea_orm::Value::String(dto.patient.gender.clone().map(Box::new)),
             sea_orm::Value::String(dto.patient.date_of_birth.map(|d| Box::new(d.to_string()))),
+            sea_orm::Value::String(dto.patient.color.clone().map(Box::new)),
             sea_orm::Value::Double(dto.patient.weight),
+            sea_orm::Value::String(microchip_id.map(Box::new)),
             sea_orm::Value::String(dto.patient.medical_notes.clone().map(Box::new)),
         ]
     ))

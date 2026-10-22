@@ -19,7 +19,7 @@ pub fn normalize_microchip(raw: &str) -> Option<String> {
 
 /// Refuses a chip that another active patient already has. Enforced here, not
 /// by a UNIQUE index, so clinic DBs that already hold duplicates still load.
-async fn ensure_chip_free(db: &DatabaseConnection, chip: &str, own_id: Option<i64>) -> Result<(), String> {
+pub(crate) async fn ensure_chip_free(db: &DatabaseConnection, chip: &str, own_id: Option<i64>) -> Result<(), String> {
     let row = db
         .query_one(Statement::from_sql_and_values(
             DbBackend::Sqlite,
