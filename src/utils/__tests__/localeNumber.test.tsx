@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { InputNumber } from 'antd';
-import { parseLocaleNumber, localeNumberParser } from '../localeNumber';
+import { parseLocaleNumber, localeNumberParser, parseLocaleMoney, localeMoneyParser } from '../localeNumber';
 
 afterEach(cleanup);
 
@@ -40,5 +40,32 @@ describe('InputNumber with localeNumberParser', () => {
     fireEvent.change(screen.getByLabelText('weight'), { target: { value: '4,5' } });
 
     expect(onChange).toHaveBeenLastCalledWith(4.5);
+  });
+});
+
+describe('parseLocaleMoney', () => {
+  it.each([
+    ['1.500', 1500],
+    ['2.500', 2500],
+    ['1,500', 1500],
+    ['12.000', 12000],
+    ['250,50', 250.5],
+    ['2.50', 2.5],
+    ['1.500,50', 1500.5],
+    ['1,500.50', 1500.5],
+    ['1500', 1500],
+    ['0,5', 0.5],
+    ['1234.567', 1234.567],
+  ])('%s -> %s', (text, expected) => {
+    expect(parseLocaleMoney(text)).toBe(expected);
+  });
+});
+
+describe('localeMoneyParser in an InputNumber', () => {
+  it('reads a dotted thousand as a thousand', () => {
+    const onChange = vi.fn();
+    render(<InputNumber aria-label="price" precision={2} parser={localeMoneyParser} onChange={onChange} />);
+    fireEvent.change(screen.getByLabelText('price'), { target: { value: '1.500' } });
+    expect(onChange).toHaveBeenLastCalledWith(1500);
   });
 });
