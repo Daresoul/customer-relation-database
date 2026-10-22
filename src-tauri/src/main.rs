@@ -122,8 +122,8 @@ fn main() {
     let bundle_config = &context.config().tauri.bundle;
     let package_info = context.package_info();
     let main_log_dir = tauri::api::path::app_log_dir(context.config());
-    let raw_serial_log_dir = tauri::api::path::app_data_dir(context.config())
-        .map(|d| d.join("raw_serial_logs"));
+    let app_data_dir = tauri::api::path::app_data_dir(context.config());
+    let raw_serial_log_dir = app_data_dir.as_ref().map(|d| d.join("raw_serial_logs"));
     // Touch the unused references to avoid future warnings if a refactor
     // drops them — kept around because we may add log-prefix derivation
     // (from package name) here later.
@@ -178,7 +178,7 @@ fn main() {
         .add_item(quit_item);
     let tray = SystemTray::new().with_menu(tray_menu);
 
-    tauri::Builder::default()
+    let run_result = tauri::Builder::default()
         .plugin(Builder::default()
             .targets(log_targets)
             .level(LevelFilter::Info)
@@ -651,6 +651,17 @@ fn main() {
             // the same Arkivet.log → Loki pipeline.
             commands::log_event,
         ])
-        .run(context)
-        .expect("error while running tauri application");
+        .run(context);
+
+    // A setup error (database won't open, migration fails) or a plugin that
+    // can't start lands here. The window is already hidden, so without this
+    // the app would just vanish.
+    if let Err(e) = run_result {
+        services::startup_failure::report(
+            &e.to_string(),
+            main_log_dir.as_deref(),
+            app_data_dir.as_deref(),
+        );
+        std::process::exit(1);
+    }
 }
