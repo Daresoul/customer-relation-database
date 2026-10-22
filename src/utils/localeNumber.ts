@@ -5,8 +5,8 @@
  * - When both appear, the last one is the decimal mark and the other groups
  *   thousands: "1.500,50" and "1,500.50" are 1500.5.
  * - One mark used more than once groups thousands: "1.500.000" is 1500000.
- * - A single mark is always decimal, so "1.500" is 1.5, never 1500. Type
- *   "1500" (or "1.500,00") for one thousand five hundred.
+ * - A single mark is always decimal, so "1.500" is 1.5 (weights, doses).
+ *   Price fields use `parseLocaleMoney`, where "1.500" is 1500.
  * - Spaces, currency symbols and "%" are ignored.
  */
 export function normalizeLocaleNumber(text: string): string {
@@ -50,3 +50,28 @@ export function parseLocaleNumber(text: string | number | null | undefined): num
  */
 export const localeNumberParser = (text?: string): number =>
   normalizeLocaleNumber(text ?? '') as unknown as number;
+
+/**
+ * Prices: like `parseLocaleNumber`, except that one "." or "," followed by
+ * exactly three digits groups thousands ("1.500" ден is 1500, not 1.5).
+ * Prices never carry three decimals, so the reading is unambiguous.
+ */
+export function normalizeLocaleMoney(text: string): string {
+  const compact = text.replace(/[^\d.,-]/g, '');
+  if (/^-?\d{1,3}[.,]\d{3}$/.test(compact)) {
+    return compact.replace(/[.,]/, '');
+  }
+  return normalizeLocaleNumber(text);
+}
+
+export function parseLocaleMoney(text: string | number | null | undefined): number | null {
+  if (typeof text === 'number') return Number.isFinite(text) ? text : null;
+  if (text == null) return null;
+  const normalized = normalizeLocaleMoney(text);
+  if (!/\d/.test(normalized)) return null;
+  const value = Number(normalized);
+  return Number.isFinite(value) ? value : null;
+}
+
+export const localeMoneyParser = (text?: string): number =>
+  normalizeLocaleMoney(text ?? '') as unknown as number;

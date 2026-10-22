@@ -102,8 +102,9 @@
 - An edit waits for the record's diagnoses to load before it can be saved, and
   the record modal and page ask before discarding typed text.
 - Number inputs read "," or "." as the decimal mark (`src/utils/localeNumber.ts`):
-  "4,5" is 4.5 and "1.500,50" is 1500.5. A single mark is always decimal, so
-  "1.500" is 1.5; type "1500" for one thousand five hundred.
+  "4,5" is 4.5 and "1.500,50" is 1500.5. A single mark is decimal in weights
+  and doses ("1.500" is 1.5). Price fields (`localeMoneyParser`) read one mark
+  followed by exactly three digits as thousands, so "1.500" ден is 1500.
 
 ## Release build secrets
 

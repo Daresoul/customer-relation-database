@@ -37,7 +37,7 @@ import { useCurrencies } from '../../../hooks/useCurrencies';
 import { useAppSettings } from '../../../hooks/useAppSettings';
 import type { LineItemTemplate, MedicalRecordLineItem, CreateLineItemInput } from '../../../types/lineItem';
 import type { Currency } from '../../../types/medical';
-import { localeNumberParser } from '../../../utils/localeNumber';
+import { localeMoneyParser, localeNumberParser } from '../../../utils/localeNumber';
 import styles from '../Forms.module.css';
 
 const { Text, Title } = Typography;
@@ -298,7 +298,7 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
             const currency = getCurrency(record.currencyId);
             return currency?.symbol ? `${currency.symbol} ${value}` : `${value}`;
           }}
-          parser={localeNumberParser}
+          parser={localeMoneyParser}
           aria-label={t('medical:lineItems.unitPrice', 'Unit Price')}
           style={{ width: 120 }}
         />
@@ -473,7 +473,7 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
                 if (!value) return '';
                 return primaryCurrency?.symbol ? `${primaryCurrency.symbol} ${value}` : `${value}`;
               }}
-              parser={localeNumberParser}
+              parser={localeMoneyParser}
               aria-label={t('medical:lineItems.manualTotal', 'Manual Total')}
               style={{ width: '100%' }}
             />
@@ -580,7 +580,7 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
                 step={0.01}
                 precision={2}
                 placeholder="0.00"
-                parser={localeNumberParser}
+                parser={localeMoneyParser}
                 style={{ width: '100%' }}
               />
             </Form.Item>
