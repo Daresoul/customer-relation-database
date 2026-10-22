@@ -3,7 +3,7 @@
  * Allows creating a new patient, optionally pre-filled with device file data
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { knownErrorMessage } from '@/utils/errors';
 import { Form, Input, Select, DatePicker, Button, Space, Row, Col, Segmented, Alert, Collapse, Tag, App, Divider, InputNumber } from 'antd';
@@ -81,21 +81,35 @@ export const CreatePatientSection: React.FC<CreatePatientSectionProps> = ({
     return species?.id;
   };
 
-  // Apply prefill data to form
-  useEffect(() => {
-    if (fillMode === 'prefill' && hasDeviceData && !isLoadingSpecies) {
-      const speciesId = findSpeciesIdByName(extractedData.species);
+  const prefillValues = () => ({
+    name: extractedData.name || '',
+    speciesId: findSpeciesIdByName(extractedData.species),
+    gender: extractedData.gender,
+    dateOfBirth: extractedData.dateOfBirth ? dayjs(extractedData.dateOfBirth) : undefined,
+  });
 
-      form.setFieldsValue({
-        name: extractedData.name || '',
-        speciesId: speciesId,
-        gender: extractedData.gender,
-        dateOfBirth: extractedData.dateOfBirth ? dayjs(extractedData.dateOfBirth) : undefined,
-      });
-    } else if (fillMode === 'blank') {
+  // Prefill once per distinct device data, and never over a field the user edited.
+  // The parent re-renders often (scans, typing), so this must not run on every render.
+  const prefillKey = [extractedData.name, extractedData.species, extractedData.gender, extractedData.dateOfBirth, speciesData.length].join('|');
+  const appliedPrefillRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (fillMode !== 'prefill' || !hasDeviceData || isLoadingSpecies) return;
+    if (appliedPrefillRef.current === prefillKey) return;
+    appliedPrefillRef.current = prefillKey;
+    const untouched = Object.entries(prefillValues()).filter(([field]) => !form.isFieldTouched(field));
+    form.setFieldsValue(Object.fromEntries(untouched));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fillMode, hasDeviceData, isLoadingSpecies, prefillKey]);
+
+  const handleFillModeChange = (mode: FillMode) => {
+    setFillMode(mode);
+    if (mode === 'blank') {
       form.resetFields();
+    } else {
+      form.setFieldsValue(prefillValues());
+      appliedPrefillRef.current = prefillKey;
     }
-  }, [fillMode, hasDeviceData, isLoadingSpecies, extractedData, speciesData]);
+  };
 
   // Sync scanned microchip ID into the form when the parent passes a new one
   useEffect(() => {
@@ -206,7 +220,7 @@ export const CreatePatientSection: React.FC<CreatePatientSectionProps> = ({
           <Segmented
             size="middle"
             value={fillMode}
-            onChange={(v) => setFillMode(v as FillMode)}
+            onChange={(v) => handleFillModeChange(v as FillMode)}
             options={[
               { label: t('medical:deviceImport.prefillToggle', 'Pre‑fill from device'), value: 'prefill' },
               { label: t('medical:deviceImport.startBlankToggle', 'Start blank'), value: 'blank' },

@@ -301,3 +301,74 @@ describe('useBarcodeScanner — regression: stuck-scanning recovery', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// useBarcodeScanner — a scan never replaces text the user wrote
+// ---------------------------------------------------------------------------
+
+describe('useBarcodeScanner — focused field with text', () => {
+  let onScan: ReturnType<typeof vi.fn>;
+  let user: ReturnType<typeof userEvent.setup>;
+
+  beforeEach(() => {
+    onScan = vi.fn();
+    user = userEvent.setup({ delay: 5 });
+  });
+
+  it('keeps the text of a focused textarea and drops the scanned characters', async () => {
+    renderHook(() => useBarcodeScanner({ onScan, suffixKey: 'Enter' }));
+    render(<textarea data-testid="notes" defaultValue="Calm, ate well." />);
+    const notes = screen.getByTestId('notes') as HTMLTextAreaElement;
+    await user.click(notes);
+
+    await user.keyboard('C9C2540C01FE{Enter}');
+
+    expect(notes.value).toBe('Calm, ate well.');
+    expect(onScan).toHaveBeenCalledWith('807010000007678');
+  });
+
+  it('keeps the text of a focused notes-type input', async () => {
+    renderHook(() => useBarcodeScanner({ onScan, suffixKey: 'Enter' }));
+    render(<input name="notes" data-testid="notes" defaultValue="Owner called" />);
+    const notes = screen.getByTestId('notes') as HTMLInputElement;
+    await user.click(notes);
+
+    await user.keyboard('807010000007678{Enter}');
+
+    expect(notes.value).toBe('Owner called');
+    expect(onScan).toHaveBeenCalledWith('807010000007678');
+  });
+
+  it('fills an empty focused field with the normalized chip', async () => {
+    renderHook(() => useBarcodeScanner({ onScan, suffixKey: 'Enter' }));
+    render(<textarea data-testid="notes" />);
+    const notes = screen.getByTestId('notes') as HTMLTextAreaElement;
+    await user.click(notes);
+
+    await user.keyboard('C9C2540C01FE{Enter}');
+
+    expect(notes.value).toBe('807010000007678');
+  });
+
+  it('replaces the text of a focused microchip field', async () => {
+    renderHook(() => useBarcodeScanner({ onScan, suffixKey: 'Enter' }));
+    render(<input id="microchipId" data-testid="chip" defaultValue="9851" />);
+    const chip = screen.getByTestId('chip') as HTMLInputElement;
+    await user.click(chip);
+
+    await user.keyboard('C9C2540C01FE{Enter}');
+
+    expect(chip.value).toBe('807010000007678');
+  });
+
+  it('replaces the text of a focused search field', async () => {
+    renderHook(() => useBarcodeScanner({ onScan, suffixKey: 'Enter' }));
+    render(<input type="search" data-testid="search" defaultValue="Rex" />);
+    const search = screen.getByTestId('search') as HTMLInputElement;
+    await user.click(search);
+
+    await user.keyboard('C9C2540C01FE{Enter}');
+
+    expect(search.value).toBe('807010000007678');
+  });
+});

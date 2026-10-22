@@ -6,8 +6,9 @@
  * - Optionally require a prefix/suffix to reduce false positives.
  * - Prevent default only during an active scan so normal typing isn’t affected.
  * - Only runs when this window is focused; won’t capture in other apps.
- * - If a scan lands inside an editable element, replace its value with the
- *   normalized form so the field never shows the raw hex from FDX-B readers.
+ * - If a scan lands inside an empty field or a chip/search field, set its value
+ *   to the normalized form so the field never shows the raw hex from FDX-B
+ *   readers. Any other field keeps its text; only the scanned characters go.
  */
 
 import { useEffect, useRef } from 'react';
@@ -26,6 +27,21 @@ function setReactInputValue(input: HTMLInputElement | HTMLTextAreaElement, value
   if (!setter) return;
   setter.call(input, value);
   input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function isScanField(el: HTMLInputElement | HTMLTextAreaElement): boolean {
+  if (el instanceof HTMLTextAreaElement) return false;
+  if (el.type === 'search') return true;
+  const role = el.getAttribute('role');
+  if (role === 'searchbox' || role === 'combobox') return true;
+  if (el.closest('.ant-input-search')) return true;
+  const hints = [el.id, el.name, el.placeholder, el.getAttribute('aria-label'), el.dataset.testid];
+  return /chip|search/i.test(hints.filter(Boolean).join(' '));
+}
+
+function withoutScannedChars(value: string, raw: string): string {
+  const at = value.lastIndexOf(raw);
+  return at === -1 ? value : value.slice(0, at) + value.slice(at + raw.length);
 }
 
 function isEditableElement(el: Element | null): el is HTMLInputElement | HTMLTextAreaElement | HTMLElement {
@@ -178,15 +194,14 @@ export function useBarcodeScanner(options: UseBarcodeScannerOptions) {
       }
       lastScanRef.current = { code: normalized, time: now };
 
-      // If the burst landed in an editable element, the raw chars may have
-      // partially leaked into it before scan-detection kicked in. Replace
-      // with the normalized form so the field never shows hex.
+      // The burst's raw chars leaked into a focused field. An empty field or a
+      // chip/search field gets the normalized code; any other field keeps the
+      // user's text, minus the scanned chars.
       const active = document.activeElement;
-      if (
-        active &&
-        (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement)
-      ) {
-        setReactInputValue(active, normalized);
+      if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) {
+        const before = withoutScannedChars(active.value, raw);
+        const next = before.trim() === '' || isScanField(active) ? normalized : before;
+        if (next !== active.value) setReactInputValue(active, next);
       }
       // Always notify the consumer so it can run auto-select / prefill / search
       // logic. Consumers that care about which field was focused can inspect

@@ -58,6 +58,7 @@ export interface ValidationError {
 export type ValidationWarningType =
   | 'patient_name_mismatch'      // Selected patient name ≠ file patient name
   | 'species_mismatch'           // Selected patient species ≠ file species
+  | 'patient_id_mismatch'        // File microchip ≠ selected patient's microchip
   | 'multi_file_name_conflict'   // Multiple files have different patient names
   | 'multi_file_species_conflict' // Multiple files have different species
   | 'date_format_invalid'        // DOB couldn't be parsed

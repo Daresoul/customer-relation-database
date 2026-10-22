@@ -15,8 +15,16 @@ import { extractPatientDataFromFile, detectPatientDataConflicts } from './device
 // Patient type for validation (minimal interface)
 interface PatientForValidation {
   id: number;
-  name: string;
+  name?: string;
   species?: string;
+  microchipId?: string;
+}
+
+// 15-digit ISO, 9-digit legacy, or 10/12-char hex reads; a name never fits
+const CHIP_PATTERN = /^(\d{9}|\d{15}|[0-9A-Fa-f]{10}|[0-9A-Fa-f]{12})$/;
+
+function looksLikeChip(identifier?: string): identifier is string {
+  return !!identifier && CHIP_PATTERN.test(identifier.trim()) && /\d/.test(identifier);
 }
 
 /**
@@ -65,9 +73,28 @@ export function validatePatientSelection(
   // Check each file for patient name mismatch
   for (const file of files) {
     const extracted = extractPatientDataFromFile(file);
+    const identifier = file.patientIdentifier?.trim();
+    const chipConfirmed = !!identifier && identifier === selectedPatient.microchipId?.trim();
+
+    if (!chipConfirmed && looksLikeChip(identifier)) {
+      result.warnings.push({
+        type: 'patient_id_mismatch',
+        message: `File "${file.fileName}" has microchip "${identifier}" but selected patient has "${selectedPatient.microchipId ?? ''}"`,
+        details: {
+          fileName: file.fileName,
+          fileIdentifier: identifier,
+          selectedMicrochipId: selectedPatient.microchipId,
+        },
+        severity: 'high',
+      });
+    }
 
     // Warning: Patient name mismatch
-    if (extracted.name && extracted.name.toLowerCase() !== selectedPatient.name.toLowerCase()) {
+    if (
+      !chipConfirmed &&
+      extracted.name &&
+      extracted.name.toLowerCase() !== (selectedPatient.name ?? '').toLowerCase()
+    ) {
       result.warnings.push({
         type: 'patient_name_mismatch',
         message: `File "${file.fileName}" has patient name "${extracted.name}" but selected patient is "${selectedPatient.name}"`,
@@ -97,6 +124,25 @@ export function validatePatientSelection(
   }
 
   return result;
+}
+
+export type MatchStrength = 'chip' | 'name' | 'chip_ambiguous' | 'name_ambiguous' | 'manual' | 'none';
+
+/**
+ * How strongly the machine's patient ID backs the picked patient
+ */
+export function getMatchStrength(
+  files: PendingDeviceFile[],
+  picked: PatientForValidation | null
+): MatchStrength {
+  const file = files.find((f) => f.patientIdentifier);
+  if (!file) return picked ? 'manual' : 'none';
+  if (file.matchAmbiguous && file.matchMethod === 'microchip') return 'chip_ambiguous';
+  if (!picked) return file.matchAmbiguous ? 'name_ambiguous' : 'none';
+  if (picked.microchipId && picked.microchipId.trim() === file.patientIdentifier?.trim()) return 'chip';
+  if (file.patientId === picked.id && file.matchMethod === 'microchip') return 'chip';
+  if (file.patientId === picked.id && file.matchMethod === 'name') return 'name';
+  return 'manual';
 }
 
 /**

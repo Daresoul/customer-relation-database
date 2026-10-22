@@ -1,4 +1,5 @@
 import { ApiService } from './api';
+import { invoke } from './invoke';
 import type {
   MedicalRecord,
   MedicalRecordDetail,
@@ -281,8 +282,10 @@ export class MedicalService {
     return '📄';
   }
 
+  // Raw invoke: the response is already camelCase, and a case transform would
+  // rename the device's `<CODE>_range` / `<CODE>_flag` result keys.
   static async getDeviceFileById(fileId: string): Promise<DownloadAttachmentResponse> {
-    return ApiService.invokeRaw('download_device_file', { fileId });
+    return invoke<DownloadAttachmentResponse>('download_device_file', { fileId });
   }
 
   /**
