@@ -10,10 +10,11 @@ vi.mock('react-i18next', () => ({
 }));
 
 const refetchPatients = vi.fn();
-const householdState: { data: unknown } = { data: undefined };
+const refetchHousehold = vi.fn();
+const householdState: { data: unknown; error: unknown } = { data: undefined, error: null };
 const patientsState: { data?: unknown[]; error: unknown; isLoading: boolean } = { error: null, isLoading: false };
 vi.mock('../../../hooks/useHousehold', () => ({
-  useHouseholdDetail: () => ({ data: householdState.data, isLoading: false, error: null, refetch: vi.fn() }),
+  useHouseholdDetail: () => ({ data: householdState.data, isLoading: false, error: householdState.error, refetch: refetchHousehold }),
   useHouseholdPatients: () => ({ ...patientsState, refetch: refetchPatients }),
 }));
 vi.mock('../HouseholdInfo', () => ({ HouseholdInfo: () => null }));
@@ -44,7 +45,17 @@ describe('HouseholdDetail pets list', () => {
     patientsState.error = null;
     patientsState.data = undefined;
     patientsState.isLoading = false;
+    householdState.error = null;
     document.body.innerHTML = '';
+  });
+
+  it('Retry on a failed household load fetches again without reloading the app', () => {
+    householdState.data = undefined;
+    householdState.error = new Error('database is locked');
+    renderPage();
+
+    fireEvent.click(screen.getByText('detail.retry'));
+    expect(refetchHousehold).toHaveBeenCalled();
   });
 
   it('shows a load error with Retry, not "no pets", when the pets fail to load', () => {
