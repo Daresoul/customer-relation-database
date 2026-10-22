@@ -152,8 +152,16 @@
       "updateSyncFailedDescription": "Could not update sync setting: {{error}}",
       "manualSyncStarted": "Manual Sync Started",
       "manualSyncStartedDescription": "Syncing appointments to Google Calendar...",
-      "syncFailed": "Sync Failed"
-    }
+      "syncFailed": "Sync Failed",
+      "syncDone": "Synced {{synced}} appointments to Google Calendar",
+      "syncPartial": "Synced {{synced}} appointments, {{failed}} failed"
+    },
+    "reconnectNeeded": "Google sign-in expired. Reconnect to keep syncing.",
+    "reconnectButton": "Reconnect",
+    "lastSynced": "Last synced: {{when}}",
+    "neverSynced": "Not synced yet",
+    "lastSyncFailed": "The last sync with Google Calendar failed",
+    "lastSyncFailedHint": "Some appointments may be missing from Google Calendar. Try Sync Now; if it keeps failing, reconnect."
   },
   "rooms": {
     "confirmDelete": "Are you sure you want to delete this room?",

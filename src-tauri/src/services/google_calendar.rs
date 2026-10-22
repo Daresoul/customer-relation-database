@@ -302,26 +302,102 @@ pub struct GoogleSyncStatus {
     pub last_sync_error: Option<String>,
 }
 
-pub async fn load_sync_status(_db: &DatabaseConnection) -> Result<GoogleSyncStatus, String> {
-    todo!()
+/// "Connected" means Google still accepts the stored login, not merely that a
+/// token is stored.
+pub async fn load_sync_status(db: &DatabaseConnection) -> Result<GoogleSyncStatus, String> {
+    let row = db
+        .query_one(Statement::from_string(
+            DbBackend::Sqlite,
+            "SELECT access_token, calendar_id, sync_enabled, last_sync, needs_reauth, last_sync_error \
+             FROM google_calendar_settings WHERE user_id = 'default'"
+                .to_string(),
+        ))
+        .await
+        .map_err(|e| format!("Failed to query settings: {}", e))?;
+
+    let Some(row) = row else {
+        return Ok(GoogleSyncStatus {
+            connected: false,
+            needs_reauth: false,
+            calendar_id: None,
+            sync_enabled: false,
+            last_sync: None,
+            last_sync_error: None,
+        });
+    };
+
+    let has_token = row.try_get::<Option<String>>("", "access_token").ok().flatten().is_some();
+    let needs_reauth = row.try_get::<i64>("", "needs_reauth").unwrap_or(0) != 0;
+    Ok(GoogleSyncStatus {
+        connected: has_token && !needs_reauth,
+        needs_reauth: has_token && needs_reauth,
+        calendar_id: row.try_get::<Option<String>>("", "calendar_id").ok().flatten(),
+        sync_enabled: row.try_get::<i64>("", "sync_enabled").unwrap_or(0) != 0,
+        last_sync: row.try_get::<Option<String>>("", "last_sync").ok().flatten(),
+        last_sync_error: row.try_get::<Option<String>>("", "last_sync_error").ok().flatten(),
+    })
 }
 
-pub async fn mark_needs_reauth(_db: &DatabaseConnection, _reason: &str) -> Result<(), String> {
-    todo!()
+pub async fn mark_needs_reauth(db: &DatabaseConnection, reason: &str) -> Result<(), String> {
+    log::warn!("Google Calendar login rejected, reconnect needed: {}", reason);
+    db.execute(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "UPDATE google_calendar_settings SET needs_reauth = 1, last_sync_error = ? WHERE user_id = 'default'",
+        [reason.to_string().into()],
+    ))
+    .await
+    .map_err(|e| format!("Failed to flag Google reconnect: {}", e))?;
+    Ok(())
 }
 
-pub async fn clear_needs_reauth(_db: &DatabaseConnection) -> Result<(), String> {
-    todo!()
+pub async fn clear_needs_reauth(db: &DatabaseConnection) -> Result<(), String> {
+    db.execute(Statement::from_string(
+        DbBackend::Sqlite,
+        "UPDATE google_calendar_settings SET needs_reauth = 0, last_sync_error = NULL WHERE user_id = 'default'"
+            .to_string(),
+    ))
+    .await
+    .map_err(|e| format!("Failed to clear Google reconnect flag: {}", e))?;
+    Ok(())
 }
 
-pub async fn record_sync_outcome(_db: &DatabaseConnection, _error: Option<&str>) -> Result<(), String> {
-    todo!()
+/// A failed sync keeps its message until a later sync succeeds.
+pub async fn record_sync_outcome(db: &DatabaseConnection, error: Option<&str>) -> Result<(), String> {
+    let statement = match error {
+        Some(message) => Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "UPDATE google_calendar_settings SET last_sync_error = ? WHERE user_id = 'default'",
+            [message.to_string().into()],
+        ),
+        None => Statement::from_string(
+            DbBackend::Sqlite,
+            "UPDATE google_calendar_settings SET last_sync_error = NULL, last_sync = CURRENT_TIMESTAMP \
+             WHERE user_id = 'default'"
+                .to_string(),
+        ),
+    };
+    db.execute(statement)
+        .await
+        .map_err(|e| format!("Failed to record sync outcome: {}", e))?;
+    Ok(())
 }
 
-pub async fn calendar_ready_for_sync(_db: &DatabaseConnection) -> Result<Option<String>, String> {
-    todo!()
+/// The calendar to sync, or None when sync is off or the login needs reconnecting
+/// (retrying a rejected login every minute only fills the log).
+pub async fn calendar_ready_for_sync(db: &DatabaseConnection) -> Result<Option<String>, String> {
+    let row = db
+        .query_one(Statement::from_string(
+            DbBackend::Sqlite,
+            "SELECT calendar_id FROM google_calendar_settings \
+             WHERE user_id = 'default' AND sync_enabled = 1 AND needs_reauth = 0"
+                .to_string(),
+        ))
+        .await
+        .map_err(|e| format!("Failed to check sync settings: {}", e))?;
+    Ok(row.and_then(|r| r.try_get::<Option<String>>("", "calendar_id").ok().flatten()))
 }
 
+/// IANA zone of this computer (the clinic's), for events and the created calendar.
 pub fn local_time_zone() -> String {
-    todo!()
+    iana_time_zone::get_timezone().unwrap_or_else(|_| "Europe/Skopje".to_string())
 }

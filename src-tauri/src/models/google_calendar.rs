@@ -26,6 +26,11 @@ pub struct GoogleCalendarSettingsResponse {
     pub calendar_id: Option<String>,
     pub sync_enabled: bool,
     pub last_sync: Option<String>,
+    /// Google refused the stored login; the user must reconnect.
+    #[serde(default)]
+    pub needs_reauth: bool,
+    #[serde(default)]
+    pub last_sync_error: Option<String>,
 }
 
 impl From<GoogleCalendarSettings> for GoogleCalendarSettingsResponse {
@@ -36,6 +41,8 @@ impl From<GoogleCalendarSettings> for GoogleCalendarSettingsResponse {
             calendar_id: settings.calendar_id,
             sync_enabled: settings.sync_enabled,
             last_sync: settings.last_sync.map(|dt| dt.to_rfc3339()),
+            needs_reauth: false,
+            last_sync_error: None,
         }
     }
 }

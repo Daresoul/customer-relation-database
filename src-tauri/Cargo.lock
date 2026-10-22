@@ -6213,6 +6213,7 @@ dependencies = [
  "flate2",
  "glob",
  "hidapi",
+ "iana-time-zone",
  "image 0.25.8",
  "lazy_static",
  "log",

@@ -348,7 +348,13 @@ impl OAuthService {
             .exchange_refresh_token(&RefreshToken::new(refresh_token))
             .request_async(async_http_client)
             .await
-            .map_err(|e| format!("Failed to refresh token: {}. Please re-authenticate.", e))?;
+            .map_err(|e| match e {
+                // Google answered and refused the stored login (revoked, expired, invalid_grant).
+                oauth2::RequestTokenError::ServerResponse(resp) => {
+                    format!("{}: {:?}", REAUTH_REQUIRED, resp.error())
+                }
+                other => format!("Failed to refresh token: {}", other),
+            })?;
 
         let access_token = token_result.access_token().secret().clone();
         let expires_in = token_result
@@ -362,6 +368,10 @@ impl OAuthService {
 
 // T039: Token refresh middleware
 use chrono::Utc;
+
+/// Prefix of a refresh error where Google refused the stored login; only a
+/// new sign-in fixes it.
+pub const REAUTH_REQUIRED: &str = "REAUTH_REQUIRED";
 
 /// Get a valid access token, refreshing if necessary (SeaORM version)
 pub async fn get_valid_access_token(
@@ -381,8 +391,7 @@ pub async fn get_valid_access_token(
     let access_token: String = row.try_get("", "access_token")
         .map_err(|_| "No access token available".to_string())?;
 
-    let refresh_token: String = row.try_get("", "refresh_token")
-        .map_err(|_| "No refresh token available".to_string())?;
+    let refresh_token: Option<String> = row.try_get("", "refresh_token").ok().flatten();
 
     let token_expires_at: Option<String> = row.try_get("", "token_expires_at").ok();
 
@@ -406,7 +415,19 @@ pub async fn get_valid_access_token(
     // Token is expired or about to expire, refresh it
     log::info!("Access token expired, refreshing...");
 
-    let (new_access_token, expires_in) = OAuthService::refresh_access_token(refresh_token).await?;
+    let refreshed = match refresh_token {
+        Some(token) => OAuthService::refresh_access_token(token).await,
+        None => Err(format!("{}: no refresh token stored", REAUTH_REQUIRED)),
+    };
+    let (new_access_token, expires_in) = match refreshed {
+        Ok(tokens) => tokens,
+        Err(e) => {
+            if e.starts_with(REAUTH_REQUIRED) {
+                crate::services::google_calendar::mark_needs_reauth(db, &e).await?;
+            }
+            return Err(e);
+        }
+    };
 
     // Calculate new expiration time
     let new_expires_at = Utc::now() + chrono::Duration::seconds(expires_in);

@@ -18,6 +18,7 @@ sqlx = { version = "0.8", default-features = false, features = ["macros", "sqlit
 tokio = { version = "1", features = ["full"] }
 thiserror = "1.0"
 chrono = { version = "0.4", features = ["serde", "clock"] }
+iana-time-zone = "0.1"
 uuid = { version = "1.4", features = ["v4", "serde"] }
 rand = "0.8"
 fake = { version = "2.9", features = ["derive"] }
