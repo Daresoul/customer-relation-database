@@ -565,11 +565,7 @@ public class PDFReportService {
             table.addCell(Util.createBorderlessCell());
             table.addCell(createParameterCell(parameter.getName()));
 //            System.out.println("parameter indicator: " + parameter.getIndicator());
-            if (parameter.getIndicator().equals(Indicator.NORMAL)) {
-                table.addCell(createOkayResultCell(String.valueOf(parameter.getResult())));
-            } else {
-                table.addCell(createBadResultCell(String.valueOf(parameter.getResult())));
-            }
+            table.addCell(createResultCell(parameter));
             table.addCell(createParameterCell(parameter.getUnit()));
             table.addCell(createParameterCell(parameter.getReferentValues()));
         }
@@ -624,11 +620,7 @@ public class PDFReportService {
             table.addCell(createResultsTableTitleCell(
                     theTitle, rowIndex++, startingIndexForVerticalTitle, parameters.size()));
             table.addCell(createParameterCell(parameter.getName()));
-            if (parameter.getIndicator().equals(Indicator.NORMAL)) {
-                table.addCell(createOkayResultCell(String.valueOf(parameter.getResult())));
-            } else {
-                table.addCell(createBadResultCell(String.valueOf(parameter.getResult())));
-            }
+            table.addCell(createResultCell(parameter));
             table.addCell(createParameterCell(parameter.getUnit()));
             table.addCell(createParameterCell(parameter.getReferentValues()));
         }
@@ -714,11 +706,7 @@ public class PDFReportService {
             table.addCell(createResultsTableTitleCell(
                     "ХЕМАТОЛОГИЈА", rowIndex++, 3, parameters.size()));
             table.addCell(createParameterCell(parameter.getName()));
-            if (parameter.getIndicator().equals(Indicator.NORMAL)) {
-                table.addCell(createOkayResultCell(String.valueOf(parameter.getResult())));
-            } else {
-                table.addCell(createBadResultCell(String.valueOf(parameter.getResult())));
-            }
+            table.addCell(createResultCell(parameter));
             table.addCell(createParameterCell(parameter.getUnit()));
             table.addCell(createParameterCell(parameter.getReferentValues()));
         }
@@ -807,6 +795,19 @@ public class PDFReportService {
 
     private static String displayOrDash(String value) {
         return (value == null || value.trim().isEmpty()) ? "—" : value;
+    }
+
+    /** Teal for normal, red for high/low, plain for values without a call. */
+    private PdfPCell createResultCell(Parameter parameter) {
+        String result = String.valueOf(parameter.getResult());
+        Indicator indicator = parameter.getIndicator();
+        if (indicator == Indicator.NORMAL) {
+            return createOkayResultCell(result);
+        }
+        if (indicator == Indicator.HIGH || indicator == Indicator.LOW) {
+            return createBadResultCell(result);
+        }
+        return createParameterCell(result);
     }
 
     private PdfPCell createOkayResultCell(String name) {

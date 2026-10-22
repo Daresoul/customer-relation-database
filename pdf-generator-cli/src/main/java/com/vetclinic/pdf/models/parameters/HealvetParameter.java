@@ -1,10 +1,10 @@
 package com.vetclinic.pdf.models.parameters;
 
-import com.vetclinic.pdf.constants.Indicator;
 import com.vetclinic.pdf.constants.parameters.HealvetParameterEnum;
 import com.vetclinic.pdf.constants.parameters.CortisolRange;
 import com.vetclinic.pdf.constants.parameters.ProBNPRange;
 import com.vetclinic.pdf.constants.parameters.Range;
+import com.vetclinic.pdf.util.ResultClassifier;
 
 import java.util.logging.Logger;
 
@@ -54,41 +54,7 @@ public class HealvetParameter extends Parameter {
             this.setReferentValues(range.getNormalRangesInStringRepresentation());
         }
 
-        if (this.getResult() != null && !this.getResult().isEmpty()) {
-            String result = this.getResult();
-            String resultForParsing;
-            boolean lessThen = false;
-            boolean moreThen = false;
-            if (result.contains("<")) {
-                lessThen = true;
-                resultForParsing = result.replace("<", "");
-            } else if (result.contains(">")) {
-                moreThen = true;
-                resultForParsing = result.replace(">", "");
-            } else {
-                resultForParsing = result;
-            }
-            double resultDouble = Double.parseDouble(resultForParsing);
-            if (resultDouble < range.getLowRange()) {
-                this.setIndicator(Indicator.LOW);
-            } else if (resultDouble > range.getHighRange()) {
-                this.setIndicator(Indicator.HIGH);
-            } else if (resultDouble == range.getLowRange()) {
-                if (lessThen) {
-                    this.setIndicator(Indicator.LOW);
-                } else {
-                    this.setIndicator(Indicator.NORMAL);
-                }
-            } else if (resultDouble == range.getHighRange()) {
-                if (moreThen) {
-                    this.setIndicator(Indicator.HIGH);
-                } else {
-                    this.setIndicator(Indicator.NORMAL);
-                }
-            } else {
-                this.setIndicator(Indicator.NORMAL);
-            }
-        }
+        this.setIndicator(ResultClassifier.classify(this.getResult(), range.getLowRange(), range.getHighRange()));
         this.setUnit(healvetParameterEnum.getUnit());
     }
 

@@ -9,6 +9,7 @@ import com.vetclinic.pdf.models.parameters.Parameter;
 import com.vetclinic.pdf.models.parameters.PcrParameter;
 import com.vetclinic.pdf.models.samples.*;
 import com.vetclinic.pdf.services.PDFReportService;
+import com.vetclinic.pdf.util.ResultClassifier;
 
 import java.io.File;
 import java.io.PrintStream;
@@ -384,26 +385,13 @@ public class PdfGeneratorCLI {
 
                 parameter.setReferentValues(referenceValues);
 
-                // Determine indicator from reference ranges
-                try {
-                    double resultVal = Double.parseDouble(parameter.getResult());
-                    if (!referenceValues.isEmpty() && testResults.has(refLowKey) && testResults.has(refHighKey)) {
-                        double refLow = Double.parseDouble(testResults.get(refLowKey).getAsString());
-                        double refHigh = Double.parseDouble(testResults.get(refHighKey).getAsString());
-
-                        if (resultVal < refLow) {
-                            parameter.setIndicator(Indicator.LOW);
-                        } else if (resultVal > refHigh) {
-                            parameter.setIndicator(Indicator.HIGH);
-                        } else {
-                            parameter.setIndicator(Indicator.NORMAL);
-                        }
-                    } else {
-                        parameter.setIndicator(Indicator.NORMAL);
-                    }
-                } catch (NumberFormatException e) {
-                    parameter.setIndicator(Indicator.NORMAL);
+                Indicator indicator = indicatorFromFlag(getStr(testResults, key + "_F", null));
+                if (indicator == null) {
+                    indicator = ResultClassifier.classify(parameter.getResult(),
+                            ResultClassifier.parseNumber(getStr(testResults, refLowKey, null)),
+                            ResultClassifier.parseNumber(getStr(testResults, refHighKey, null)));
                 }
+                parameter.setIndicator(indicator);
 
                 parameters.add(parameter);
             }
@@ -642,48 +630,15 @@ public class PdfGeneratorCLI {
     }
 
     /**
-     * Compute LOW/HIGH/NORMAL by comparing the value to the device-supplied range
-     * (preferred, format "low-high") or the fallback low/high. Any parse failure
-     * yields NORMAL so a malformed range never paints a misleading flag.
+     * Compare the value with the device-supplied range (preferred, "low-high")
+     * or the table fallback. No readable range or value gives UNKNOWN, never NORMAL.
      */
     private static Indicator computeIndicator(String result, String deviceRange, String refLow, String refHigh) {
-        Double lo = null;
-        Double hi = null;
-        if (deviceRange != null && !deviceRange.isEmpty()) {
-            int dash = deviceRange.indexOf('-', 1); // skip a possible leading sign
-            if (dash > 0) {
-                try {
-                    lo = Double.parseDouble(deviceRange.substring(0, dash).trim());
-                    hi = Double.parseDouble(deviceRange.substring(dash + 1).trim());
-                } catch (NumberFormatException ignored) {
-                    lo = null;
-                    hi = null;
-                }
-            }
+        Double[] range = ResultClassifier.parseRange(deviceRange);
+        if (range == null) {
+            range = new Double[]{ResultClassifier.parseNumber(refLow), ResultClassifier.parseNumber(refHigh)};
         }
-        if ((lo == null || hi == null) && !refLow.isEmpty() && !refHigh.isEmpty()) {
-            try {
-                lo = Double.parseDouble(refLow);
-                hi = Double.parseDouble(refHigh);
-            } catch (NumberFormatException ignored) {
-                return Indicator.NORMAL;
-            }
-        }
-        if (lo == null || hi == null) {
-            return Indicator.NORMAL;
-        }
-        try {
-            double v = Double.parseDouble(result.trim());
-            if (v < lo) {
-                return Indicator.LOW;
-            }
-            if (v > hi) {
-                return Indicator.HIGH;
-            }
-            return Indicator.NORMAL;
-        } catch (NumberFormatException e) {
-            return Indicator.NORMAL;
-        }
+        return ResultClassifier.classify(result, range[0], range[1]);
     }
 
     private static HealvetSample parseHealvetSample(JsonObject json, PatientType patientType) {
@@ -744,7 +699,7 @@ public class PdfGeneratorCLI {
                 Parameter parameter = new Parameter();
                 parameter.setName(paramCode);
                 parameter.setResult(resultValue);
-                parameter.setIndicator(Indicator.NORMAL);
+                parameter.setIndicator(Indicator.UNKNOWN);
                 parameters.add(parameter);
             }
         }
