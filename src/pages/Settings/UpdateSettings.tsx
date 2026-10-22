@@ -8,7 +8,7 @@ import React, { useState, useEffect } from 'react';
 import { Form, Switch, Button, Typography, Space, App } from 'antd';
 import { getVersion } from '@tauri-apps/api/app';
 import { useTranslation } from 'react-i18next';
-import { updateService } from '../../services/updateService';
+import { updateService, createBackupFailedConfirm } from '../../services/updateService';
 import { useUpdater } from '../../hooks/useUpdater';
 import { extractErrorMessage } from '../../utils/errors';
 
@@ -16,7 +16,7 @@ const { Text } = Typography;
 
 export function UpdateSettings() {
   const { t } = useTranslation('settings');
-  const { message, notification } = App.useApp();
+  const { message, notification, modal } = App.useApp();
   const [autoCheckEnabled, setAutoCheckEnabled] = useState(true);
   const [lastCheck, setLastCheck] = useState<Date | null>(null);
   const [currentVersion, setCurrentVersion] = useState<string>('');
@@ -111,7 +111,7 @@ export function UpdateSettings() {
               onClick={async () => {
                 notification.destroy('manual-update-check');
                 try {
-                  await updateService.installAndRestart();
+                  await updateService.installAndRestart(createBackupFailedConfirm(modal, t));
                 } catch (error) {
                   console.error('Update installation failed:', error);
                   notification.error({

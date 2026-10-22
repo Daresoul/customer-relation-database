@@ -7,12 +7,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { App, Button } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { updateService } from '../services/updateService';
+import { updateService, createBackupFailedConfirm } from '../services/updateService';
 import type { UpdateManifest, UpdateStatus } from '../types/update';
 
 export function useUpdater() {
   const { t } = useTranslation('settings');
-  const { notification } = App.useApp();
+  const { notification, modal } = App.useApp();
   const [status, setStatus] = useState<UpdateStatus>('idle');
   const [manifest, setManifest] = useState<UpdateManifest | null>(null);
 
@@ -51,7 +51,10 @@ export function useUpdater() {
                 notification.destroy('update-available');
                 try {
                   setStatus('installing');
-                  await updateService.installAndRestart();
+                  const installing = await updateService.installAndRestart(
+                    createBackupFailedConfirm(modal, t),
+                  );
+                  if (!installing) setStatus('ready');
                 } catch (error) {
                   setStatus('error');
                   console.error('Update installation failed:', error);
@@ -76,7 +79,7 @@ export function useUpdater() {
       setStatus('error');
       console.error('Update check failed:', error);
     }
-  }, [notification, t]);
+  }, [notification, modal, t]);
 
   /**
    * Install the downloaded update and restart the app
@@ -84,7 +87,8 @@ export function useUpdater() {
   const installUpdate = useCallback(async () => {
     try {
       setStatus('installing');
-      await updateService.installAndRestart();
+      const installing = await updateService.installAndRestart(createBackupFailedConfirm(modal, t));
+      if (!installing) setStatus('ready');
     } catch (error) {
       setStatus('error');
       console.error('Update installation failed:', error);
@@ -94,7 +98,7 @@ export function useUpdater() {
         placement: 'topRight',
       });
     }
-  }, [notification, t]);
+  }, [notification, modal, t]);
 
   /**
    * Subscribe to updater events (PENDING, DONE, ERROR)

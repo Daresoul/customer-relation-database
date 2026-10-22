@@ -8,7 +8,17 @@ import { ApiService } from './api';
 import { checkUpdate, installUpdate, onUpdaterEvent } from '@tauri-apps/api/updater';
 import { relaunch } from '@tauri-apps/api/process';
 import { invoke } from '@/services/invoke';
+import type { HookAPI as ModalHookAPI } from 'antd/es/modal/useModal';
 import type { UpdatePreferences } from '../types/update';
+import type { BackupConfig } from '../types/generated/BackupConfig';
+import type { TFunction } from '../utils/errors';
+
+/** Asked when the pre-update backup failed; resolves true to update anyway. */
+export type ConfirmUpdateWithoutBackup = (reason: string) => Promise<boolean>;
+
+function errorText(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
 
 export const updateService = {
   /**
@@ -45,19 +55,27 @@ export const updateService = {
   /**
    * Install update and restart the application.
    *
-   * Runs a pre-update backup first if a destination is configured. The backup
-   * is best-effort — if it fails (no destination, write error, etc.) we still
-   * proceed with the update so the user is never stranded on a broken version
-   * because backups are misbehaving. Errors are logged for diagnosis.
+   * Runs a pre-update backup first when a backup folder is set. If that
+   * backup fails, the user is asked before installing; returns false when
+   * they cancel. With no backup folder there is nothing to back up, so the
+   * update goes ahead.
    */
-  async installAndRestart() {
+  async installAndRestart(confirmWithoutBackup: ConfirmUpdateWithoutBackup): Promise<boolean> {
+    let backupError: string | null = null;
     try {
-      await invoke('run_backup_now');
+      const config = await invoke<BackupConfig>('get_backup_config');
+      if (config.directory) {
+        await invoke('run_backup_now', { preUpdate: true });
+      }
     } catch (err) {
-      console.warn('Pre-update backup failed (continuing with update):', err);
+      backupError = errorText(err);
+    }
+    if (backupError !== null && !(await confirmWithoutBackup(backupError))) {
+      return false;
     }
     await installUpdate();
     await relaunch();
+    return true;
   },
 
   /**
@@ -68,3 +86,27 @@ export const updateService = {
     return onUpdaterEvent(handler);
   },
 };
+
+/**
+ * Builds the "backup failed, update anyway?" question on top of an antd
+ * modal API (from `App.useApp()`). Cancel has focus, so Enter keeps the
+ * current version.
+ */
+export function createBackupFailedConfirm(
+  modal: Pick<ModalHookAPI, 'confirm'>,
+  t: TFunction,
+): ConfirmUpdateWithoutBackup {
+  return (reason) =>
+    new Promise<boolean>((resolve) => {
+      modal.confirm({
+        title: t('updates.backupFailed.title'),
+        content: t('updates.backupFailed.content', { reason }),
+        okText: t('updates.backupFailed.updateAnyway'),
+        cancelText: t('updates.backupFailed.cancel'),
+        okButtonProps: { danger: true },
+        autoFocusButton: 'cancel',
+        onOk: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
+    });
+}
