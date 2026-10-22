@@ -78,25 +78,135 @@ pub struct PdfStatus {
     pub error: Option<String>,
 }
 
+impl PdfStatus {
+    fn ok(kind: &str) -> Self {
+        Self { kind: kind.to_string(), ok: true, error: None }
+    }
+
+    fn failed(kind: &str, error: impl Into<String>) -> Self {
+        Self { kind: kind.to_string(), ok: false, error: Some(error.into()) }
+    }
+}
+
+impl PdfEnv {
+    pub fn from_app(app_handle: &tauri::AppHandle) -> Result<Self, String> {
+        Ok(Self {
+            jar_path: crate::services::java_pdf_service::JavaPdfService::get_jar_path(app_handle)?,
+            storage_dir: crate::services::file_storage::FileStorageService::get_storage_dir(app_handle)?,
+        })
+    }
+}
+
+/// The documents made from a record on every save, in the order they are made.
+const DOCUMENT_KINDS: [&str; 3] = ["report", "pharmacy_note", "invoice"];
+
+fn attachment_type_of(kind: &str) -> &'static str {
+    match kind {
+        "report" => "simple_report",
+        "pharmacy_note" => "pharmacy_note",
+        "invoice" => "invoice",
+        _ => "generated_pdf",
+    }
+}
+
+/// A saved record and how each of its documents fared.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[ts(export, export_to = "../../src/types/generated/")]
+#[serde(rename_all = "camelCase")]
+pub struct SavedMedicalRecord {
+    #[serde(flatten)]
+    pub record: MedicalRecord,
+    pub pdfs: Vec<PdfStatus>,
+}
+
 // T027: MedicalRecordService with CRUD operations
 pub struct MedicalRecordService;
 
 impl MedicalRecordService {
+    /// Regenerate the record's report, pharmacy note and invoice. Each new
+    /// document replaces the old one of its kind only once it is stored; a
+    /// failure leaves the old one in place. A pharmacy note or invoice the
+    /// record no longer has content for is retired.
     pub async fn generate_record_documents(
-        _env: &PdfEnv,
-        _db: &DatabaseConnection,
-        _record: &MedicalRecord,
+        env: &PdfEnv,
+        db: &DatabaseConnection,
+        record: &MedicalRecord,
     ) -> Vec<PdfStatus> {
-        Vec::new()
+        let mut statuses = Vec::new();
+        for kind in DOCUMENT_KINDS {
+            match Self::document_applies(db, record, kind).await {
+                Ok(true) => statuses.push(Self::generate_document(env, db, record, kind).await),
+                Ok(false) => Self::retire_documents(db, record.id, attachment_type_of(kind), None).await,
+                Err(e) => statuses.push(PdfStatus::failed(kind, e)),
+            }
+        }
+        statuses
     }
 
+    /// Regenerate one document (the Retry after a failed save).
     pub async fn regenerate_document(
-        _env: &PdfEnv,
-        _db: &DatabaseConnection,
-        _record_id: i64,
+        env: &PdfEnv,
+        db: &DatabaseConnection,
+        record_id: i64,
         kind: &str,
     ) -> PdfStatus {
-        PdfStatus { kind: kind.to_string(), ok: false, error: None }
+        if !DOCUMENT_KINDS.contains(&kind) {
+            return PdfStatus::failed(kind, format!("Unknown document kind: {}", kind));
+        }
+        match Self::get_medical_record(db, record_id, false).await {
+            Ok(detail) => Self::generate_document(env, db, &detail.record, kind).await,
+            Err(e) => PdfStatus::failed(kind, e),
+        }
+    }
+
+    /// The kinds that need no other input than the record itself.
+    async fn document_applies(db: &DatabaseConnection, record: &MedicalRecord, kind: &str) -> Result<bool, String> {
+        Ok(match kind {
+            "pharmacy_note" => record.prescription_notes.as_ref().is_some_and(|n| !n.trim().is_empty()),
+            "invoice" => !crate::services::line_item::LineItemService::get_line_items_for_record(db, record.id)
+                .await?
+                .is_empty(),
+            _ => true,
+        })
+    }
+
+    async fn generate_document(env: &PdfEnv, db: &DatabaseConnection, record: &MedicalRecord, kind: &str) -> PdfStatus {
+        let result = match kind {
+            "report" => Self::generate_simple_report_pdf(env, db, record.id, record).await,
+            "pharmacy_note" => Self::generate_pharmacy_note_pdf(env, db, record.id, record).await,
+            "invoice" => Self::generate_invoice_pdf(env, db, record.id, record).await,
+            other => Err(format!("Unknown document kind: {}", other)),
+        };
+        match result {
+            Ok(new_id) => {
+                Self::retire_documents(db, record.id, attachment_type_of(kind), Some(new_id)).await;
+                PdfStatus::ok(kind)
+            }
+            Err(e) => {
+                log::error!("❌ {} PDF for record {} failed: {}", kind, record.id, e);
+                PdfStatus::failed(kind, e)
+            }
+        }
+    }
+
+    /// Soft-delete the record's documents of one type, except `keep_id`.
+    async fn retire_documents(db: &DatabaseConnection, record_id: i64, attachment_type: &str, keep_id: Option<i64>) {
+        let result = db
+            .execute(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "UPDATE medical_attachments SET deleted_at = ? \
+                 WHERE medical_record_id = ? AND attachment_type = ? AND deleted_at IS NULL AND id != ?",
+                [
+                    Utc::now().to_rfc3339().into(),
+                    record_id.into(),
+                    attachment_type.into(),
+                    keep_id.unwrap_or(-1).into(),
+                ],
+            ))
+            .await;
+        if let Err(e) = result {
+            log::warn!("Could not retire old {} documents of record {}: {}", attachment_type, record_id, e);
+        }
     }
 
     /// The record's invoice number and date, assigned on first use and kept
@@ -522,97 +632,87 @@ impl MedicalRecordService {
         app_handle: &tauri::AppHandle,
         db: &DatabaseConnection,
         input: CreateMedicalRecordInput,
-    ) -> Result<MedicalRecord, String> {
-        log::debug!("Creating medical record with input: device_test_data={:?}, device_type={:?}, device_name={:?}",
-            input.device_test_data.is_some(), input.device_type, input.device_name);
-
-        let now = Utc::now();
+    ) -> Result<SavedMedicalRecord, String> {
         let record = Self::save_new_record(db, input.clone()).await?;
-        let id = record.id;
+        let pdfs = match PdfEnv::from_app(app_handle) {
+            Ok(env) => {
+                let mut pdfs = Vec::new();
+                if let Some(device) = Self::generate_device_report(&env, db, &record, &input).await {
+                    pdfs.push(device);
+                }
+                pdfs.extend(Self::generate_record_documents(&env, db, &record).await);
+                pdfs
+            }
+            Err(e) => Self::unavailable_documents(db, &record, &e).await,
+        };
+        Ok(SavedMedicalRecord { record, pdfs })
+    }
 
-        // Generate PDFs if device test data is present
-        log::debug!("[PDF] Checking for device data: device_test_data (legacy)={}, device_data_list={}",
-            input.device_test_data.is_some(), input.device_data_list.is_some());
-
-        // Collect all device data (either from device_data_list or legacy single device)
-        let mut all_device_data: Vec<crate::services::device_pdf_service::DeviceTestData> = Vec::new();
-
-        // Add devices from device_data_list (new multi-device format)
-        if let Some(ref device_list) = input.device_data_list {
-            log::debug!("[PDF] Found {} devices in device_data_list", device_list.len());
-            for device in device_list {
-                all_device_data.push(crate::services::device_pdf_service::DeviceTestData {
-                    device_type: device.device_type.clone(),
-                    device_name: device.device_name.clone(),
-                    test_results: device.device_test_data.clone(),
-                    detected_at: now,
-                    patient_identifier: None, // Will be filled below
-                });
+    /// Every document the record would get, marked failed with `error`
+    /// (no JAR, no storage folder).
+    async fn unavailable_documents(db: &DatabaseConnection, record: &MedicalRecord, error: &str) -> Vec<PdfStatus> {
+        log::error!("❌ Record {} documents can't be made: {}", record.id, error);
+        let mut statuses = Vec::new();
+        for kind in DOCUMENT_KINDS {
+            if Self::document_applies(db, record, kind).await.unwrap_or(true) {
+                statuses.push(PdfStatus::failed(kind, error));
             }
         }
+        statuses
+    }
 
-        // Add legacy single device if present
-        if input.device_test_data.is_some() && input.device_type.is_some() && input.device_name.is_some() {
-            log::debug!("[PDF] Found legacy single device data");
-            all_device_data.push(crate::services::device_pdf_service::DeviceTestData {
-                device_type: input.device_type.unwrap(),
-                device_name: input.device_name.unwrap(),
-                test_results: input.device_test_data.unwrap(),
-                detected_at: now,
+    /// The lab report for device results sent with a new record, if any.
+    async fn generate_device_report(
+        env: &PdfEnv,
+        db: &DatabaseConnection,
+        record: &MedicalRecord,
+        input: &CreateMedicalRecordInput,
+    ) -> Option<PdfStatus> {
+        use crate::services::device_pdf_service::DeviceTestData;
+
+        let mut devices: Vec<DeviceTestData> = input
+            .device_data_list
+            .iter()
+            .flatten()
+            .map(|d| DeviceTestData {
+                device_type: d.device_type.clone(),
+                device_name: d.device_name.clone(),
+                test_results: d.device_test_data.clone(),
+                detected_at: record.created_at,
+                patient_identifier: None,
+            })
+            .collect();
+        if let (Some(results), Some(device_type), Some(device_name)) =
+            (&input.device_test_data, &input.device_type, &input.device_name)
+        {
+            devices.push(DeviceTestData {
+                device_type: device_type.clone(),
+                device_name: device_name.clone(),
+                test_results: results.clone(),
+                detected_at: record.created_at,
                 patient_identifier: None,
             });
         }
+        if devices.is_empty() {
+            return None;
+        }
 
-        // Generate PDF if we have any device data
-        if !all_device_data.is_empty() {
-            log::debug!("[PDF] Generating PDF with {} device samples...", all_device_data.len());
-
-            // Get patient data for PDF generation
-            let patient_data = match Self::get_patient_for_pdf(db, input.patient_id).await {
-                Ok(p) => p,
-                Err(e) => {
-                    log::warn!("Failed to get patient data for PDF: {}", e);
-                    return Ok(record); // Return the record anyway, just skip PDF generation
-                }
-            };
-
-            // Fill in patient identifier for all devices
-            let patient_identifier = Some(patient_data.microchip_id.clone().unwrap_or_else(|| patient_data.name.clone()));
-            for device in all_device_data.iter_mut() {
-                device.patient_identifier = patient_identifier.clone();
+        let result = async {
+            let patient_data = Self::get_patient_for_pdf(db, record.patient_id).await?;
+            let identifier = Some(patient_data.microchip_id.clone().unwrap_or_else(|| patient_data.name.clone()));
+            for device in devices.iter_mut() {
+                device.patient_identifier = identifier.clone();
             }
-
-            // Generate PDF with all devices
-            if let Err(e) = Self::generate_and_save_pdfs_multi(app_handle, db, id, &patient_data, &all_device_data).await {
-                log::warn!("Failed to generate PDFs: {}", e);
-                // Continue anyway - the record was created successfully
+            Self::generate_and_save_pdfs_multi(env, db, record.id, &patient_data, &devices).await
+        }
+        .await;
+        Some(match result {
+            Ok(()) => PdfStatus::ok("device_report"),
+            Err(e) => {
+                log::error!("❌ Device report for record {} failed: {}", record.id, e);
+                PdfStatus::failed("device_report", e)
             }
-        }
-
-        // Generate simple report PDF with title and description (using template)
-        log::info!("📝 Starting simple report PDF generation for record {}", id);
-        match Self::generate_simple_report_pdf(app_handle, db, id, &record).await {
-            Ok(_) => log::info!("✅ Simple report PDF generated successfully for record {}", id),
-            Err(e) => log::error!("❌ Failed to generate simple report PDF: {}", e),
-        }
-
-        // Generate pharmacy note PDF if prescription notes exist
-        if record.prescription_notes.as_ref().map_or(false, |n| !n.trim().is_empty()) {
-            log::info!("📝 Starting pharmacy note PDF generation for record {}", id);
-            match Self::generate_pharmacy_note_pdf(app_handle, db, id, &record).await {
-                Ok(_) => log::info!("✅ Pharmacy note PDF generated for record {}", id),
-                Err(e) => log::error!("❌ Failed to generate pharmacy note PDF: {}", e),
-            }
-        }
-
-        // Generate invoice PDF if line items exist
-        log::info!("📝 Starting invoice PDF generation for record {}", id);
-        match Self::generate_invoice_pdf(app_handle, db, id, &record).await {
-            Ok(_) => log::info!("✅ Invoice PDF generation completed for record {}", id),
-            Err(e) => log::error!("❌ Failed to generate invoice PDF: {}", e),
-        }
-
-        Ok(record)
+        })
     }
 
     /// Sanitize a string for inclusion in a PDF filename:
@@ -640,22 +740,22 @@ impl MedicalRecordService {
         }
     }
 
-    /// Format the current UTC timestamp as `YYYY-MM-DD HH-MM` for use
+    /// Format the current local time as `YYYY-MM-DD HH-MM` for use
     /// in filenames. We avoid colons (Windows-illegal), use spaces
     /// only between date and time (most file browsers handle those
     /// fine), and skip seconds — minute resolution is more than
     /// enough for human filenames.
     fn pdf_timestamp() -> String {
-        chrono::Utc::now().format("%Y-%m-%d %H-%M").to_string()
+        chrono::Local::now().format("%Y-%m-%d %H-%M").to_string()
     }
 
     /// Generate a simple report PDF using the template with medical record title and description
     async fn generate_simple_report_pdf(
-        app_handle: &tauri::AppHandle,
+        env: &PdfEnv,
         db: &DatabaseConnection,
         medical_record_id: i64,
         record: &MedicalRecord,
-    ) -> Result<(), String> {
+    ) -> Result<i64, String> {
         use crate::services::java_pdf_service::JavaPdfService;
 
         // Get patient and owner info for the report
@@ -684,7 +784,7 @@ impl MedicalRecordService {
         // Generate simple report PDF
         log::info!("📄 Calling Java to generate simple report PDF for record {}...", medical_record_id);
         JavaPdfService::generate_simple_report(
-            app_handle,
+            &env.jar_path,
             pdf_path.to_str().ok_or("Invalid PDF path")?,
             &record.name,
             &record.description,
@@ -692,8 +792,8 @@ impl MedicalRecordService {
         )?;
 
         // Save PDF as attachment
-        Self::save_pdf_attachment(
-            app_handle,
+        let attachment_id = Self::save_pdf_attachment(
+            env,
             db,
             medical_record_id,
             &pdf_path,
@@ -704,22 +804,23 @@ impl MedicalRecordService {
             "simple_report",  // Use different type so generate_configured_report won't delete it
         ).await?;
 
+        let _ = std::fs::remove_file(&pdf_path);
         log::debug!("Simple report PDF generated and saved as attachment");
-        Ok(())
+        Ok(attachment_id)
     }
 
     /// Generate a pharmacy note PDF with prescription text overlaid on the template
     async fn generate_pharmacy_note_pdf(
-        app_handle: &tauri::AppHandle,
+        env: &PdfEnv,
         db: &DatabaseConnection,
         medical_record_id: i64,
         record: &MedicalRecord,
-    ) -> Result<(), String> {
+    ) -> Result<i64, String> {
         use crate::services::java_pdf_service::JavaPdfService;
 
         let prescription_text = match &record.prescription_notes {
             Some(text) if !text.trim().is_empty() => text.clone(),
-            _ => return Ok(()), // No prescription notes, skip
+            _ => return Err("The record has no prescription to print".to_string()),
         };
 
         // Pull patient name for the filename — slightly redundant with
@@ -746,14 +847,14 @@ impl MedicalRecordService {
 
         log::info!("📄 Calling Java to generate pharmacy note PDF for record {}...", medical_record_id);
         JavaPdfService::generate_pharmacy_note(
-            app_handle,
+            &env.jar_path,
             pdf_path.to_str().ok_or("Invalid PDF path")?,
             &prescription_text,
         )?;
 
         // Save PDF as attachment
-        Self::save_pdf_attachment(
-            app_handle,
+        let attachment_id = Self::save_pdf_attachment(
+            env,
             db,
             medical_record_id,
             &pdf_path,
@@ -764,17 +865,18 @@ impl MedicalRecordService {
             "pharmacy_note",
         ).await?;
 
+        let _ = std::fs::remove_file(&pdf_path);
         log::debug!("Pharmacy note PDF generated and saved as attachment");
-        Ok(())
+        Ok(attachment_id)
     }
 
     /// Generate an invoice PDF from medical record line items
     async fn generate_invoice_pdf(
-        app_handle: &tauri::AppHandle,
+        env: &PdfEnv,
         db: &DatabaseConnection,
         medical_record_id: i64,
         record: &MedicalRecord,
-    ) -> Result<(), String> {
+    ) -> Result<i64, String> {
         use crate::services::java_pdf_service::{JavaPdfService, InvoiceLineItem};
         use crate::services::line_item::LineItemService;
 
@@ -784,8 +886,7 @@ impl MedicalRecordService {
             .unwrap_or_default();
 
         if line_items.is_empty() {
-            log::debug!("No line items for record {} - skipping invoice generation", medical_record_id);
-            return Ok(());
+            return Err("The record has no line items to invoice".to_string());
         }
 
         // Get patient/owner info for the recipient (ЗА) field
@@ -839,7 +940,7 @@ impl MedicalRecordService {
 
         log::info!("📄 Generating invoice PDF for record {}...", medical_record_id);
         JavaPdfService::generate_invoice(
-            app_handle,
+            &env.jar_path,
             pdf_path.to_str().ok_or("Invalid PDF path")?,
             &date,
             &invoice_number,
@@ -850,8 +951,8 @@ impl MedicalRecordService {
         )?;
 
         // Save PDF as attachment
-        Self::save_pdf_attachment(
-            app_handle,
+        let attachment_id = Self::save_pdf_attachment(
+            env,
             db,
             medical_record_id,
             &pdf_path,
@@ -862,8 +963,9 @@ impl MedicalRecordService {
             "invoice",
         ).await?;
 
+        let _ = std::fs::remove_file(&pdf_path);
         log::info!("✅ Invoice PDF generated and saved for record {}", medical_record_id);
-        Ok(())
+        Ok(attachment_id)
     }
 
     /// Helper to get patient data for PDF generation
@@ -937,7 +1039,7 @@ impl MedicalRecordService {
 
     /// Generate Java PDF report with multiple device samples and save as attachment
     async fn generate_and_save_pdfs_multi(
-        app_handle: &tauri::AppHandle,
+        env: &PdfEnv,
         db: &DatabaseConnection,
         medical_record_id: i64,
         patient_data: &crate::services::device_pdf_service::PatientData,
@@ -981,8 +1083,8 @@ impl MedicalRecordService {
 
         // Generate Java PDF with all devices
         log::debug!("Generating combined PDF report using Java...");
-        JavaPdfService::generate_pdf_multi(
-            app_handle,
+        JavaPdfService::generate_pdf_multi_with_jar(
+            &env.jar_path,
             pdf_path.to_str().ok_or("Invalid PDF path")?,
             patient_data,
             device_data_list,
@@ -1002,8 +1104,8 @@ impl MedicalRecordService {
         };
 
         // Save PDF as attachment
-        Self::save_pdf_attachment(
-            app_handle,
+        let attachment_id = Self::save_pdf_attachment(
+            env,
             db,
             medical_record_id,
             &pdf_path,
@@ -1014,25 +1116,14 @@ impl MedicalRecordService {
             "generated_pdf",  // This can be replaced by generate_configured_report
         ).await?;
 
-        log::debug!("PDF report generated and saved as attachment");
+        let _ = std::fs::remove_file(&pdf_path);
+        log::debug!("PDF report generated and saved as attachment {}", attachment_id);
         Ok(())
-    }
-
-    /// Generate Java PDF report and save as attachment (legacy single-device wrapper)
-    #[allow(dead_code)]
-    async fn generate_and_save_pdfs(
-        app_handle: &tauri::AppHandle,
-        db: &DatabaseConnection,
-        medical_record_id: i64,
-        patient_data: &crate::services::device_pdf_service::PatientData,
-        device_data: &crate::services::device_pdf_service::DeviceTestData,
-    ) -> Result<(), String> {
-        Self::generate_and_save_pdfs_multi(app_handle, db, medical_record_id, patient_data, &[device_data.clone()]).await
     }
 
     /// Save a PDF file as an attachment to a medical record
     async fn save_pdf_attachment(
-        app_handle: &tauri::AppHandle,
+        env: &PdfEnv,
         db: &DatabaseConnection,
         medical_record_id: i64,
         pdf_path: &std::path::Path,
@@ -1041,7 +1132,7 @@ impl MedicalRecordService {
         device_type: &str,
         device_name: &str,
         attachment_type: &str,
-    ) -> Result<(), String> {
+    ) -> Result<i64, String> {
         use uuid::Uuid;
 
         // Read PDF file
@@ -1051,12 +1142,7 @@ impl MedicalRecordService {
         // Generate unique file ID
         let file_id = Uuid::new_v4().to_string();
 
-        // Get storage directory - use Tauri's platform-specific app data directory
-        let app_data_dir = app_handle.path_resolver().app_data_dir()
-            .ok_or("Failed to get app data directory")?;
-        let storage_dir = app_data_dir
-            .join("files")
-            .join("medical");
+        let storage_dir = &env.storage_dir;
 
         // Create directory if it doesn't exist
         std::fs::create_dir_all(&storage_dir)
@@ -1071,7 +1157,7 @@ impl MedicalRecordService {
 
         // Create attachment record
         let now = chrono::Utc::now();
-        db.execute(Statement::from_sql_and_values(
+        let inserted = db.execute(Statement::from_sql_and_values(
             DbBackend::Sqlite,
             "INSERT INTO medical_attachments \
              (medical_record_id, file_id, original_name, mime_type, file_size, uploaded_at, device_type, device_name, connection_method, attachment_type) \
@@ -1094,7 +1180,7 @@ impl MedicalRecordService {
 
         log::debug!("Saved {} PDF attachment: {} (file_id: {})", pdf_type, filename, file_id);
 
-        Ok(())
+        Ok(inserted.last_insert_id() as i64)
     }
 
     /// Apply an edit: the record's fields, its line items and a history row.
@@ -1327,26 +1413,13 @@ impl MedicalRecordService {
         db: &DatabaseConnection,
         record_id: i64,
         updates: UpdateMedicalRecordInput,
-    ) -> Result<MedicalRecord, String> {
-        let updated_record = Self::save_record_changes(db, record_id, updates).await?;
-
-        // Regenerate invoice PDF on update (line items or discount may have changed)
-        log::info!("📝 Regenerating invoice PDF for updated record {}", record_id);
-        match Self::generate_invoice_pdf(app_handle, db, record_id, &updated_record).await {
-            Ok(_) => log::info!("✅ Invoice PDF regenerated for record {}", record_id),
-            Err(e) => log::error!("❌ Failed to regenerate invoice PDF: {}", e),
-        }
-
-        // Regenerate pharmacy note PDF on update if prescription notes exist
-        if updated_record.prescription_notes.as_ref().map_or(false, |n| !n.trim().is_empty()) {
-            log::info!("📝 Regenerating pharmacy note PDF for updated record {}", record_id);
-            match Self::generate_pharmacy_note_pdf(app_handle, db, record_id, &updated_record).await {
-                Ok(_) => log::info!("✅ Pharmacy note PDF regenerated for record {}", record_id),
-                Err(e) => log::error!("❌ Failed to regenerate pharmacy note PDF: {}", e),
-            }
-        }
-
-        Ok(updated_record)
+    ) -> Result<SavedMedicalRecord, String> {
+        let record = Self::save_record_changes(db, record_id, updates).await?;
+        let pdfs = match PdfEnv::from_app(app_handle) {
+            Ok(env) => Self::generate_record_documents(&env, db, &record).await,
+            Err(e) => Self::unavailable_documents(db, &record, &e).await,
+        };
+        Ok(SavedMedicalRecord { record, pdfs })
     }
 
     pub async fn archive_medical_record(
@@ -1495,7 +1568,7 @@ impl MedicalRecordService {
         app_handle: &tauri::AppHandle,
         db: &DatabaseConnection,
         record_id: i64,
-    ) -> Result<MedicalRecord, String> {
+    ) -> Result<SavedMedicalRecord, String> {
         // Fetch latest history entry
         let row = db
             .query_one(Statement::from_sql_and_values(

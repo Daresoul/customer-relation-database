@@ -507,6 +507,7 @@ fn main() {
             commands::get_medical_record,
             commands::create_medical_record,
             commands::update_medical_record,
+            commands::regenerate_record_document,
             commands::archive_medical_record,
             commands::upload_medical_attachment,
             commands::download_medical_attachment,

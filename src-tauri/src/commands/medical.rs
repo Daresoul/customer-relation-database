@@ -1,7 +1,7 @@
 use tauri::{AppHandle, State};
 use crate::database::SeaOrmPool;
 use crate::models::medical::*;
-use crate::services::medical_record::MedicalRecordService;
+use crate::services::medical_record::{MedicalRecordService, PdfEnv, PdfStatus, SavedMedicalRecord};
 use crate::services::file_storage::FileStorageService;
 use crate::services::pdf_render::PdfRenderService;
 use crate::services::device_parser::DeviceParserService;
@@ -42,7 +42,7 @@ pub async fn create_medical_record(
     app_handle: AppHandle,
     pool: State<'_, SeaOrmPool>,
     input: CreateMedicalRecordInput,
-) -> Result<MedicalRecord, String> {
+) -> Result<SavedMedicalRecord, String> {
     // Validate input
     if input.name.is_empty() {
         return Err("Name is required".to_string());
@@ -66,7 +66,7 @@ pub async fn update_medical_record(
     pool: State<'_, SeaOrmPool>,
     record_id: i64,
     updates: UpdateMedicalRecordInput,
-) -> Result<MedicalRecord, String> {
+) -> Result<SavedMedicalRecord, String> {
     // Validate updates
     if let Some(ref name) = updates.name {
         if name.is_empty() {
@@ -80,6 +80,19 @@ pub async fn update_medical_record(
     }
 
     MedicalRecordService::update_medical_record(&app_handle, &pool, record_id, updates).await
+}
+
+/// Make one of a record's documents again (`report`, `pharmacy_note` or
+/// `invoice`), replacing the old one once the new one is stored.
+#[tauri::command]
+pub async fn regenerate_record_document(
+    app_handle: AppHandle,
+    pool: State<'_, SeaOrmPool>,
+    record_id: i64,
+    kind: String,
+) -> Result<PdfStatus, String> {
+    let env = PdfEnv::from_app(&app_handle)?;
+    Ok(MedicalRecordService::regenerate_document(&env, &pool, record_id, &kind).await)
 }
 
 // T035: Implement archive_medical_record command
@@ -420,7 +433,7 @@ pub async fn revert_medical_record(
     app_handle: AppHandle,
     pool: State<'_, SeaOrmPool>,
     record_id: i64,
-) -> Result<MedicalRecord, String> {
+) -> Result<SavedMedicalRecord, String> {
     MedicalRecordService::revert_one_step(&app_handle, &pool, record_id).await
 }
 
