@@ -588,6 +588,69 @@ async fn rebuild_search_index_restores_searchability() {
 }
 
 // ---------------------------------------------------------------------------
+// create_patient_with_household
+// ---------------------------------------------------------------------------
+
+fn pet_with_household(name: &str, chip: Option<&str>) -> CreatePatientWithHouseholdDto {
+    CreatePatientWithHouseholdDto {
+        household: CreateHouseholdDto {
+            household_name: Some(format!("{} household", name)),
+            address: None,
+            city: None,
+            postal_code: None,
+            notes: None,
+        },
+        people: vec![person("Ana", "Petrovska", true)],
+        patient: crate::models::dto::CreatePatientDto {
+            name: Some(name.to_string()),
+            species_id: Some(1),
+            breed_id: None,
+            gender: Some("Female".to_string()),
+            date_of_birth: None,
+            color: Some("Brown".to_string()),
+            weight: None,
+            microchip_id: chip.map(|c| c.to_string()),
+            medical_notes: None,
+            household_id: None,
+        },
+        relationship: None,
+    }
+}
+
+#[tokio::test]
+async fn create_patient_with_household_saves_the_normalised_microchip() {
+    let test_db = create_test_db_with_migrations().await;
+
+    let (_, patient_id) = q::create_patient_with_household(&test_db, pet_with_household("Bella", Some(" 900 000-000000001 ")))
+        .await
+        .unwrap();
+
+    let patient = crate::services::patient::PatientService::get_by_id(&test_db, patient_id)
+        .await
+        .unwrap()
+        .expect("patient");
+    assert_eq!(patient.microchip_id.as_deref(), Some("900000000000001"));
+    assert_eq!(patient.gender.as_deref(), Some("Female"));
+    assert_eq!(patient.color.as_deref(), Some("Brown"));
+}
+
+#[tokio::test]
+async fn create_patient_with_household_refuses_a_chip_another_patient_has() {
+    let test_db = create_test_db_with_migrations().await;
+    q::create_patient_with_household(&test_db, pet_with_household("Bella", Some("900000000000001")))
+        .await
+        .unwrap();
+    let before = household_count(&test_db).await;
+
+    let err = q::create_patient_with_household(&test_db, pet_with_household("Max", Some("900 000 000 000 001")))
+        .await
+        .unwrap_err();
+
+    assert!(err.contains("already registered"), "{}", err);
+    assert_eq!(household_count(&test_db).await, before, "no orphan household on refusal");
+}
+
+// ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
 
