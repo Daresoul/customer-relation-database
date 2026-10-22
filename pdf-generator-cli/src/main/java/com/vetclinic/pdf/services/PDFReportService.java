@@ -1366,6 +1366,16 @@ public class PDFReportService {
         reportTitle.setSpacingAfter(5);
         document.add(reportTitle);
 
+        if (pcrSample.isInvalid()) {
+            Paragraph invalid = new Paragraph(
+                    "НЕВАЛИДЕН ТЕСТ (INVALID): интерната контрола не помина — повторете го тестот. "
+                            + "Резултатите подолу не се важечки.",
+                    FontUtil.getMacedonianFont(11, FontUtil.BAD_RESULT_FONT_COLOR));
+            invalid.setAlignment(Element.ALIGN_CENTER);
+            invalid.setSpacingAfter(5);
+            document.add(invalid);
+        }
+
         // Results table
         PdfPTable table = new PdfPTable(6);
         table.setWidthPercentage(95);
@@ -1381,27 +1391,25 @@ public class PDFReportService {
         table.addCell(createPcrHeaderCell("Индикатор", headerBg));
         table.addCell(createPcrHeaderCell("Лот", headerBg));
 
-        // Data rows
+        boolean invalidRun = pcrSample.isInvalid();
         for (PcrParameter param : pcrSample.getPcrParameters()) {
-            // Item name
+            boolean control = param.isInternalControl();
+            boolean redCall = control ? !param.isPositive() : (!invalidRun && param.isPositive());
+
             table.addCell(createPcrDataCell(param.getName(), false));
 
             // Sample type - empty to match reference
             table.addCell(createPcrDataCell("", false));
 
-            // Result (Ct) - highlight positive results in red
-            String result = param.getResult() != null ? param.getResult() : "NoCt";
-            table.addCell(createPcrDataCell(result, param.isPositive()));
+            String result = param.getResult() != null ? param.getResult() : "";
+            table.addCell(createPcrDataCell(result, !control && redCall));
 
-            // Ranges
             String ranges = param.getReferentValues() != null ? param.getReferentValues() : ">36 or NoCt";
             table.addCell(createPcrDataCell(ranges, false));
 
-            // Indicator
-            String indicator = param.isPositive() ? "Positive(+)" : "Negative(-)";
-            table.addCell(createPcrDataCell(indicator, param.isPositive()));
+            String indicator = (invalidRun && !control) ? "INVALID" : param.getIndicatorText();
+            table.addCell(createPcrDataCell(indicator, redCall));
 
-            // Lot
             String lot = param.getLotNumber() != null ? param.getLotNumber() : "";
             table.addCell(createPcrDataCell(lot, false));
         }

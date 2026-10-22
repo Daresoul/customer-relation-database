@@ -307,19 +307,19 @@ public class PdfGeneratorCLI {
                 // this stdout into Arkivet.log (shipped to Loki), so "how many
                 // rows did each device table get?" is answerable remotely.
                 // params=0 means that device's table rendered header-only.
-                int paramCount = (sample.getParameters() == null) ? 0 : sample.getParameters().size();
+                int paramCount = (sample instanceof PcrSample)
+                        ? ((PcrSample) sample).getPcrParameters().size()
+                        : (sample.getParameters() == null) ? 0 : sample.getParameters().size();
                 System.out.println("PARSED_SAMPLE device=" + deviceType
                         + " sample_id=" + sample.getSampleId()
                         + " params=" + paramCount);
-                // A grid sample with zero parameters would render a header-only
+                // A sample with zero parameters would render a header-only
                 // table on a report that otherwise looks complete — the same
                 // silently-empty failure the Rust side guards against. Refuse
                 // (exit 1, logged by the Rust caller) rather than emit it. This
                 // also catches key-shape mismatches between Rust and this JAR
-                // that the Rust-side non-empty check cannot see. PCR samples
-                // are exempt: they render on their own page from a different
-                // structure and legitimately may carry no grid parameters.
-                if (paramCount == 0 && !"pcr".equals(deviceType)) {
+                // that the Rust-side non-empty check cannot see.
+                if (paramCount == 0) {
                     throw new IllegalStateException(
                             "Sample for device '" + deviceType + "' parsed to 0 parameters — "
                             + "refusing to render a report with an empty results table");
@@ -562,6 +562,42 @@ public class PdfGeneratorCLI {
         return sample;
     }
 
+    private static final java.util.regex.Pattern SEGMENT_FIELD_KEY =
+            java.util.regex.Pattern.compile("^[A-Z][A-Z0-9]{2}_\\d+$");
+
+    /**
+     * Every PCR test code the device sent: any key that is not metadata or a
+     * per-code suffix. Known codes keep the panel order, unknown ones follow
+     * by name, and the internal control comes last.
+     */
+    static List<String> pcrCodes(JsonObject testResults) {
+        List<String> known = new ArrayList<>();
+        List<String> unknown = new ArrayList<>();
+        String control = null;
+        for (String key : testResults.keySet()) {
+            if (isMetadataKey(key) || SEGMENT_FIELD_KEY.matcher(key).matches()
+                    || testResults.get(key).isJsonNull()) {
+                continue;
+            }
+            PcrTestCode code = PcrTestCode.fromCode(key);
+            if (code == PcrTestCode.IC) {
+                control = key;
+            } else if (code != null) {
+                known.add(key);
+            } else {
+                unknown.add(key);
+            }
+        }
+        known.sort(java.util.Comparator.comparingInt(k -> PcrTestCode.fromCode(k).ordinal()));
+        java.util.Collections.sort(unknown);
+        List<String> codes = new ArrayList<>(known);
+        codes.addAll(unknown);
+        if (control != null) {
+            codes.add(control);
+        }
+        return codes;
+    }
+
     /**
      * True for HL7 metadata / non-result keys that shouldn't be treated as
      * droppable analytes: message headers (MSH/PID/OBR/...), patient fields, and
@@ -569,7 +605,8 @@ public class PdfGeneratorCLI {
      */
     private static boolean isMetadataKey(String key) {
         if (key.endsWith("_unit") || key.endsWith("_range") || key.endsWith("_flag")
-            || key.endsWith("_sample_type") || key.endsWith("_curve") || key.endsWith("_lot")) {
+            || key.endsWith("_sample_type") || key.endsWith("_curve") || key.endsWith("_lot")
+            || key.endsWith("_threshold")) {
             return true;
         }
         String[] prefixes = {
@@ -753,53 +790,25 @@ public class PdfGeneratorCLI {
             sample.setReviewer(json.get("reviewer").getAsString());
         }
 
-        // Parse test results - look for PCR test codes
         JsonObject testResults = json.getAsJsonObject("test_results");
+        for (String testCode : pcrCodes(testResults)) {
+            PcrParameter param = new PcrParameter();
+            param.setTestCode(PcrTestCode.fromCode(testCode));
+            param.setName(testCode);
+            param.setResult(testResults.get(testCode).getAsString());
+            param.setReferentValues(getStr(testResults, testCode + "_range", PcrTestCode.getNegativeRange()));
 
-        // PCR test codes to look for
-        String[] pcrTestCodes = {"CDV", "CPIV", "CAV-2", "Bb", "MC", "IC"};
-
-        for (String testCode : pcrTestCodes) {
-            if (testResults.has(testCode)) {
-                String result = testResults.get(testCode).getAsString();
-
-                PcrTestCode pcrTestCode = PcrTestCode.fromCode(testCode);
-                PcrParameter param = new PcrParameter();
-                param.setTestCode(pcrTestCode);
-                param.setName(testCode);
-                param.setResult(result);
-
-                // Set reference values
-                String rangeKey = testCode + "_range";
-                if (testResults.has(rangeKey) && !testResults.get(rangeKey).isJsonNull()) {
-                    param.setReferentValues(testResults.get(rangeKey).getAsString());
-                } else {
-                    param.setReferentValues(PcrTestCode.getNegativeRange());
-                }
-
-                // Parse curve data
-                String curveKey = testCode + "_curve";
-                if (testResults.has(curveKey) && !testResults.get(curveKey).isJsonNull()) {
-                    param.parseCurveData(testResults.get(curveKey).getAsString());
-                }
-
-                // Set sample type
-                String sampleTypeKey = testCode + "_sample_type";
-                if (testResults.has(sampleTypeKey) && !testResults.get(sampleTypeKey).isJsonNull()) {
-                    param.setSampleType(testResults.get(sampleTypeKey).getAsString());
-                }
-
-                // Set lot number
-                String lotKey = testCode + "_lot";
-                if (testResults.has(lotKey) && !testResults.get(lotKey).isJsonNull()) {
-                    param.setLotNumber(testResults.get(lotKey).getAsString());
-                }
-
-                // Determine indicator based on Ct value
-                param.determineIndicator();
-
-                sample.addPcrParameter(param);
+            String curve = getStr(testResults, testCode + "_curve", null);
+            if (curve != null) {
+                param.parseCurveData(curve);
             }
+            param.setSampleType(getStr(testResults, testCode + "_sample_type", null));
+            param.setLotNumber(getStr(testResults, testCode + "_lot", null));
+            param.setThreshold(ResultClassifier.parseNumber(getStr(testResults, testCode + "_threshold", null)));
+            param.setDeviceFlag(getStr(testResults, testCode + "_flag", null));
+            param.determineIndicator();
+
+            sample.addPcrParameter(param);
         }
 
         return sample;

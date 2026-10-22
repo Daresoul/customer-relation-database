@@ -59,40 +59,29 @@ public class AmplificationCurveRenderer {
         List<Double> curveData = parameter.getCurveData();
         String testCode = parameter.getTestCode() != null ? parameter.getTestCode().getCode() : parameter.getName();
 
-        // Get the final fluorescence value (last data point) and threshold
-        double finalValue = 500; // Default
-        if (curveData != null && !curveData.isEmpty()) {
-            finalValue = curveData.get(curveData.size() - 1); // Last data point
-        }
-        double thresholdValue = thresholdLine(parameter);
+        // Fewer than two points is not a curve; draw an empty plot rather than invent one.
+        boolean hasCurve = curveData != null && curveData.size() >= 2;
+        Double finalValue = hasCurve ? curveData.get(curveData.size() - 1) : null;
+        Double thresholdValue = thresholdLine(parameter);
 
-        // Create dataset with curve data and horizontal lines
+        // Series that have no data stay empty, so they draw nothing.
         XYSeries curveSeries = new XYSeries("Curve");
         XYSeries resultSeries = new XYSeries("Result");
         XYSeries thresholdSeries = new XYSeries("Threshold");
 
-        // Add the actual curve data (blue line)
-        if (curveData != null && !curveData.isEmpty()) {
+        if (hasCurve) {
             int numPoints = curveData.size();
             double cycleStep = (double) (X_MAX - X_MIN) / (numPoints - 1);
             for (int i = 0; i < numPoints; i++) {
-                double cycle = X_MIN + (i * cycleStep);
-                double fluorescence = curveData.get(i);
-                curveSeries.add(cycle, fluorescence);
+                curveSeries.add(X_MIN + (i * cycleStep), curveData.get(i));
             }
-        } else {
-            // No data - create flat line
-            for (int cycle = X_MIN; cycle <= X_MAX; cycle += 4) {
-                curveSeries.add(cycle, 500);
-            }
+            resultSeries.add(X_MIN, finalValue);
+            resultSeries.add(X_MAX, finalValue);
         }
-
-        // Draw horizontal lines across the full X range
-        resultSeries.add(X_MIN, finalValue);
-        resultSeries.add(X_MAX, finalValue);
-
-        thresholdSeries.add(X_MIN, thresholdValue);
-        thresholdSeries.add(X_MAX, thresholdValue);
+        if (thresholdValue != null) {
+            thresholdSeries.add(X_MIN, thresholdValue);
+            thresholdSeries.add(X_MAX, thresholdValue);
+        }
 
         XYSeriesCollection dataset = new XYSeriesCollection();
         dataset.addSeries(curveSeries);      // Index 0: Blue curve
@@ -112,7 +101,7 @@ public class AmplificationCurveRenderer {
         );
 
         // Customize the chart
-        customizeChart(chart, curveData, finalValue, thresholdValue);
+        customizeChart(chart, hasCurve ? curveData : null, finalValue, thresholdValue);
 
         // Enable anti-aliasing for smooth lines
         chart.setAntiAlias(true);
@@ -163,7 +152,7 @@ public class AmplificationCurveRenderer {
     /**
      * Customize the chart appearance to match the reference form.
      */
-    private static void customizeChart(JFreeChart chart, List<Double> curveData, double finalValue, double thresholdValue) {
+    private static void customizeChart(JFreeChart chart, List<Double> curveData, Double finalValue, Double thresholdValue) {
         chart.setBackgroundPaint(BACKGROUND_COLOR);
         chart.setBorderVisible(false);
 
@@ -221,56 +210,58 @@ public class AmplificationCurveRenderer {
 
         plot.setRenderer(renderer);
 
-        // Determine which line is on top and which is on bottom
-        boolean greenOnTop = finalValue > thresholdValue;
-
-        // Add value marker for the TOP line (label above)
-        // Use darker, more saturated colors for better contrast against the light gray background
-        Color topLabelColor = greenOnTop ? new Color(0, 100, 0) : new Color(180, 0, 0);
-        org.jfree.chart.plot.ValueMarker topMarker = new org.jfree.chart.plot.ValueMarker(greenOnTop ? finalValue : thresholdValue);
-        topMarker.setPaint(new Color(0, 0, 0, 0)); // Invisible line (we already have the series line)
-        topMarker.setLabel(String.format("%,.1f", greenOnTop ? finalValue : thresholdValue));
-        topMarker.setLabelFont(new Font("SansSerif", Font.BOLD, 9 * SCALE_FACTOR));
-        topMarker.setLabelPaint(topLabelColor);
-        topMarker.setLabelAnchor(org.jfree.chart.ui.RectangleAnchor.TOP_LEFT);
-        topMarker.setLabelTextAnchor(org.jfree.chart.ui.TextAnchor.BOTTOM_LEFT);
-        plot.addRangeMarker(topMarker);
-
-        // Add value marker for the BOTTOM line (label below)
-        Color bottomLabelColor = greenOnTop ? new Color(180, 0, 0) : new Color(0, 100, 0);
-        org.jfree.chart.plot.ValueMarker bottomMarker = new org.jfree.chart.plot.ValueMarker(greenOnTop ? thresholdValue : finalValue);
-        bottomMarker.setPaint(new Color(0, 0, 0, 0)); // Invisible line
-        bottomMarker.setLabel(String.format("%,.1f", greenOnTop ? thresholdValue : finalValue));
-        bottomMarker.setLabelFont(new Font("SansSerif", Font.BOLD, 9 * SCALE_FACTOR));
-        bottomMarker.setLabelPaint(bottomLabelColor);
-        bottomMarker.setLabelAnchor(org.jfree.chart.ui.RectangleAnchor.BOTTOM_LEFT);
-        bottomMarker.setLabelTextAnchor(org.jfree.chart.ui.TextAnchor.TOP_LEFT);
-        plot.addRangeMarker(bottomMarker);
+        if (finalValue != null) {
+            addValueLabel(plot, finalValue, new Color(0, 100, 0), thresholdValue == null || finalValue > thresholdValue);
+        }
+        if (thresholdValue != null) {
+            addValueLabel(plot, thresholdValue, new Color(180, 0, 0), finalValue == null || thresholdValue >= finalValue);
+        }
     }
 
-    /** The threshold line to draw for this curve. */
+    /** A value label on a line; the upper line is labelled above it, the lower one below. */
+    private static void addValueLabel(XYPlot plot, double value, Color color, boolean above) {
+        org.jfree.chart.plot.ValueMarker marker = new org.jfree.chart.plot.ValueMarker(value);
+        marker.setPaint(new Color(0, 0, 0, 0)); // Invisible line (the series draws it)
+        marker.setLabel(String.format("%,.1f", value));
+        marker.setLabelFont(new Font("SansSerif", Font.BOLD, 9 * SCALE_FACTOR));
+        marker.setLabelPaint(color);
+        marker.setLabelAnchor(above ? org.jfree.chart.ui.RectangleAnchor.TOP_LEFT
+                : org.jfree.chart.ui.RectangleAnchor.BOTTOM_LEFT);
+        marker.setLabelTextAnchor(above ? org.jfree.chart.ui.TextAnchor.BOTTOM_LEFT
+                : org.jfree.chart.ui.TextAnchor.TOP_LEFT);
+        plot.addRangeMarker(marker);
+    }
+
+    /** Smallest y span drawn, in RFU, so baseline noise stays flat instead of filling the plot. */
+    private static final double MIN_Y_SPAN = 300;
+
+    /** The device's threshold for this curve, or null: no line is drawn without one. */
     static Double thresholdLine(PcrParameter parameter) {
-        List<Double> curveData = parameter.getCurveData();
-        if (curveData == null || curveData.isEmpty()) {
-            return 400.0;
-        }
-        double minValue = curveData.stream().mapToDouble(Double::doubleValue).min().orElse(0);
-        double avgValue = curveData.stream().mapToDouble(Double::doubleValue).average().orElse(0);
-        return minValue + (avgValue - minValue) * 0.3;
+        return parameter.getThreshold();
     }
 
-    /** Y axis {lower, upper} for the curve and threshold. */
+    /** Y axis {lower, upper}: the curve and threshold, at least MIN_Y_SPAN tall, with 10% padding. */
     static double[] yAxisRange(List<Double> curveData, Double thresholdValue) {
-        double minY, maxY;
-        if (curveData != null && !curveData.isEmpty()) {
-            minY = curveData.stream().mapToDouble(Double::doubleValue).min().orElse(0);
-            maxY = curveData.stream().mapToDouble(Double::doubleValue).max().orElse(1000);
-        } else {
-            minY = Math.min(500, thresholdValue);
-            maxY = Math.max(500, thresholdValue);
+        double minY = Double.POSITIVE_INFINITY;
+        double maxY = Double.NEGATIVE_INFINITY;
+        if (curveData != null) {
+            for (double v : curveData) {
+                minY = Math.min(minY, v);
+                maxY = Math.max(maxY, v);
+            }
         }
-        double range = maxY - minY;
-        double padding = range * 0.1;
+        if (thresholdValue != null) {
+            minY = Math.min(minY, thresholdValue);
+            maxY = Math.max(maxY, thresholdValue);
+        }
+        if (Double.isInfinite(minY)) {
+            minY = 0;
+            maxY = MIN_Y_SPAN;
+        }
+        if (maxY - minY < MIN_Y_SPAN) {
+            maxY = minY + MIN_Y_SPAN;
+        }
+        double padding = (maxY - minY) * 0.1;
         return new double[]{minY - padding, maxY + padding};
     }
 
