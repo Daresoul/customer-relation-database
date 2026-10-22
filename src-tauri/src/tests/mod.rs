@@ -75,3 +75,12 @@ pub mod table_rebuild_tests;
 
 #[cfg(test)]
 pub mod command_registration_tests;
+
+#[cfg(test)]
+pub mod device_health_tests;
+
+#[cfg(test)]
+pub mod device_delivery_tests;
+
+#[cfg(test)]
+pub mod folder_watch_tests;

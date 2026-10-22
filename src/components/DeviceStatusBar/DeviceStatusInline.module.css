@@ -79,6 +79,11 @@
   white-space: nowrap;
 }
 
+.lastResult {
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 .typeIcon {
   font-size: 11px;
   color: var(--text-secondary);

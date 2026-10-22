@@ -11,11 +11,12 @@ use tauri::{AppHandle, Manager};
 use chrono::Utc;
 use rand::Rng;
 use crate::services::device_input::PortType::HIDDevice;
-use crate::services::device_parser::DeviceParserService;
-use crate::services::device_capture::throttled_show_and_focus;
 use crate::services::file_storage::FileStorageService;
-use crate::commands::file_history::record_device_file_access_internal_seaorm;
 use crate::database::SeaOrmPool;
+use crate::services::device_events::{
+    deliver_result, last_bytes, last_result, note_bytes, report_cut_off, AppSink, DeviceErrorKind,
+    ResultSource,
+};
 
 // Thread handle for managing listener lifecycle
 // Stores JoinHandle, shutdown channel, and cleanup data for graceful thread termination
@@ -144,8 +145,11 @@ pub struct DeviceConnectionStatus {
     pub status: ConnectionState,
     pub last_connected: Option<String>,
     pub last_error: Option<String>,
+    pub error_kind: Option<DeviceErrorKind>,
     pub retry_count: u32,
     pub next_retry: Option<String>,
+    pub last_result_at: Option<String>,
+    pub last_byte_at: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
@@ -157,7 +161,8 @@ pub enum ConnectionState {
 }
 
 /// Update connection status and emit event to frontend
-fn update_connection_status(app_handle: &AppHandle, integration_id: i64, port_name: &str, device_type: &str, status: ConnectionState, error: Option<String>, retry_count: u32, next_retry_secs: Option<u64>) {
+#[allow(clippy::too_many_arguments)]
+fn update_connection_status(app_handle: &AppHandle, integration_id: i64, port_name: &str, device_type: &str, status: ConnectionState, error: Option<String>, error_kind: Option<DeviceErrorKind>, retry_count: u32, next_retry_secs: Option<u64>) {
     log::info!("🔄 Device connection status update - Integration ID: {}, Port: {}, Device: {}, Status: {:?}, Retry: {}",
         integration_id, port_name, device_type, status, retry_count);
 
@@ -189,8 +194,11 @@ fn update_connection_status(app_handle: &AppHandle, integration_id: i64, port_na
             None
         },
         last_error: error,
+        error_kind,
         retry_count,
         next_retry,
+        last_result_at: last_result(integration_id),
+        last_byte_at: last_bytes(integration_id),
     };
 
     // Store in global state, only emit to frontend if status actually changed
@@ -198,7 +206,9 @@ fn update_connection_status(app_handle: &AppHandle, integration_id: i64, port_na
         let mut statuses = get_connection_status().lock()
             .expect("CONNECTION_STATUS mutex poisoned - a thread panicked while holding the lock");
         let key = format!("{}:{}", integration_id, port_name);
-        let changed = statuses.get(&key).map(|prev| prev.status != connection_status.status).unwrap_or(true);
+        let changed = statuses.get(&key).map(|prev| {
+            prev.status != connection_status.status || prev.error_kind != connection_status.error_kind
+        }).unwrap_or(true);
         statuses.insert(key, connection_status.clone());
         changed
     };
@@ -208,6 +218,15 @@ fn update_connection_status(app_handle: &AppHandle, integration_id: i64, port_na
             Ok(_) => log::info!("📡 Emitted device-connection-status event to frontend for {} ({})", device_type, port_name),
             Err(e) => log::error!("❌ Failed to emit device-connection-status event: {}", e),
         }
+    }
+}
+
+/// Re-send an integration's status, e.g. after its last-result time changed.
+pub fn emit_status_for(app_handle: &AppHandle, integration_id: i64) {
+    for mut status in get_all_connection_statuses().into_iter().filter(|s| s.integration_id == integration_id) {
+        status.last_result_at = last_result(integration_id);
+        status.last_byte_at = last_bytes(integration_id);
+        let _ = app_handle.emit_all("device-connection-status", &status);
     }
 }
 
@@ -380,12 +399,17 @@ impl FrameAssembler {
     /// Needed because a device that stops mid-frame (power-off, cable yank)
     /// otherwise leaves that fragment in the buffer until the next result,
     /// which is especially dangerous for Healvet (no start symbol to re-anchor).
+    #[cfg(test)]
     fn discard_partial(&mut self, protocol: &DeviceProtocol) -> usize {
-        let n = self.data.len();
-        self.data.clear();
+        self.take_partial(protocol).len()
+    }
+
+    /// Like `discard_partial`, but hands the bytes back so they can be kept.
+    fn take_partial(&mut self, protocol: &DeviceProtocol) -> Vec<u8> {
+        let partial = std::mem::take(&mut self.data);
         self.consecutive_end_symbols = 0;
         self.started = protocol.start_symbol.is_none();
-        n
+        partial
     }
 
     /// Feed one byte; returns the completed message when a frame terminates.
@@ -884,6 +908,131 @@ fn calculate_backoff_delay(attempt: u32) -> Duration {
     Duration::from_secs(capped_delay + jitter)
 }
 
+struct ListenFailure {
+    message: String,
+    kind: DeviceErrorKind,
+    /// How long the port was open before it failed; None when it never opened.
+    connected_for: Option<Duration>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum ReadErrorAction {
+    NoData,
+    Fatal,
+}
+
+/// Read errors other than "no data yet" stop the loop so the listener can
+/// close the handle and reconnect. Windows reports many unplug errors as codes
+/// std can't map (22, 31, 1167) and ERROR_OPERATION_ABORTED (995) as TimedOut;
+/// treating those as transient left a dead, green, spinning reader.
+pub(crate) fn classify_read_error(e: &std::io::Error) -> ReadErrorAction {
+    const ERROR_OPERATION_ABORTED: i32 = 995;
+    if e.raw_os_error() == Some(ERROR_OPERATION_ABORTED) {
+        return ReadErrorAction::Fatal;
+    }
+    match e.kind() {
+        std::io::ErrorKind::TimedOut
+        | std::io::ErrorKind::WouldBlock
+        | std::io::ErrorKind::Interrupted => ReadErrorAction::NoData,
+        _ => ReadErrorAction::Fatal,
+    }
+}
+
+/// serialport reports both "no such port" and "port held by another program"
+/// (Windows ACCESS_DENIED, POSIX EBUSY) as `NoDevice`, so whether the port is
+/// still listed decides which one it was.
+pub(crate) fn classify_open_error(e: &serialport::Error, port_present: bool) -> DeviceErrorKind {
+    match e.kind() {
+        serialport::ErrorKind::NoDevice if port_present => DeviceErrorKind::PortBusy,
+        serialport::ErrorKind::NoDevice => DeviceErrorKind::PortMissing,
+        serialport::ErrorKind::Io(std::io::ErrorKind::NotFound) => DeviceErrorKind::PortMissing,
+        serialport::ErrorKind::Io(std::io::ErrorKind::PermissionDenied) => DeviceErrorKind::AccessDenied,
+        _ => DeviceErrorKind::Unknown,
+    }
+}
+
+fn port_present(port_name: &str) -> bool {
+    if port_name.starts_with('/') {
+        return std::path::Path::new(port_name).exists();
+    }
+    available_ports()
+        .map(|ports| ports.iter().any(|p| p.port_name.eq_ignore_ascii_case(port_name)))
+        .unwrap_or(true)
+}
+
+/// A connection that stayed up this long starts the backoff over. One that
+/// dropped at once keeps backing off, so a port that opens and then fails its
+/// first read can't become a two-second retry loop.
+pub(crate) const STABLE_CONNECTION: Duration = Duration::from_secs(30);
+
+pub(crate) fn next_retry_count(previous: u32, connected_for: Option<Duration>) -> u32 {
+    match connected_for {
+        Some(d) if d >= STABLE_CONNECTION => 1,
+        _ => previous.saturating_add(1),
+    }
+}
+
+pub(crate) trait FrameSink {
+    fn on_bytes(&mut self, data: &[u8]);
+    fn on_frame(&mut self, frame: Vec<u8>);
+    fn on_cut_off(&mut self, partial: Vec<u8>);
+}
+
+/// Some drivers return a read timeout at once instead of after the port's
+/// timeout; without a pause the loop would spin a CPU core.
+const MIN_EMPTY_READ: Duration = Duration::from_millis(10);
+const EMPTY_READ_PAUSE: Duration = Duration::from_millis(50);
+
+/// Read until shutdown (Ok) or a fatal read error (Err). A frame that stalls
+/// for `idle_flush` goes to `on_cut_off`, so it can't corrupt the next one.
+pub(crate) fn run_read_loop<R: std::io::Read + ?Sized>(
+    reader: &mut R,
+    protocol: &DeviceProtocol,
+    shutdown_rx: &mpsc::Receiver<()>,
+    idle_flush: Duration,
+    sink: &mut dyn FrameSink,
+) -> Result<(), String> {
+    let mut assembler = FrameAssembler::new(protocol);
+    let mut buffer = vec![0; 1024];
+    let mut last_byte_at = Instant::now();
+
+    loop {
+        if shutdown_rx.try_recv().is_ok() {
+            return Ok(());
+        }
+
+        let read_started = Instant::now();
+        let no_data = match reader.read(&mut buffer) {
+            Ok(n) if n > 0 => {
+                sink.on_bytes(&buffer[..n]);
+                last_byte_at = Instant::now();
+                for &byte in &buffer[..n] {
+                    if let Some(frame) = assembler.push_byte(byte, protocol) {
+                        sink.on_frame(frame);
+                    }
+                }
+                false
+            }
+            Ok(_) => true,
+            Err(e) => match classify_read_error(&e) {
+                ReadErrorAction::NoData => true,
+                ReadErrorAction::Fatal => {
+                    return Err(format!("Connection lost: {} ({:?})", e, e.kind()));
+                }
+            },
+        };
+
+        if no_data {
+            if assembler.partial_len() > 0 && last_byte_at.elapsed() >= idle_flush {
+                sink.on_cut_off(assembler.take_partial(protocol));
+            }
+            if read_started.elapsed() < MIN_EMPTY_READ {
+                thread::sleep(EMPTY_READ_PAUSE);
+            }
+        }
+    }
+}
+
 /// Stop all active listeners - used for graceful shutdown
 /// Returns number of threads that were stopped
 pub fn stop_all_listeners() -> usize {
@@ -979,9 +1128,8 @@ pub fn start_listen(
             log::info!("🔌 Attempting connection to {} ({}) - Attempt {}",
                 device_type_clone, port_name_clone, retry_count + 1);
 
-            // Update status to connecting
             update_connection_status(&app_handle, integration_id, &port_name_clone, &device_type_clone,
-                ConnectionState::Connecting, None, retry_count, None);
+                ConnectionState::Connecting, None, None, retry_count, None);
 
             // Get protocol configuration for the device type
             let protocol = get_device_protocol(&device_type_clone);
@@ -995,25 +1143,26 @@ pub fn start_listen(
                         device_type_clone, port_name_clone);
                     break; // Clean exit
                 }
-                Err(e) => {
+                Err(failure) => {
                     // Every serial open/read error is treated as recoverable and retried
                     // indefinitely with capped exponential backoff. This is deliberate for an
                     // always-on clinic PC: the common failure is a device that is powered on,
                     // unplugged, or has its COM port renumbered *after* the app started. Those
                     // recover on their own once the port reappears — no app restart needed.
-                    // Errors that used to be classed "permanent" (port not found, access denied)
-                    // are exactly this case, so they no longer give up. The listener only stops
-                    // on an explicit shutdown signal (stop_listen).
-                    retry_count = retry_count.saturating_add(1);
+                    // The listener only stops on an explicit shutdown signal (stop_listen).
+                    retry_count = next_retry_count(retry_count, failure.connected_for);
 
-                    // Compute the delay up front so the UI shows an accurate next-retry time
-                    // instead of a hard-coded guess.
                     let delay = calculate_backoff_delay(retry_count);
                     let delay_secs = delay.as_secs();
                     log::warn!("⚠️  Connection error on {} ({}): {} (attempt {}) - retrying in {}s",
-                        device_type_clone, port_name_clone, e, retry_count, delay_secs);
+                        device_type_clone, port_name_clone, failure.message, retry_count, delay_secs);
+                    let state = if failure.connected_for.is_some() {
+                        ConnectionState::Disconnected
+                    } else {
+                        ConnectionState::Error
+                    };
                     update_connection_status(&app_handle, integration_id, &port_name_clone, &device_type_clone,
-                        ConnectionState::Error, Some(e.clone()), retry_count, Some(delay_secs));
+                        state, Some(failure.message), Some(failure.kind), retry_count, Some(delay_secs));
 
                     // Efficient backoff sleep using recv_timeout() - blocks until signal or timeout.
                     // This is more efficient than spinning with try_recv() + sleep().
@@ -1146,135 +1295,6 @@ pub fn stop_listen(port_name: &str, device_type: &str) {
     }
 }
 
-/// Handle incoming device data: parse and emit to frontend
-fn handle_device_data(app_handle: &AppHandle, data: &[u8], device_name: &str, device_type: &str) {
-    log::info!("📥 Received device data - Device: {} ({}), Data size: {} bytes",
-        device_name, device_type, data.len());
-
-    // Parse the device data based on device type
-    let result = match device_type {
-        "healvet_hv_fia_3000" => {
-            log::info!("🔍 Parsing Healvet HV-FIA-3000 data from {}", device_name);
-            DeviceParserService::parse_healvet_serial(device_name, data, "serial_port")
-        }
-        "mnchip_pointcare_chemistry" => {
-            log::info!("🔍 Parsing MNCHIP PointCare Chemistry data from {}", device_name);
-            DeviceParserService::parse_mnchip_data("mnchip_pointcare_chemistry", device_name, "serial_data", data, "serial_port")
-        }
-        "mnchip_pcr_analyzer" => {
-            log::info!("🔍 Parsing MNCHIP PCR Analyzer data from {}", device_name);
-            DeviceParserService::parse_mnchip_data("mnchip_pcr_analyzer", device_name, "serial_data", data, "serial_port")
-        }
-        _ => {
-            log::error!("❌ Unknown device type: {} (from {})", device_type, device_name);
-            return;
-        }
-    };
-
-    match result {
-        Ok(device_data) => {
-            log::info!("✅ Successfully parsed device data from {} ({})", device_name, device_type);
-            log::info!("   📋 Patient ID: {:?}, Sample ID: {:?}, File: {}",
-                device_data.patient_identifier,
-                device_data.test_results.get("SNO")
-                    .or_else(|| device_data.test_results.get("ID1"))
-                    .or_else(|| device_data.test_results.get("sample_id")),
-                device_data.original_file_name);
-
-            // Emit to frontend
-            match app_handle.emit_all("device-data-received", &device_data) {
-                Ok(_) => {
-                    log::info!("📡 Emitted device-data-received event to frontend for {} ({})",
-                        device_name, device_type);
-                }
-                Err(e) => {
-                    log::error!("❌ Failed to emit device data to frontend: {}", e);
-                }
-            }
-
-            // Wake from tray when device data is received (only if window is hidden)
-            let is_hidden = app_handle.get_window("main")
-                .map(|w| !w.is_visible().unwrap_or(true))
-                .unwrap_or(false);
-
-            if is_hidden {
-                throttled_show_and_focus(&app_handle);
-
-                let cause = if let Some(ref code) = device_data.patient_identifier {
-                    let is_digits = code.chars().all(|c| c.is_ascii_digit());
-                    let len = code.len();
-                    if is_digits && (len == 15 || len == 10) { "scan" } else { "device_data" }
-                } else {
-                    "device_data"
-                };
-
-                let _ = app_handle.emit_all(
-                    "wake-from-tray",
-                    serde_json::json!({
-                        "cause": cause,
-                        "code": device_data.patient_identifier.clone().unwrap_or_default(),
-                        "device": device_name,
-                        "deviceType": device_type
-                    }),
-                );
-            }
-
-            // Save file and track access (async)
-            let app_handle_track = app_handle.clone();
-            let file_name = device_data.original_file_name.clone();
-            let file_data_vec = device_data.file_data.clone();
-            let device_type_str = device_data.device_type.clone();
-            let device_name_str = device_data.device_name.clone();
-            let mime_type = device_data.mime_type.clone();
-
-            log::info!("💾 Starting async file save and tracking for {} from {} ({})",
-                file_name, device_name_str, device_type_str);
-
-            tauri::async_runtime::spawn(async move {
-                // Get database connection from Tauri state
-                if let Some(db) = app_handle_track.try_state::<SeaOrmPool>() {
-                    log::info!("   ✅ Database connection retrieved for file tracking");
-
-                    // Save file to storage
-                    match FileStorageService::save_device_file(&app_handle_track, &file_name, &file_data_vec) {
-                        Ok((file_id, file_path)) => {
-                            log::info!("   ✅ File saved successfully - ID: {}, Path: {}", file_id, file_path);
-
-                            // Track file access
-                            let file_size = file_data_vec.len() as i64;
-                            log::info!("   📊 Recording file access - Size: {} bytes, Type: {}", file_size, mime_type);
-
-                            if let Err(e) = record_device_file_access_internal_seaorm(
-                                &**db,
-                                file_id,
-                                file_name.clone(),
-                                file_path,
-                                Some(file_size),
-                                Some(mime_type),
-                                device_type_str,
-                                device_name_str,
-                                Some("serial_port".to_string()),
-                            ).await {
-                                log::error!("   ❌ Failed to record file access for {}: {}", file_name, e);
-                            } else {
-                                log::info!("   ✅ File access recorded successfully for {}", file_name);
-                            }
-                        }
-                        Err(e) => {
-                            log::error!("   ❌ Failed to save device file {}: {}", file_name, e);
-                        }
-                    }
-                } else {
-                    log::error!("   ❌ Failed to get database connection from app state for file tracking");
-                }
-            });
-        }
-        Err(e) => {
-            log::error!("❌ Failed to parse device data from {} ({}): {}", device_name, device_type, e);
-        }
-    }
-}
-
 fn handle_listening_serial(
     port_name: &str,
     app_handle: &AppHandle,
@@ -1282,7 +1302,7 @@ fn handle_listening_serial(
     device_type: &str,
     integration_id: i64,
     shutdown_rx: &mpsc::Receiver<()>,
-) -> Result<(), String> {
+) -> Result<(), ListenFailure> {
     log::info!("🔌 Opening serial port - Port: {}, Device: {}, Integration ID: {}",
         port_name, device_type, integration_id);
 
@@ -1310,14 +1330,18 @@ fn handle_listening_serial(
         .map_err(|e| {
             log::error!("❌ Failed to open serial port {} for {} (Integration ID: {}): {}",
                 port_name, device_type, integration_id, e);
-            format!("Failed to open port: {}", e)
+            ListenFailure {
+                message: format!("Failed to open port: {}", e),
+                kind: classify_open_error(&e, port_present(port_name)),
+                connected_for: None,
+            }
         })?;
 
     log::info!("✅ Serial port {} opened successfully for {} (Integration ID: {})",
         port_name, device_type, integration_id);
+    let connected_at = Instant::now();
 
-    // Successfully connected - update status
-    update_connection_status(app_handle, integration_id, port_name, device_type, ConnectionState::Connected, None, 0, None);
+    update_connection_status(app_handle, integration_id, port_name, device_type, ConnectionState::Connected, None, None, 0, None);
 
     // Write session start marker to raw log
     if let Some(log_path) = get_raw_log_path(app_handle, port_name) {
@@ -1332,98 +1356,79 @@ fn handle_listening_serial(
         }
     }
 
-    let mut assembler = FrameAssembler::new(&protocol);
-    let mut buffer = vec![0; 1024];
-    let mut total_bytes_read = 0u64;
-    let mut read_count = 0u64;
-    // Time of the last byte received. If a frame stalls partway (device powered
-    // off / cable pulled mid-transmission) we flush the partial buffer after this
-    // idle gap so its bytes don't get prepended to — and corrupt — the next
-    // result. A real frame streams with sub-second inter-byte gaps at these baud
-    // rates, so seconds of silence mid-frame means the frame was abandoned.
-    let mut last_byte_at = Instant::now();
+    // Seconds of silence mid-frame means the device stopped partway (power-off,
+    // cable pulled); a real frame streams with sub-second gaps at these speeds.
     const INTER_FRAME_IDLE_FLUSH: Duration = Duration::from_secs(5);
 
     log::info!("📖 Starting serial port read loop for {} ({})", device_type, port_name);
-    log::info!("   🔍 Protocol - Start symbol: {:?}, End symbol: {:?}",
-        protocol.start_symbol, protocol.end_symbol);
+    let mut sink = SerialSink { app_handle, port_name, device_type, integration_id };
+    let result = run_read_loop(&mut *port, &protocol, shutdown_rx, INTER_FRAME_IDLE_FLUSH, &mut sink);
+    drop(port);
 
-    loop {
-        // Check for shutdown signal using try_recv (non-blocking)
-        // Using try_recv instead of recv_timeout for better responsiveness
-        if shutdown_rx.try_recv().is_ok() {
-            log::info!("🛑 Shutdown signal received in read loop for {} ({}), closing port", device_type, port_name);
-            drop(port); // Explicitly close the port
-            return Ok(()); // Clean shutdown
+    result.map_err(|message| {
+        log::error!("💥 Read error on port {} for {} (Integration ID: {}): {}",
+            port_name, device_type, integration_id, message);
+        ListenFailure {
+            message,
+            kind: DeviceErrorKind::Disconnected,
+            connected_for: Some(connected_at.elapsed()),
         }
+    })
+}
 
-        match port.read(&mut buffer) {
-            Ok(bytes_read) if bytes_read > 0 => {
-                read_count += 1;
-                total_bytes_read += bytes_read as u64;
+struct SerialSink<'a> {
+    app_handle: &'a AppHandle,
+    port_name: &'a str,
+    device_type: &'a str,
+    integration_id: i64,
+}
 
-                // Write raw bytes to per-port log file for debugging
-                write_raw_log(app_handle, port_name, &buffer[..bytes_read]);
+impl SerialSink<'_> {
+    fn source(&self) -> ResultSource {
+        ResultSource {
+            integration_id: self.integration_id,
+            device_name: self.port_name.to_string(),
+            device_type: self.device_type.to_string(),
+            connection_method: "serial_port".to_string(),
+        }
+    }
 
-                if read_count % 100 == 0 {
-                    // Demoted to debug because this fires every ~200ms during
-                    // a steady analyzer connection and was drowning out the
-                    // signal in production logs. The full byte stream is
-                    // captured separately in `raw_serial_logs/raw_<port>-<date>.log`
-                    // for forensic use, so nothing is actually lost — just
-                    // less noise in the main log.
-                    log::debug!("📊 Read statistics for {} ({}): {} reads, {} total bytes",
-                        device_type, port_name, read_count, total_bytes_read);
-                }
-                last_byte_at = Instant::now();
-                for i in 0..bytes_read {
-                    if let Some(message) = assembler.push_byte(buffer[i], &protocol) {
-                        log::info!("📦 Complete message received from {} ({}) - Size: {} bytes",
-                            device_type, port_name, message.len());
-                        // Parse and emit device data
-                        handle_device_data(&app_handle, &message, &port_name, &device_type);
-                    }
-                }
-            }
-            Ok(_) => {}
-            Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => {
-                // Flush a stalled partial frame so it can't corrupt the next result.
-                if assembler.partial_len() > 0 && last_byte_at.elapsed() >= INTER_FRAME_IDLE_FLUSH {
-                    let dropped = assembler.discard_partial(&protocol);
-                    log::warn!("🧹 Discarded {}-byte stalled partial frame from {} ({}) after {:?} idle",
-                        dropped, device_type, port_name, INTER_FRAME_IDLE_FLUSH);
-                }
-            }
-            Err(ref e) if e.kind() == std::io::ErrorKind::BrokenPipe ||
-            e.kind() == std::io::ErrorKind::ConnectionAborted ||
-            e.kind() == std::io::ErrorKind::Interrupted ||
-            e.kind() == std::io::ErrorKind::ConnectionRefused ||
-            e.kind() == std::io::ErrorKind::NotFound ||
-            e.kind() == std::io::ErrorKind::PermissionDenied => {
-                let err_msg = format!("Connection lost: {}", e);
-                log::error!("💥 Fatal error on port {} for {} (Integration ID: {}): {:?} - {}",
-                    port_name, device_type, integration_id, e.kind(), e);
-                log::error!("   Connection will be reestablished after 5 seconds");
-                return Err(err_msg);
-            }
-            Err(ref e) if e.kind() == std::io::ErrorKind::Other => {
-                let err_str = e.to_string().to_lowercase();
-                if err_str.contains("device") || err_str.contains("failed") {
-                    log::error!("💥 Device error on port {} for {} (Integration ID: {}): {}",
-                        port_name, device_type, integration_id, e);
-                    let err_msg = format!("Device error: {}", e);
-                    log::error!("   Connection will be reestablished after 5 seconds");
-                    return Err(err_msg);
-                }
-            }
+    fn storage(&self) -> Option<(SeaOrmPool, std::path::PathBuf)> {
+        let db = self.app_handle.try_state::<SeaOrmPool>()?.inner().clone();
+        match FileStorageService::get_storage_dir(self.app_handle) {
+            Ok(dir) => Some((db, dir)),
             Err(e) => {
-                log::warn!("⚠️  Transient error reading port {} for {} (Integration ID: {}): {:?} - {} (continuing)",
-                    port_name, device_type, integration_id, e.kind(), e);
+                log::error!("❌ No storage folder for device results: {}", e);
+                None
             }
         }
     }
-    // Note: Loop never exits normally - all exits are via return statements above
 }
+
+impl FrameSink for SerialSink<'_> {
+    fn on_bytes(&mut self, data: &[u8]) {
+        write_raw_log(self.app_handle, self.port_name, data);
+        note_bytes(self.integration_id);
+    }
+
+    fn on_frame(&mut self, frame: Vec<u8>) {
+        log::info!("📦 Complete message received from {} ({}) - Size: {} bytes",
+            self.device_type, self.port_name, frame.len());
+        let Some((db, dir)) = self.storage() else { return };
+        let sink = AppSink { app: self.app_handle.clone() };
+        let raw_name = format!("{}_{}.txt", self.device_type, Utc::now().format("%Y%m%d_%H%M%S"));
+        tauri::async_runtime::block_on(deliver_result(&db, &dir, &sink, &self.source(), &raw_name, &frame));
+    }
+
+    fn on_cut_off(&mut self, partial: Vec<u8>) {
+        log::warn!("🧹 Stalled partial frame ({} bytes) from {} ({}), integration {}",
+            partial.len(), self.device_type, self.port_name, self.integration_id);
+        let Some((db, dir)) = self.storage() else { return };
+        let sink = AppSink { app: self.app_handle.clone() };
+        tauri::async_runtime::block_on(report_cut_off(&db, &dir, &sink, &self.source(), &partial));
+    }
+}
+
 
 #[cfg(test)]
 mod frame_assembler_tests {

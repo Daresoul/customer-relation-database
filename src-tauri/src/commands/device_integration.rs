@@ -4,6 +4,7 @@ use crate::models::device_integration::{
 };
 use crate::services::device_integration::DeviceIntegrationService;
 use crate::services::device_input::{start_listen, stop_listen};
+use crate::services::file_watcher::reload_file_watchers;
 use tauri::{State, AppHandle};
 
 #[tauri::command]
@@ -41,6 +42,7 @@ pub async fn create_device_integration(
         }
     }
 
+    reload_file_watchers().await;
     Ok(integration)
 }
 
@@ -75,6 +77,7 @@ pub async fn update_device_integration(
         }
     }
 
+    reload_file_watchers().await;
     Ok(integration)
 }
 
@@ -93,7 +96,9 @@ pub async fn delete_device_integration(
         }
     }
 
-    DeviceIntegrationService::delete(&pool, id).await
+    DeviceIntegrationService::delete(&pool, id).await?;
+    reload_file_watchers().await;
+    Ok(())
 }
 
 #[tauri::command]
@@ -122,5 +127,6 @@ pub async fn toggle_device_integration_enabled(
         }
     }
 
+    reload_file_watchers().await;
     Ok(integration)
 }

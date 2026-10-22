@@ -109,6 +109,9 @@ pub struct FileAccessHistory {
     pub first_attached_at: Option<DateTime<Utc>>,
     pub attachment_count: i32,
     pub last_accessed_at: DateTime<Utc>,
+    /// "ok", or "failed" when the bytes couldn't be read as a result.
+    pub status: String,
+    pub error: Option<String>,
 }
 
 // File access history with medical record details

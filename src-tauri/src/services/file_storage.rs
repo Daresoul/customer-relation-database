@@ -448,20 +448,13 @@ impl FileStorageService {
         Err("Unsupported platform".to_string())
     }
 
-    /// Save device file to storage (for crash protection / file history tracking)
-    /// Returns the file_id and file_path where the file was saved
-    pub fn save_device_file(
-        app_handle: &AppHandle,
-        _file_name: &str,
+    /// Save device bytes (for crash protection / file history tracking) under a
+    /// new file id in `storage_dir`. Returns the file id and path.
+    pub fn save_device_file_in(
+        storage_dir: &std::path::Path,
         file_data: &[u8],
     ) -> Result<(String, String), String> {
-        // Generate unique file ID
         let file_id = Uuid::new_v4().to_string();
-
-        // Get storage directory
-        let storage_dir = Self::get_storage_dir(app_handle)?;
-
-        // Save file to disk
         let file_path = storage_dir.join(&file_id);
         fs::write(&file_path, file_data)
             .map_err(|e| format!("Failed to write device file: {}", e))?;

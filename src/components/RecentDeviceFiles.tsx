@@ -3,6 +3,7 @@ import { Table, Button, Tag, Space, Typography, Tooltip, App, Modal } from 'antd
 import { ClockCircleOutlined, CheckCircleOutlined, WarningOutlined, EyeOutlined, PlusOutlined, FileSearchOutlined } from '@ant-design/icons';
 import { fileHistoryService } from '../services/fileHistoryService';
 import type { FileAccessHistoryWithRecord } from '../types/fileHistory';
+import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 
@@ -20,6 +21,7 @@ const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, da
   const [files, setFiles] = useState<FileAccessHistoryWithRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const { message } = App.useApp();
+  const { t } = useTranslation('devices');
 
   const loadRecentFiles = async () => {
     setLoading(true);
@@ -165,6 +167,13 @@ const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, da
       width: 100,
       align: 'center' as const,
       render: (_: any, record: FileAccessHistoryWithRecord) => {
+        if (record.status === 'failed') {
+          return (
+            <Tooltip title={`${t('recentFiles.couldNotReadHint')}${record.error ? ` (${record.error})` : ''}`}>
+              <Tag color="error">{t('recentFiles.couldNotRead')}</Tag>
+            </Tooltip>
+          );
+        }
         if (record.firstAttachedToRecordId) {
           return (
             <Tooltip title={`Attached to ${record.patientName} - ${record.recordName} (${record.attachmentCount}x)`}>
@@ -203,7 +212,7 @@ const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, da
               onClick={() => handleOpenFile(record)}
             />
           </Tooltip>
-          {onAddToRecord && (
+          {onAddToRecord && record.status !== 'failed' && (
             <Button
               type="primary"
               size="small"

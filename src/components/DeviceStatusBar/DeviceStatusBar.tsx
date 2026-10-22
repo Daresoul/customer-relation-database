@@ -7,6 +7,8 @@ import { useTranslation } from 'react-i18next';
 import { useDeviceIntegrations, useDeviceConnectionStatus, useFileWatcherStatus } from '../../hooks/useDeviceIntegrations';
 import { ConnectionState, FileWatcherState, getDeviceTypeDisplayName } from '../../types/deviceIntegration';
 import { DevToolsDrawer } from '../DevTools';
+import { describeFolderStatus, describeSerialStatus, formatLastResult } from './deviceHealth';
+import { HealthLines } from './HealthLines';
 import styles from './DeviceStatusBar.module.css';
 
 const { Text } = Typography;
@@ -108,34 +110,6 @@ export const DeviceStatusBar: React.FC = () => {
     }
   };
 
-  const getSerialStatusText = (state?: ConnectionState, retryCount?: number, lastError?: string): string => {
-    switch (state) {
-      case 'Connected':
-        return t('status.connected');
-      case 'Connecting':
-        return retryCount ? t('status.connectingAttempt', { count: retryCount + 1 }) : t('status.connecting');
-      case 'Disconnected':
-        return t('status.disconnectedRetrying');
-      case 'Error':
-        return t('status.errorRetrying', { message: lastError || t('status.unknown') });
-      default:
-        return t('status.unknown');
-    }
-  };
-
-  const getFileWatcherStatusText = (state?: FileWatcherState, lastError?: string): string => {
-    switch (state) {
-      case 'Watching':
-        return t('status.watching');
-      case 'Error':
-        return t('status.errorWithMessage', { message: lastError || t('status.unknown') });
-      case 'Stopped':
-        return t('status.stopped');
-      default:
-        return t('status.unknown');
-    }
-  };
-
   return (
     <div className={styles.statusBar}>
       <div className={styles.statusBarContent}>
@@ -155,9 +129,14 @@ export const DeviceStatusBar: React.FC = () => {
               !availablePorts.includes(integration.serialPortName);
 
             const statusColor = portMissing ? '#ff4d4f' : getSerialStatusColor(status?.status);
-            const statusText = portMissing
-              ? t('status.portNotFound', { port: integration.serialPortName })
-              : getSerialStatusText(status?.status, status?.retry_count, status?.last_error);
+            const health = portMissing
+              ? {
+                  text: t('health.kinds.port_missing.title', { port: integration.serialPortName }),
+                  action: t('health.kinds.port_missing.action', { port: integration.serialPortName }),
+                  details: status?.last_error,
+                }
+              : describeSerialStatus(status, t);
+            const lastResult = formatLastResult(status?.last_result_at, new Date(), t);
 
             return (
               <Tooltip
@@ -167,7 +146,7 @@ export const DeviceStatusBar: React.FC = () => {
                     <div><strong>{integration.name}</strong></div>
                     <div>{getDeviceTypeDisplayName(integration.deviceType as any)}</div>
                     <div>{t('tooltips.port', { port: integration.serialPortName })}</div>
-                    <div>{t('tooltips.status', { status: statusText })}</div>
+                    <HealthLines health={health} lastResult={lastResult} />
                     {portMissing && (
                       <div>
                         {availablePorts && availablePorts.length > 0
@@ -188,6 +167,7 @@ export const DeviceStatusBar: React.FC = () => {
                     style={{ backgroundColor: statusColor }}
                   />
                   <Text className={styles.deviceName}>{integration.name}</Text>
+                  {lastResult && <Text type="secondary" className={styles.lastResult}>{lastResult}</Text>}
                 </div>
               </Tooltip>
             );
@@ -197,7 +177,8 @@ export const DeviceStatusBar: React.FC = () => {
           {fileWatchIntegrations.map((integration) => {
             const status = getFileWatcherStatus(integration.id);
             const statusColor = getFileWatcherStatusColor(status?.status);
-            const statusText = getFileWatcherStatusText(status?.status, status?.last_error);
+            const health = describeFolderStatus(status, t);
+            const lastResult = formatLastResult(status?.last_result_at, new Date(), t);
 
             return (
               <Tooltip
@@ -208,7 +189,7 @@ export const DeviceStatusBar: React.FC = () => {
                     <div>{getDeviceTypeDisplayName(integration.deviceType as any)}</div>
                     <div>{t('tooltips.directory', { directory: integration.watchDirectory })}</div>
                     <div>{t('tooltips.pattern', { pattern: integration.filePattern })}</div>
-                    <div>{t('tooltips.status', { status: statusText })}</div>
+                    <HealthLines health={health} lastResult={lastResult} />
                   </div>
                 }
               >
@@ -219,6 +200,7 @@ export const DeviceStatusBar: React.FC = () => {
                     style={{ backgroundColor: statusColor }}
                   />
                   <Text className={styles.deviceName}>{integration.name}</Text>
+                  {lastResult && <Text type="secondary" className={styles.lastResult}>{lastResult}</Text>}
                 </div>
               </Tooltip>
             );

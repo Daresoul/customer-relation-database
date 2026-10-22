@@ -21,6 +21,8 @@ fn row_to_file_access_history(row: &sea_orm::QueryResult) -> Result<FileAccessHi
         first_attached_at: row.try_get::<Option<DateTime<Utc>>>("", "first_attached_at").ok().flatten(),
         attachment_count: row.try_get("", "attachment_count").unwrap_or(0),
         last_accessed_at: row.try_get("", "last_accessed_at").map_err(|e| format!("Failed to get last_accessed_at: {}", e))?,
+        status: row.try_get("", "status").unwrap_or_else(|_| "ok".to_string()),
+        error: row.try_get::<Option<String>>("", "error").ok().flatten(),
     })
 }
 
@@ -30,7 +32,13 @@ pub async fn get_recent_device_files(
     pool: State<'_, SeaOrmPool>,
     days: Option<i64>,
 ) -> Result<Vec<FileAccessHistoryWithRecord>, String> {
-    let days = days.unwrap_or(14); // Default to 14 days
+    recent_device_files(&pool, days.unwrap_or(14)).await
+}
+
+pub async fn recent_device_files(
+    pool: &DatabaseConnection,
+    days: i64,
+) -> Result<Vec<FileAccessHistoryWithRecord>, String> {
     let cutoff_date = Utc::now() - Duration::days(days);
 
     let rows = pool.query_all(Statement::from_sql_and_values(
@@ -142,6 +150,28 @@ pub async fn record_device_file_access_internal_seaorm(
     device_name: String,
     connection_method: Option<String>,
 ) -> Result<(), String> {
+    record_device_file_with_status(
+        db, file_id, original_name, file_path, file_size, mime_type, device_type, device_name,
+        connection_method, "ok", None,
+    ).await
+}
+
+/// Like `record_device_file_access_internal_seaorm`, with a status: "ok" for a
+/// result, "failed" for bytes that couldn't be read as one (with the error).
+#[allow(clippy::too_many_arguments)]
+pub async fn record_device_file_with_status(
+    db: &DatabaseConnection,
+    file_id: String,
+    original_name: String,
+    file_path: String,
+    file_size: Option<i64>,
+    mime_type: Option<String>,
+    device_type: String,
+    device_name: String,
+    connection_method: Option<String>,
+    status: &str,
+    error: Option<String>,
+) -> Result<(), String> {
     use sea_orm::Value;
 
     // Check if file already exists
@@ -167,8 +197,8 @@ pub async fn record_device_file_access_internal_seaorm(
         db.execute(Statement::from_sql_and_values(
             DbBackend::Sqlite,
             "INSERT INTO file_access_history \
-             (file_id, original_name, file_path, file_size, mime_type, device_type, device_name, connection_method) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+             (file_id, original_name, file_path, file_size, mime_type, device_type, device_name, connection_method, status, error) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 file_id.into(),
                 original_name.into(),
@@ -178,6 +208,8 @@ pub async fn record_device_file_access_internal_seaorm(
                 device_type.into(),
                 device_name.into(),
                 Value::String(connection_method.map(Box::new)),
+                status.into(),
+                Value::String(error.map(Box::new)),
             ]
         ))
         .await

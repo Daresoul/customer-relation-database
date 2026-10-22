@@ -5,7 +5,9 @@ use crate::models::device_integration::ConnectionType;
 use crate::database::SeaOrmPool;
 use crate::models::Patient;
 use tauri::{State, AppHandle};
+use crate::services::device_events::{last_bytes, last_result, seed_last_result};
 use sea_orm::{ConnectionTrait, Statement, DbBackend};
+use std::collections::HashMap;
 
 #[tauri::command]
 pub async fn get_available_ports() -> Result<Vec<PortInfo>, String> {
@@ -15,16 +17,63 @@ pub async fn get_available_ports() -> Result<Vec<PortInfo>, String> {
     Ok(enriched_ports)
 }
 
+/// Add the last result time (this session's, else the stored one from an
+/// earlier run) and the last byte time to each status.
+pub fn fill_connection_health(
+    statuses: Vec<DeviceConnectionStatus>,
+    persisted: &HashMap<i64, String>,
+) -> Vec<DeviceConnectionStatus> {
+    statuses
+        .into_iter()
+        .map(|mut s| {
+            s.last_result_at = last_result(s.integration_id).or_else(|| persisted.get(&s.integration_id).cloned());
+            s.last_byte_at = last_bytes(s.integration_id);
+            s
+        })
+        .collect()
+}
+
+pub fn fill_watcher_health(
+    statuses: Vec<FileWatcherStatus>,
+    persisted: &HashMap<i64, String>,
+) -> Vec<FileWatcherStatus> {
+    statuses
+        .into_iter()
+        .map(|mut s| {
+            s.last_result_at = last_result(s.integration_id).or_else(|| persisted.get(&s.integration_id).cloned());
+            s
+        })
+        .collect()
+}
+
+/// Also seeds the in-memory times, so status events sent later carry them.
+async fn persisted_last_results(pool: &SeaOrmPool) -> HashMap<i64, String> {
+    let persisted = DeviceIntegrationService::last_result_times(pool).await.unwrap_or_else(|e| {
+        log::warn!("Could not read stored last result times: {}", e);
+        HashMap::new()
+    });
+    for (id, at) in &persisted {
+        seed_last_result(*id, at);
+    }
+    persisted
+}
+
 /// Get all device connection statuses
 #[tauri::command]
-pub fn get_device_connection_statuses() -> Vec<DeviceConnectionStatus> {
-    get_all_connection_statuses()
+pub async fn get_device_connection_statuses(
+    pool: State<'_, SeaOrmPool>,
+) -> Result<Vec<DeviceConnectionStatus>, String> {
+    let persisted = persisted_last_results(&pool).await;
+    Ok(fill_connection_health(get_all_connection_statuses(), &persisted))
 }
 
 /// Get all file watcher statuses
 #[tauri::command]
-pub fn get_file_watcher_statuses() -> Vec<FileWatcherStatus> {
-    get_all_file_watcher_statuses()
+pub async fn get_file_watcher_statuses(
+    pool: State<'_, SeaOrmPool>,
+) -> Result<Vec<FileWatcherStatus>, String> {
+    let persisted = persisted_last_results(&pool).await;
+    Ok(fill_watcher_health(get_all_file_watcher_statuses(), &persisted))
 }
 
 /// Start listening to a device integration's serial port
@@ -176,6 +225,9 @@ pub async fn reconnect_device_listeners(
                 integration.id, port_name, e);
         }
     }
+
+    // Folders too: a missing folder that is back starts watching right away.
+    crate::services::file_watcher::reload_file_watchers().await;
 
     Ok(get_all_connection_statuses())
 }
