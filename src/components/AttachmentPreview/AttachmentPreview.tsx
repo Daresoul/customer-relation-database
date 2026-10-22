@@ -93,6 +93,7 @@ interface TextAttachmentPreviewProps {
  * DOM as React text nodes, so markup inside a file is never parsed.
  */
 export const TextAttachmentPreview: React.FC<TextAttachmentPreviewProps> = ({ blob, kind }) => {
+  const { t } = useTranslation(['medical']);
   const [content, setContent] = useState<React.ReactNode>(null);
   const [loading, setLoading] = useState(true);
 
@@ -113,7 +114,7 @@ export const TextAttachmentPreview: React.FC<TextAttachmentPreviewProps> = ({ bl
       })
       .catch((error) => {
         console.error('Failed to load file content:', error);
-        if (!cancelled) setContent('Error loading file content');
+        if (!cancelled) setContent(t('medical:detail.fileContentLoadFailed'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

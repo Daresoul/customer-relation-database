@@ -68,7 +68,7 @@ export const useAppointments = (filter: AppointmentFilter = {}) => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [APPOINTMENTS_KEY] });
     },
-    onError: createMutationErrorHandler(notification, 'Create Appointment', t, 'useAppointments'),
+    onError: createMutationErrorHandler(notification, 'createAppointment', t, 'useAppointments'),
   });
 
   // Update appointment mutation
@@ -78,7 +78,7 @@ export const useAppointments = (filter: AppointmentFilter = {}) => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [APPOINTMENTS_KEY] });
     },
-    onError: createMutationErrorHandler(notification, 'Update Appointment', t, 'useAppointments'),
+    onError: createMutationErrorHandler(notification, 'updateAppointment', t, 'useAppointments'),
   });
 
   // Delete appointment mutation
@@ -87,7 +87,7 @@ export const useAppointments = (filter: AppointmentFilter = {}) => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [APPOINTMENTS_KEY] });
     },
-    onError: createMutationErrorHandler(notification, 'Cancel Appointment', t, 'useAppointments'),
+    onError: createMutationErrorHandler(notification, 'cancelAppointment', t, 'useAppointments'),
   });
 
   // Duplicate appointment mutation
@@ -97,7 +97,7 @@ export const useAppointments = (filter: AppointmentFilter = {}) => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [APPOINTMENTS_KEY] });
     },
-    onError: createMutationErrorHandler(notification, 'Duplicate Appointment', t, 'useAppointments'),
+    onError: createMutationErrorHandler(notification, 'duplicateAppointment', t, 'useAppointments'),
   });
 
   // Check conflicts

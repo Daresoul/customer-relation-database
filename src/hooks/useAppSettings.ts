@@ -46,7 +46,7 @@ export const useAppSettings = () => {
         queryClient.invalidateQueries({ queryKey: ['settings'] });
       }
     },
-    onError: createMutationErrorHandler(notification, 'Update Settings', t, 'useAppSettings'),
+    onError: createMutationErrorHandler(notification, 'updateSettings', t, 'useAppSettings'),
   });
 
   // Apply settings on load

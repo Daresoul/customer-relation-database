@@ -82,7 +82,7 @@ export function useCreateMedicalRecord() {
         exact: false,
       });
     },
-    onError: createMutationErrorHandler(notification, 'Create Medical Record', t, 'useMedicalRecords'),
+    onError: createMutationErrorHandler(notification, 'createMedicalRecord', t, 'useMedicalRecords'),
   });
 }
 
@@ -117,7 +117,7 @@ export function useUpdateMedicalRecord() {
         queryKey: ['medical-record', data.id],
       });
     },
-    onError: createMutationErrorHandler(notification, 'Update Medical Record', t, 'useMedicalRecords'),
+    onError: createMutationErrorHandler(notification, 'updateMedicalRecord', t, 'useMedicalRecords'),
   });
 }
 
@@ -138,10 +138,10 @@ export function useArchiveMedicalRecord() {
     }) => MedicalService.archiveMedicalRecord(recordId, archive),
     onSuccess: (_, variables) => {
       notification.success({
-        message: variables.archive ? 'Medical Record Archived' : 'Medical Record Restored',
+        message: variables.archive ? t('medical:messages.archivedTitle') : t('medical:messages.restoredTitle'),
         description: variables.archive
-          ? 'Medical record archived successfully'
-          : 'Medical record restored successfully',
+          ? t('medical:messages.archiveSuccess')
+          : t('medical:messages.restoreSuccess'),
         placement: 'bottomRight',
         duration: 3,
       });
@@ -160,7 +160,7 @@ export function useArchiveMedicalRecord() {
         queryKey: ['medical-record', variables.recordId],
       });
     },
-    onError: createMutationErrorHandler(notification, 'Archive Medical Record', t, 'useMedicalRecords'),
+    onError: createMutationErrorHandler(notification, 'archiveMedicalRecord', t, 'useMedicalRecords'),
   });
 }
 
@@ -196,8 +196,8 @@ export function useUploadAttachment() {
     },
     onSuccess: (data, variables) => {
       notification.success({
-        message: 'File uploaded successfully',
-        description: 'File uploaded successfully',
+        message: t('medical:messages.uploadSuccess'),
+        description: t('medical:messages.uploadSuccess'),
         placement: 'bottomRight',
         duration: 3,
       });
@@ -214,7 +214,7 @@ export function useUploadAttachment() {
         },
       });
     },
-    onError: createMutationErrorHandler(notification, 'Upload File', t, 'useMedicalRecords'),
+    onError: createMutationErrorHandler(notification, 'uploadFile', t, 'useMedicalRecords'),
   });
 }
 
@@ -233,8 +233,8 @@ export function useDeleteAttachment() {
     }) => MedicalService.deleteAttachment(attachmentId),
     onSuccess: (_, variables) => {
       notification.success({
-        message: 'Attachment deleted successfully',
-        description: 'Attachment deleted successfully',
+        message: t('medical:messages.attachmentDeleteSuccess'),
+        description: t('medical:messages.attachmentDeleteSuccess'),
         placement: 'bottomRight',
         duration: 3,
       });
@@ -250,7 +250,7 @@ export function useDeleteAttachment() {
         },
       });
     },
-    onError: createMutationErrorHandler(notification, 'Delete Attachment', t, 'useMedicalRecords'),
+    onError: createMutationErrorHandler(notification, 'deleteAttachment', t, 'useMedicalRecords'),
   });
 }
 
@@ -268,13 +268,13 @@ export function useDownloadAttachment() {
     }) => MedicalService.downloadAndOpenAttachment(attachmentId, fileName),
     onSuccess: () => {
       notification.success({
-        message: 'File downloaded successfully',
-        description: 'File downloaded successfully',
+        message: t('medical:messages.downloadSuccess'),
+        description: t('medical:messages.downloadSuccess'),
         placement: 'bottomRight',
         duration: 3,
       });
     },
-    onError: createMutationErrorHandler(notification, 'Download File', t, 'useMedicalRecords'),
+    onError: createMutationErrorHandler(notification, 'downloadFile', t, 'useMedicalRecords'),
   });
 }
 
@@ -310,16 +310,18 @@ export function useBulkArchiveMedicalRecords() {
 
       if (successCount > 0) {
         notification.success({
-          message: 'Bulk Operation Complete',
-          description: `${successCount} record(s) ${variables.archive ? 'archived' : 'restored'} successfully`,
+          message: t('medical:messages.bulkComplete'),
+          description: variables.archive
+            ? t('medical:messages.bulkArchived', { count: successCount })
+            : t('medical:messages.bulkRestored', { count: successCount }),
           placement: 'bottomRight',
           duration: 3,
         });
       }
       if (failCount > 0) {
         notification.warning({
-          message: 'Partial Failure',
-          description: `Failed to process ${failCount} record(s)`,
+          message: t('medical:messages.partialFailure'),
+          description: t('medical:messages.bulkFailed', { count: failCount }),
           placement: 'bottomRight',
           duration: 4,
         });
@@ -330,6 +332,6 @@ export function useBulkArchiveMedicalRecords() {
         queryKey: ['medical-records']
       });
     },
-    onError: createMutationErrorHandler(notification, 'Bulk Archive', t, 'useMedicalRecords'),
+    onError: createMutationErrorHandler(notification, 'bulkArchive', t, 'useMedicalRecords'),
   });
 }

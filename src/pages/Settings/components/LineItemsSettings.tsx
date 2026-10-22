@@ -142,13 +142,13 @@ const LineItemsSettings: React.FC<LineItemsSettingsProps> = ({ isUpdating }) => 
       render: (price: number, record: LineItemTemplate) => formatPrice(price, record.currencyId),
     },
     {
-      title: t('settings:lineItems.description', 'Description'),
+      title: t('settings:lineItems.descriptionLabel', 'Description'),
       dataIndex: 'description',
       key: 'description',
       render: (text: string) => text || '-',
     },
     {
-      title: t('common:actions', 'Actions'),
+      title: t('common:actionsLabel', 'Actions'),
       key: 'actions',
       width: 200,
       render: (_: any, record: LineItemTemplate) => (

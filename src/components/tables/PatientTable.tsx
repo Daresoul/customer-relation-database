@@ -103,9 +103,9 @@ export const PatientTable: React.FC<PatientTableProps> = ({
     const months = dayjs().diff(dayjs(dateOfBirth), 'month') % 12;
 
     if (years > 0) {
-      return `${years} year${years > 1 ? 's' : ''}`;
+      return t('households:detail.animals.age.years', { count: years });
     }
-    return `${months} month${months !== 1 ? 's' : ''}`;
+    return t('households:detail.animals.age.months', { count: months });
   };
 
   const columns: ColumnsType<PatientWithHousehold> = [
@@ -121,7 +121,7 @@ export const PatientTable: React.FC<PatientTableProps> = ({
         // clickable. Microchip-only patients show "No name" rather than the
         // chip number, since that's available in its own column.
         const hasName = !!text;
-        const display = hasName ? text : t('entities:patient.noName', 'No name');
+        const display = hasName ? text : t('entities:defaults.noName', 'No name');
         return (
           <Space>
             <HeartOutlined className={styles.iconPink} />
@@ -255,7 +255,7 @@ export const PatientTable: React.FC<PatientTableProps> = ({
       width: 100,
       align: 'right',
       render: (weight) =>
-        weight ? <Text>{weight.toFixed(1)} kg</Text> : <Text type="secondary">-</Text>,
+        weight ? <Text>{t('patients:units.weightKg', { weight: weight.toFixed(1) })}</Text> : <Text type="secondary">-</Text>,
       sorter: (a, b) => (a.weight || 0) - (b.weight || 0),
     },
     {
@@ -332,7 +332,7 @@ export const PatientTable: React.FC<PatientTableProps> = ({
           defaultPageSize: 10,
           showSizeChanger: true,
           showQuickJumper: true,
-          showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} patients`,
+          showTotal: (total, range) => t('patients:tableTotal', { start: range[0], end: range[1], total }),
         }}
         scroll={{ x: 1500, y: 'calc(100vh - 300px)' }}
         size="middle"

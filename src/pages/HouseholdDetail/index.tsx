@@ -107,7 +107,7 @@ export const HouseholdDetail: React.FC = () => {
                 title: <Link to="/"><HomeOutlined /> {t('detail.breadcrumb.home')}</Link>,
               },
               {
-                title: data.household.householdName || `Household ${householdId}`,
+                title: data.household.householdName || t('detail.unnamedTitle', { id: householdId }),
               },
             ]}
           />

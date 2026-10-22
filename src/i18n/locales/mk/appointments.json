@@ -90,7 +90,8 @@
     "createFailed": "Неуспешно создавање на терминот",
     "updatedSuccess": "Терминот е успешно ажуриран",
     "updateFailed": "Неуспешно ажурирање на терминот",
-    "saveFailed": "Неуспешно зачувување на терминот"
+    "saveFailed": "Неуспешно зачувување на терминот",
+    "duplicateSelectDate": "Изберете датум на кој ќе се дуплира овој термин:"
   },
   "details": {
     "title": "Детали за терминот",
@@ -111,6 +112,35 @@
     "dateRange": "Временски опсег",
     "clear": "Избриши",
     "apply": "Примени",
-    "timeLabel": "Време"
+    "timeLabel": "Време",
+    "weekOf": "Недела од {{date}}",
+    "more_one": "+{{count}} уште",
+    "more_other": "+{{count}} уште",
+    "addAppointment": "Додај термин",
+    "scheduleFirst": "Закажи прв термин"
+  },
+  "list": {
+    "showing": "Прикажани {{shown}} од {{total}} термини",
+    "loadingMore": "Се вчитуваат уште термини...",
+    "durationMinutes": "({{duration}} мин)",
+    "roomNumber": "Соба {{id}}",
+    "createdBy": "Создаден {{when}} од {{user}}"
+  },
+  "rooms": {
+    "title": "Соби за термини",
+    "add": "Додај соба",
+    "addNew": "Додај нова соба",
+    "edit": "Уреди соба",
+    "color": "Боја",
+    "colorTooltip": "Боја на собата: {{color}}",
+    "name": "Име",
+    "nameLabel": "Име на собата",
+    "nameRequired": "Внесете име на собата",
+    "namePlaceholder": "пр. Соба за преглед 1",
+    "descriptionPlaceholder": "Опис на собата (по избор)",
+    "capacityRequired": "Внесете капацитет на собата",
+    "capacityPlaceholder": "Број на пациенти/животни",
+    "colorLabel": "Боја на собата",
+    "colorHint": "Оваа боја ќе се користи за препознавање на собата во календарот"
   }
 }

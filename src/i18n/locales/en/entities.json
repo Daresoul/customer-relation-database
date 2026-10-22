@@ -1,7 +1,13 @@
 {
   "patient": {
     "singular": "patient",
-    "plural": "patients"
+    "plural": "patients",
+    "dateOfBirth": "Date of Birth",
+    "gender": "Gender",
+    "weight": "Weight (kg)",
+    "color": "Color/Markings",
+    "microchipId": "Microchip ID",
+    "active": "Active Patient"
   },
   "species": {
     "dog": "Dog",
@@ -15,7 +21,8 @@
     "ferret": "Ferret",
     "reptile": "Reptile",
     "fish": "Fish",
-    "other": "Other"
+    "other": "Other",
+    "label": "Species"
   },
   "gender": {
     "male": "Male",
@@ -87,5 +94,15 @@
     "noActivity": "No activity",
     "unknown": "Unknown",
     "none": "None"
+  },
+  "breed": {
+    "label": "Breed"
+  },
+  "relationship": {
+    "owner": "Owner",
+    "family": "Family Member",
+    "caretaker": "Caretaker",
+    "emergency": "Emergency Contact",
+    "other": "Other"
   }
 }

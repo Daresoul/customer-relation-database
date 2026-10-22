@@ -34,13 +34,13 @@ export function usePatients() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: [PATIENTS_KEY] });
       notification.success({
-        message: 'Patient Created',
-        description: `${data.name} has been added successfully`,
+        message: t('patients:messages.createdTitle'),
+        description: t('patients:messages.createdDesc', { name: data.name }),
         placement: 'bottomRight',
         duration: 3,
       });
     },
-    onError: createMutationErrorHandler(notification, 'Create Patient', t, 'usePatients'),
+    onError: createMutationErrorHandler(notification, 'createPatient', t, 'usePatients'),
   });
 
   // Update patient mutation
@@ -50,13 +50,13 @@ export function usePatients() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [PATIENTS_KEY] });
       notification.success({
-        message: 'Patient Updated',
-        description: 'Patient information has been saved',
+        message: t('patients:messages.updatedTitle'),
+        description: t('patients:messages.infoSaved'),
         placement: 'bottomRight',
         duration: 3,
       });
     },
-    onError: createMutationErrorHandler(notification, 'Update Patient', t, 'usePatients'),
+    onError: createMutationErrorHandler(notification, 'updatePatient', t, 'usePatients'),
   });
 
   // Delete patient mutation
@@ -65,13 +65,13 @@ export function usePatients() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [PATIENTS_KEY] });
       notification.success({
-        message: 'Patient Deleted',
-        description: 'Patient has been removed',
+        message: t('patients:messages.deletedTitle'),
+        description: t('patients:messages.removedDesc'),
         placement: 'bottomRight',
         duration: 3,
       });
     },
-    onError: createMutationErrorHandler(notification, 'Delete Patient', t, 'usePatients'),
+    onError: createMutationErrorHandler(notification, 'deletePatient', t, 'usePatients'),
   });
 
   // Add owner to patient mutation
@@ -90,7 +90,7 @@ export function usePatients() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [PATIENTS_KEY] });
     },
-    onError: createMutationErrorHandler(notification, 'Add Owner', t, 'usePatients'),
+    onError: createMutationErrorHandler(notification, 'addOwner', t, 'usePatients'),
   });
 
   // Remove owner from patient mutation
@@ -100,7 +100,7 @@ export function usePatients() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [PATIENTS_KEY] });
     },
-    onError: createMutationErrorHandler(notification, 'Remove Owner', t, 'usePatients'),
+    onError: createMutationErrorHandler(notification, 'removeOwner', t, 'usePatients'),
   });
 
   // Set primary owner mutation
@@ -110,7 +110,7 @@ export function usePatients() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [PATIENTS_KEY] });
     },
-    onError: createMutationErrorHandler(notification, 'Set Primary Owner', t, 'usePatients'),
+    onError: createMutationErrorHandler(notification, 'setPrimaryOwner', t, 'usePatients'),
   });
 
   // Get single patient (not cached, for one-off fetches)

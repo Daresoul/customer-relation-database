@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { AutoComplete, Spin } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 
 /**
  * Value type accepted by SearchableSelect. Widened from the original
@@ -31,7 +32,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   value,
   onChange,
   options,
-  placeholder = 'Search...',
+  placeholder,
   disabled = false,
   loading = false,
   allowClear = true,
@@ -39,6 +40,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   onCreateNew,
   'data-testid': dataTestId,
 }) => {
+  const { t } = useTranslation('forms');
   const [searchText, setSearchText] = useState('');
 
   // Coerce the incoming form value to a string for comparison against
@@ -136,12 +138,12 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
       onSelect={handleSelect}
       onChange={handleChange}
       onKeyDown={handleKeyDown}
-      placeholder={placeholder}
+      placeholder={placeholder ?? t('forms:placeholders.search')}
       disabled={disabled || loading}
       allowClear={allowClear}
       className={className}
       filterOption={false} // We handle filtering ourselves
-      notFoundContent={loading ? <Spin size="small" /> : 'No results found'}
+      notFoundContent={loading ? <Spin size="small" /> : t('forms:messages.noResults')}
       suffixIcon={loading ? <Spin size="small" /> : <SearchOutlined />}
       style={{ width: '100%' }}
       data-testid={dataTestId}

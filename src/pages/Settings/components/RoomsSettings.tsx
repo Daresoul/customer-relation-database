@@ -96,7 +96,7 @@ const RoomsSettings: React.FC<RoomsSettingsProps> = ({ isUpdating }) => {
 
   const columns = [
     {
-      title: 'Color',
+      title: t('appointments:rooms.color'),
       dataIndex: 'color',
       key: 'color',
       width: 80,
@@ -106,34 +106,34 @@ const RoomsSettings: React.FC<RoomsSettingsProps> = ({ isUpdating }) => {
           style={{
             backgroundColor: record.isActive ? color || '#1890ff' : '#d9d9d9'
           }}
-          title={`Room color: ${color || '#1890ff'}`}
+          title={t('appointments:rooms.colorTooltip', { color: color || '#1890ff' })}
         />
       ),
     },
     {
-      title: 'Name',
+      title: t('appointments:rooms.name'),
       dataIndex: 'name',
       key: 'name',
       render: (text: string, record: Room) => (
         <span className={record.isActive ? styles.roomNameActive : styles.roomNameInactive}>
           {text}
-          {!record.isActive && ' (Inactive)'}
+          {!record.isActive && ` (${t('common:inactive')})`}
         </span>
       ),
     },
     {
-      title: 'Description',
+      title: t('appointments:fields.description'),
       dataIndex: 'description',
       key: 'description',
       render: (text: string) => text || '-',
     },
     {
-      title: 'Capacity',
+      title: t('appointments:fields.capacity'),
       dataIndex: 'capacity',
       key: 'capacity',
     },
     {
-      title: 'Actions',
+      title: t('common:actionsLabel'),
       key: 'actions',
       render: (_: any, record: Room) => (
         <Space>
@@ -142,7 +142,7 @@ const RoomsSettings: React.FC<RoomsSettingsProps> = ({ isUpdating }) => {
             size="small"
             onClick={() => handleEditRoom(record)}
           >
-            Edit
+            {t('common:edit')}
           </Button>
           {record.isActive && (
             <Popconfirm
@@ -157,7 +157,7 @@ const RoomsSettings: React.FC<RoomsSettingsProps> = ({ isUpdating }) => {
                 danger
                 loading={updateRoomMutation.isPending}
               >
-                Deactivate
+                {t('common:deactivate')}
               </Button>
             </Popconfirm>
           )}
@@ -171,7 +171,7 @@ const RoomsSettings: React.FC<RoomsSettingsProps> = ({ isUpdating }) => {
       <Card
         title={
           <span className={styles.cardTitle}>
-            <HomeOutlined /> Appointment Rooms
+            <HomeOutlined /> {t('appointments:rooms.title')}
           </span>
         }
         extra={
@@ -180,7 +180,7 @@ const RoomsSettings: React.FC<RoomsSettingsProps> = ({ isUpdating }) => {
             icon={<PlusOutlined />}
             onClick={handleAddRoom}
           >
-            Add Room
+            {t('appointments:rooms.add')}
           </Button>
         }
         className={styles.roomsCard}
@@ -197,7 +197,7 @@ const RoomsSettings: React.FC<RoomsSettingsProps> = ({ isUpdating }) => {
 
       {/* Add/Edit Room Modal */}
       <Modal
-        title={editingRoom ? 'Edit Room' : 'Add New Room'}
+        title={editingRoom ? t('appointments:rooms.edit') : t('appointments:rooms.addNew')}
         open={roomModalVisible}
         onCancel={() => {
           setRoomModalVisible(false);
@@ -215,40 +215,40 @@ const RoomsSettings: React.FC<RoomsSettingsProps> = ({ isUpdating }) => {
         >
           <Form.Item
             name="name"
-            label="Room Name"
-            rules={[{ required: true, message: 'Please enter room name' }]}
+            label={t('appointments:rooms.nameLabel')}
+            rules={[{ required: true, message: t('appointments:rooms.nameRequired') }]}
           >
-            <Input placeholder="e.g., Examination Room 1" />
+            <Input placeholder={t('appointments:rooms.namePlaceholder')} />
           </Form.Item>
 
           <Form.Item
             name="description"
-            label="Description"
+            label={t('appointments:fields.description')}
           >
             <TextArea
               rows={3}
-              placeholder="Optional description of the room"
+              placeholder={t('appointments:rooms.descriptionPlaceholder')}
             />
           </Form.Item>
 
           <Form.Item
             name="capacity"
-            label="Capacity"
-            rules={[{ required: true, message: 'Please enter room capacity' }]}
+            label={t('appointments:fields.capacity')}
+            rules={[{ required: true, message: t('appointments:rooms.capacityRequired') }]}
             initialValue={1}
           >
             <InputNumber
               min={1}
               max={100}
-              placeholder="Number of patients/animals"
+              placeholder={t('appointments:rooms.capacityPlaceholder')}
               className={styles.fullWidth}
             />
           </Form.Item>
 
           <Form.Item
             name="color"
-            label="Room Color"
-            extra="This color will be used to identify the room in the calendar"
+            label={t('appointments:rooms.colorLabel')}
+            extra={t('appointments:rooms.colorHint')}
           >
             <Input
               type="color"

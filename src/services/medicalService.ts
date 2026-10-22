@@ -1,4 +1,5 @@
 import { ApiService } from './api';
+import i18n from 'i18next';
 import { invoke } from './invoke';
 import type {
   MedicalRecord,
@@ -220,9 +221,9 @@ export class MedicalService {
 
     let targetPath = await save({
       defaultPath: defaultFileName,
-      title: 'Save Attachment As',
+      title: i18n.t('medical:detail.saveAttachmentAs'),
       filters: extension ? [{
-        name: `${extension.substring(1).toUpperCase()} Files`,
+        name: i18n.t('medical:detail.fileTypeFilter', { ext: extension.substring(1).toUpperCase() }),
         extensions: [extension.substring(1)]
       }] : undefined
     });
@@ -254,13 +255,13 @@ export class MedicalService {
   static validateFile(file: File, maxSizeInMB = 100): string | null {
     const maxSize = maxSizeInMB * 1024 * 1024;
     if (file.size > maxSize) {
-      return `File size exceeds ${maxSizeInMB}MB limit`;
+      return i18n.t('medical:messages.fileTooLarge', { max: maxSizeInMB });
     }
     return null;
   }
 
   static formatFileSize(bytes?: number): string {
-    if (!bytes) return 'Unknown size';
+    if (!bytes) return i18n.t('medical:detail.unknownSize');
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     if (bytes === 0) return '0 Bytes';
     const i = Math.floor(Math.log(bytes) / Math.log(1024));

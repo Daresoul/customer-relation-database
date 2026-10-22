@@ -4,6 +4,7 @@
 
 import React from 'react';
 import { Empty, Button, Space } from 'antd';
+import { useTranslation } from 'react-i18next';
 import {
   FileSearchOutlined,
   InboxOutlined,
@@ -89,135 +90,170 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
 };
 
 // No data state
-export const NoData: React.FC<Partial<EmptyStateProps>> = (props) => (
-  <EmptyState
-    title="No Data"
-    description="There is no data to display"
-    iconType="inbox"
-    {...props}
-  />
-);
+export const NoData: React.FC<Partial<EmptyStateProps>> = (props) => {
+  const { t } = useTranslation('common');
+  return (
+    <EmptyState
+      title={t('common:empty.noDataTitle')}
+      description={t('common:empty.noDataDescription')}
+      iconType="inbox"
+      {...props}
+    />
+  );
+};
 
 // No search results
-export const NoSearchResults: React.FC<Partial<EmptyStateProps>> = (props) => (
-  <EmptyState
-    title="No Results Found"
-    description="Try adjusting your search criteria"
-    iconType="search"
-    actionText="Clear Search"
-    {...props}
-  />
-);
+export const NoSearchResults: React.FC<Partial<EmptyStateProps>> = (props) => {
+  const { t } = useTranslation('common');
+  return (
+    <EmptyState
+      title={t('common:empty.noResultsTitle')}
+      description={t('common:empty.noResultsDescription')}
+      iconType="search"
+      actionText={t('common:empty.clearSearch')}
+      {...props}
+    />
+  );
+};
 
 // No patients
-export const NoPatientsFound: React.FC<Partial<EmptyStateProps>> = (props) => (
-  <EmptyState
-    title="No Patients Found"
-    description="Start by adding your first patient"
-    iconType="heart"
-    actionText="Add Patient"
-    {...props}
-  />
-);
+export const NoPatientsFound: React.FC<Partial<EmptyStateProps>> = (props) => {
+  const { t } = useTranslation('common');
+  return (
+    <EmptyState
+      title={t('common:empty.noPatientsTitle')}
+      description={t('common:empty.noPatientsDescription')}
+      iconType="heart"
+      actionText={t('common:empty.addPatient')}
+      {...props}
+    />
+  );
+};
 
 // No households
-export const NoHouseholdsFound: React.FC<Partial<EmptyStateProps>> = (props) => (
-  <EmptyState
-    title="No Households Found"
-    description="Create a household to get started"
-    iconType="team"
-    actionText="Create Household"
-    {...props}
-  />
-);
+export const NoHouseholdsFound: React.FC<Partial<EmptyStateProps>> = (props) => {
+  const { t } = useTranslation('common');
+  return (
+    <EmptyState
+      title={t('common:empty.noHouseholdsTitle')}
+      description={t('common:empty.noHouseholdsDescription')}
+      iconType="team"
+      actionText={t('common:empty.createHousehold')}
+      {...props}
+    />
+  );
+};
 
 // Error state
 export const ErrorState: React.FC<{
   error?: Error | string;
   onRetry?: () => void;
-}> = ({ error, onRetry }) => (
-  <EmptyState
-    title="Something went wrong"
-    description={typeof error === 'string' ? error : error?.message || 'An unexpected error occurred'}
-    iconType="frown"
-    actionText="Retry"
-    onAction={onRetry}
-    fullHeight
-  />
-);
+}> = ({ error, onRetry }) => {
+  const { t } = useTranslation('common');
+  return (
+    <EmptyState
+      title={t('common:crash.title')}
+      description={typeof error === 'string' ? error : error?.message || t('common:unexpectedError')}
+      iconType="frown"
+      actionText={t('common:retry')}
+      onAction={onRetry}
+      fullHeight
+    />
+  );
+};
 
 // Success state
 export const SuccessState: React.FC<{
   title?: string;
   description?: string;
   onContinue?: () => void;
-}> = ({ title = 'Success!', description = 'Operation completed successfully', onContinue }) => (
-  <EmptyState
-    title={title}
-    description={description}
-    iconType="smile"
-    actionText="Continue"
-    onAction={onContinue}
-    fullHeight
-  />
-);
+}> = ({ title, description, onContinue }) => {
+  const { t } = useTranslation('common');
+  return (
+    <EmptyState
+      title={title ?? t('common:empty.successTitle')}
+      description={description ?? t('common:operationSuccess')}
+      iconType="smile"
+      actionText={t('common:empty.continue')}
+      onAction={onContinue}
+      fullHeight
+    />
+  );
+};
 
 // Loading failed state
 export const LoadingFailed: React.FC<{
   onRetry?: () => void;
-}> = ({ onRetry }) => (
-  <EmptyState
-    title="Failed to Load"
-    description="Unable to load the requested data"
-    iconType="frown"
-    actionText="Try Again"
-    onAction={onRetry}
-    secondaryActionText="Refresh Page"
-    onSecondaryAction={() => window.location.reload()}
-  />
-);
+}> = ({ onRetry }) => {
+  const { t } = useTranslation('common');
+  return (
+    <EmptyState
+      title={t('common:empty.loadFailedTitle')}
+      description={t('common:empty.loadFailedDescription')}
+      iconType="frown"
+      actionText={t('common:empty.tryAgain')}
+      onAction={onRetry}
+      secondaryActionText={t('common:empty.refreshPage')}
+      onSecondaryAction={() => window.location.reload()}
+    />
+  );
+};
 
 // Permission denied state
-export const PermissionDenied: React.FC<Partial<EmptyStateProps>> = (props) => (
-  <EmptyState
-    title="Access Denied"
-    description="You don't have permission to view this content"
-    image={Empty.PRESENTED_IMAGE_SIMPLE}
-    {...props}
-  />
-);
+export const PermissionDenied: React.FC<Partial<EmptyStateProps>> = (props) => {
+  const { t } = useTranslation('common');
+  return (
+    <EmptyState
+      title={t('common:empty.accessDeniedTitle')}
+      description={t('common:empty.accessDeniedDescription')}
+      image={Empty.PRESENTED_IMAGE_SIMPLE}
+      {...props}
+    />
+  );
+};
 
 // Coming soon state
-export const ComingSoon: React.FC<Partial<EmptyStateProps>> = (props) => (
-  <EmptyState
-    title="Coming Soon"
-    description="This feature is under development"
-    image={Empty.PRESENTED_IMAGE_SIMPLE}
-    {...props}
-  />
-);
+export const ComingSoon: React.FC<Partial<EmptyStateProps>> = (props) => {
+  const { t } = useTranslation('common');
+  return (
+    <EmptyState
+      title={t('common:empty.comingSoonTitle')}
+      description={t('common:empty.comingSoonDescription')}
+      image={Empty.PRESENTED_IMAGE_SIMPLE}
+      {...props}
+    />
+  );
+};
 
 // Table empty state
 export const TableEmptyState: React.FC<{
   entityName?: string;
   onAdd?: () => void;
-}> = ({ entityName = 'items', onAdd }) => (
-  <div className={styles.tablePadding}>
-    <EmptyState
-      title={`No ${entityName} yet`}
-      description={`Start by adding your first ${entityName.slice(0, -1)}`}
-      actionText={`Add ${entityName.slice(0, -1)}`}
-      onAction={onAdd}
-    />
-  </div>
-);
+}> = ({ entityName, onAdd }) => {
+  const { t } = useTranslation('common');
+  const plural = entityName ?? t('common:empty.items');
+  const singular = entityName ? entityName.slice(0, -1) : t('common:empty.item');
+  return (
+    <div className={styles.tablePadding}>
+      <EmptyState
+        title={t('common:empty.tableTitle', { items: plural })}
+        description={t('common:empty.tableDescription', { item: singular })}
+        actionText={t('common:empty.tableAdd', { item: singular })}
+        onAction={onAdd}
+      />
+    </div>
+  );
+};
 
 // List empty state
 export const ListEmptyState: React.FC<{
   itemName?: string;
-}> = ({ itemName = 'items' }) => (
-  <div className={styles.listEmpty}>
-    <InboxOutlined className={styles.listEmptyIcon} />
-    <div>No {itemName} to display</div>
-  </div>
-);
+}> = ({ itemName }) => {
+  const { t } = useTranslation('common');
+  return (
+    <div className={styles.listEmpty}>
+      <InboxOutlined className={styles.listEmptyIcon} />
+      <div>{t('common:empty.listEmpty', { items: itemName ?? t('common:empty.items') })}</div>
+    </div>
+  );
+};

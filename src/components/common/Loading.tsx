@@ -9,6 +9,7 @@ import {
   SyncOutlined,
   HourglassOutlined,
 } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import styles from './Common.module.css';
 
 export interface LoadingProps {
@@ -88,13 +89,16 @@ export const Loading: React.FC<LoadingProps> = ({
 
 // Page loader component
 export const PageLoader: React.FC<{ message?: string }> = ({
-  message = 'Loading...',
-}) => (
-  <div className={styles.pageLoaderContainer}>
-    <Loading size="large" />
-    <div className={styles.pageLoaderText}>{message}</div>
-  </div>
-);
+  message,
+}) => {
+  const { t } = useTranslation('common');
+  return (
+    <div className={styles.pageLoaderContainer}>
+      <Loading size="large" />
+      <div className={styles.pageLoaderText}>{message ?? t('common:loading')}</div>
+    </div>
+  );
+};
 
 // Content loader with skeleton
 export interface ContentLoaderProps {
@@ -164,13 +168,16 @@ export const FormLoader: React.FC<{ fields?: number }> = ({ fields = 4 }) => (
 
 // Inline loader
 export const InlineLoader: React.FC<{ text?: string }> = ({
-  text = 'Loading...',
-}) => (
-  <Space size="small">
-    <Spin size="small" />
-    <span className={styles.inlineLoaderText}>{text}</span>
-  </Space>
-);
+  text,
+}) => {
+  const { t } = useTranslation('common');
+  return (
+    <Space size="small">
+      <Spin size="small" />
+      <span className={styles.inlineLoaderText}>{text ?? t('common:loading')}</span>
+    </Space>
+  );
+};
 
 // Button loader
 export const ButtonLoader: React.FC = () => (
@@ -191,6 +198,7 @@ export const LazyLoader: React.FC<LazyLoaderProps> = ({
   retry,
   children,
 }) => {
+  const { t } = useTranslation('common');
   if (loading) {
     return <PageLoader />;
   }
@@ -198,11 +206,11 @@ export const LazyLoader: React.FC<LazyLoaderProps> = ({
   if (error) {
     return (
       <div className={styles.lazyLoaderError}>
-        <div className={styles.lazyLoaderErrorTitle}>Error loading content</div>
+        <div className={styles.lazyLoaderErrorTitle}>{t('common:errorLoadingContent')}</div>
         <div className={styles.lazyLoaderErrorMessage}>{error.message}</div>
         {retry && (
           <button onClick={retry} className={styles.lazyLoaderButton}>
-            Retry
+            {t('common:retry')}
           </button>
         )}
       </div>

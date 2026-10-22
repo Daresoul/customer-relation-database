@@ -260,7 +260,7 @@ export const TabbedMedicalRecordFields: React.FC<TabbedMedicalRecordFieldsProps>
         >
           <span>
             <UnorderedListOutlined />
-            {t('medical:tabs.lineItems', 'Factura')}
+            {t('medical:tabs.lineItems', 'Invoice')}
           </span>
         </Badge>,
       ),

@@ -31,7 +31,9 @@
     "hid": "HID",
     "serialPci": "Serial PCI",
     "serialBluetooth": "Serial Bluetooth",
-    "unknown": "Unknown"
+    "unknown": "Unknown",
+    "virtual": "Virtual",
+    "builtIn": "Built-in"
   },
   "deviceTypes": {
     "exigoEosVet": "Exigo EOS Vet (Hematology)",
@@ -94,7 +96,15 @@
   "notifications": {
     "reconnectStarted": "Reconnecting devices",
     "reconnectStartedDesc": "Retrying connection to disconnected devices...",
-    "reconnectFailed": "Reconnect failed"
+    "reconnectFailed": "Reconnect failed",
+    "integrationCreated": "Device Integration Created",
+    "integrationCreatedDesc": "Device integration created successfully",
+    "integrationUpdated": "Device Integration Updated",
+    "integrationUpdatedDesc": "Device integration updated successfully",
+    "integrationDeleted": "Device Integration Deleted",
+    "integrationDeletedDesc": "Device integration deleted successfully",
+    "integrationToggled": "Device Integration Toggled",
+    "integrationToggledDesc": "Device integration enabled/disabled successfully"
   },
   "buttons": {
     "refresh": "Refresh",
@@ -117,7 +127,8 @@
     "addSuccess": "Device integration added successfully",
     "updateSuccess": "Device integration updated successfully",
     "deleteSuccess": "Device integration deleted successfully",
-    "operationFailed": "Operation failed"
+    "operationFailed": "Operation failed",
+    "autoOpenReport": "Open generated report automatically after save"
   },
   "labels": {
     "devices": "Devices:"
@@ -176,5 +187,29 @@
   "recentFiles": {
     "couldNotRead": "Couldn't read",
     "couldNotReadHint": "The device sent data we couldn't read. The raw file is kept for support."
+  },
+  "portTypeTooltips": {
+    "serialUsb": "Connected USB Serial Device",
+    "hid": "Connected HID Device",
+    "virtual": "Virtual/Test Serial Port (socat, pty, etc.)",
+    "disconnected": "Device in registry but not connected: {{path}}",
+    "builtIn": "Motherboard Serial Port (COM1, /dev/ttyS0, etc.)",
+    "serialPci": "PCI Serial Port",
+    "serialBluetooth": "Bluetooth Serial Port",
+    "unknown": "Unknown port type - may need driver or be unsupported device"
+  },
+  "portDetails": {
+    "chipDisconnected": "{{chip}} (Disconnected) - VID:{{vid}} PID:{{pid}}",
+    "usbDisconnected": "Disconnected USB Device - VID:{{vid}} PID:{{pid}}",
+    "ftdiDisconnected": "FTDI USB Serial (Disconnected)",
+    "usbSerialDisconnected": "USB Serial Device (Disconnected)",
+    "vcpDisconnected": "Virtual COM Port (Disconnected)",
+    "disconnectedPath": "Disconnected: {{path}}",
+    "motherboard": "Motherboard Serial Port",
+    "standardSerial": "Standard Serial Port ({{port}})",
+    "builtIn": "Built-in Serial Port",
+    "namedVirtual": "{{device}} Virtual Port",
+    "virtualSerial": "Virtual Serial Port ({{name}})",
+    "linuxUsbAdapter": "Linux USB Serial Adapter #{{number}}"
   }
 }

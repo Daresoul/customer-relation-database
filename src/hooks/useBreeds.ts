@@ -37,7 +37,7 @@ export const useCreateBreed = () => {
         duration: 3,
       });
     },
-    onError: createMutationErrorHandler(notification, 'Create Breed', t, 'useBreeds'),
+    onError: createMutationErrorHandler(notification, 'createBreed', t, 'useBreeds'),
   });
 };
 
@@ -58,7 +58,7 @@ export const useUpdateBreed = () => {
         duration: 3,
       });
     },
-    onError: createMutationErrorHandler(notification, 'Update Breed', t, 'useBreeds'),
+    onError: createMutationErrorHandler(notification, 'updateBreed', t, 'useBreeds'),
   });
 };
 
@@ -79,6 +79,6 @@ export const useDeleteBreed = () => {
         duration: 3,
       });
     },
-    onError: createMutationErrorHandler(notification, 'Delete Breed', t, 'useBreeds'),
+    onError: createMutationErrorHandler(notification, 'deleteBreed', t, 'useBreeds'),
   });
 };

@@ -45,7 +45,8 @@
     "createdBy": "Создаден од",
     "updatedBy": "Ажуриран од",
     "documents": "Документи",
-    "deviceData": "Податоци од уред"
+    "deviceData": "Податоци од уред",
+    "total": "Вкупно"
   },
   "tabs": {
     "standard": "Стандард",
@@ -78,7 +79,9 @@
     "saveAsTemplateAndAdd": "Зачувај како шаблон и додај",
     "fromTemplate": "(од шаблон)",
     "namePlaceholder": "пр. Итна консултација",
-    "descriptionPlaceholder": "Незадолжителен опис"
+    "descriptionPlaceholder": "Незадолжителен опис",
+    "itemName": "Ставка",
+    "items": "ставки"
   },
   "form": {
     "createTitle": "Создај медицински запис",
@@ -107,7 +110,8 @@
     "retry": "Обиди се повторно",
     "regeneratePdf": "Регенерирај PDF",
     "printReport": "Печати извештај",
-    "browseRecentFiles": "Прелистај скорашни датотеки"
+    "browseRecentFiles": "Прелистај скорашни датотеки",
+    "browseRecentDeviceFiles": "Прелистај скорашни датотеки од уреди"
   },
   "messages": {
     "createSuccess": "Медицинскиот запис е успешно создаден",
@@ -128,7 +132,21 @@
     "diagnosesPartialSave": "Дијагнозите не се зачувани",
     "validationFailed": "Пополнете ги задолжителните полиња означени со црвено.",
     "diagnosesLoadFailed": "Дијагнозите на овој запис не можеа да се вчитаат",
-    "diagnosesLoadFailedHint": "Зачувувањето е запрено за да не се изгубат. Обидете се повторно да ги вчитате."
+    "diagnosesLoadFailedHint": "Зачувувањето е запрено за да не се изгубат. Обидете се повторно да ги вчитате.",
+    "loadErrorDetail": "Настана грешка при вчитување на записот.",
+    "archivedTitle": "Медицинскиот запис е архивиран",
+    "restoredTitle": "Медицинскиот запис е вратен",
+    "attachmentDeleteSuccess": "Прилогот е успешно избришан",
+    "downloadSuccess": "Датотеката е успешно преземена",
+    "bulkComplete": "Групната операција е завршена",
+    "bulkArchived_one": "{{count}} запис е успешно архивиран",
+    "bulkArchived_other": "{{count}} записи се успешно архивирани",
+    "bulkRestored_one": "{{count}} запис е успешно вратен",
+    "bulkRestored_other": "{{count}} записи се успешно вратени",
+    "partialFailure": "Делумен неуспех",
+    "bulkFailed_one": "Неуспешна обработка на {{count}} запис",
+    "bulkFailed_other": "Неуспешна обработка на {{count}} записи",
+    "fileTooLarge": "Датотеката го надминува ограничувањето од {{max}}MB"
   },
   "filters": {
     "all": "Сите записи",
@@ -189,7 +207,21 @@
     "noHistory": "Сè уште нема историја",
     "noAttachments": "Нема прикачувања",
     "noDocuments": "Сè уште нема документи",
-    "noDeviceData": "Нема прикачени податоци од уред"
+    "noDeviceData": "Нема прикачени податоци од уред",
+    "attachmentDeleted": "Датотеката „{{name}}“ е избришана.",
+    "attachmentDeleteFailed": "Датотеката не можеше да се избрише.",
+    "deleteAttachmentConfirm": "Да се избрише датотеката?",
+    "deleteAttachmentDesc": "Датотеката ќе се отстрани од овој запис.",
+    "recordDetails": "Детали за медицинскиот запис",
+    "pdfRegenerated": "PDF-от е повторно направен",
+    "pdfRegeneratedDesc": "PDF извештајот е успешно повторно направен од сите податоци од уредите",
+    "pdfRegenerationFailed": "PDF-от не можеше повторно да се направи",
+    "unknownError": "Настана непозната грешка",
+    "previewLoadFailed": "Неуспешно вчитување на прегледот",
+    "fileContentLoadFailed": "Грешка при вчитување на содржината на датотеката",
+    "unknownSize": "Непозната големина",
+    "saveAttachmentAs": "Зачувај го прилогот како",
+    "fileTypeFilter": "{{ext}} датотеки"
   },
   "deviceImport": {
     "title": "Увези податоци од уред во медицински запис",
@@ -250,7 +282,21 @@
     "machineSaidChip": "Микрочип — уредот вели: {{machine}} · вие избравте: {{picked}}",
     "noChip": "без микрочип",
     "attachAnyway": "Сепак прикачи на {{name}}",
-    "goBack": "Назад"
+    "goBack": "Назад",
+    "pdfGenerationFailed": "PDF не можеше да се направи",
+    "pdfGenerationFailedDesc": "Записот е зачуван, но PDF-от не можеше да се направи. Можете повторно да го направите од медицинскиот запис.",
+    "generatingPdf": "Се прави PDF...",
+    "pleaseWait": "Почекајте додека се прави извештајот.",
+    "pdfReady": "PDF-от е подготвен",
+    "pdfReadyDesc": "Кликнете за повторно правење ако е потребно.",
+    "regenerate": "Регенерирај PDF",
+    "printAfterSave": "Направи и печати PDF извештај по зачувувањето",
+    "defaultTitle": "{{devices}} - Податоци од уред",
+    "defaultDescription": "Податоци од уред увезени од:\n  - {{files}}\n\nДетектирано на: {{detectedAt}}",
+    "addedToImport": "„{{name}}“ е додадена во овој увоз.",
+    "addFailed": "Неуспешно додавање на „{{name}}“",
+    "filesUploaded": "Прикачени {{done}}/{{total}} датотеки",
+    "filesFailedSuffix": ", {{failed}} неуспешни"
   },
   "autocomplete": {
     "typeToSearch": "Внесете најмалку 2 знаци за пребарување на шаблони",
@@ -274,5 +320,87 @@
     "body": "Она што го внесовте во овој запис не е зачувано.",
     "discard": "Отфрли",
     "keepEditing": "Продолжи со уредување"
+  },
+  "history": {
+    "title": "Историја на промени",
+    "by": "од {{name}}",
+    "changed": "Променето: {{fields}}",
+    "noFieldDetails": "Нема зачувани детали по полиња",
+    "revertPrevious": "Врати на претходната верзија",
+    "reverted": "Вратено на претходната верзија",
+    "revertFailed": "Неуспешно враќање"
+  },
+  "printReport": {
+    "title": "Поставки за печатење на извештајот",
+    "patientInfo": "Информации за пациентот (само за ова печатење)",
+    "patientInfoHint": "Промените тука важат само за ова печатење и нема да се зачуваат во базата.",
+    "ownerPlaceholder": "Име на сопственикот",
+    "patientName": "Име на пациентот",
+    "patientNamePlaceholder": "Име на пациентот",
+    "selectFiles": "Изберете датотеки за вклучување",
+    "selectAll": "Избери ги сите",
+    "deselectAll": "Поништи го изборот",
+    "noDeviceFiles": "Нема датотеки со резултати од уреди за овој медицински запис.",
+    "generateAndPrint": "Направи и печати",
+    "selectAtLeastOne": "Изберете барем една датотека од уред за да се вклучи во извештајот.",
+    "generateFailed": "Неуспешно правење на извештајот",
+    "unknownDevice": "Непознат уред",
+    "generated": "Извештајот е направен",
+    "generatedDesc": "PDF извештајот е успешно направен"
+  },
+  "recentFiles": {
+    "loadFailed": "Неуспешно вчитување на скорашните датотеки од уреди",
+    "opening": "Се отвора {{name}}…",
+    "openFailed": "Датотеката не можеше да се отвори: {{error}}",
+    "fileDetails": "Детали за датотеката",
+    "fileDetailsTooltip": "Детали за датотеката",
+    "fileName": "Име на датотека",
+    "device": "Уред",
+    "connection": "Врска",
+    "received": "Примено",
+    "fileSize": "Големина на датотека",
+    "mimeType": "MIME тип",
+    "attachedTo": "Прикачено на",
+    "attachedAt": "Прикачено во",
+    "attachmentCount": "Број на прикачувања",
+    "openFile": "Отвори датотека",
+    "openFileDebug": "Отвори датотека (дебагирање)",
+    "unknown": "Непознато",
+    "via": "{{device}} преку {{connection}}",
+    "status": "Статус",
+    "attachedToRecord": "Прикачено на {{patient}} - {{record}} ({{times}}x)",
+    "notAttached": "Сè уште не е прикачено на ниту еден запис",
+    "total_one": "Вкупно {{count}} датотека",
+    "total_other": "Вкупно {{count}} датотеки",
+    "empty": "Нема примени датотеки од уреди во последните 14 дена. Датотеките ќе се појават тука кога уредите ќе испратат податоци.",
+    "couldNotReadResults": "Не можеа да се прочитаат резултатите од „{{name}}“ — ќе се прикачи како обична датотека, без табела со резултати од уредот.",
+    "addedToPending": "{{name}} е додадена во датотеките на чекање",
+    "addedToRecord": "{{name}} е додадена во медицинскиот запис",
+    "addFromHistoryFailed": "Неуспешно додавање на датотека од историјата"
+  },
+  "pdfPreview": {
+    "loadFailed": "Неуспешно вчитување на PDF прегледот",
+    "loadMoreFailed": "Неуспешно вчитување на повеќе страници",
+    "regenerated": "Прегледите се успешно повторно направени",
+    "regenerateFailed": "Неуспешно повторно правење на прегледите",
+    "printFailed": "Печатењето не успеа",
+    "printDialogFailed": "Неуспешно отворање на дијалогот за печатење",
+    "pagesLoaded": "Вчитани {{loaded}} од {{total}} страници",
+    "regenerate": "Направи повторно",
+    "pageAlt": "Страница {{page}}",
+    "loadingMore": "Се вчитуваат уште страници...",
+    "scrollForMore": "Лизгајте надолу за да вчитате повеќе страници",
+    "inlineTimedOut": "Времето за прикажување на PDF-от истече.",
+    "inlineFailed": "PDF-от не можеше да се прикаже. {{error}}",
+    "downloadPdf": "Преземи PDF",
+    "unableToDisplay": "PDF-от не може да се прикаже тука."
+  },
+  "templates": {
+    "created": "Шаблонот е создаден",
+    "createdDesc": "Шаблонот за запис е успешно создаден",
+    "updated": "Шаблонот е ажуриран",
+    "updatedDesc": "Шаблонот за запис е успешно ажуриран",
+    "deleted": "Шаблонот е избришан",
+    "deletedDesc": "Шаблонот за запис е успешно избришан"
   }
 }

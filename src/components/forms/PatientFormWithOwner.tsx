@@ -150,7 +150,7 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
           const primaryPerson = item.people?.find((p: any) => p.is_primary) || item.people?.[0];
           const householdName = item.household_name ||
                                (primaryPerson ? primaryPerson.last_name : null) ||
-                               'Unnamed Household';
+                               t('households:unnamedHousehold');
 
           return {
             id: item.id,
@@ -220,9 +220,9 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
       console.error('Form submission error:', error);
       if (error?.errorFields) {
         const firstError = error.errorFields[0]?.errors[0];
-        setFormError(firstError || 'Please check all required fields');
+        setFormError(firstError || t('forms:validation.checkRequired'));
       } else {
-        setFormError(knownErrorMessage(error, t) || error?.message || 'Failed to save patient');
+        setFormError(knownErrorMessage(error, t) || error?.message || t('forms:errors.saveFailed'));
       }
     } finally {
       setSubmitting(false);
@@ -244,14 +244,14 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
       title={
         <Space>
           <HeartOutlined className={styles.iconPink} />
-          {patient ? 'Edit Patient' : 'Add New Patient'}
+          {patient ? t('patients:editPatient') : t('patients:addButton')}
         </Space>
       }
       className={styles.formCardCentered}
     >
       {formError && (
         <Alert
-          message="Error"
+          message={t('common:error')}
           description={formError}
           type="error"
           showIcon
@@ -286,16 +286,16 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
         <Divider orientation="left">
           <Space>
             <HomeOutlined />
-            Household Information
+            {t('patients:detail.householdInfo.title')}
           </Space>
         </Divider>
 
         {/* Household Selection */}
         <Row gutter={16}>
           <Col xs={24}>
-            <Form.Item name="householdId" label="Select Household (Optional)">
+            <Form.Item name="householdId" label={t('forms:labels.selectHouseholdOptional')}>
               <Select
-                placeholder="Search for household by name..."
+                placeholder={t('forms:placeholders.searchHousehold')}
                 showSearch
                 allowClear
                 loading={searchingHouseholds}
@@ -303,8 +303,8 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
                 filterOption={false}
                 notFoundContent={
                   searchingHouseholds
-                    ? 'Searching...'
-                    : 'No households match this search. Use "Create New Household" below to add one.'
+                    ? t('forms:messages.searching')
+                    : t('forms:messages.noHouseholdsMatch')
                 }
                 className={styles.fullWidth}
               >
@@ -314,7 +314,7 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
                     <Option key={`household-${household.id}`} value={household.id}>
                       <Space>
                         <HomeOutlined />
-                        <span>{household.lastName || 'Unknown'}</span>
+                        <span>{household.lastName || t('entities:defaults.unknown')}</span>
                         {household.primaryContact && (
                           <span className={styles.householdOption}>({household.primaryContact})</span>
                         )}
@@ -329,7 +329,7 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
               onClick={() => setCreateHouseholdOpen(true)}
               className={styles.actionButton}
             >
-              Create New Household
+              {t('patients:detail.householdInfo.createNewHousehold')}
             </Button>
           </Col>
         </Row>
@@ -342,7 +342,7 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
             // the Select can render it, then select it on the parent form.
             const householdName =
               (typeof newHousehold.householdName === 'string' && newHousehold.householdName) ||
-              'New Household';
+              t('households:newHousehold');
             setHouseholds((prev) => {
               if (prev.some((h) => h.id === newHousehold.id)) return prev;
               return [
@@ -356,8 +356,8 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
             form.setFieldValue('householdId', newHousehold.id);
             setCreateHouseholdOpen(false);
             notification.success({
-              message: 'Household created',
-              description: `${householdName} created and selected.`,
+              message: t('patients:detail.householdInfo.createSuccess'),
+              description: t('households:createdAndSelected', { name: householdName }),
               placement: 'bottomRight',
               duration: 3,
             });
@@ -375,7 +375,7 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
               disabled={loading}
               data-testid="submit-patient-btn"
             >
-              {patient ? 'Update Patient' : 'Create Patient'}
+              {patient ? t('patients:form.updateButton') : t('patients:form.createButton')}
             </Button>
             <Button
               type="default"
@@ -383,7 +383,7 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
               onClick={onCancel}
               disabled={submitting}
             >
-              Cancel
+              {t('common:cancel')}
             </Button>
           </Space>
         </Form.Item>

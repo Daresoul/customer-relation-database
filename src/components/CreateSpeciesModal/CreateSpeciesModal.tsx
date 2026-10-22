@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { Modal, Form, Input, App } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { useCreateSpecies } from '../../hooks/useSpecies';
 import { toTitleCase } from '../../utils/stringUtils';
 
@@ -17,6 +18,7 @@ export const CreateSpeciesModal: React.FC<CreateSpeciesModalProps> = ({
   onSuccess,
 }) => {
   const [form] = Form.useForm();
+  const { t } = useTranslation(['settings', 'common']);
   const { notification } = App.useApp();
   const createSpecies = useCreateSpecies();
 
@@ -32,8 +34,8 @@ export const CreateSpeciesModal: React.FC<CreateSpeciesModalProps> = ({
       const titleCasedName = toTitleCase(values.name.trim());
       await createSpecies.mutateAsync({ name: titleCasedName });
       notification.success({
-        message: 'Success',
-        description: `Species "${titleCasedName}" created successfully`,
+        message: t('common:success'),
+        description: t('settings:species.createdNamed', { name: titleCasedName }),
         placement: 'bottomRight',
         duration: 3,
       });
@@ -43,8 +45,8 @@ export const CreateSpeciesModal: React.FC<CreateSpeciesModalProps> = ({
     } catch (error) {
       console.error('Failed to create species:', error);
       notification.error({
-        message: 'Error',
-        description: 'Failed to create species',
+        message: t('common:error'),
+        description: t('settings:species.createFailed'),
         placement: 'bottomRight',
         duration: 5,
       });
@@ -58,23 +60,23 @@ export const CreateSpeciesModal: React.FC<CreateSpeciesModalProps> = ({
 
   return (
     <Modal
-      title="Create New Species"
+      title={t('settings:species.createTitle')}
       open={open}
       onOk={handleSubmit}
       onCancel={handleCancel}
       confirmLoading={createSpecies.isPending}
-      okText="Create"
+      okText={t('common:create')}
     >
       <Form form={form} layout="vertical">
         <Form.Item
           name="name"
-          label="Species Name"
+          label={t('settings:species.nameColumn')}
           rules={[
-            { required: true, message: 'Please enter species name' },
-            { max: 50, message: 'Name cannot exceed 50 characters' },
+            { required: true, message: t('settings:species.nameRequired') },
+            { max: 50, message: t('settings:species.nameMaxLength', { max: 50 }) },
           ]}
         >
-          <Input placeholder="Enter species name" autoFocus />
+          <Input placeholder={t('settings:species.namePlaceholder')} autoFocus />
         </Form.Item>
       </Form>
     </Modal>

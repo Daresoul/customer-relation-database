@@ -3,6 +3,7 @@
  */
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Form,
   Input,
@@ -64,6 +65,7 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
   loading = false,
   mode = 'create',
 }) => {
+  const { t } = useTranslation(['households', 'patients', 'forms', 'common', 'entities']);
   const [form] = Form.useForm();
 
   // Patient-association state. Only meaningful in edit mode (need the
@@ -99,7 +101,7 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
       );
     } catch (err) {
       console.error('Failed to load household patients:', err);
-      message.error('Could not load patients for this household.');
+      message.error(t('form.loadPatientsFailed'));
     } finally {
       setLoadingPatients(false);
     }
@@ -150,13 +152,13 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
         id: patientId,
         dto: { householdId },
       });
-      message.success('Patient added to household.');
+      message.success(t('form.patientAdded'));
       setSearchValue('');
       setSearchResults([]);
       await refreshHouseholdPatients();
     } catch (err: any) {
       console.error('Add patient failed:', err);
-      message.error(`Could not add patient: ${err?.message || err}`);
+      message.error(t('form.addPatientFailed', { error: err?.message || err }));
     }
   };
 
@@ -166,11 +168,11 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
         id: patientId,
         dto: { householdId: null },
       });
-      message.success('Patient removed from household.');
+      message.success(t('form.patientRemoved'));
       await refreshHouseholdPatients();
     } catch (err: any) {
       console.error('Remove patient failed:', err);
-      message.error(`Could not remove patient: ${err?.message || err}`);
+      message.error(t('form.removePatientFailed', { error: err?.message || err }));
     }
   };
 
@@ -192,7 +194,7 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
       title={
         <Space>
           <HomeOutlined />
-          {mode === 'create' ? 'Create New Household' : 'Edit Household'}
+          {mode === 'create' ? t('patients:detail.householdInfo.createNewHousehold') : t('patients:editHousehold')}
         </Space>
       }
       className={styles.formCardLarge}
@@ -210,14 +212,14 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
           <Col xs={24}>
             <Form.Item
               name="lastName"
-              label="Household Name"
+              label={t('form.householdName')}
               rules={[
-                { required: true, message: 'Please enter household name' },
-                { max: 100, message: 'Name cannot exceed 100 characters' },
+                { required: true, message: t('form.householdNameRequired') },
+                { max: 100, message: t('form.nameTooLong') },
               ]}
             >
               <Input
-                placeholder="Enter household/family name"
+                placeholder={t('form.householdNamePlaceholder')}
                 prefix={<HomeOutlined />}
                 size="large"
               />
@@ -228,7 +230,7 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
         <Divider orientation="left">
           <Space>
             <UserOutlined />
-            Contacts
+            {t('form.contacts')}
           </Space>
         </Divider>
 
@@ -242,7 +244,7 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
                   className={styles.contactCard}
                   title={
                     <Space>
-                      <Text>Contact {index + 1}</Text>
+                      <Text>{t('form.contactNumber', { number: index + 1 })}</Text>
                       <Form.Item
                         {...restField}
                         name={[name, 'isPrimary']}
@@ -259,14 +261,14 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
                             });
                           }}
                         >
-                          {form.getFieldValue(['contacts', name, 'isPrimary']) ? 'Primary' : 'Set as Primary'}
+                          {form.getFieldValue(['contacts', name, 'isPrimary']) ? t('form.primary') : t('form.setAsPrimary')}
                         </Button>
                       </Form.Item>
                     </Space>
                   }
                   extra={
                     fields.length > 1 && (
-                      <Tooltip title="Remove contact">
+                      <Tooltip title={t('form.removeContact')}>
                         <Button
                           type="text"
                           danger
@@ -283,20 +285,20 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
                       <Form.Item
                         {...restField}
                         name={[name, 'firstName']}
-                        label="First Name"
-                        rules={[{ required: true, message: 'First name required' }]}
+                        label={t('forms:labels.firstName')}
+                        rules={[{ required: true, message: t('form.firstNameRequired') }]}
                       >
-                        <Input placeholder="First name" prefix={<UserOutlined />} />
+                        <Input placeholder={t('form.firstNamePlaceholder')} prefix={<UserOutlined />} />
                       </Form.Item>
                     </Col>
                     <Col xs={24} sm={12}>
                       <Form.Item
                         {...restField}
                         name={[name, 'lastName']}
-                        label="Last Name"
-                        rules={[{ required: true, message: 'Last name required' }]}
+                        label={t('forms:labels.lastName')}
+                        rules={[{ required: true, message: t('form.lastNameRequired') }]}
                       >
-                        <Input placeholder="Last name" />
+                        <Input placeholder={t('form.lastNamePlaceholder')} />
                       </Form.Item>
                     </Col>
                   </Row>
@@ -306,22 +308,22 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
                       <Form.Item
                         {...restField}
                         name={[name, 'phone']}
-                        label="Phone"
+                        label={t('entities:contactTypes.phone')}
                         rules={[
-                          { pattern: /^[\d\s\-\+\(\)]+$/, message: 'Invalid phone format' },
+                          { pattern: /^[\d\s\-\+\(\)]+$/, message: t('form.invalidPhone') },
                         ]}
                       >
-                        <Input placeholder="Phone number" prefix={<PhoneOutlined />} />
+                        <Input placeholder={t('form.phonePlaceholder')} prefix={<PhoneOutlined />} />
                       </Form.Item>
                     </Col>
                     <Col xs={24} sm={12}>
                       <Form.Item
                         {...restField}
                         name={[name, 'email']}
-                        label="Email"
-                        rules={[{ type: 'email', message: 'Invalid email address' }]}
+                        label={t('entities:contactTypes.email')}
+                        rules={[{ type: 'email', message: t('form.invalidEmail') }]}
                       >
-                        <Input placeholder="Email (optional)" prefix={<MailOutlined />} />
+                        <Input placeholder={t('form.emailPlaceholder')} prefix={<MailOutlined />} />
                       </Form.Item>
                     </Col>
                   </Row>
@@ -331,9 +333,9 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
                       <Form.Item
                         {...restField}
                         name={[name, 'relationship']}
-                        label="Relationship/Role"
+                        label={t('form.relationship')}
                       >
-                        <Input placeholder="e.g., Owner, Emergency Contact, etc." />
+                        <Input placeholder={t('form.relationshipPlaceholder')} />
                       </Form.Item>
                     </Col>
                   </Row>
@@ -347,7 +349,7 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
                   block
                   icon={<PlusOutlined />}
                 >
-                  Add Another Contact
+                  {t('form.addContact')}
                 </Button>
               </Form.Item>
             </>
@@ -357,7 +359,7 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
         <Divider orientation="left">
           <Space>
             <HomeOutlined />
-            Address (Optional)
+            {t('form.addressSection')}
           </Space>
         </Divider>
 
@@ -365,9 +367,9 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
           <Col xs={24}>
             <Form.Item
               name={['address', 'street']}
-              label="Street Address"
+              label={t('form.street')}
             >
-              <Input placeholder="Street address" />
+              <Input placeholder={t('form.streetPlaceholder')} />
             </Form.Item>
           </Col>
         </Row>
@@ -376,25 +378,25 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
           <Col xs={24} sm={12}>
             <Form.Item
               name={['address', 'city']}
-              label="City"
+              label={t('forms:labels.city')}
             >
-              <Input placeholder="City" />
+              <Input placeholder={t('forms:labels.city')} />
             </Form.Item>
           </Col>
           <Col xs={24} sm={6}>
             <Form.Item
               name={['address', 'state']}
-              label="State"
+              label={t('form.state')}
             >
-              <Input placeholder="State" />
+              <Input placeholder={t('form.state')} />
             </Form.Item>
           </Col>
           <Col xs={24} sm={6}>
             <Form.Item
               name={['address', 'zipCode']}
-              label="ZIP Code"
+              label={t('form.zipCode')}
             >
-              <Input placeholder="ZIP" />
+              <Input placeholder={t('form.zipPlaceholder')} />
             </Form.Item>
           </Col>
         </Row>
@@ -405,11 +407,11 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
           <Col xs={24}>
             <Form.Item
               name="notes"
-              label="Notes"
+              label={t('forms:labels.notes')}
             >
               <Input.TextArea
                 rows={3}
-                placeholder="Additional notes about this household"
+                placeholder={t('form.notesPlaceholder')}
                 showCount
                 maxLength={500}
               />
@@ -425,7 +427,7 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
             <Divider orientation="left">
               <Space>
                 <UserOutlined />
-                Patients
+                {t('patients:title')}
               </Space>
             </Divider>
 
@@ -436,7 +438,7 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
                 emptyText: (
                   <Empty
                     image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description="No patients in this household yet."
+                    description={t('form.noPatients', 'No patients in this household yet.')}
                   />
                 ),
               }}
@@ -445,15 +447,15 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
                   actions={[
                     <Popconfirm
                       key="remove"
-                      title="Remove this patient from the household?"
-                      description="The patient record stays — only the household link is cleared."
+                      title={t('form.removePatientTitle')}
+                      description={t('form.removePatientDesc')}
                       onConfirm={() => handleRemovePatient(p.id)}
-                      okText="Remove"
-                      cancelText="Cancel"
+                      okText={t('common:remove')}
+                      cancelText={t('common:cancel')}
                       okButtonProps={{ danger: true }}
                     >
                       <Button type="link" danger icon={<DeleteOutlined />}>
-                        Remove
+                        {t('common:remove')}
                       </Button>
                     </Popconfirm>,
                   ]}
@@ -471,7 +473,7 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
                         )}
                         {p.microchipId && (
                           <Text type="secondary" style={{ fontSize: 12 }}>
-                            Chip: {p.microchipId}
+                            {t('form.chip', { chip: p.microchipId })}
                           </Text>
                         )}
                       </Space>
@@ -481,7 +483,7 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
               )}
             />
 
-            <Form.Item label="Add existing patient" style={{ marginTop: 16 }}>
+            <Form.Item label={t('form.addExistingPatient', 'Add existing patient')} style={{ marginTop: 16 }}>
               <Select
                 showSearch
                 // Always render as "empty" — we clear immediately after
@@ -489,7 +491,7 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
                 // binding `value` to a string search query trips the
                 // type-checker (option values are numeric patient IDs).
                 value={undefined}
-                placeholder="Search by patient name or microchip ID (type 2+ chars)"
+                placeholder={t('form.searchPatientPlaceholder')}
                 suffixIcon={<SearchOutlined />}
                 filterOption={false}
                 loading={searching}
@@ -499,10 +501,10 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
                 }}
                 notFoundContent={
                   searching
-                    ? 'Searching...'
+                    ? t('forms:messages.searching')
                     : searchValue.trim().length < 2
-                      ? 'Type 2 or more characters to search.'
-                      : 'No matching patients found.'
+                      ? t('form.typeMore')
+                      : t('form.noMatchingPatients')
                 }
                 style={{ width: '100%' }}
                 allowClear
@@ -528,8 +530,7 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
                 ))}
               </Select>
               <Text type="secondary" style={{ fontSize: 12 }}>
-                Picking a patient immediately moves them into this household.
-                The other household (if any) loses the link.
+                {t('form.pickHint')}
               </Text>
             </Form.Item>
           </>
@@ -540,13 +541,11 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
             <Divider orientation="left">
               <Space>
                 <UserOutlined />
-                Patients
+                {t('patients:title')}
               </Space>
             </Divider>
             <Text type="secondary">
-              Save this household first, then re-open it to add or move patients
-              into it. From the patient form you can also assign patients to
-              this household by name.
+              {t('form.saveFirstHint', 'Save this household first, then re-open it to add or move patients into it. From the patient form you can also assign patients to this household by name.')}
             </Text>
           </>
         )}
@@ -560,7 +559,7 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
               loading={loading}
               size="large"
             >
-              {mode === 'create' ? 'Create Household' : 'Save Changes'}
+              {mode === 'create' ? t('form.createHousehold') : t('common:saveChanges')}
             </Button>
             <Button
               type="default"
@@ -569,7 +568,7 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
               disabled={loading}
               size="large"
             >
-              Cancel
+              {t('common:cancel')}
             </Button>
           </Space>
         </Form.Item>

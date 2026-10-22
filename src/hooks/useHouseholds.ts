@@ -71,7 +71,7 @@ export const useCreateHousehold = () => {
         duration: 3,
       });
     },
-    onError: createMutationErrorHandler(notification, 'Create Household', t, 'useHouseholds'),
+    onError: createMutationErrorHandler(notification, 'createHousehold', t, 'useHouseholds'),
   });
 };
 
@@ -94,7 +94,7 @@ export const useUpdateHousehold = () => {
         duration: 3,
       });
     },
-    onError: createMutationErrorHandler(notification, 'Update Household', t, 'useHouseholds'),
+    onError: createMutationErrorHandler(notification, 'updateHousehold', t, 'useHouseholds'),
   });
 };
 
@@ -114,7 +114,7 @@ export const useDeleteHousehold = () => {
         duration: 3,
       });
     },
-    onError: createMutationErrorHandler(notification, 'Delete Household', t, 'useHouseholds'),
+    onError: createMutationErrorHandler(notification, 'deleteHousehold', t, 'useHouseholds'),
   });
 };
 

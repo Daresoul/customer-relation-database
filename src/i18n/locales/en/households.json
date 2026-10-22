@@ -82,7 +82,8 @@
           "workPhone": "Work Phone"
         },
         "addContactMethod": "Add Contact Method"
-      }
+      },
+      "personUpdated": "Person updated successfully"
     },
     "animals": {
       "title": "Associated Animals",
@@ -110,6 +111,70 @@
         "years_other": "{{count}} years"
       },
       "loadFailed": "Could not load this household's pets"
-    }
+    },
+    "unnamedTitle": "Household {{id}}"
+  },
+  "unnamed": "Unnamed",
+  "unnamedHousehold": "Unnamed Household",
+  "newHousehold": "New Household",
+  "createdAndSelected": "{{name}} created and selected.",
+  "form": {
+    "householdName": "Household Name",
+    "householdNameRequired": "Please enter household name",
+    "nameTooLong": "Name cannot exceed 100 characters",
+    "householdNamePlaceholder": "Enter household/family name",
+    "contacts": "Contacts",
+    "contactNumber": "Contact {{number}}",
+    "primary": "Primary",
+    "setAsPrimary": "Set as Primary",
+    "removeContact": "Remove contact",
+    "firstNameRequired": "First name required",
+    "firstNamePlaceholder": "First name",
+    "lastNameRequired": "Last name required",
+    "lastNamePlaceholder": "Last name",
+    "invalidPhone": "Invalid phone format",
+    "phonePlaceholder": "Phone number",
+    "invalidEmail": "Invalid email address",
+    "emailPlaceholder": "Email (optional)",
+    "relationship": "Relationship/Role",
+    "relationshipPlaceholder": "e.g., Owner, Emergency Contact, etc.",
+    "addContact": "Add Another Contact",
+    "addressSection": "Address (Optional)",
+    "street": "Street Address",
+    "streetPlaceholder": "Street address",
+    "state": "State",
+    "zipCode": "ZIP Code",
+    "zipPlaceholder": "ZIP",
+    "notesPlaceholder": "Additional notes about this household",
+    "noPatients": "No patients in this household yet.",
+    "removePatientTitle": "Remove this patient from the household?",
+    "removePatientDesc": "The patient record stays — only the household link is cleared.",
+    "chip": "Chip: {{chip}}",
+    "addExistingPatient": "Add existing patient",
+    "searchPatientPlaceholder": "Search by patient name or microchip ID (type 2+ chars)",
+    "typeMore": "Type 2 or more characters to search.",
+    "noMatchingPatients": "No matching patients found.",
+    "pickHint": "Picking a patient immediately moves them into this household. The other household (if any) loses the link.",
+    "saveFirstHint": "Save this household first, then re-open it to add or move patients into it. From the patient form you can also assign patients to this household by name.",
+    "createHousehold": "Create Household",
+    "loadPatientsFailed": "Could not load patients for this household.",
+    "patientAdded": "Patient added to household.",
+    "addPatientFailed": "Could not add patient: {{error}}",
+    "patientRemoved": "Patient removed from household.",
+    "removePatientFailed": "Could not remove patient: {{error}}"
+  },
+  "table": {
+    "details": "Household Details",
+    "householdName": "Household Name:",
+    "notSpecified": "Not specified",
+    "address": "Address:",
+    "petCount": "Number of Pets:",
+    "viewPetsHint": "View household page to see all pets",
+    "lastActivity": "Last Activity:",
+    "status": "Status:",
+    "notes": "Notes:",
+    "addPet": "Add Pet",
+    "viewFullDetails": "View Full Details",
+    "total": "{{start}}-{{end}} of {{total}} households"
   }
 }

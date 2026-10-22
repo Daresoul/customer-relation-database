@@ -90,7 +90,8 @@
     "createFailed": "Failed to create appointment",
     "updatedSuccess": "Appointment updated successfully",
     "updateFailed": "Failed to update appointment",
-    "saveFailed": "Failed to save appointment"
+    "saveFailed": "Failed to save appointment",
+    "duplicateSelectDate": "Select a date to duplicate this appointment to:"
   },
   "details": {
     "title": "Appointment Details",
@@ -111,6 +112,35 @@
     "dateRange": "Date Range",
     "clear": "Clear",
     "apply": "Apply",
-    "timeLabel": "Time"
+    "timeLabel": "Time",
+    "weekOf": "Week of {{date}}",
+    "more_one": "+{{count}} more",
+    "more_other": "+{{count}} more",
+    "addAppointment": "Add appointment",
+    "scheduleFirst": "Schedule First Appointment"
+  },
+  "list": {
+    "showing": "Showing {{shown}} of {{total}} appointments",
+    "loadingMore": "Loading more appointments...",
+    "durationMinutes": "({{duration}} min)",
+    "roomNumber": "Room {{id}}",
+    "createdBy": "Created {{when}} by {{user}}"
+  },
+  "rooms": {
+    "title": "Appointment Rooms",
+    "add": "Add Room",
+    "addNew": "Add New Room",
+    "edit": "Edit Room",
+    "color": "Color",
+    "colorTooltip": "Room color: {{color}}",
+    "name": "Name",
+    "nameLabel": "Room Name",
+    "nameRequired": "Please enter room name",
+    "namePlaceholder": "e.g., Examination Room 1",
+    "descriptionPlaceholder": "Optional description of the room",
+    "capacityRequired": "Please enter room capacity",
+    "capacityPlaceholder": "Number of patients/animals",
+    "colorLabel": "Room Color",
+    "colorHint": "This color will be used to identify the room in the calendar"
   }
 }

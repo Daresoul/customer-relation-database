@@ -32,7 +32,7 @@ const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, da
       setFiles(recentFiles);
     } catch (error) {
       console.error('[RecentDeviceFiles] Failed to load recent device files:', error);
-      message.error('Failed to load recent device files');
+      message.error(t('medical:recentFiles.loadFailed'));
       setFiles([]); // Set empty array on error
     } finally {
       setLoading(false);
@@ -63,39 +63,39 @@ const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, da
    * actually sent (e.g. inspecting the XML/JSON, checking a 0-byte or malformed file).
    */
   const handleOpenFile = async (file: FileAccessHistoryWithRecord) => {
-    const hide = message.loading(`Opening ${file.originalName}…`, 0);
+    const hide = message.loading(t('medical:recentFiles.opening', { name: file.originalName }), 0);
     try {
       await fileHistoryService.openDeviceFile(file.fileId);
       hide();
     } catch (error) {
       hide();
       console.error('[RecentDeviceFiles] Failed to open device file:', error);
-      message.error(`Could not open file: ${error}`);
+      message.error(t('medical:recentFiles.openFailed', { error: String(error) }));
     }
   };
 
   const handleViewFile = (file: FileAccessHistoryWithRecord) => {
     Modal.info({
-      title: 'File Details',
+      title: t('medical:recentFiles.fileDetails'),
       width: 600,
       content: (
         <div style={{ marginTop: 16 }}>
-          <p><strong>File Name:</strong> {file.originalName}</p>
-          <p><strong>Device:</strong> {file.deviceName} ({file.deviceType})</p>
-          <p><strong>Connection:</strong> {file.connectionMethod || 'Unknown'}</p>
-          <p><strong>Received:</strong> {new Date(file.receivedAt).toLocaleString()}</p>
-          <p><strong>File Size:</strong> {file.fileSize ? `${(file.fileSize / 1024).toFixed(2)} KB` : 'Unknown'}</p>
-          <p><strong>MIME Type:</strong> {file.mimeType || 'Unknown'}</p>
+          <p><strong>{t('medical:recentFiles.fileName')}:</strong> {file.originalName}</p>
+          <p><strong>{t('medical:recentFiles.device')}:</strong> {file.deviceName} ({file.deviceType})</p>
+          <p><strong>{t('medical:recentFiles.connection')}:</strong> {file.connectionMethod || t('medical:recentFiles.unknown')}</p>
+          <p><strong>{t('medical:recentFiles.received')}:</strong> {new Date(file.receivedAt).toLocaleString()}</p>
+          <p><strong>{t('medical:recentFiles.fileSize')}:</strong> {file.fileSize ? `${(file.fileSize / 1024).toFixed(2)} KB` : t('medical:recentFiles.unknown')}</p>
+          <p><strong>{t('medical:recentFiles.mimeType')}:</strong> {file.mimeType || t('medical:recentFiles.unknown')}</p>
           {file.firstAttachedToRecordId && (
             <>
-              <p><strong>Attached to:</strong> {file.patientName} - {file.recordName}</p>
-              <p><strong>Attached at:</strong> {file.firstAttachedAt ? new Date(file.firstAttachedAt).toLocaleString() : 'Unknown'}</p>
+              <p><strong>{t('medical:recentFiles.attachedTo')}:</strong> {file.patientName} - {file.recordName}</p>
+              <p><strong>{t('medical:recentFiles.attachedAt')}:</strong> {file.firstAttachedAt ? new Date(file.firstAttachedAt).toLocaleString() : t('medical:recentFiles.unknown')}</p>
             </>
           )}
-          <p><strong>Attachment Count:</strong> {file.attachmentCount}</p>
+          <p><strong>{t('medical:recentFiles.attachmentCount')}:</strong> {file.attachmentCount}</p>
           <div style={{ marginTop: 16 }}>
             <Button icon={<FileSearchOutlined />} onClick={() => handleOpenFile(file)}>
-              Open file
+              {t('medical:recentFiles.openFile')}
             </Button>
           </div>
         </div>
@@ -131,7 +131,7 @@ const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, da
 
   const columns = [
     {
-      title: 'File Name',
+      title: t('medical:recentFiles.fileName'),
       dataIndex: 'originalName',
       key: 'originalName',
       ellipsis: {
@@ -149,12 +149,12 @@ const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, da
       ),
     },
     {
-      title: 'Device',
+      title: t('medical:recentFiles.device'),
       dataIndex: 'deviceType',
       key: 'deviceType',
       width: 180,
       render: (deviceType: string, record: FileAccessHistoryWithRecord) => (
-        <Tooltip title={`${record.deviceName} via ${record.connectionMethod || 'Unknown'}`}>
+        <Tooltip title={t('medical:recentFiles.via', { device: record.deviceName, connection: record.connectionMethod || t('medical:recentFiles.unknown') })}>
           <Tag color={getDeviceTypeColor(deviceType)}>
             {getDeviceTypeDisplay(deviceType)}
           </Tag>
@@ -162,7 +162,7 @@ const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, da
       ),
     },
     {
-      title: 'Status',
+      title: t('medical:recentFiles.status'),
       key: 'status',
       width: 100,
       align: 'center' as const,
@@ -176,13 +176,13 @@ const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, da
         }
         if (record.firstAttachedToRecordId) {
           return (
-            <Tooltip title={`Attached to ${record.patientName} - ${record.recordName} (${record.attachmentCount}x)`}>
+            <Tooltip title={t('medical:recentFiles.attachedToRecord', { patient: record.patientName, record: record.recordName, times: record.attachmentCount })}>
               <CheckCircleOutlined style={{ color: '#52c41a', fontSize: '18px' }} />
             </Tooltip>
           );
         } else {
           return (
-            <Tooltip title="Not yet attached to any record">
+            <Tooltip title={t('medical:recentFiles.notAttached')}>
               <WarningOutlined style={{ color: '#faad14', fontSize: '18px' }} />
             </Tooltip>
           );
@@ -190,13 +190,13 @@ const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, da
       },
     },
     {
-      title: 'Actions',
+      title: t('common:actionsLabel'),
       key: 'actions',
       width: 210,
       fixed: 'right' as const,
       render: (_: any, record: FileAccessHistoryWithRecord) => (
         <Space size="small">
-          <Tooltip title="File details">
+          <Tooltip title={t('medical:recentFiles.fileDetailsTooltip')}>
             <Button
               type="link"
               size="small"
@@ -204,7 +204,7 @@ const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, da
               onClick={() => handleViewFile(record)}
             />
           </Tooltip>
-          <Tooltip title="Open file (debug)">
+          <Tooltip title={t('medical:recentFiles.openFileDebug')}>
             <Button
               type="link"
               size="small"
@@ -219,7 +219,7 @@ const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, da
               icon={<PlusOutlined />}
               onClick={() => handleAddToRecord(record)}
             >
-              Add
+              {t('common:add')}
             </Button>
           )}
         </Space>
@@ -237,12 +237,12 @@ const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, da
         pagination={{
           pageSize: 10,
           showSizeChanger: true,
-          showTotal: (total) => `Total ${total} files`,
+          showTotal: (total) => t('medical:recentFiles.total', { count: total }),
         }}
         size="small"
         scroll={{ x: 700 }}
         locale={{
-          emptyText: 'No device files received in the last 14 days. Files will appear here when devices send data.',
+          emptyText: t('medical:recentFiles.empty'),
         }}
       />
     </div>

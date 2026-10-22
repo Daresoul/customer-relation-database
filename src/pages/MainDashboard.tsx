@@ -126,7 +126,7 @@ export const MainDashboard: React.FC = () => {
           ...patient,
           household: household ? {
             id: household.id,
-            householdName: household.lastName || 'Unnamed',
+            householdName: household.lastName || t('households:unnamed'),
             address: household.address
           } : undefined
         } as PatientWithHousehold;
@@ -197,7 +197,7 @@ export const MainDashboard: React.FC = () => {
           ...patient,
           household: household ? {
             id: household.id,
-            householdName: household.lastName || 'Unnamed',
+            householdName: household.lastName || t('households:unnamed'),
             address: household.address
           } : undefined
         } as PatientWithHousehold;
@@ -537,7 +537,7 @@ export const MainDashboard: React.FC = () => {
                 label: (
                   <span>
                     <FileTextOutlined />
-                    Saved For Later
+                    {t('devices:pending.title')}
                     {pendingCount > 0 && (
                       <Badge count={pendingCount} size="small" style={{ marginLeft: 8 }} />
                     )}

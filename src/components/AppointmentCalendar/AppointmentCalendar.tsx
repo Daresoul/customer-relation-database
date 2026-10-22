@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Calendar, Badge, Button, Space, Tooltip, Tag, Radio, ConfigProvider } from 'antd';
+import { Calendar, Badge, Button, Space, Tooltip, Tag, Radio } from 'antd';
 import { CalendarMode } from 'antd/es/calendar/generateCalendar';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
@@ -12,7 +12,6 @@ import appointmentService from '../../services/appointmentService';
 import WeekView from './WeekView';
 import DayView from './DayView';
 import DayViewSimple from './DayViewSimple';
-import enUS from 'antd/es/locale/en_US';
 import { useTranslation } from 'react-i18next';
 import styles from './AppointmentCalendar.module.css';
 
@@ -44,6 +43,7 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
   const { t } = useTranslation('appointments');
   const [selectedDate, setSelectedDate] = useState<Dayjs>(dayjs());
   const themeColors = useThemeColors();
+  const statusLabel = (status: string) => t(`status.${status === 'in_progress' ? 'inProgress' : status}`);
 
 
   // Fetch room data for colors
@@ -69,7 +69,7 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
           <strong>{t('details.patient')}:</strong> {apt.patientName || t('details.unknownPatient')}
         </div>
         <div className={styles.tooltipLine}>
-          <strong>Microchip ID:</strong> {apt.microchipId || '-'}
+          <strong>{t('patients:fields.microchipId')}:</strong> {apt.microchipId || '-'}
         </div>
         <div className={styles.tooltipLine}>
           <strong>{t('details.time')}:</strong> {dayjs(apt.startTime).format('HH:mm')} - {dayjs(apt.endTime).format('HH:mm')}
@@ -83,7 +83,7 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
           </div>
         )}
         <div className={styles.tooltipLine}>
-          <strong>{t('fields.status')}:</strong> {apt.status.replace('_', ' ')}
+          <strong>{t('fields.status')}:</strong> {statusLabel(apt.status)}
         </div>
         <div className={styles.tooltipTitle}>{apt.title}</div>
         {apt.description && (
@@ -180,7 +180,7 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
             </Tooltip>
           ))}
           {dayAppointments.length > 3 && (
-            <div className={styles.moreAppointments}>+{dayAppointments.length - 3} more</div>
+            <div className={styles.moreAppointments}>{t('calendar.more', { count: dayAppointments.length - 3 })}</div>
           )}
         </div>
       );
@@ -209,9 +209,9 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                 {dayjs(apt.startTime).format('HH:mm')} - {dayjs(apt.endTime).format('HH:mm')}
               </div>
               <div className={styles.appointmentTitle}>{apt.title}</div>
-              <div className={styles.appointmentPatient}>{apt.patientName || 'Patient'}</div>
+              <div className={styles.appointmentPatient}>{apt.patientName || t('details.patient')}</div>
               <Tag color={getRoomColor(apt)}>
-                {apt.status.replace('_', ' ')}
+                {statusLabel(apt.status)}
               </Tag>
             </div>
           </Tooltip>
@@ -281,7 +281,7 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
     const title = view === 'month'
       ? selectedDate.format('MMMM YYYY')
       : view === 'week'
-      ? `Week of ${selectedDate.startOf('week').format('MMM DD, YYYY')}`
+      ? t('calendar.weekOf', { date: selectedDate.startOf('week').format('MMM DD, YYYY') })
       : selectedDate.format('dddd, MMMM DD, YYYY');
 
     return (
@@ -346,29 +346,15 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
           />
         );
       default:
-        // Configure locale to start week on Monday
-        const customLocale = {
-          ...enUS,
-          Calendar: {
-            ...enUS.Calendar,
-            lang: {
-              ...enUS.Calendar?.lang,
-              weekStart: 1, // Monday
-            },
-          },
-        };
-
         return (
-          <ConfigProvider locale={customLocale}>
-            <Calendar
-              value={selectedDate}
-              onSelect={handleSelect}
-              cellRender={cellRender}
-              mode="month"
-              headerRender={() => null} // We use custom header
-              fullscreen={true}
-            />
-          </ConfigProvider>
+          <Calendar
+            value={selectedDate}
+            onSelect={handleSelect}
+            cellRender={cellRender}
+            mode="month"
+            headerRender={() => null} // We use custom header
+            fullscreen={true}
+          />
         );
     }
   };

@@ -39,6 +39,6 @@ describe('RecentDeviceFiles', () => {
 
     expect(await screen.findByText('broken.xml')).toBeInTheDocument();
     expect(screen.getByText('recentFiles.couldNotRead')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: /Add/ })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: /add/i })).toHaveLength(1);
   });
 });

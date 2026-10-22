@@ -190,7 +190,7 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({
             >
               {allHouseholds.map((h: any) => (
                 <Option key={h.household?.id || h.id} value={h.household?.id || h.id}>
-                  {h.household?.householdName || h.householdName || h.household?.household_name || 'Unknown'}
+                  {h.household?.householdName || h.householdName || h.household?.household_name || t('entities:defaults.unknown')}
                 </Option>
               ))}
             </Select>

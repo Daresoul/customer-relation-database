@@ -7,6 +7,7 @@ import { emit } from '@tauri-apps/api/event';
 import { App } from 'antd';
 import type { Patient } from '../types';
 import type { HouseholdTableRecord } from '../types/ui.types';
+import i18n from 'i18next';
 
 // Create a holder for the App instance
 let appInstance: any = null;
@@ -19,12 +20,12 @@ export const setAppInstance = (app: any) => {
 const handleApiError = (error: any, operation: string) => {
   console.error(`API Error in ${operation}:`, error);
 
-  const errorMessage = error?.message || error?.toString() || 'An unexpected error occurred';
+  const errorMessage = error?.message || error?.toString() || i18n.t('common:unexpectedError');
 
   // Use App instance if available, otherwise use console.error
   if (appInstance?.notification) {
     appInstance.notification.error({
-      message: `${operation} Failed`,
+      message: i18n.t(`common:api.failed.${operation}`),
       description: errorMessage,
       placement: 'bottomRight',
       duration: 6,
@@ -63,46 +64,46 @@ export const patientApi = {
     try {
       return await invoke<Patient[]>('search_patients', { query: query || '', limit });
     } catch (error) {
-      return handleApiError(error, 'Search Patients');
+      return handleApiError(error, 'searchPatients');
     }
   },
 
   create: async (patient: Partial<Patient>): Promise<Patient> => {
-    const hide = showLoading('Creating patient...');
+    const hide = showLoading(i18n.t('common:api.loading.creatingPatient'));
     try {
       const result = await invoke<Patient>('create_patient', { dto: patient });
       hide();
-      showSuccess('Patient Created', `${patient.name} has been successfully added`);
+      showSuccess(i18n.t('common:api.success.patientCreated'), i18n.t('common:api.success.patientCreatedDesc', { name: patient.name }));
       try { await emit('patient-created', result as any); } catch {}
       return result;
     } catch (error) {
       hide();
-      return handleApiError(error, 'Create Patient');
+      return handleApiError(error, 'createPatient');
     }
   },
 
   update: async (id: number, updates: Partial<Patient>): Promise<Patient> => {
-    const hide = showLoading('Updating patient...');
+    const hide = showLoading(i18n.t('common:api.loading.updatingPatient'));
     try {
       const result = await invoke<Patient>('update_patient', { id, dto: updates });
       hide();
-      showSuccess('Patient Updated', 'Changes have been saved');
+      showSuccess(i18n.t('common:api.success.patientUpdated'), i18n.t('common:api.success.changesSaved'));
       return result;
     } catch (error) {
       hide();
-      return handleApiError(error, 'Update Patient');
+      return handleApiError(error, 'updatePatient');
     }
   },
 
   delete: async (id: number): Promise<void> => {
-    const hide = showLoading('Deleting patient...');
+    const hide = showLoading(i18n.t('common:api.loading.deletingPatient'));
     try {
       await invoke('delete_patient', { id });
       hide();
-      showSuccess('Patient Deleted', 'The patient has been removed');
+      showSuccess(i18n.t('common:api.success.patientDeleted'), i18n.t('common:api.success.patientDeletedDesc'));
     } catch (error) {
       hide();
-      return handleApiError(error, 'Delete Patient');
+      return handleApiError(error, 'deletePatient');
     }
   },
 
@@ -110,7 +111,7 @@ export const patientApi = {
     try {
       return await invoke<Patient>('get_patient', { id });
     } catch (error) {
-      return handleApiError(error, 'Get Patient');
+      return handleApiError(error, 'getPatient');
     }
   },
 
@@ -118,7 +119,7 @@ export const patientApi = {
     try {
       return await invoke<Patient[]>('list_patients', { ownerId });
     } catch (error) {
-      return handleApiError(error, 'List Patients');
+      return handleApiError(error, 'listPatients');
     }
   },
 };
@@ -167,7 +168,7 @@ export const householdApi = {
 
           return {
             id: household.id,
-            lastName: household.household_name || household.name || household.last_name || 'Unnamed',
+            lastName: household.household_name || household.name || household.last_name || i18n.t('common:api.unnamed'),
             primaryContact: primaryPerson ? `${primaryPerson.first_name} ${primaryPerson.last_name}` : null,
             phone: primaryPerson?.contacts?.find((c: any) => c.contact_type === 'phone')?.contact_value || null,
             email: primaryPerson?.contacts?.find((c: any) => c.contact_type === 'email')?.contact_value || null,
@@ -186,12 +187,12 @@ export const householdApi = {
 
       return [];
     } catch (error) {
-      return handleApiError(error, 'Search Households');
+      return handleApiError(error, 'searchHouseholds');
     }
   },
 
   create: async (household: Partial<HouseholdTableRecord>): Promise<HouseholdTableRecord> => {
-    const hide = showLoading('Creating household...');
+    const hide = showLoading(i18n.t('common:api.loading.creatingHousehold'));
     try {
       // Format address as a single string if it's an object
       let addressString = null;
@@ -235,7 +236,7 @@ export const householdApi = {
 
       const result = await invoke<any>('create_household_with_people', { dto });
       hide();
-      showSuccess('Household Created', `${household.lastName} household has been created`);
+      showSuccess(i18n.t('common:api.success.householdCreated'), i18n.t('common:api.success.householdCreatedDesc', { name: household.lastName }));
 
       // Transform the nested result to flat HouseholdTableRecord
       if (result.household) {
@@ -264,32 +265,32 @@ export const householdApi = {
       return result;
     } catch (error) {
       hide();
-      return handleApiError(error, 'Create Household');
+      return handleApiError(error, 'createHousehold');
     }
   },
 
   update: async (id: number, updates: Partial<HouseholdTableRecord>): Promise<HouseholdTableRecord> => {
-    const hide = showLoading('Updating household...');
+    const hide = showLoading(i18n.t('common:api.loading.updatingHousehold'));
     try {
       const result = await invoke<HouseholdTableRecord>('update_household', { id, updates });
       hide();
-      showSuccess('Household Updated', 'Changes have been saved');
+      showSuccess(i18n.t('common:api.success.householdUpdated'), i18n.t('common:api.success.changesSaved'));
       return result;
     } catch (error) {
       hide();
-      return handleApiError(error, 'Update Household');
+      return handleApiError(error, 'updateHousehold');
     }
   },
 
   delete: async (id: number): Promise<void> => {
-    const hide = showLoading('Deleting household...');
+    const hide = showLoading(i18n.t('common:api.loading.deletingHousehold'));
     try {
       await invoke('delete_household', { id });
       hide();
-      showSuccess('Household Deleted', 'The household has been removed');
+      showSuccess(i18n.t('common:api.success.householdDeleted'), i18n.t('common:api.success.householdDeletedDesc'));
     } catch (error) {
       hide();
-      return handleApiError(error, 'Delete Household');
+      return handleApiError(error, 'deleteHousehold');
     }
   },
 
@@ -297,7 +298,7 @@ export const householdApi = {
     try {
       return await invoke<HouseholdTableRecord>('get_household', { id });
     } catch (error) {
-      return handleApiError(error, 'Get Household');
+      return handleApiError(error, 'getHousehold');
     }
   },
 
@@ -305,31 +306,31 @@ export const householdApi = {
     try {
       return await invoke<HouseholdTableRecord[]>('list_households');
     } catch (error) {
-      return handleApiError(error, 'List Households');
+      return handleApiError(error, 'listHouseholds');
     }
   },
 
   addPatient: async (householdId: number, patientId: number): Promise<void> => {
-    const hide = showLoading('Adding patient to household...');
+    const hide = showLoading(i18n.t('common:api.loading.addingPatientToHousehold'));
     try {
       await invoke('add_patient_to_household', { householdId, patientId });
       hide();
-      showSuccess('Patient Added', 'Patient has been added to the household');
+      showSuccess(i18n.t('common:api.success.patientAdded'), i18n.t('common:api.success.patientAddedDesc'));
     } catch (error) {
       hide();
-      return handleApiError(error, 'Add Patient to Household');
+      return handleApiError(error, 'addPatientToHousehold');
     }
   },
 
   removePatient: async (householdId: number, patientId: number): Promise<void> => {
-    const hide = showLoading('Removing patient from household...');
+    const hide = showLoading(i18n.t('common:api.loading.removingPatientFromHousehold'));
     try {
       await invoke('remove_patient_from_household', { householdId, patientId });
       hide();
-      showSuccess('Patient Removed', 'Patient has been removed from the household');
+      showSuccess(i18n.t('common:api.success.patientRemoved'), i18n.t('common:api.success.patientRemovedDesc'));
     } catch (error) {
       hide();
-      return handleApiError(error, 'Remove Patient from Household');
+      return handleApiError(error, 'removePatientFromHousehold');
     }
   },
 };
@@ -370,12 +371,12 @@ export const batchOperations = {
       }
     }
     
-    showSuccess('Import Complete', `Successfully imported ${results.length} of ${total} patients`);
+    showSuccess(i18n.t('common:api.success.importComplete'), i18n.t('common:api.success.importCompleteDesc', { imported: results.length, total }));
     return results;
   },
 
   deleteMultiplePatients: async (ids: number[]): Promise<void> => {
-    const hide = showLoading(`Deleting ${ids.length} patients...`);
+    const hide = showLoading(i18n.t('common:api.loading.deletingPatients', { count: ids.length }));
     let successCount = 0;
     
     for (const id of ids) {
@@ -390,12 +391,12 @@ export const batchOperations = {
     hide();
     
     if (successCount === ids.length) {
-      showSuccess('Patients Deleted', `Successfully deleted ${successCount} patients`);
+      showSuccess(i18n.t('common:api.success.patientsDeleted'), i18n.t('common:api.success.patientsDeletedDesc', { count: successCount }));
     } else {
       if (appInstance?.notification) {
         appInstance.notification.warning({
-          message: 'Partial Success',
-          description: `Deleted ${successCount} of ${ids.length} patients`,
+          message: i18n.t('common:api.success.partialSuccess'),
+          description: i18n.t('common:api.success.partialDeleteDesc', { deleted: successCount, total: ids.length }),
           placement: 'topRight',
         });
       } else {

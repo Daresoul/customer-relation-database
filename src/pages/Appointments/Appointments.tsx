@@ -121,7 +121,7 @@ const Appointments: React.FC = () => {
             setDetailDrawerVisible(false);
           } catch (error) {
             notification.error({
-        message: 'Error',
+        message: t('common:error'),
         description: t('messages.deleteFailed'),
         placement: 'bottomRight',
         duration: 5,
@@ -142,7 +142,7 @@ const Appointments: React.FC = () => {
           title: t('messages.duplicateTitle'),
           content: (
             <div>
-              <p>Select a date to duplicate this appointment to:</p>
+              <p>{t('messages.duplicateSelectDate')}</p>
               <DatePicker
                 onChange={(date) => {
                   selectedDate = date?.toDate() || null;
@@ -173,7 +173,7 @@ const Appointments: React.FC = () => {
       });
         } catch (error) {
           notification.error({
-        message: 'Error',
+        message: t('common:error'),
         description: t('messages.duplicateFailed'),
         placement: 'bottomRight',
         duration: 5,
@@ -212,7 +212,7 @@ const Appointments: React.FC = () => {
       setModalVisible(false);
       refetch();
     } catch (error) {
-      notification.error({ message: "Error", description:
+      notification.error({ message: t('common:error'), description:
         t(modalMode === 'create' ? 'messages.createFailed' : 'messages.updateFailed')
       , placement: "bottomRight", duration: 5 });
       throw error;
@@ -376,7 +376,7 @@ const Appointments: React.FC = () => {
                   </div>
                 )}
                 <div>
-                  <strong>{t('fields.status')}:</strong> {appointmentDetail.appointment.status}
+                  <strong>{t('fields.status')}:</strong> {t(`status.${appointmentDetail.appointment.status === 'in_progress' ? 'inProgress' : appointmentDetail.appointment.status}`)}
                 </div>
               </div>
             </Card>

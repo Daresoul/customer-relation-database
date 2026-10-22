@@ -41,7 +41,7 @@ export const useCreateLineItemTemplate = () => {
         duration: 3,
       });
     },
-    onError: createMutationErrorHandler(notification, 'Create Line Item Template', t, 'useLineItemTemplates'),
+    onError: createMutationErrorHandler(notification, 'createLineItemTemplate', t, 'useLineItemTemplates'),
   });
 };
 
@@ -62,7 +62,7 @@ export const useUpdateLineItemTemplate = () => {
         duration: 3,
       });
     },
-    onError: createMutationErrorHandler(notification, 'Update Line Item Template', t, 'useLineItemTemplates'),
+    onError: createMutationErrorHandler(notification, 'updateLineItemTemplate', t, 'useLineItemTemplates'),
   });
 };
 
@@ -82,6 +82,6 @@ export const useDeleteLineItemTemplate = () => {
         duration: 3,
       });
     },
-    onError: createMutationErrorHandler(notification, 'Delete Line Item Template', t, 'useLineItemTemplates'),
+    onError: createMutationErrorHandler(notification, 'deleteLineItemTemplate', t, 'useLineItemTemplates'),
   });
 };

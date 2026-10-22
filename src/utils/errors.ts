@@ -12,6 +12,7 @@
  */
 
 import type { ReactNode } from 'react';
+import type enErrors from '../i18n/locales/en/errors.json';
 
 // ============================================================================
 // Error Types & Classification
@@ -935,6 +936,9 @@ type NotificationLike = {
   }) => void;
 };
 
+/** A mutation named in errors.json "operations", so its title can be translated. */
+export type MutationOperation = keyof typeof enErrors.operations;
+
 /**
  * Standard onError handler for React Query mutations
  * Returns a function that handles errors with notifications
@@ -944,20 +948,20 @@ type NotificationLike = {
  *
  * useMutation({
  *   mutationFn: createPatient,
- *   onError: createMutationErrorHandler(notification, 'Create Patient', t, 'usePatients'),
+ *   onError: createMutationErrorHandler(notification, 'createPatient', t, 'usePatients'),
  * })
  */
 export function createMutationErrorHandler(
   notification: NotificationLike,
-  operationName: string,
+  operation: MutationOperation,
   t: TFunction,
   source?: string
 ) {
   return (error: unknown) => {
-    const appError = handleError(error, { source, action: operationName });
+    const appError = handleError(error, { source, action: operation });
 
     notification.error({
-      message: t('errors:failedTo', { operation: operationName }),
+      message: t('errors:failedTo', { operation: t(`errors:operations.${operation}`) }),
       description: getUserFriendlyMessage(appError, t),
       placement: 'bottomRight',
       duration: 5,

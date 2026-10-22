@@ -302,8 +302,8 @@ export const MedicalRecordDetailPage: React.FC = () => {
       });
 
       notification.success({
-        message: 'PDF Regenerated',
-        description: 'Successfully regenerated PDF report from all device test data',
+        message: t('medical:detail.pdfRegenerated'),
+        description: t('medical:detail.pdfRegeneratedDesc'),
         placement: 'bottomRight',
         duration: 5,
       });
@@ -313,8 +313,8 @@ export const MedicalRecordDetailPage: React.FC = () => {
     } catch (error: any) {
       console.error('❌ Failed to regenerate PDF:', error);
       notification.error({
-        message: 'PDF Regeneration Failed',
-        description: error?.toString() || 'An unknown error occurred',
+        message: t('medical:detail.pdfRegenerationFailed'),
+        description: error?.toString() || t('medical:detail.unknownError'),
         placement: 'bottomRight',
         duration: 7,
       });
@@ -345,7 +345,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
 
       notification.success({
         message: t('common:success'),
-        description: `Added ${originalName} to medical record`,
+        description: t('medical:recentFiles.addedToRecord', { name: originalName }),
         placement: 'bottomRight',
         duration: 3,
       });
@@ -363,7 +363,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
       console.error('[MedicalRecordDetail] Failed to add recent file:', error);
       notification.error({
         message: t('common:error'),
-        description: 'Failed to add file from history',
+        description: t('medical:recentFiles.addFromHistoryFailed'),
         placement: 'bottomRight',
         duration: 5,
       });
@@ -374,7 +374,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
     const key = String(row.id);
     if (expanded) {
       if (!isPreviewable(row.mimeType, row.originalName)) {
-        notification.info({ message: "Info", description: t('medical:detail.previewNotAvailable'), placement: "bottomRight", duration: 3 });
+        notification.info({ message: t('common:info'), description: t('medical:detail.previewNotAvailable'), placement: "bottomRight", duration: 3 });
         return;
       }
       // Only one open at a time
@@ -410,7 +410,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
           setPreviewBlobs(prev => ({ ...prev, [key]: blob }));
           setPreviewKinds(prev => ({ ...prev, [key]: 'blob' }));
         } catch (e: any) {
-          notification.error({ message: "Error", description: e?.message || 'Failed to load preview', placement: "bottomRight", duration: 5 });
+          notification.error({ message: t('common:error'), description: e?.message || t('medical:detail.previewLoadFailed'), placement: "bottomRight", duration: 5 });
         }
       }
     } else {
@@ -830,7 +830,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
 
                     return (
                       <div className={styles.marginTop16}>
-                        <Text type="secondary" className={styles.descriptionLabel}>{t('medical:lineItems.title', 'Factura')}</Text>
+                        <Text type="secondary" className={styles.descriptionLabel}>{t('medical:lineItems.title', 'Invoice')}</Text>
                         <Table
                           size="small"
                           dataSource={lineItems}
@@ -1062,7 +1062,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
 
       {/* Recent Files Drawer */}
       <Drawer
-        title="Recent Device Files (Last 14 Days)"
+        title={t('medical:deviceImport.recentFilesTitle')}
         placement="right"
         width={800}
         onClose={() => setRecentFilesDrawerOpen(false)}
@@ -1091,8 +1091,8 @@ export const MedicalRecordDetailPage: React.FC = () => {
               patientOverrides
             );
             notification.success({
-              message: 'Report Generated',
-              description: 'PDF report generated successfully',
+              message: t('medical:printReport.generated'),
+              description: t('medical:printReport.generatedDesc'),
               placement: 'bottomRight',
               duration: 5,
             });
