@@ -52,7 +52,7 @@ describe('useAppSettings.updateSettings', () => {
     const { result } = renderHook(() => useAppSettings(), { wrapper });
     await waitFor(() => expect(result.current.settings).toBeDefined());
 
-    await expect(result.current.updateSettings({ ...settings, theme: 'dark' } as any)).rejects.toThrow('database is locked');
+    await expect(result.current.updateSettings({ ...settings, theme: 'dark' } as never)).rejects.toThrow('database is locked');
   });
 
   it('resolves only after the backend confirms, without a toast of its own', async () => {
@@ -61,7 +61,7 @@ describe('useAppSettings.updateSettings', () => {
     await waitFor(() => expect(result.current.settings).toBeDefined());
 
     await act(async () => {
-      await result.current.updateSettings({ ...settings, theme: 'dark' } as any);
+      await result.current.updateSettings({ ...settings, theme: 'dark' } as never);
     });
 
     expect(updateSettings).toHaveBeenCalledTimes(1);

@@ -42,14 +42,14 @@ describe('useAppointments saves', () => {
     createAppointment.mockRejectedValue(new Error('overlap'));
     const { result } = renderHook(() => useAppointments(filter), { wrapper });
 
-    await expect(result.current.createAppointment({} as any)).rejects.toThrow('overlap');
+    await expect(result.current.createAppointment({} as never)).rejects.toThrow('overlap');
   });
 
   it('update rejects when the backend refuses', async () => {
     updateAppointment.mockRejectedValue(new Error('gone'));
     const { result } = renderHook(() => useAppointments(filter), { wrapper });
 
-    await expect(result.current.updateAppointment({ id: 1, input: {} as any })).rejects.toThrow('gone');
+    await expect(result.current.updateAppointment({ id: 1, input: {} as never })).rejects.toThrow('gone');
   });
 
   it('create resolves after the backend confirms, leaving the success message to the caller', async () => {
@@ -57,7 +57,7 @@ describe('useAppointments saves', () => {
     const { result } = renderHook(() => useAppointments(filter), { wrapper });
 
     await act(async () => {
-      await result.current.createAppointment({} as any);
+      await result.current.createAppointment({} as never);
     });
     expect(document.body.textContent).not.toContain('Appointment Created');
   });

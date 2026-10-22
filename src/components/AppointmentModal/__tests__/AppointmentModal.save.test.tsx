@@ -1,4 +1,3 @@
-import React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import { App } from 'antd';
@@ -34,11 +33,11 @@ const appointment = {
   endTime: '2030-01-10T09:30:00.000Z',
   roomId: undefined,
   status: 'scheduled',
-} as any;
+} as never;
 
 const rooms = [{ id: 3, name: 'Exam 1', capacity: 1 }];
 
-function renderModal(onSave: (d: any) => Promise<void>) {
+function renderModal(onSave: (d: unknown) => Promise<void>) {
   return render(
     <App>
       <AppointmentModal open mode="edit" appointment={appointment} onCancel={vi.fn()} onSave={onSave} rooms={rooms} />

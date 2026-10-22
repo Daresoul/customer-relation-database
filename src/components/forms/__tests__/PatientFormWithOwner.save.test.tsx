@@ -1,4 +1,3 @@
-import React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import { App } from 'antd';
@@ -23,9 +22,9 @@ vi.mock('../CreateHouseholdModal', () => ({ CreateHouseholdModal: () => null }))
 
 import { PatientFormWithOwner } from '../PatientFormWithOwner';
 
-const patient = { id: 4, name: 'Rex', speciesId: 1 } as any;
+const patient = { id: 4, name: 'Rex', speciesId: 1 } as never;
 
-function renderForm(onSubmit: (d: any) => Promise<void>) {
+function renderForm(onSubmit: (d: unknown) => Promise<void>) {
   return render(
     <App>
       <PatientFormWithOwner patient={patient} onSubmit={onSubmit} onCancel={vi.fn()} />

@@ -39,7 +39,7 @@ describe('useUpdateHousehold', () => {
     const { result } = renderHook(() => useUpdateHousehold(), { wrapper });
 
     await act(async () => {
-      await result.current.mutateAsync({ householdId: 5, updates: { postalCode: null as any } });
+      await result.current.mutateAsync({ householdId: 5, updates: { postalCode: null as never } });
     });
 
     const args = invokeMock.mock.calls.find((c) => c[0] === 'update_household')![1];
