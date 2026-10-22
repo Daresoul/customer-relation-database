@@ -139,6 +139,8 @@ fn main() {
         services::log_rotation::prune_old_logs(dir, 30);
     }
 
+    let (log_rotation_strategy, log_max_file_size) = services::log_rotation::main_log_rotation();
+
     // Configure logging based on build type
     #[cfg(debug_assertions)]
     let log_targets = vec![
@@ -180,6 +182,8 @@ fn main() {
         .plugin(Builder::default()
             .targets(log_targets)
             .level(LevelFilter::Info)
+            .rotation_strategy(log_rotation_strategy)
+            .max_file_size(log_max_file_size)
             .build())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,

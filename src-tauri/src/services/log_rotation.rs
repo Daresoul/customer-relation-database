@@ -15,9 +15,12 @@
 //!      without any extra plumbing. This module only contributes the
 //!      retention sweep for that directory.
 //!
-//! Both surfaces share [`prune_old_logs`] which deletes files matching
-//! `<base>-YYYY-MM-DD.log` whose embedded date is older than the
-//! retention window.
+//! The plugin itself never deletes the main log (see [`main_log_rotation`]);
+//! past 50 MB it renames it at startup to `<base>_YYYY-MM-DD_HH-MM-SS.log`.
+//!
+//! All surfaces share [`prune_old_logs`] which deletes files matching
+//! `<base>-YYYY-MM-DD.log` or `<base>_YYYY-MM-DD_HH-MM-SS.log` whose
+//! embedded date is older than the retention window.
 //!
 //! Failures here are logged to stderr and otherwise swallowed — log
 //! rotation is best-effort housekeeping, never a reason to refuse to
@@ -29,8 +32,13 @@ use std::path::Path;
 use tauri_plugin_log::RotationStrategy;
 
 /// Rotation settings for `tauri-plugin-log`'s main log file.
+///
+/// The plugin's default (KeepOne, 40 KB) deletes the live log at startup once
+/// it passes 40 KB, so a same-day restart lost the day's log. KeepAll renames
+/// an oversized file to `<name>_YYYY-MM-DD_HH-MM-SS.log` instead; this module
+/// recognises that name and prunes it with the other archives.
 pub fn main_log_rotation() -> (RotationStrategy, u128) {
-    (RotationStrategy::KeepOne, 40_000)
+    (RotationStrategy::KeepAll, 50 * 1024 * 1024)
 }
 
 /// Rotate any `<name>.log` files in `dir` whose last-modified date is
@@ -137,9 +145,25 @@ fn is_already_archived(stem: &str) -> bool {
     parse_date_suffix(stem).is_some()
 }
 
-/// Extract the trailing `-YYYY-MM-DD` from a filename stem, if present.
-/// Returns `None` if the suffix is absent or unparseable.
+/// Extract the archive date from a filename stem: our own trailing
+/// `-YYYY-MM-DD`, or the plugin's size-rotation `_YYYY-MM-DD_HH-MM-SS`.
+/// Returns `None` if neither is present or parseable.
 fn parse_date_suffix(stem: &str) -> Option<NaiveDate> {
+    parse_daily_suffix(stem).or_else(|| parse_plugin_rotated_suffix(stem))
+}
+
+fn parse_plugin_rotated_suffix(stem: &str) -> Option<NaiveDate> {
+    // `x_YYYY-MM-DD_HH-MM-SS` → 1 base char + `_` + 19.
+    let len = stem.len();
+    if len < 21 || !stem.is_char_boundary(len - 19) || !stem[..len - 19].ends_with('_') {
+        return None;
+    }
+    chrono::NaiveDateTime::parse_from_str(&stem[len - 19..], "%Y-%m-%d_%H-%M-%S")
+        .ok()
+        .map(|dt| dt.date())
+}
+
+fn parse_daily_suffix(stem: &str) -> Option<NaiveDate> {
     // Need at least `x-YYYY-MM-DD` → 12 chars (1 base char + dash + 10).
     let len = stem.len();
     if len < 12 {
