@@ -335,6 +335,17 @@ async fn update_can_clear_discount_manual_total_and_the_last_line_item() {
     assert_eq!(count(&db, &format!("SELECT COUNT(*) FROM medical_record_line_items WHERE medical_record_id = {}", record.id)).await, 0);
 }
 
+#[tokio::test]
+async fn lab_reports_fall_back_to_the_records_own_time() {
+    let db = create_test_db_with_migrations().await;
+    let patient_id = seed_patient(&db).await;
+    let id = insert_record_with_invoice(&db, patient_id, "013/2026").await;
+
+    let time = MedicalRecordService::record_time(&db, id).await.unwrap();
+
+    assert_eq!(time.to_rfc3339(), "2026-10-20T10:00:00+00:00");
+}
+
 // ---------------------------------------------------------------------------
 // D9/D10: an edit regenerates every document, replaces the old one only after
 // the new one is stored, and reports each document's outcome

@@ -143,6 +143,12 @@ impl MedicalRecordService {
         statuses
     }
 
+    /// When the record was made; lab reports print it when the analyzer
+    /// sent no test time of its own.
+    pub async fn record_time(db: &DatabaseConnection, record_id: i64) -> Result<DateTime<Utc>, String> {
+        Err(format!("not implemented for {}", record_id))
+    }
+
     /// Regenerate one document (the Retry after a failed save).
     pub async fn regenerate_document(
         env: &PdfEnv,
