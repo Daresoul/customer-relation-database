@@ -369,11 +369,9 @@ pub async fn get_household_with_people(
     }))
 }
 
-// Update household. Every field is Option<String>; None means "leave
-// unchanged" (COALESCE keeps the existing value), Some("") means
-// "clear to empty string". `city` and `postal_code` were added so the
-// inline create form's address columns can be edited after creation
-// without going through the full HouseholdForm.
+// Update household. None leaves a field unchanged. For the optional columns
+// an empty or blank string clears the field to NULL; the name is required, so
+// it only ever changes to a new value.
 pub async fn update_household(
     db: &DatabaseConnection,
     household_id: i32,
@@ -383,15 +381,30 @@ pub async fn update_household(
     postal_code: Option<String>,
     notes: Option<String>,
 ) -> Result<(), String> {
+    fn change(v: Option<String>) -> [sea_orm::Value; 2] {
+        let set = v.is_some();
+        let value = v.filter(|s| !s.trim().is_empty());
+        [set.into(), sea_orm::Value::String(value.map(Box::new))]
+    }
+    let [address_set, address] = change(address);
+    let [city_set, city] = change(city);
+    let [postal_code_set, postal_code] = change(postal_code);
+    let [notes_set, notes] = change(notes);
+
     db.execute(Statement::from_sql_and_values(
         DbBackend::Sqlite,
-        "UPDATE households SET household_name = COALESCE(?, household_name), address = COALESCE(?, address), city = COALESCE(?, city), postal_code = COALESCE(?, postal_code), notes = COALESCE(?, notes), updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        "UPDATE households SET household_name = COALESCE(?, household_name), \
+         address = CASE WHEN ? THEN ? ELSE address END, \
+         city = CASE WHEN ? THEN ? ELSE city END, \
+         postal_code = CASE WHEN ? THEN ? ELSE postal_code END, \
+         notes = CASE WHEN ? THEN ? ELSE notes END, \
+         updated_at = CURRENT_TIMESTAMP WHERE id = ?",
         [
             sea_orm::Value::String(household_name.map(Box::new)),
-            sea_orm::Value::String(address.map(Box::new)),
-            sea_orm::Value::String(city.map(Box::new)),
-            sea_orm::Value::String(postal_code.map(Box::new)),
-            sea_orm::Value::String(notes.map(Box::new)),
+            address_set, address,
+            city_set, city,
+            postal_code_set, postal_code,
+            notes_set, notes,
             household_id.into(),
         ]
     ))

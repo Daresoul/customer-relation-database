@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { invoke } from '@tauri-apps/api';
+import { invoke } from '@/services/invoke';
 import {
   HouseholdDetailView,
   Household,
@@ -66,12 +66,15 @@ export function useUpdateHousehold() {
       householdId: number;
       updates: Partial<Household>
     }) => {
-      // Use camelCase parameters (Tauri handles the conversion)
+      // undefined leaves a field alone; null or '' clears it
+      const clearable = (v: string | null | undefined) => (v === undefined ? undefined : v ?? '');
       return await invoke<Household>('update_household', {
         householdId,
-        householdName: updates.householdName,
-        address: updates.address,
-        notes: updates.notes
+        householdName: updates.householdName || undefined,
+        address: clearable(updates.address),
+        city: clearable(updates.city),
+        postalCode: clearable(updates.postalCode),
+        notes: clearable(updates.notes)
       });
     },
     onMutate: async ({ householdId, updates }) => {
