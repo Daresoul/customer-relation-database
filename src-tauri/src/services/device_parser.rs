@@ -893,9 +893,8 @@ mod tests {
 
         let result = DeviceParserService::parse_healvet_serial("Test Healvet", serial_data, "serial_port");
 
-        assert!(result.is_ok());
-        let device_data = result.unwrap();
-        assert_eq!(device_data.device_type, "healvet_hv_fia_3000");
+        // Not the Healvet wire format: no analyte value, so an error.
+        assert!(result.is_err());
     }
 
     #[test]
@@ -910,10 +909,7 @@ mod tests {
             "file_watch",
         );
 
-        assert!(result.is_ok());
-        let device_data = result.unwrap();
-        assert_eq!(device_data.device_type, "mnchip_pointcare_chemistry");
-        // Note: patient_identifier is extracted from PID segment field 6, not from JSON content
-        // This test passes empty HL7 data, so patient_identifier will be None
+        // JSON is not HL7: no OBX result, so an error.
+        assert!(result.is_err());
     }
 }
