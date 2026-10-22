@@ -334,3 +334,128 @@ async fn update_can_clear_discount_manual_total_and_the_last_line_item() {
     assert!(updated.line_items.is_none());
     assert_eq!(count(&db, &format!("SELECT COUNT(*) FROM medical_record_line_items WHERE medical_record_id = {}", record.id)).await, 0);
 }
+
+// ---------------------------------------------------------------------------
+// D9/D10: an edit regenerates every document, replaces the old one only after
+// the new one is stored, and reports each document's outcome
+// ---------------------------------------------------------------------------
+
+use crate::services::medical_record::{PdfEnv, PdfStatus};
+
+const DEV_JAR: &str = "../pdf-generator-cli/build/libs/pdf-generator-cli-1.0.0.jar";
+
+fn jar_env(storage: &tempfile::TempDir) -> Option<PdfEnv> {
+    let jar = std::path::PathBuf::from(DEV_JAR);
+    if !jar.exists() || std::process::Command::new("java").arg("-version").output().is_err() {
+        eprintln!("SKIP: JAR not built ({})", DEV_JAR);
+        return None;
+    }
+    Some(PdfEnv { jar_path: jar, storage_dir: storage.path().to_path_buf() })
+}
+
+fn broken_env(storage: &tempfile::TempDir) -> PdfEnv {
+    PdfEnv {
+        jar_path: storage.path().join("missing.jar"),
+        storage_dir: storage.path().to_path_buf(),
+    }
+}
+
+async fn active_documents(db: &DatabaseConnection, record_id: i64, attachment_type: &str) -> i64 {
+    count(
+        db,
+        &format!(
+            "SELECT COUNT(*) FROM medical_attachments WHERE medical_record_id = {} \
+             AND attachment_type = '{}' AND deleted_at IS NULL",
+            record_id, attachment_type
+        ),
+    )
+    .await
+}
+
+fn status<'a>(statuses: &'a [PdfStatus], kind: &str) -> &'a PdfStatus {
+    statuses.iter().find(|s| s.kind == kind).unwrap_or_else(|| panic!("no {} status in {:?}", kind, statuses))
+}
+
+async fn full_record(db: &DatabaseConnection) -> crate::models::medical::MedicalRecord {
+    let patient_id = seed_patient(db).await;
+    let mut input = new_record(patient_id, vec![item("Exam", 1500.0)]);
+    input.prescription_notes = Some("Amoxicillin 2x daily".to_string());
+    MedicalRecordService::save_new_record(db, input).await.unwrap()
+}
+
+#[tokio::test]
+async fn an_edit_regenerates_each_document_and_replaces_the_old_one() {
+    let storage = tempfile::tempdir().unwrap();
+    let Some(env) = jar_env(&storage) else { return };
+    let db = create_test_db_with_migrations().await;
+    let record = full_record(&db).await;
+
+    let first = MedicalRecordService::generate_record_documents(&env, &db, &record).await;
+    let mut changes = no_changes();
+    changes.description = Some("Corrected notes".to_string());
+    let edited = MedicalRecordService::save_record_changes(&db, record.id, changes).await.unwrap();
+    let second = MedicalRecordService::generate_record_documents(&env, &db, &edited).await;
+
+    for statuses in [&first, &second] {
+        for kind in ["report", "pharmacy_note", "invoice"] {
+            assert!(status(statuses, kind).ok, "{:?}", statuses);
+        }
+    }
+    for attachment_type in ["simple_report", "pharmacy_note", "invoice"] {
+        assert_eq!(active_documents(&db, record.id, attachment_type).await, 1, "{}", attachment_type);
+    }
+}
+
+#[tokio::test]
+async fn a_failed_document_keeps_the_old_one_and_says_why() {
+    let storage = tempfile::tempdir().unwrap();
+    let Some(env) = jar_env(&storage) else { return };
+    let db = create_test_db_with_migrations().await;
+    let record = full_record(&db).await;
+    MedicalRecordService::generate_record_documents(&env, &db, &record).await;
+
+    let statuses = MedicalRecordService::generate_record_documents(&broken_env(&storage), &db, &record).await;
+
+    for kind in ["report", "pharmacy_note", "invoice"] {
+        let s = status(&statuses, kind);
+        assert!(!s.ok);
+        assert!(s.error.as_deref().is_some_and(|e| !e.is_empty()));
+    }
+    for attachment_type in ["simple_report", "pharmacy_note", "invoice"] {
+        assert_eq!(active_documents(&db, record.id, attachment_type).await, 1, "{}", attachment_type);
+    }
+}
+
+#[tokio::test]
+async fn clearing_items_and_prescription_retires_their_documents() {
+    let storage = tempfile::tempdir().unwrap();
+    let Some(env) = jar_env(&storage) else { return };
+    let db = create_test_db_with_migrations().await;
+    let record = full_record(&db).await;
+    MedicalRecordService::generate_record_documents(&env, &db, &record).await;
+
+    let mut changes = no_changes();
+    changes.prescription_notes = Some(String::new());
+    changes.line_items = Some(vec![]);
+    let edited = MedicalRecordService::save_record_changes(&db, record.id, changes).await.unwrap();
+    let statuses = MedicalRecordService::generate_record_documents(&env, &db, &edited).await;
+
+    assert!(status(&statuses, "report").ok);
+    assert_eq!(active_documents(&db, record.id, "pharmacy_note").await, 0);
+    assert_eq!(active_documents(&db, record.id, "invoice").await, 0);
+}
+
+#[tokio::test]
+async fn one_document_can_be_retried_on_its_own() {
+    let storage = tempfile::tempdir().unwrap();
+    let Some(env) = jar_env(&storage) else { return };
+    let db = create_test_db_with_migrations().await;
+    let record = full_record(&db).await;
+    MedicalRecordService::generate_record_documents(&broken_env(&storage), &db, &record).await;
+
+    let retried = MedicalRecordService::regenerate_document(&env, &db, record.id, "invoice").await;
+
+    assert!(retried.ok, "{:?}", retried);
+    assert_eq!(active_documents(&db, record.id, "invoice").await, 1);
+    assert_eq!(active_documents(&db, record.id, "simple_report").await, 0);
+}

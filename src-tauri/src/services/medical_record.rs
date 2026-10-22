@@ -61,10 +61,44 @@ pub struct Invoice {
     pub date: chrono::NaiveDate,
 }
 
+/// Where record documents are rendered (the JAR) and stored.
+pub struct PdfEnv {
+    pub jar_path: std::path::PathBuf,
+    pub storage_dir: std::path::PathBuf,
+}
+
+/// How one generated document fared on a save.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[ts(export, export_to = "../../src/types/generated/")]
+#[serde(rename_all = "camelCase")]
+pub struct PdfStatus {
+    /// `report`, `pharmacy_note`, `invoice` or `device_report`.
+    pub kind: String,
+    pub ok: bool,
+    pub error: Option<String>,
+}
+
 // T027: MedicalRecordService with CRUD operations
 pub struct MedicalRecordService;
 
 impl MedicalRecordService {
+    pub async fn generate_record_documents(
+        _env: &PdfEnv,
+        _db: &DatabaseConnection,
+        _record: &MedicalRecord,
+    ) -> Vec<PdfStatus> {
+        Vec::new()
+    }
+
+    pub async fn regenerate_document(
+        _env: &PdfEnv,
+        _db: &DatabaseConnection,
+        _record_id: i64,
+        kind: &str,
+    ) -> PdfStatus {
+        PdfStatus { kind: kind.to_string(), ok: false, error: None }
+    }
+
     /// The record's invoice number and date, assigned on first use and kept
     /// from then on. `now` carries the clinic's time zone: the date and the
     /// number's year are the local calendar date, not UTC's.
