@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   upload: vi.fn(),
   saveForLater: vi.fn(),
   markProcessed: vi.fn(),
+  downloadDeviceFile: vi.fn(),
   generateReport: vi.fn(),
 }));
 
@@ -41,7 +42,7 @@ vi.mock('@/services/fileHistoryService', () => ({
   fileHistoryService: {
     saveDeviceFilesForLater: mocks.saveForLater,
     markPendingEntryProcessed: mocks.markProcessed,
-    downloadDeviceFile: vi.fn(),
+    downloadDeviceFile: mocks.downloadDeviceFile,
   },
 }));
 vi.mock('@/services/medicalService', () => ({
@@ -57,7 +58,11 @@ vi.mock('@/components/forms/fieldGroups', () => ({
   ),
 }));
 vi.mock('../CreatePatientSection', () => ({ default: () => null }));
-vi.mock('../../RecentDeviceFiles', () => ({ default: () => null }));
+vi.mock('../../RecentDeviceFiles', () => ({
+  default: ({ onAddToRecord }: { onAddToRecord: (fileId: string, name: string) => void }) => (
+    <button onClick={() => onAddToRecord('hist-abc', 'healvet.json')}>add recent</button>
+  ),
+}));
 
 import { DeviceImportProvider, useDeviceImport, PendingDeviceFile } from '../../../contexts/DeviceImportContext';
 import DeviceImportModal from '../DeviceImportModal';
@@ -195,6 +200,30 @@ describe('DeviceImportModal — save', () => {
     await screen.findByText('record page 99');
     expect(mocks.markProcessed).toHaveBeenCalledTimes(1);
     expect(mocks.markProcessed).toHaveBeenCalledWith(5);
+  });
+});
+
+describe('DeviceImportModal — recent files', () => {
+  it('a file added from recent files keeps its link to the file history', async () => {
+    const user = userEvent.setup();
+    mocks.downloadDeviceFile.mockResolvedValue({
+      fileName: 'healvet.json',
+      fileData: [4, 4],
+      mimeType: 'application/json',
+      deviceType: 'healvet_hv_fia_3000',
+      deviceName: 'Healvet',
+      testResults: { T4: '2.1' },
+    });
+    renderModal();
+    receive(maxResult());
+
+    await user.click(await screen.findByText('medical:deviceImport.browseRecentFiles'));
+    await user.click(await screen.findByText('add recent'));
+    await waitFor(() => expect(dialog().getByText('healvet.json')).toBeInTheDocument());
+    await user.click(screen.getByTestId('device-import-submit-btn'));
+
+    await screen.findByText('record page 99');
+    expect(mocks.upload).toHaveBeenCalledWith(expect.objectContaining({ sourceFileId: 'hist-abc' }));
   });
 });
 
