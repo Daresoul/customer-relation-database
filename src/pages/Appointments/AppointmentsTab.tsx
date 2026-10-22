@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   Tabs,
   Button,
@@ -43,7 +43,7 @@ const { RangePicker } = DatePicker;
 
 const AppointmentsTab: React.FC = () => {
   const { t } = useTranslation(['appointments', 'common']);
-  const { notification, modal } = App.useApp();
+  const { message, modal } = App.useApp();
   const [activeView, setActiveView] = useState<'calendar' | 'list'>('list');
   const [calendarView, setCalendarView] = useState<CalendarView>('month');
   const [modalVisible, setModalVisible] = useState(false);
@@ -53,6 +53,18 @@ const AppointmentsTab: React.FC = () => {
   const [initialDate, setInitialDate] = useState<Date>(new Date());
   const [initialEndDate, setInitialEndDate] = useState<Date | undefined>();
   const [filter, setFilter] = useState<AppointmentFilter>({});
+  const [today, setToday] = useState(() => new Date().toDateString());
+
+  // The app lives in the tray for days, so "today" must follow the clock.
+  useEffect(() => {
+    const syncToday = () => setToday(new Date().toDateString());
+    const timer = setInterval(syncToday, 60_000);
+    window.addEventListener('focus', syncToday);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', syncToday);
+    };
+  }, []);
 
   const {
     appointments: listAppointments,
@@ -84,7 +96,7 @@ const AppointmentsTab: React.FC = () => {
       end.setHours(23, 59, 59, 999);
       return { startDate: start, endDate: end };
     }
-  }, [activeView]);
+  }, [activeView, today]);
 
   const { data: calendarData, isLoading: calendarLoading, error: calendarError } = useCalendarAppointments(
     startDate,
@@ -137,19 +149,14 @@ const AppointmentsTab: React.FC = () => {
         onOk: async () => {
           try {
             await deleteAppointment(appointment.id);
-            notification.success({
-        message: t('appointments:messages.deletedSuccess'),
-        description: t('appointments:messages.deletedSuccess'),
-        placement: 'bottomRight',
-        duration: 3,
-      });
-          } catch (error: any) {
-            notification.error({ message: t('common:error'), description: error.message || t('appointments:messages.deleteFailed'), placement: "bottomRight", duration: 5 });
+            message.success(t('appointments:messages.deletedSuccess'));
+          } catch {
+            // useAppointments already reported the failure
           }
         },
       });
     },
-    [deleteAppointment, t, modal, notification]
+    [deleteAppointment, t, modal, message]
   );
 
   // Handle duplicate appointment
@@ -160,48 +167,29 @@ const AppointmentsTab: React.FC = () => {
           appointmentId: appointment.id,
           targetDate: new Date().toISOString(),
         });
-        notification.success({
-        message: t('appointments:messages.duplicatedSuccess'),
-        description: t('appointments:messages.duplicatedSuccess'),
-        placement: 'bottomRight',
-        duration: 3,
-      });
-      } catch (error: any) {
-        notification.error({ message: t('common:error'), description: error.message || t('appointments:messages.duplicateFailed'), placement: "bottomRight", duration: 5 });
+        message.success(t('appointments:messages.duplicatedSuccess'));
+      } catch {
+        // useAppointments already reported the failure
       }
     },
-    [duplicateAppointment, t, notification]
+    [duplicateAppointment, t, message]
   );
 
   // Handle save appointment (create or update)
   const handleSaveAppointment = useCallback(
     async (values: any) => {
-      try {
-        if (modalMode === 'edit' && selectedAppointment) {
-          await updateAppointment({ id: selectedAppointment.id, input: values });
-          notification.success({
-        message: t('appointments:messages.updatedSuccess'),
-        description: t('appointments:messages.updatedSuccess'),
-        placement: 'bottomRight',
-        duration: 3,
-      });
-        } else {
-          await createAppointment(values);
-          notification.success({
-        message: t('appointments:messages.createdSuccess'),
-        description: t('appointments:messages.createdSuccess'),
-        placement: 'bottomRight',
-        duration: 3,
-      });
-        }
-        setModalVisible(false);
-        setSelectedAppointment(null);
-      } catch (error: any) {
-        console.error('AppointmentsTab: Save error:', error);
-        notification.error({ message: t('common:error'), description: error.message || t('appointments:messages.saveFailed'), placement: "bottomRight", duration: 5 });
+      // A failure is reported by useAppointments; rethrow so the modal keeps the form.
+      if (modalMode === 'edit' && selectedAppointment) {
+        await updateAppointment({ id: selectedAppointment.id, input: values });
+        message.success(t('appointments:messages.updatedSuccess'));
+      } else {
+        await createAppointment(values);
+        message.success(t('appointments:messages.createdSuccess'));
       }
+      setModalVisible(false);
+      setSelectedAppointment(null);
     },
-    [modalMode, selectedAppointment, updateAppointment, createAppointment, t, notification]
+    [modalMode, selectedAppointment, updateAppointment, createAppointment, t, message]
   );
 
   return (

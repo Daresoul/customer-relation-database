@@ -205,9 +205,8 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
       }
 
       // Check for conflicts before saving
-      if (conflicts.length > 0 && values.room_id) {
-        // Find the selected room
-        const selectedRoom = rooms?.find(r => r.id === values.room_id);
+      if (conflicts.length > 0 && values.roomId) {
+        const selectedRoom = rooms?.find(r => r.id === values.roomId);
 
         // Calculate total appointments at this time (conflicts + current appointment)
         const totalAppointments = mode === 'edit' ? conflicts.length : conflicts.length + 1;
