@@ -269,6 +269,13 @@ pub async fn resolve_patient_from_identifier(
     pool: State<'_, SeaOrmPool>,
     identifier: String,
 ) -> Result<PatientMatch, String> {
+    resolve_patient(&pool, identifier).await
+}
+
+pub(crate) async fn resolve_patient(
+    pool: &sea_orm::DatabaseConnection,
+    identifier: String,
+) -> Result<PatientMatch, String> {
     // First try to find by microchip ID (exact match)
     let microchip_result = pool.query_one(Statement::from_sql_and_values(
         DbBackend::Sqlite,
