@@ -121,7 +121,7 @@ export const PatientTable: React.FC<PatientTableProps> = ({
         // clickable. Microchip-only patients show "No name" rather than the
         // chip number, since that's available in its own column.
         const hasName = !!text;
-        const display = hasName ? text : t('entities:patient.noName', 'No name');
+        const display = hasName ? text : t('entities:defaults.noName', 'No name');
         return (
           <Space>
             <HeartOutlined className={styles.iconPink} />

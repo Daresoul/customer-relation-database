@@ -131,7 +131,8 @@
         "microchipId": "Microchip ID",
         "status": "Status",
         "created": "Created",
-        "lastUpdated": "Last Updated"
+        "lastUpdated": "Last Updated",
+        "notes": "Notes"
       },
       "validation": {
         "nameRequired": "Name is required",
@@ -212,5 +213,7 @@
   },
   "dashboard": {
     "loadFailed": "Could not load patients and households"
-  }
+  },
+  "scanNotFoundTitle": "No patient found",
+  "scanNotFoundDesc": "No patient matches this microchip. Opening \"Add new patient\" with the chip pre-filled."
 }

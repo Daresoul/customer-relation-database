@@ -97,5 +97,9 @@
     "description": "This page hit an error. Your data is safe and the error has been logged.",
     "reload": "Reload",
     "goToDashboard": "Go to dashboard"
-  }
+  },
+  "active": "Active",
+  "inactive": "Inactive",
+  "deactivate": "Deactivate",
+  "reactivate": "Reactivate"
 }

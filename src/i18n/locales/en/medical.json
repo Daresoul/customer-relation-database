@@ -45,18 +45,19 @@
     "createdBy": "Created By",
     "updatedBy": "Updated By",
     "documents": "Documents",
-    "deviceData": "Device Data"
+    "deviceData": "Device Data",
+    "total": "Total"
   },
   "tabs": {
     "standard": "Standard",
     "prescriptions": "Prescriptions",
-    "lineItems": "Factura"
+    "lineItems": "Invoice"
   },
   "prescriptions": {
     "description": "Enter prescription or pharmacy notes. This will be included in the generated PDF report for the customer."
   },
   "lineItems": {
-    "title": "Factura",
+    "title": "Invoice",
     "addFromTemplate": "Add from saved templates or create custom items",
     "addCustom": "Add custom item",
     "selectTemplate": "Select a line item template...",
@@ -78,7 +79,9 @@
     "saveAsTemplateAndAdd": "Save as template & add",
     "fromTemplate": "(from template)",
     "namePlaceholder": "e.g., Emergency consultation",
-    "descriptionPlaceholder": "Optional description"
+    "descriptionPlaceholder": "Optional description",
+    "itemName": "Item",
+    "items": "items"
   },
   "form": {
     "createTitle": "Create Medical Record",
@@ -189,7 +192,11 @@
     "noHistory": "No history yet",
     "noAttachments": "No attachments",
     "noDocuments": "No documents yet",
-    "noDeviceData": "No device data attached"
+    "noDeviceData": "No device data attached",
+    "attachmentDeleted": "File \"{{name}}\" was deleted.",
+    "attachmentDeleteFailed": "Failed to delete the file.",
+    "deleteAttachmentConfirm": "Delete this file?",
+    "deleteAttachmentDesc": "The file will be removed from this record."
   },
   "deviceImport": {
     "title": "Import Device Data to Medical Record",
@@ -250,7 +257,15 @@
     "machineSaidChip": "Microchip — machine said: {{machine}} · you picked: {{picked}}",
     "noChip": "no chip",
     "attachAnyway": "Attach to {{name}} anyway",
-    "goBack": "Go back"
+    "goBack": "Go back",
+    "pdfGenerationFailed": "PDF Generation Failed",
+    "pdfGenerationFailedDesc": "The record was saved but PDF generation failed. You can regenerate it from the medical record view.",
+    "generatingPdf": "Generating PDF...",
+    "pleaseWait": "Please wait while the report is being generated.",
+    "pdfReady": "PDF Ready",
+    "pdfReadyDesc": "Click to regenerate if needed.",
+    "regenerate": "Regenerate PDF",
+    "printAfterSave": "Generate and print PDF report after saving"
   },
   "autocomplete": {
     "typeToSearch": "Type at least 2 characters to search templates",

@@ -148,7 +148,7 @@ const LineItemsSettings: React.FC<LineItemsSettingsProps> = ({ isUpdating }) => 
       render: (text: string) => text || '-',
     },
     {
-      title: t('common:actions', 'Actions'),
+      title: t('common:actionsLabel', 'Actions'),
       key: 'actions',
       width: 200,
       render: (_: any, record: LineItemTemplate) => (

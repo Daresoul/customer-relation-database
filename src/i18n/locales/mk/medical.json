@@ -45,7 +45,8 @@
     "createdBy": "Создаден од",
     "updatedBy": "Ажуриран од",
     "documents": "Документи",
-    "deviceData": "Податоци од уред"
+    "deviceData": "Податоци од уред",
+    "total": "Вкупно"
   },
   "tabs": {
     "standard": "Стандард",
@@ -78,7 +79,9 @@
     "saveAsTemplateAndAdd": "Зачувај како шаблон и додај",
     "fromTemplate": "(од шаблон)",
     "namePlaceholder": "пр. Итна консултација",
-    "descriptionPlaceholder": "Незадолжителен опис"
+    "descriptionPlaceholder": "Незадолжителен опис",
+    "itemName": "Ставка",
+    "items": "ставки"
   },
   "form": {
     "createTitle": "Создај медицински запис",
@@ -189,7 +192,11 @@
     "noHistory": "Сè уште нема историја",
     "noAttachments": "Нема прикачувања",
     "noDocuments": "Сè уште нема документи",
-    "noDeviceData": "Нема прикачени податоци од уред"
+    "noDeviceData": "Нема прикачени податоци од уред",
+    "attachmentDeleted": "Датотеката „{{name}}“ е избришана.",
+    "attachmentDeleteFailed": "Датотеката не можеше да се избрише.",
+    "deleteAttachmentConfirm": "Да се избрише датотеката?",
+    "deleteAttachmentDesc": "Датотеката ќе се отстрани од овој запис."
   },
   "deviceImport": {
     "title": "Увези податоци од уред во медицински запис",
@@ -250,7 +257,15 @@
     "machineSaidChip": "Микрочип — уредот вели: {{machine}} · вие избравте: {{picked}}",
     "noChip": "без микрочип",
     "attachAnyway": "Сепак прикачи на {{name}}",
-    "goBack": "Назад"
+    "goBack": "Назад",
+    "pdfGenerationFailed": "PDF не можеше да се направи",
+    "pdfGenerationFailedDesc": "Записот е зачуван, но PDF-от не можеше да се направи. Можете повторно да го направите од медицинскиот запис.",
+    "generatingPdf": "Се прави PDF...",
+    "pleaseWait": "Почекајте додека се прави извештајот.",
+    "pdfReady": "PDF-от е подготвен",
+    "pdfReadyDesc": "Кликнете за повторно правење ако е потребно.",
+    "regenerate": "Регенерирај PDF",
+    "printAfterSave": "Направи и печати PDF извештај по зачувувањето"
   },
   "autocomplete": {
     "typeToSearch": "Внесете најмалку 2 знаци за пребарување на шаблони",

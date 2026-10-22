@@ -1,7 +1,13 @@
 {
   "patient": {
     "singular": "пациент",
-    "plural": "пациенти"
+    "plural": "пациенти",
+    "dateOfBirth": "Датум на раѓање",
+    "gender": "Пол",
+    "weight": "Тежина (кг)",
+    "color": "Боја/белези",
+    "microchipId": "ID на микрочип",
+    "active": "Активен пациент"
   },
   "species": {
     "dog": "Куче",
@@ -15,7 +21,8 @@
     "ferret": "Ласица",
     "reptile": "Рептил",
     "fish": "Риба",
-    "other": "Друго"
+    "other": "Друго",
+    "label": "Вид"
   },
   "gender": {
     "male": "Машки",
@@ -87,5 +94,15 @@
     "noActivity": "Без активност",
     "unknown": "Непознато",
     "none": "Ниту едно"
+  },
+  "breed": {
+    "label": "Раса"
+  },
+  "relationship": {
+    "owner": "Сопственик",
+    "family": "Член на семејство",
+    "caretaker": "Негувател",
+    "emergency": "Контакт за итни случаи",
+    "other": "Друго"
   }
 }

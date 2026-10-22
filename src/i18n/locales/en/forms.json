@@ -14,7 +14,11 @@
     "pastDate": "Date cannot be in the past",
     "uniqueValue": "This value already exists",
     "fileSize": "File size exceeds limit",
-    "fileType": "File type not supported"
+    "fileType": "File type not supported",
+    "invalidPhone": "Please enter a valid phone number",
+    "invalidEmail": "Please enter a valid email",
+    "weightRange": "Weight must be between 0.01 and 500 kg",
+    "alphanumeric": "Only letters and numbers allowed"
   },
   "labels": {
     "firstName": "First Name",
@@ -35,7 +39,11 @@
     "comments": "Comments",
     "selectOption": "Select an option",
     "chooseFile": "Choose File",
-    "noFileChosen": "No file chosen"
+    "noFileChosen": "No file chosen",
+    "createNewPatient": "Create New Patient",
+    "relationship": "Relationship",
+    "primaryContact": "Primary Contact",
+    "patientName": "Patient Name"
   },
   "placeholders": {
     "enterName": "Enter name",
@@ -48,7 +56,19 @@
     "typeHere": "Type here...",
     "optional": "(Optional)",
     "example": "e.g., {{example}}",
-    "selectField": "Select {{field}}"
+    "selectField": "Select {{field}}",
+    "firstName": "Enter first name",
+    "lastName": "Enter last name",
+    "phone": "Enter phone number",
+    "email": "Enter email address",
+    "selectRelationship": "Select relationship",
+    "patientName": "Enter patient name",
+    "searchSpecies": "Search species...",
+    "searchBreed": "Search breed...",
+    "selectGender": "Select gender",
+    "weight": "Enter weight",
+    "color": "Enter color/markings",
+    "microchipId": "Enter microchip ID"
   },
   "buttons": {
     "submit": "Submit",
@@ -77,12 +97,16 @@
     "unsavedChanges": "You have unsaved changes. Are you sure you want to leave?",
     "confirmDelete": "Are you sure you want to delete this item?",
     "noResults": "No results found",
-    "searchResults": "{{count}} results found"
+    "searchResults": "{{count}} results found",
+    "patientCreated": "Patient created successfully"
   },
   "success": {
     "created": "{{entity}} created successfully"
   },
   "error": {
     "create": "Failed to create {{entity}}"
+  },
+  "errors": {
+    "createFailed": "Failed to create patient"
   }
 }

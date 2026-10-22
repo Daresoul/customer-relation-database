@@ -65,7 +65,7 @@ const PendingDeviceTable: React.FC<PendingDeviceTableProps> = ({ onItemsLoaded }
       render: (d: string) => new Date(d).toLocaleString(),
     },
     {
-      title: t('common:actions'),
+      title: t('common:actionsLabel'),
       key: 'actions',
       width: 160,
       render: (_: any, rec: PendingDeviceEntryWithFile) => (
