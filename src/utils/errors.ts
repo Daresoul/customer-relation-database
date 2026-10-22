@@ -729,8 +729,16 @@ export function getErrorTranslationKey(error: AppError | unknown): string {
   return CATEGORY_TO_TRANSLATION_KEY[normalized.category] || 'errors:generic.unexpected';
 }
 
-export function knownErrorMessage(_error: unknown, _t: TFunction): string | null {
-  return null;
+/**
+ * Translated message for a backend error we recognise (e.g. a duplicate
+ * microchip), or null so the caller keeps its own wording.
+ */
+export function knownErrorMessage(error: unknown, t: TFunction): string | null {
+  const code = detectErrorCode(extractErrorMessage(error));
+  const key = code ? ERROR_CODE_TO_TRANSLATION_KEY[code] : undefined;
+  if (!key) return null;
+  const translated = t(key);
+  return translated === key ? null : translated;
 }
 
 /**

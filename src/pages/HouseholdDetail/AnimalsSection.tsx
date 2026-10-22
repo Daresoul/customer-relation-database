@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Table, Typography, Tag, Empty, Button, Modal, App } from 'antd';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { knownErrorMessage } from '@/utils/errors';
 import { Patient } from '../../types/household';
 import { PlusOutlined } from '@ant-design/icons';
 import PatientFormWithOwner from '../../components/forms/PatientFormWithOwner';
@@ -44,7 +45,7 @@ export const AnimalsSection: React.FC<AnimalsSectionProps> = ({ patients, househ
     } catch (error: any) {
       notification.error({
         message: t('common:error'),
-        description: error?.message || t('detail.animals.patientCreateFailed'),
+        description: knownErrorMessage(error, t) || error?.message || t('detail.animals.patientCreateFailed'),
         placement: 'bottomRight',
       });
     } finally {

@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { knownErrorMessage } from '@/utils/errors';
 import { Form, Input, Select, DatePicker, Button, Space, Row, Col, Segmented, Alert, Collapse, Tag, App, Divider, InputNumber } from 'antd';
 import { PlusOutlined, UserAddOutlined, CloseOutlined, WarningOutlined, HomeOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -146,7 +147,7 @@ export const CreatePatientSection: React.FC<CreatePatientSectionProps> = ({
       console.error('Failed to create patient:', error);
       notification.error({
         message: t('forms:error.create', { entity: t('entities:patient.singular') }),
-        description: error?.message || 'Unknown error',
+        description: knownErrorMessage(error, t) || error?.message || 'Unknown error',
         placement: 'bottomRight',
         duration: 5,
       });

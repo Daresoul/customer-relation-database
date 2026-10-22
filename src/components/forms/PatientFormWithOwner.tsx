@@ -6,6 +6,7 @@
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { knownErrorMessage } from '@/utils/errors';
 import {
   Form,
   Select,
@@ -227,7 +228,7 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
         const firstError = error.errorFields[0]?.errors[0];
         setFormError(firstError || 'Please check all required fields');
       } else {
-        setFormError(error?.message || 'Failed to save patient');
+        setFormError(knownErrorMessage(error, t) || error?.message || 'Failed to save patient');
       }
     } finally {
       setSubmitting(false);
