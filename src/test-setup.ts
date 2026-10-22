@@ -5,7 +5,7 @@
  */
 
 import '@testing-library/jest-dom/vitest';
-import { vi } from 'vitest';
+import { afterEach, vi } from 'vitest';
 import type { ReactNode } from 'react';
 
 // Node 22+ ships its own global `localStorage`, which shadows jsdom's and is
@@ -72,4 +72,12 @@ vi.mock('@testing-library/react', async (importOriginal) => {
   }) as typeof rtl.render;
 
   return { ...rtl, render };
+});
+
+// RTL registers its auto-cleanup only when the module is first loaded, so in a
+// shared worker (--poolOptions.threads.singleThread) later files kept the
+// previous test's DOM and listeners mounted.
+afterEach(async () => {
+  const { cleanup } = await import('@testing-library/react');
+  cleanup();
 });
