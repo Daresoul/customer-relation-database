@@ -62,6 +62,7 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, "044_fts5_unicode61_tokenizer", upgrade_fts5_to_unicode61).await?;
     run_migration(pool, "045_add_attachment_deleted_at", add_attachment_deleted_at_column).await?;
     run_migration(pool, "046_rebuild_household_search", rebuild_household_search).await?;
+    run_migration(pool, "047_fix_medical_records_fts_triggers", fix_medical_records_fts_triggers).await?;
 
     Ok(())
 }
@@ -2946,6 +2947,35 @@ fn rebuild_household_search(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::fut
         sqlx::query("DELETE FROM household_search").execute(pool).await?;
         sqlx::query(&index_rows_sql("1 = 1")).execute(pool).await?;
 
+        Ok(())
+    })
+}
+
+// Migration 047: medical_records_fts is an external-content table, so an
+// AFTER UPDATE trigger that runs `UPDATE medical_records_fts` makes FTS5 read
+// the *new* row to find the tokens to remove. Those were never indexed, and
+// SQLite answers "database disk image is malformed": editing a record's
+// title or description failed. Remove the old tokens with the 'delete'
+// command and the OLD values instead, then rebuild the index once.
+fn fix_medical_records_fts_triggers(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        let remove_old = "INSERT INTO medical_records_fts(medical_records_fts, rowid, name, procedure_name, description) \
+                          VALUES('delete', old.id, old.name, old.procedure_name, old.description);";
+        let add_new = "INSERT INTO medical_records_fts(rowid, name, procedure_name, description) \
+                       VALUES (new.id, new.name, new.procedure_name, new.description);";
+        let triggers = [
+            ("medical_records_fts_update", "AFTER UPDATE ON medical_records", format!("{}\n{}", remove_old, add_new)),
+            ("medical_records_fts_delete", "AFTER DELETE ON medical_records", remove_old.to_string()),
+        ];
+        for (name, event, body) in triggers {
+            sqlx::query(&format!("DROP TRIGGER IF EXISTS {name}")).execute(pool).await?;
+            sqlx::query(&format!("CREATE TRIGGER {name} {event} BEGIN\n{body}\nEND"))
+                .execute(pool)
+                .await?;
+        }
+        sqlx::query("INSERT INTO medical_records_fts(medical_records_fts) VALUES('rebuild')")
+            .execute(pool)
+            .await?;
         Ok(())
     })
 }
