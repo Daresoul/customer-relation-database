@@ -4,8 +4,21 @@ use std::process::{Command, Stdio};
 use chrono::{DateTime, Utc};
 use serde::{Serialize, Deserialize};
 use serde_json::Value;
-use std::path::PathBuf;
+use std::ffi::OsStr;
+use std::path::{Path, PathBuf};
 use std::fs;
+use std::time::Duration;
+
+/// Longest a PDF job may run before Java is stopped.
+const JAVA_TIMEOUT: Duration = Duration::from_secs(60);
+const JAVA_VERSION_TIMEOUT: Duration = Duration::from_secs(15);
+
+/// What a finished Java run printed.
+struct JavaOutput {
+    success: bool,
+    stdout: String,
+    stderr: String,
+}
 
 /// Java PDF service - calls the iText 5 JAR for PDF generation
 /// This provides 100% identical output to the original print-app
@@ -73,14 +86,6 @@ impl JavaPdfService {
 
         let java_input = Self::build_java_input(patient, device_data_list, output_path, &chrono::Local);
 
-        // Create temp JSON file for input
-        let temp_dir = std::env::temp_dir();
-        let input_json_path = temp_dir.join(format!("pdf_input_{}.json", Utc::now().timestamp()));
-
-        // Write JSON to temp file
-        let json_str = serde_json::to_string_pretty(&java_input)
-            .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
-
         log::debug!("   🔍 DEBUG - Samples being sent to Java:");
         for (idx, sample) in java_input.samples.iter().enumerate() {
             log::debug!("   Sample #{} ({}): {} test results", idx + 1, sample.device_type, sample.test_results.len());
@@ -89,42 +94,10 @@ impl JavaPdfService {
             }
         }
 
-        fs::write(&input_json_path, json_str)
-            .map_err(|e| format!("Failed to write temp JSON file: {}", e))?;
-
-        log::debug!("   📄 Input JSON created: {:?}", input_json_path);
-
-        // Get JAR path (in pdf-generator-cli/build/libs/)
+        let input = serde_json::to_value(&java_input)
+            .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
         let jar_path = Self::get_jar_path(app_handle)?;
-
-        log::info!("   ☕ JAR path: {:?}", jar_path);
-        log::info!("   📂 Output path: {}", output_path);
-
-        // Call Java JAR
-        let output = Self::create_java_command(&jar_path, &input_json_path)
-            .output()
-            .map_err(|e| format!("Failed to execute Java: {}", e))?;
-
-        // Clean up temp JSON file
-        let _ = fs::remove_file(&input_json_path);
-
-        // Check if command was successful
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            return Err(format!(
-                "Java JAR failed:\nSTDOUT: {}\nSTDERR: {}",
-                stdout, stderr
-            ));
-        }
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        log::info!("   ✅ Java output: {}", stdout);
-
-        // Verify PDF was created
-        if !PathBuf::from(output_path).exists() {
-            return Err(format!("PDF was not created at: {}", output_path));
-        }
+        Self::run_jar_job(&jar_path, input, output_path, JAVA_TIMEOUT)?;
 
         log::info!("✅ Java PDF generated successfully");
         Ok(())
@@ -254,14 +227,15 @@ impl JavaPdfService {
     /// Create a Java command configured to prevent macOS focus-stealing.
     /// Sets headless mode flags, redirects stdin to null, and on macOS
     /// creates a new process group to isolate the child process.
-    fn create_java_command(jar_path: &PathBuf, input_json_path: &PathBuf) -> Command {
+    /// Every Java invocation goes through here.
+    fn create_java_command(jar_path: &Path, args: &[&OsStr]) -> Command {
         let mut cmd = Command::new("java");
         cmd.arg("-Djava.awt.headless=true")
             .arg("-Dapple.awt.UIElement=true")
             .arg("-Djava.awt.GraphicsEnvironment=sun.java2d.HeadlessGraphicsEnvironment")
             .arg("-jar")
             .arg(jar_path)
-            .arg(input_json_path)
+            .args(args)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
@@ -285,42 +259,75 @@ impl JavaPdfService {
         cmd
     }
 
+    /// Folder for one PDF job's input file.
+    fn new_job_dir() -> Result<PathBuf, String> {
+        Ok(std::env::temp_dir())
+    }
+
+    /// Run a command and collect its output.
+    fn run_with_timeout(mut cmd: Command, _timeout: Duration) -> Result<JavaOutput, String> {
+        let output = cmd
+            .output()
+            .map_err(|e| format!("Failed to execute Java: {}", e))?;
+        Ok(JavaOutput {
+            success: output.status.success(),
+            stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+            stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+        })
+    }
+
+    /// One JAR run: write the input JSON, run Java, check the PDF exists.
+    pub(crate) fn run_jar_job(
+        jar_path: &Path,
+        input: Value,
+        output_path: &str,
+        timeout: Duration,
+    ) -> Result<(), String> {
+        let job_dir = Self::new_job_dir()?;
+        let input_json_path = job_dir.join(format!("pdf_input_{}.json", Utc::now().timestamp()));
+        let json_str = serde_json::to_string_pretty(&input)
+            .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
+        fs::write(&input_json_path, json_str)
+            .map_err(|e| format!("Failed to write temp JSON file: {}", e))?;
+
+        log::info!("   ☕ JAR path: {:?}", jar_path);
+        log::info!("   📂 Output path: {}", output_path);
+
+        let result = Self::run_with_timeout(
+            Self::create_java_command(jar_path, &[input_json_path.as_os_str()]),
+            timeout,
+        );
+        let _ = fs::remove_file(&input_json_path);
+        let output = result?;
+
+        if !output.success {
+            return Err(format!(
+                "Java JAR failed:\nSTDOUT: {}\nSTDERR: {}",
+                output.stdout, output.stderr
+            ));
+        }
+        log::info!("   ✅ Java output: {}", output.stdout);
+
+        if !PathBuf::from(output_path).exists() {
+            return Err(format!("PDF was not created at: {}", output_path));
+        }
+        Ok(())
+    }
+
     /// Ask the bundled JAR which app version it was built for (`java -jar … --version`,
     /// printing the manifest's Implementation-Version). Returns the trimmed string,
     /// or an Err if the JAR can't be located or Java can't run it.
     fn read_jar_version(app_handle: &tauri::AppHandle) -> Result<String, String> {
         let jar_path = Self::get_jar_path(app_handle)?;
-        let mut cmd = Command::new("java");
-        cmd.arg("-Djava.awt.headless=true")
-            .arg("-Dapple.awt.UIElement=true")
-            .arg("-Djava.awt.GraphicsEnvironment=sun.java2d.HeadlessGraphicsEnvironment")
-            .arg("-jar")
-            .arg(&jar_path)
-            .arg("--version")
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-        #[cfg(unix)]
-        {
-            use std::os::unix::process::CommandExt;
-            cmd.process_group(0);
+        let output = Self::run_with_timeout(
+            Self::create_java_command(&jar_path, &[OsStr::new("--version")]),
+            JAVA_VERSION_TIMEOUT,
+        )
+        .map_err(|e| format!("Failed to run JAR --version: {}", e))?;
+        if !output.success {
+            return Err(format!("JAR --version exited non-zero: {}", output.stderr));
         }
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            const CREATE_NO_WINDOW: u32 = 0x08000000;
-            cmd.creation_flags(CREATE_NO_WINDOW);
-        }
-        let output = cmd
-            .output()
-            .map_err(|e| format!("Failed to run JAR --version: {}", e))?;
-        if !output.status.success() {
-            return Err(format!(
-                "JAR --version exited non-zero: {}",
-                String::from_utf8_lossy(&output.stderr)
-            ));
-        }
-        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+        Ok(output.stdout.trim().to_string())
     }
 
     /// Verify the bundled PDF-generator JAR was built for the same app version
@@ -603,50 +610,8 @@ impl JavaPdfService {
             });
         }
 
-        // Create temp JSON file for input
-        let temp_dir = std::env::temp_dir();
-        let input_json_path = temp_dir.join(format!("simple_report_input_{}.json", Utc::now().timestamp()));
-
-        // Write JSON to temp file
-        let json_str = serde_json::to_string_pretty(&json_obj)
-            .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
-
-        fs::write(&input_json_path, json_str)
-            .map_err(|e| format!("Failed to write temp JSON file: {}", e))?;
-
-        log::debug!("   📄 Simple report input JSON created: {:?}", input_json_path);
-
-        // Get JAR path
         let jar_path = Self::get_jar_path(app_handle)?;
-
-        log::info!("   ☕ JAR path: {:?}", jar_path);
-        log::info!("   📂 Output path: {}", output_path);
-
-        // Call Java JAR
-        let output = Self::create_java_command(&jar_path, &input_json_path)
-            .output()
-            .map_err(|e| format!("Failed to execute Java: {}", e))?;
-
-        // Clean up temp JSON file
-        let _ = fs::remove_file(&input_json_path);
-
-        // Check if command was successful
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            return Err(format!(
-                "Java JAR failed:\nSTDOUT: {}\nSTDERR: {}",
-                stdout, stderr
-            ));
-        }
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        log::info!("   ✅ Java output: {}", stdout);
-
-        // Verify PDF was created
-        if !PathBuf::from(output_path).exists() {
-            return Err(format!("PDF was not created at: {}", output_path));
-        }
+        Self::run_jar_job(&jar_path, json_obj, output_path, JAVA_TIMEOUT)?;
 
         log::info!("✅ Simple report PDF generated successfully");
         Ok(())
@@ -689,50 +654,8 @@ impl JavaPdfService {
             "output_path": output_path
         });
 
-        // Create temp JSON file for input
-        let temp_dir = std::env::temp_dir();
-        let input_json_path = temp_dir.join(format!("invoice_input_{}.json", Utc::now().timestamp()));
-
-        // Write JSON to temp file
-        let json_str = serde_json::to_string_pretty(&json_obj)
-            .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
-
-        fs::write(&input_json_path, &json_str)
-            .map_err(|e| format!("Failed to write temp JSON file: {}", e))?;
-
-        log::debug!("   📄 Invoice input JSON created: {:?}", input_json_path);
-
-        // Get JAR path
         let jar_path = Self::get_jar_path(app_handle)?;
-
-        log::info!("   ☕ JAR path: {:?}", jar_path);
-        log::info!("   📂 Output path: {}", output_path);
-
-        // Call Java JAR
-        let output = Self::create_java_command(&jar_path, &input_json_path)
-            .output()
-            .map_err(|e| format!("Failed to execute Java: {}", e))?;
-
-        // Clean up temp JSON file
-        let _ = fs::remove_file(&input_json_path);
-
-        // Check if command was successful
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            return Err(format!(
-                "Java JAR failed:\nSTDOUT: {}\nSTDERR: {}",
-                stdout, stderr
-            ));
-        }
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        log::info!("   ✅ Java output: {}", stdout);
-
-        // Verify PDF was created
-        if !PathBuf::from(output_path).exists() {
-            return Err(format!("PDF was not created at: {}", output_path));
-        }
+        Self::run_jar_job(&jar_path, json_obj, output_path, JAVA_TIMEOUT)?;
 
         log::info!("✅ Invoice PDF generated successfully");
         Ok(())
@@ -753,44 +676,8 @@ impl JavaPdfService {
             "output_path": output_path
         });
 
-        // Create temp JSON file for input
-        let temp_dir = std::env::temp_dir();
-        let input_json_path = temp_dir.join(format!("pharmacy_note_input_{}.json", Utc::now().timestamp()));
-
-        let json_str = serde_json::to_string_pretty(&json_obj)
-            .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
-
-        fs::write(&input_json_path, &json_str)
-            .map_err(|e| format!("Failed to write temp JSON file: {}", e))?;
-
-        log::debug!("   📄 Pharmacy note input JSON created: {:?}", input_json_path);
-
         let jar_path = Self::get_jar_path(app_handle)?;
-
-        log::info!("   ☕ JAR path: {:?}", jar_path);
-        log::info!("   📂 Output path: {}", output_path);
-
-        let output = Self::create_java_command(&jar_path, &input_json_path)
-            .output()
-            .map_err(|e| format!("Failed to execute Java: {}", e))?;
-
-        let _ = fs::remove_file(&input_json_path);
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            return Err(format!(
-                "Java JAR failed:\nSTDOUT: {}\nSTDERR: {}",
-                stdout, stderr
-            ));
-        }
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        log::info!("   ✅ Java output: {}", stdout);
-
-        if !PathBuf::from(output_path).exists() {
-            return Err(format!("PDF was not created at: {}", output_path));
-        }
+        Self::run_jar_job(&jar_path, json_obj, output_path, JAVA_TIMEOUT)?;
 
         log::info!("✅ Pharmacy note PDF generated successfully");
         Ok(())
