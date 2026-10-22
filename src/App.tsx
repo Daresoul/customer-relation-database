@@ -123,8 +123,8 @@ function AppContent() {
             <AntApp notification={{ maxCount: 1, placement: 'bottomRight' }}>
               <DeviceDataHandler />
               <WakeFromTrayHandler />
-              <DeviceImportModal />
               <Router>
+                <DeviceImportModal />
                 <AppWrapper>
                   <Routes>
                     <Route path="/" element={<MainDashboard />} />

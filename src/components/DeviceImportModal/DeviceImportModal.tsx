@@ -4,7 +4,7 @@
  * Refactored to use MedicalRecordFieldGroup for reusable field definitions.
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Modal,
   Form,
@@ -20,6 +20,7 @@ import {
   Card,
   Drawer,
   Checkbox,
+  Alert,
 } from 'antd';
 import {
   SaveOutlined,
@@ -32,7 +33,9 @@ import {
   PrinterOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { useDeviceImport } from '@/contexts/DeviceImportContext';
+import type { GroupedDeviceFile } from '@/contexts/DeviceImportContext';
 import { usePatients } from '@/hooks/usePatients';
 import { useCreateMedicalRecord, useUploadAttachment } from '@/hooks/useMedicalRecords';
 import { useSearchRecordTemplates } from '@/hooks/useRecordTemplates';
@@ -50,12 +53,32 @@ import type { RecordType, RecordTemplate } from '@/components/forms/fieldGroups'
 import styles from './DeviceImportModal.module.css';
 import { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
 import { listen } from '@tauri-apps/api/event';
+import { validatePatientSelection, getMatchStrength } from '@/utils/deviceDataValidation';
+import type { MatchStrength } from '@/utils/deviceDataValidation';
+import type { ValidationWarning } from '@/types/deviceImport';
 
 const { Option } = Select;
 const { Text } = Typography;
 
+const MATCH_TAGS: Record<MatchStrength, { color?: string; key: string; fallback: string }> = {
+  chip: { color: 'green', key: 'matchChip', fallback: 'Chip match' },
+  name: { color: 'gold', key: 'matchName', fallback: 'Name guess — please check' },
+  chip_ambiguous: { color: 'red', key: 'matchChipAmbiguous', fallback: 'Chip matches several patients — choose' },
+  name_ambiguous: { color: 'orange', key: 'matchNameAmbiguous', fallback: 'Several patients have this name — choose' },
+  manual: { key: 'matchManual', fallback: 'Picked by hand' },
+  none: { key: 'matchNone', fallback: 'No automatic match — choose the patient' },
+};
+
+// One import per result: remounting on importId starts every result with a fresh form and serial
 const DeviceImportModal: React.FC = () => {
+  const { modalOpen, importId } = useDeviceImport();
+  if (!modalOpen) return null;
+  return <DeviceImportDialog key={importId} />;
+};
+
+const DeviceImportDialog: React.FC = () => {
   const { t } = useTranslation(['medical', 'common', 'forms']);
+  const navigate = useNavigate();
   const { notification, modal: modalHook } = App.useApp();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
@@ -83,17 +106,26 @@ const DeviceImportModal: React.FC = () => {
   const {
     modalOpen,
     suggestedPatientId,
+    waitingCount,
     addDeviceFile,
     removeDeviceFile,
-    clearAllFiles,
-    closeModal,
+    finishImport,
     getGroupedFiles,
     getAggregatedPatientData,
     getPatientDataConflicts,
   } = useDeviceImport();
 
   const pendingFiles = getGroupedFiles();
+  const extractedPatientData = useMemo(() => getAggregatedPatientData(), [getAggregatedPatientData]);
   const { patients, refreshPatients, loading: patientsLoading } = usePatients();
+
+  const pickedPatientId = Form.useWatch('patientId', form);
+  const pickedPatient = patients.find((p) => p.id === pickedPatientId);
+  const pickedForCheck = pickedPatient
+    ? { id: pickedPatient.id, name: pickedPatient.name, species: pickedPatient.species, microchipId: pickedPatient.microchipId }
+    : null;
+  const matchStrength = getMatchStrength(pendingFiles, pickedForCheck);
+  const mismatches = pickedForCheck ? validatePatientSelection(pickedForCheck, pendingFiles).warnings : [];
 
   // Prefill the "save for later" serial once — from the matched patient's name or
   // the device-supplied identifier — so staff don't retype what we already know.
@@ -218,14 +250,12 @@ const DeviceImportModal: React.FC = () => {
     }
   }, [modalOpen]);
 
-  // Reset form with defaults when modal opens or relevant data changes
+  // Defaults for this result; a file added later never overwrites a field the user edited
   useEffect(() => {
-    if (modalOpen) {
-      const defaults = getDefaultFormValues();
-      form.resetFields();
-      form.setFieldsValue(defaults);
-    }
-  }, [modalOpen, suggestedPatientId, pendingFiles.length]);
+    const defaults = Object.entries(getDefaultFormValues()).filter(([field]) => !form.isFieldTouched(field));
+    form.setFieldsValue(Object.fromEntries(defaults));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suggestedPatientId, pendingFiles.length]);
 
   const handleRecordTypeChange = (value: RecordType) => {
     setRecordType(value);
@@ -248,18 +278,51 @@ const DeviceImportModal: React.FC = () => {
     modalHook.confirm({
       title: t('common:confirm'),
       content: t('medical:deviceImport.confirmCancel'),
-      onOk: () => {
-        form.resetFields();
-        setCreatePatientExpanded(false);
-        setScannedMicrochipId('');
-        setLineItems([]);
-        setDiscountPercent(undefined);
-        setManualTotal(undefined);
-        clearAllFiles();
-        closeModal();
-      },
+      autoFocusButton: null,
+      onOk: finishImport,
     });
   };
+
+  const mismatchLine = (w: ValidationWarning) => {
+    const d = w.details as Record<string, string | undefined>;
+    switch (w.type) {
+      case 'patient_id_mismatch':
+        return t('medical:deviceImport.machineSaidChip', {
+          defaultValue: 'Microchip — machine said: {{machine}} · you picked: {{picked}}',
+          machine: d.fileIdentifier,
+          picked: d.selectedMicrochipId || t('medical:deviceImport.noChip', 'no chip'),
+        });
+      case 'species_mismatch':
+        return t('medical:deviceImport.machineSaidSpecies', {
+          defaultValue: 'Species — machine said: {{machine}} · you picked: {{picked}}',
+          machine: d.fileSpecies,
+          picked: d.selectedSpecies,
+        });
+      default:
+        return t('medical:deviceImport.machineSaidName', {
+          defaultValue: 'Name — machine said: {{machine}} · you picked: {{picked}}',
+          machine: d.filePatientName,
+          picked: d.selectedPatientName,
+        });
+    }
+  };
+
+  const confirmMismatch = (warnings: ValidationWarning[], name: string) =>
+    new Promise<boolean>((resolve) => {
+      modalHook.confirm({
+        title: t('medical:deviceImport.mismatchTitle', 'This result may belong to another patient'),
+        content: (
+          <Space direction="vertical" size={2}>
+            {warnings.map((w, i) => <Text key={i}>{mismatchLine(w)}</Text>)}
+          </Space>
+        ),
+        okText: t('medical:deviceImport.attachAnyway', { defaultValue: 'Attach to {{name}} anyway', name }),
+        cancelText: t('medical:deviceImport.goBack', 'Go back'),
+        autoFocusButton: null,
+        onOk: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
+    });
 
   const handleAddRecentFile = async (fileId: string, originalName: string) => {
     try {
@@ -308,8 +371,13 @@ const DeviceImportModal: React.FC = () => {
   };
 
   const handleSaveForLater = async () => {
-    if (!patientSerial || patientSerial.trim().length === 0) {
-      notification.warning({ message: t('common:warning'), description: 'Please enter a patient serial to save for later', placement: 'bottomRight' });
+    const serial = patientSerial.trim();
+    if (!serial) {
+      notification.warning({
+        message: t('common:warning'),
+        description: t('medical:deviceImport.serialRequired', 'Enter a patient name or serial to save this result for later.'),
+        placement: 'bottomRight',
+      });
       return;
     }
     try {
@@ -318,18 +386,33 @@ const DeviceImportModal: React.FC = () => {
         originalName: f.fileName,
         fileSize: f.fileData?.length,
       }));
-      const savedCount = await fileHistoryService.saveDeviceFilesForLater(patientSerial.trim(), filesMeta, pendingFiles[0]?.patientIdentifier);
-      notification.success({ message: t('common:success'), description: `Saved ${savedCount} file(s) for later under serial '${patientSerial}'.`, placement: 'bottomRight' });
-      form.resetFields();
-      setCreatePatientExpanded(false);
-      setLineItems([]);
-      setDiscountPercent(undefined);
-      setManualTotal(undefined);
-      clearAllFiles();
-      closeModal();
+      const savedCount = await fileHistoryService.saveDeviceFilesForLater(serial, filesMeta, pendingFiles[0]?.patientIdentifier);
+      if (!savedCount) {
+        notification.error({
+          message: t('common:error'),
+          description: t('medical:deviceImport.savedNone', 'Nothing was saved for later: the result file was not found. The result is still open.'),
+          placement: 'bottomRight',
+          duration: 0,
+        });
+        return;
+      }
+      notification.success({
+        message: t('common:success'),
+        description: t('medical:deviceImport.savedForLater', {
+          defaultValue: "Saved {{n}} file(s) for later under '{{serial}}'.",
+          n: savedCount,
+          serial,
+        }),
+        placement: 'bottomRight',
+      });
+      finishImport();
     } catch (e: any) {
       console.error('Save for later failed:', e);
-      notification.error({ message: t('common:error'), description: e?.message || 'Failed to save for later', placement: 'bottomRight' });
+      notification.error({
+        message: t('common:error'),
+        description: e?.message || t('medical:deviceImport.saveForLaterFailed', 'Failed to save for later'),
+        placement: 'bottomRight',
+      });
     } finally {
       setLoading(false);
     }
@@ -371,6 +454,9 @@ const DeviceImportModal: React.FC = () => {
       return;
     }
     if (errorFields.length > 0) setErrorFields([]);
+    if (mismatches.length > 0 && !(await confirmMismatch(mismatches, pickedPatient?.name || ''))) {
+      return;
+    }
     try {
       setLoading(true);
 
@@ -426,12 +512,12 @@ const DeviceImportModal: React.FC = () => {
               attachmentType: 'test_result',
               sourceFileId: file.sourceFileId,
             })
-            .then((res: any) => ({ status: 'fulfilled' as const, fileName: file.fileName, value: res }))
-            .catch((err: any) => ({ status: 'rejected' as const, fileName: file.fileName, reason: err }))
+            .then((res: any) => ({ status: 'fulfilled' as const, file, fileName: file.fileName, value: res }))
+            .catch((err: any) => ({ status: 'rejected' as const, file, fileName: file.fileName, reason: err }))
         );
 
         const results = await Promise.all(tasks);
-        const successes = results.filter(r => r.status === 'fulfilled') as Array<{status: 'fulfilled'; fileName: string; value: any}>;
+        const successes = results.filter(r => r.status === 'fulfilled') as Array<{status: 'fulfilled'; file: GroupedDeviceFile; fileName: string; value: any}>;
         const failures = results.filter(r => r.status === 'rejected') as Array<{status: 'rejected'; fileName: string; reason: any}>;
 
         if (successes.length > 0) {
@@ -443,7 +529,7 @@ const DeviceImportModal: React.FC = () => {
           });
 
           try {
-            const uniquePendingIds = Array.from(new Set(pendingFiles.map(f => f.pendingEntryId).filter(Boolean))) as number[];
+            const uniquePendingIds = Array.from(new Set(successes.map(s => s.file.pendingEntryId).filter(Boolean))) as number[];
             await Promise.all(uniquePendingIds.map(id => fileHistoryService.markPendingEntryProcessed(id)));
           } catch (e) {
             console.warn('Failed to mark some pending entries processed:', e);
@@ -513,18 +599,9 @@ const DeviceImportModal: React.FC = () => {
         }
       }
 
-      form.resetFields();
-      setCreatePatientExpanded(false);
-      setScannedMicrochipId('');
-      setLineItems([]);
-      setDiscountPercent(undefined);
-      setManualTotal(undefined);
-      clearAllFiles();
-      closeModal();
-
-      // Navigate to the newly created medical record
+      finishImport();
       if (createdRecord?.id) {
-        window.location.href = `/medical-records/${createdRecord.id}`;
+        navigate(`/medical-records/${createdRecord.id}`);
       }
     } catch (_error) {
       notification.error({
@@ -538,9 +615,7 @@ const DeviceImportModal: React.FC = () => {
     }
   };
 
-  if (!modalOpen) {
-    return null;
-  }
+  const matchTag = MATCH_TAGS[matchStrength];
 
   return (
     <Modal
@@ -549,6 +624,9 @@ const DeviceImportModal: React.FC = () => {
           <FileOutlined />
           {t('medical:deviceImport.title')}
           <Tag color="blue">{pendingFiles.length} {t('medical:deviceImport.filesCount')}</Tag>
+          {waitingCount > 0 && (
+            <Tag color="orange">{t('medical:deviceImport.moreWaiting', { count: waitingCount })}</Tag>
+          )}
         </Space>
       }
       open={modalOpen}
@@ -567,7 +645,7 @@ const DeviceImportModal: React.FC = () => {
             icon={<HistoryOutlined />}
             onClick={() => setRecentFilesDrawerOpen(true)}
           >
-            Browse Recent Files
+            {t('medical:deviceImport.browseRecentFiles', 'Browse Recent Files')}
           </Button>
         }
         style={{ marginBottom: 16 }}
@@ -610,6 +688,9 @@ const DeviceImportModal: React.FC = () => {
                         {t('medical:deviceImport.patientDetected')}
                       </Tag>
                     )}
+                    {(!file.testResults || Object.keys(file.testResults).length === 0) && (
+                      <Tag color="red">{t('medical:deviceImport.noValuesRead', 'No values could be read — attached as a plain file')}</Tag>
+                    )}
                   </Space>
                 }
                 description={
@@ -639,13 +720,13 @@ const DeviceImportModal: React.FC = () => {
       <Card size="small" style={{ marginBottom: 16 }}>
         <Space wrap>
           <Input
-            placeholder="Patient serial / reference"
+            placeholder={t('medical:deviceImport.serialPlaceholder', 'Patient name or serial')}
             value={patientSerial}
             onChange={(e) => setPatientSerial(e.target.value)}
             style={{ width: 300 }}
           />
-          <Button onClick={handleSaveForLater} disabled={pendingFiles.length === 0}>
-            Save for later
+          <Button onClick={handleSaveForLater} disabled={pendingFiles.length === 0} loading={loading}>
+            {t('medical:deviceImport.saveForLater', 'Save for later')}
           </Button>
         </Space>
       </Card>
@@ -670,6 +751,11 @@ const DeviceImportModal: React.FC = () => {
           name="patientId"
           label={t('medical:deviceImport.selectPatient')}
           rules={[{ required: true, message: t('forms:validation.required') }]}
+          extra={
+            <Tag color={matchTag.color} style={{ marginTop: 4 }}>
+              {t(`medical:deviceImport.${matchTag.key}`, matchTag.fallback)}
+            </Tag>
+          }
         >
           <Select
             placeholder={t('medical:deviceImport.selectPatientPlaceholder')}
@@ -689,9 +775,23 @@ const DeviceImportModal: React.FC = () => {
           </Select>
         </Form.Item>
 
+        {mismatches.length > 0 && (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message={t('medical:deviceImport.mismatchTitle', 'This result may belong to another patient')}
+            description={
+              <Space direction="vertical" size={2}>
+                {mismatches.map((w, i) => <Text key={i}>{mismatchLine(w)}</Text>)}
+              </Space>
+            }
+          />
+        )}
+
         {/* Inline Patient Creation Section */}
         <CreatePatientSection
-          extractedData={getAggregatedPatientData()}
+          extractedData={extractedPatientData}
           conflicts={getPatientDataConflicts()}
           onPatientCreated={handlePatientCreated}
           onCancel={() => setCreatePatientExpanded(false)}
@@ -737,7 +837,6 @@ const DeviceImportModal: React.FC = () => {
           <Space>
             <Button
               type="primary"
-              htmlType="submit"
               loading={loading}
               icon={<SaveOutlined />}
               onClick={handleSubmit}
@@ -754,7 +853,7 @@ const DeviceImportModal: React.FC = () => {
 
       {/* Recent Files Drawer */}
       <Drawer
-        title="Recent Device Files (Last 14 Days)"
+        title={t('medical:deviceImport.recentFilesTitle', 'Recent Device Files (Last 14 Days)')}
         placement="right"
         width={800}
         onClose={() => setRecentFilesDrawerOpen(false)}
