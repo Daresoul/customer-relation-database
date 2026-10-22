@@ -4,6 +4,56 @@ use crate::models::dto::MaybeNull;
 use chrono::{Utc, DateTime};
 use serde_json::json;
 
+/// Every column a `MedicalRecord` is read from. All record SELECTs use this
+/// list so no field (like `invoice_number`) is left out of one of them.
+const RECORD_COLUMNS: &str = "id, patient_id, record_type, name, procedure_name, description, \
+     prescription_notes, price, currency_id, discount_percent, manual_total, invoice_number, \
+     is_archived, version, created_at, updated_at, created_by, updated_by";
+
+/// A REAL column that may hold an integer or a float.
+fn row_f64(row: &QueryResult, col: &str) -> Option<f64> {
+    row.try_get::<i64>("", col)
+        .ok()
+        .map(|i| i as f64)
+        .or_else(|| row.try_get::<f64>("", col).ok())
+}
+
+fn row_utc(row: &QueryResult, col: &str) -> DateTime<Utc> {
+    row.try_get::<String>("", col)
+        .ok()
+        .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+        .map(|dt| dt.with_timezone(&Utc))
+        .unwrap_or_else(Utc::now)
+}
+
+/// Map a row selected with `RECORD_COLUMNS`. Attachments and line items
+/// are loaded separately by the callers that need them.
+fn row_to_record(row: &QueryResult) -> MedicalRecord {
+    let is_archived_int: i64 = row.try_get("", "is_archived").unwrap_or(0);
+    MedicalRecord {
+        id: row.try_get("", "id").unwrap_or(0),
+        patient_id: row.try_get("", "patient_id").unwrap_or(0),
+        record_type: row.try_get("", "record_type").unwrap_or_default(),
+        name: row.try_get("", "name").unwrap_or_default(),
+        procedure_name: row.try_get("", "procedure_name").ok(),
+        description: row.try_get("", "description").unwrap_or_default(),
+        prescription_notes: row.try_get("", "prescription_notes").ok(),
+        price: row_f64(row, "price"),
+        currency_id: row.try_get("", "currency_id").ok(),
+        discount_percent: row_f64(row, "discount_percent"),
+        manual_total: row_f64(row, "manual_total"),
+        invoice_number: row.try_get("", "invoice_number").ok(),
+        is_archived: is_archived_int != 0,
+        version: row.try_get("", "version").unwrap_or(1),
+        created_at: row_utc(row, "created_at"),
+        updated_at: row_utc(row, "updated_at"),
+        created_by: row.try_get("", "created_by").ok(),
+        updated_by: row.try_get("", "updated_by").ok(),
+        attachments: None,
+        line_items: None,
+    }
+}
+
 // T027: MedicalRecordService with CRUD operations
 pub struct MedicalRecordService;
 
@@ -19,12 +69,7 @@ impl MedicalRecordService {
         let offset = ((page - 1) * page_size) as i64;
 
         // Build the query based on filters
-        let mut sql = String::from(
-            "SELECT id, patient_id, record_type, name, procedure_name, description, \
-             prescription_notes, price, currency_id, is_archived, version, created_at, updated_at, \
-             created_by, updated_by \
-             FROM medical_records WHERE patient_id = ?"
-        );
+        let mut sql = format!("SELECT {} FROM medical_records WHERE patient_id = ?", RECORD_COLUMNS);
         let mut params: Vec<Value> = vec![patient_id.into()];
 
         if let Some(ref f) = filter {
@@ -62,69 +107,7 @@ impl MedicalRecordService {
 
         log::debug!("Got {} rows from database", rows.len());
 
-        let mut records = Vec::new();
-        for row in rows {
-            log::trace!("Processing row...");
-            let record_id: i64 = row.try_get("", "id").map_err(|e| e.to_string())?;
-            let is_archived_int: i64 = row.try_get("", "is_archived").unwrap_or(0);
-            let created_at_str: Option<String> = row.try_get("", "created_at").ok();
-            let updated_at_str: Option<String> = row.try_get("", "updated_at").ok();
-
-            let created_at = created_at_str
-                .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
-                .map(|dt| dt.with_timezone(&Utc))
-                .unwrap_or_else(|| Utc::now());
-
-            let updated_at = updated_at_str
-                .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
-                .map(|dt| dt.with_timezone(&Utc))
-                .unwrap_or_else(|| Utc::now());
-
-            // Handle price as either integer or float
-            let price: Option<f64> = row.try_get::<i64>("", "price")
-                .ok()
-                .map(|i| i as f64)
-                .or_else(|| row.try_get::<f64>("", "price").ok());
-
-            // Attachments are fetched after search-filtering + pagination
-            // (below) so we only hit the DB for the records actually
-            // returned on this page, not the whole patient history.
-
-            // Handle discount_percent as either integer or float
-            let discount_percent: Option<f64> = row.try_get::<i64>("", "discount_percent")
-                .ok()
-                .map(|i| i as f64)
-                .or_else(|| row.try_get::<f64>("", "discount_percent").ok());
-
-            // Handle manual_total as either integer or float
-            let manual_total: Option<f64> = row.try_get::<i64>("", "manual_total")
-                .ok()
-                .map(|i| i as f64)
-                .or_else(|| row.try_get::<f64>("", "manual_total").ok());
-
-            records.push(MedicalRecord {
-                id: record_id,
-                patient_id: row.try_get("", "patient_id").unwrap_or(0),
-                record_type: row.try_get("", "record_type").unwrap_or_default(),
-                name: row.try_get("", "name").unwrap_or_default(),
-                procedure_name: row.try_get("", "procedure_name").ok(),
-                description: row.try_get("", "description").unwrap_or_default(),
-                prescription_notes: row.try_get("", "prescription_notes").ok(),
-                price,
-                currency_id: row.try_get("", "currency_id").ok(),
-                discount_percent,
-                manual_total,
-                invoice_number: row.try_get("", "invoice_number").ok(),
-                is_archived: is_archived_int != 0,
-                version: row.try_get("", "version").unwrap_or(1),
-                created_at,
-                updated_at,
-                created_by: row.try_get("", "created_by").ok(),
-                updated_by: row.try_get("", "updated_by").ok(),
-                attachments: None, // filled in below, only for the paged slice
-                line_items: None, // Line items are only loaded in get_medical_record detail view
-            });
-        }
+        let mut records: Vec<MedicalRecord> = rows.iter().map(row_to_record).collect();
 
         log::debug!("Fetched {} records before search filter", records.len());
 
@@ -231,76 +214,20 @@ impl MedicalRecordService {
         let row = db
             .query_one(Statement::from_sql_and_values(
                 DbBackend::Sqlite,
-                "SELECT id, patient_id, record_type, name, procedure_name, description, \
-                 prescription_notes, price, currency_id, discount_percent, manual_total, \
-                 is_archived, version, created_at, updated_at, \
-                 created_by, updated_by \
-                 FROM medical_records WHERE id = ?",
+                &format!("SELECT {} FROM medical_records WHERE id = ?", RECORD_COLUMNS),
                 [record_id.into()],
             ))
             .await
             .map_err(|e| format!("Failed to fetch medical record: {}", e))?
             .ok_or("Medical record not found".to_string())?;
 
-        let is_archived_int: i64 = row.try_get("", "is_archived").unwrap_or(0);
-        let created_at_str: Option<String> = row.try_get("", "created_at").ok();
-        let updated_at_str: Option<String> = row.try_get("", "updated_at").ok();
-
-        let created_at = created_at_str
-            .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
-            .map(|dt| dt.with_timezone(&Utc))
-            .unwrap_or_else(|| Utc::now());
-
-        let updated_at = updated_at_str
-            .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
-            .map(|dt| dt.with_timezone(&Utc))
-            .unwrap_or_else(|| Utc::now());
-
-        // Handle price as either integer or float
-        let price: Option<f64> = row.try_get::<i64>("", "price")
-            .ok()
-            .map(|i| i as f64)
-            .or_else(|| row.try_get::<f64>("", "price").ok());
-
-        // Handle discount_percent as either integer or float
-        let discount_percent: Option<f64> = row.try_get::<i64>("", "discount_percent")
-            .ok()
-            .map(|i| i as f64)
-            .or_else(|| row.try_get::<f64>("", "discount_percent").ok());
-
-        // Handle manual_total as either integer or float
-        let manual_total: Option<f64> = row.try_get::<i64>("", "manual_total")
-            .ok()
-            .map(|i| i as f64)
-            .or_else(|| row.try_get::<f64>("", "manual_total").ok());
-
         // Get line items using the LineItemService
         let line_items = crate::services::line_item::LineItemService::get_line_items_for_record(db, record_id)
             .await
             .unwrap_or_default();
 
-        let record = MedicalRecord {
-            id: row.try_get("", "id").unwrap_or(0),
-            patient_id: row.try_get("", "patient_id").unwrap_or(0),
-            record_type: row.try_get("", "record_type").unwrap_or_default(),
-            name: row.try_get("", "name").unwrap_or_default(),
-            procedure_name: row.try_get("", "procedure_name").ok(),
-            description: row.try_get("", "description").unwrap_or_default(),
-            prescription_notes: row.try_get("", "prescription_notes").ok(),
-            price,
-            currency_id: row.try_get("", "currency_id").ok(),
-            discount_percent,
-            manual_total,
-            invoice_number: row.try_get("", "invoice_number").ok(),
-            is_archived: is_archived_int != 0,
-            version: row.try_get("", "version").unwrap_or(1),
-            created_at,
-            updated_at,
-            created_by: row.try_get("", "created_by").ok(),
-            updated_by: row.try_get("", "updated_by").ok(),
-            attachments: None,
-            line_items: if line_items.is_empty() { None } else { Some(line_items) },
-        };
+        let mut record = row_to_record(&row);
+        record.line_items = if line_items.is_empty() { None } else { Some(line_items) };
 
         // Get attachments using helper
         let attachments = Self::fetch_attachments(db, record_id).await.unwrap_or_default();
@@ -1100,11 +1027,7 @@ impl MedicalRecordService {
         let old_row = db
             .query_one(Statement::from_sql_and_values(
                 DbBackend::Sqlite,
-                "SELECT id, patient_id, record_type, name, procedure_name, description, \
-                 prescription_notes, price, currency_id, discount_percent, manual_total, \
-                 is_archived, version, created_at, updated_at, \
-                 created_by, updated_by \
-                 FROM medical_records WHERE id = ?",
+                &format!("SELECT {} FROM medical_records WHERE id = ?", RECORD_COLUMNS),
                 [record_id.into()],
             ))
             .await
@@ -1226,71 +1149,15 @@ impl MedicalRecordService {
         let row = db
             .query_one(Statement::from_sql_and_values(
                 DbBackend::Sqlite,
-                "SELECT id, patient_id, record_type, name, procedure_name, description, \
-                 prescription_notes, price, currency_id, discount_percent, manual_total, \
-                 is_archived, version, created_at, updated_at, \
-                 created_by, updated_by \
-                 FROM medical_records WHERE id = ?",
+                &format!("SELECT {} FROM medical_records WHERE id = ?", RECORD_COLUMNS),
                 [record_id.into()],
             ))
             .await
             .map_err(|e| format!("Failed to fetch updated medical record: {}", e))?
             .ok_or("Updated record not found".to_string())?;
 
-        let is_archived_int: i64 = row.try_get("", "is_archived").unwrap_or(0);
-        let created_at_str: Option<String> = row.try_get("", "created_at").ok();
-        let updated_at_str: Option<String> = row.try_get("", "updated_at").ok();
-
-        let created_at = created_at_str
-            .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
-            .map(|dt| dt.with_timezone(&Utc))
-            .unwrap_or_else(|| Utc::now());
-
-        let updated_at = updated_at_str
-            .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
-            .map(|dt| dt.with_timezone(&Utc))
-            .unwrap_or_else(|| Utc::now());
-
-        // Handle price as either integer or float
-        let price: Option<f64> = row.try_get::<i64>("", "price")
-            .ok()
-            .map(|i| i as f64)
-            .or_else(|| row.try_get::<f64>("", "price").ok());
-
-        // Handle discount_percent as either integer or float
-        let discount_percent: Option<f64> = row.try_get::<i64>("", "discount_percent")
-            .ok()
-            .map(|i| i as f64)
-            .or_else(|| row.try_get::<f64>("", "discount_percent").ok());
-
-        // Handle manual_total as either integer or float
-        let manual_total: Option<f64> = row.try_get::<i64>("", "manual_total")
-            .ok()
-            .map(|i| i as f64)
-            .or_else(|| row.try_get::<f64>("", "manual_total").ok());
-
-        let updated_record = MedicalRecord {
-            id: row.try_get("", "id").unwrap_or(0),
-            patient_id: row.try_get("", "patient_id").unwrap_or(0),
-            record_type: row.try_get("", "record_type").unwrap_or_default(),
-            name: row.try_get("", "name").unwrap_or_default(),
-            procedure_name: row.try_get("", "procedure_name").ok(),
-            description: row.try_get("", "description").unwrap_or_default(),
-            prescription_notes: row.try_get("", "prescription_notes").ok(),
-            price,
-            currency_id: row.try_get("", "currency_id").ok(),
-            discount_percent,
-            manual_total,
-            invoice_number: row.try_get("", "invoice_number").ok(),
-            is_archived: is_archived_int != 0,
-            version: row.try_get("", "version").unwrap_or(1),
-            created_at,
-            updated_at,
-            created_by: row.try_get("", "created_by").ok(),
-            updated_by: row.try_get("", "updated_by").ok(),
-            attachments: None,
-            line_items,
-        };
+        let mut updated_record = row_to_record(&row);
+        updated_record.line_items = line_items;
 
         // Build full snapshot history entry
         // Old snapshot
@@ -1418,13 +1285,7 @@ impl MedicalRecordService {
         // patient's records (small), so the in-memory filter is cheap.
         let needle = search_term.trim().to_lowercase();
 
-        let mut sql = String::from(
-            "SELECT id, patient_id, record_type, name, procedure_name, description, \
-             prescription_notes, price, currency_id, is_archived, version, created_at, updated_at, \
-             created_by, updated_by \
-             FROM medical_records \
-             WHERE patient_id = ?"
-        );
+        let mut sql = format!("SELECT {} FROM medical_records WHERE patient_id = ?", RECORD_COLUMNS);
 
         if !include_archived {
             sql.push_str(" AND is_archived = 0");
@@ -1443,81 +1304,20 @@ impl MedicalRecordService {
             .await
             .map_err(|e| format!("Failed to search medical records: {}", e))?;
 
-        let mut records = Vec::new();
-        for row in rows {
-            let is_archived_int: i64 = row.try_get("", "is_archived").unwrap_or(0);
-            let created_at_str: Option<String> = row.try_get("", "created_at").ok();
-            let updated_at_str: Option<String> = row.try_get("", "updated_at").ok();
-
-            let created_at = created_at_str
-                .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
-                .map(|dt| dt.with_timezone(&Utc))
-                .unwrap_or_else(|| Utc::now());
-
-            let updated_at = updated_at_str
-                .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
-                .map(|dt| dt.with_timezone(&Utc))
-                .unwrap_or_else(|| Utc::now());
-
-            // Handle price as either integer or float
-            let price: Option<f64> = row.try_get::<i64>("", "price")
-                .ok()
-                .map(|i| i as f64)
-                .or_else(|| row.try_get::<f64>("", "price").ok());
-
-            // Handle discount_percent as either integer or float
-            let discount_percent: Option<f64> = row.try_get::<i64>("", "discount_percent")
-                .ok()
-                .map(|i| i as f64)
-                .or_else(|| row.try_get::<f64>("", "discount_percent").ok());
-
-            // Handle manual_total as either integer or float
-            let manual_total: Option<f64> = row.try_get::<i64>("", "manual_total")
-                .ok()
-                .map(|i| i as f64)
-                .or_else(|| row.try_get::<f64>("", "manual_total").ok());
-
-            let name: String = row.try_get("", "name").unwrap_or_default();
-            let procedure_name: Option<String> = row.try_get("", "procedure_name").ok();
-            let description: String = row.try_get("", "description").unwrap_or_default();
-
-            // Unicode-aware substring match across the same three fields the
-            // old SQL LIKE covered (name, description, procedure_name). An
-            // empty needle matches everything (acts as "list all").
-            if !needle.is_empty() {
-                let hit = name.to_lowercase().contains(&needle)
-                    || description.to_lowercase().contains(&needle)
-                    || procedure_name
+        let records = rows
+            .iter()
+            .map(row_to_record)
+            .filter(|r| {
+                // Unicode-aware substring match across name, description and
+                // procedure_name. An empty needle matches everything.
+                needle.is_empty()
+                    || r.name.to_lowercase().contains(&needle)
+                    || r.description.to_lowercase().contains(&needle)
+                    || r.procedure_name
                         .as_deref()
-                        .is_some_and(|p| p.to_lowercase().contains(&needle));
-                if !hit {
-                    continue;
-                }
-            }
-
-            records.push(MedicalRecord {
-                id: row.try_get("", "id").unwrap_or(0),
-                patient_id: row.try_get("", "patient_id").unwrap_or(0),
-                record_type: row.try_get("", "record_type").unwrap_or_default(),
-                name,
-                procedure_name,
-                description,
-                prescription_notes: row.try_get("", "prescription_notes").ok(),
-                price,
-                currency_id: row.try_get("", "currency_id").ok(),
-                discount_percent,
-                manual_total,
-                invoice_number: row.try_get("", "invoice_number").ok(),
-                is_archived: is_archived_int != 0,
-                version: row.try_get("", "version").unwrap_or(1),
-                created_at,
-                updated_at,
-                created_by: row.try_get("", "created_by").ok(),
-                updated_by: row.try_get("", "updated_by").ok(),
-                attachments: None,
-                line_items: None,
-            });
-        }
+                        .is_some_and(|p| p.to_lowercase().contains(&needle))
+            })
+            .collect();
         Ok(records)
     }
 
@@ -1556,56 +1356,14 @@ impl MedicalRecordService {
         let row = db
             .query_one(Statement::from_sql_and_values(
                 DbBackend::Sqlite,
-                "SELECT id, patient_id, record_type, name, procedure_name, description, \
-                 prescription_notes, price, currency_id, is_archived, version, created_at, updated_at, \
-                 created_by, updated_by \
-                 FROM medical_records WHERE id = ?",
+                &format!("SELECT {} FROM medical_records WHERE id = ?", RECORD_COLUMNS),
                 [record_id.into()],
             ))
             .await
             .map_err(|e| format!("Failed to fetch medical record: {}", e))?
             .ok_or("Medical record not found".to_string())?;
 
-        let mut base = MedicalRecord {
-            id: row.try_get("", "id").unwrap_or(0),
-            patient_id: row.try_get("", "patient_id").unwrap_or(0),
-            record_type: row.try_get("", "record_type").unwrap_or_default(),
-            name: row.try_get("", "name").unwrap_or_default(),
-            procedure_name: row.try_get("", "procedure_name").ok(),
-            description: row.try_get("", "description").unwrap_or_default(),
-            prescription_notes: row.try_get("", "prescription_notes").ok(),
-            price: row.try_get::<i64>("", "price")
-                .ok()
-                .map(|i| i as f64)
-                .or_else(|| row.try_get::<f64>("", "price").ok()),
-            currency_id: row.try_get("", "currency_id").ok(),
-            discount_percent: row.try_get::<i64>("", "discount_percent")
-                .ok()
-                .map(|i| i as f64)
-                .or_else(|| row.try_get::<f64>("", "discount_percent").ok()),
-            manual_total: row.try_get::<i64>("", "manual_total")
-                .ok()
-                .map(|i| i as f64)
-                .or_else(|| row.try_get::<f64>("", "manual_total").ok()),
-            invoice_number: row.try_get("", "invoice_number").ok(),
-            is_archived: {
-                let v: i64 = row.try_get("", "is_archived").unwrap_or(0);
-                v != 0
-            },
-            version: row.try_get("", "version").unwrap_or(1),
-            created_at: {
-                let s: Option<String> = row.try_get("", "created_at").ok();
-                s.and_then(|s| DateTime::parse_from_rfc3339(&s).ok()).map(|d| d.with_timezone(&Utc)).unwrap_or_else(|| Utc::now())
-            },
-            updated_at: {
-                let s: Option<String> = row.try_get("", "updated_at").ok();
-                s.and_then(|s| DateTime::parse_from_rfc3339(&s).ok()).map(|d| d.with_timezone(&Utc)).unwrap_or_else(|| Utc::now())
-            },
-            created_by: row.try_get("", "created_by").ok(),
-            updated_by: row.try_get("", "updated_by").ok(),
-            attachments: None,
-            line_items: None,
-        };
+        let mut base = row_to_record(&row);
 
         // Fetch history snapshot
         let hrow = db
