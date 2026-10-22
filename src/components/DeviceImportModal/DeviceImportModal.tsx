@@ -352,6 +352,7 @@ const DeviceImportDialog: React.FC = () => {
         testResults: dl.testResults,
         patientIdentifier: undefined,
         detectedAt: new Date().toISOString(),
+        sourceFileId: fileId,
       });
       notification.success({
         message: t('common:success'),
