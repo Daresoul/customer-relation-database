@@ -69,3 +69,6 @@ pub mod owner_lookup_tests;
 
 #[cfg(test)]
 pub mod device_patient_match_tests;
+
+#[cfg(test)]
+pub mod table_rebuild_tests;

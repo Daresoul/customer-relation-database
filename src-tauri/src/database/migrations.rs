@@ -2829,6 +2829,16 @@ fn upgrade_fts5_to_unicode61(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::fu
     })
 }
 
+pub async fn rebuild_with_foreign_keys_off<F>(pool: &SqlitePool, rebuild: F) -> Result<(), sqlx::Error>
+where
+    F: for<'c> FnOnce(
+        &'c mut sqlx::SqliteConnection,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + 'c>>,
+{
+    let mut conn = pool.acquire().await?;
+    rebuild(&mut *conn).await
+}
+
 // Migration 046: rebuild household_search from the real tables. Migration 044's
 // back-fill joined a table that never existed and swallowed the error, so every
 // household created before it was unsearchable. The old triggers only covered
