@@ -429,6 +429,18 @@ fn main() {
                 None => log::warn!("Backup: could not resolve app_data_dir, skipping"),
             }
 
+            // Free the disk space of attachments deleted over 30 days ago, at
+            // start and daily, in the background. See services::attachment_purge.
+            match services::file_storage::FileStorageService::get_storage_dir(&app.handle()) {
+                Ok(dir) => {
+                    tauri::async_runtime::spawn(services::attachment_purge::run_purge_schedule(
+                        dir,
+                        sea_orm_pool.clone(),
+                    ));
+                }
+                Err(e) => log::warn!("Attachment purge: no attachment folder, skipping: {}", e),
+            }
+
             // Initialize serial port listeners for device integrations
             let sea_orm_pool_for_serial = sea_orm_pool.clone();
             let app_handle_for_serial = app.handle();

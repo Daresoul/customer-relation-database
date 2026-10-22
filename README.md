@@ -106,6 +106,25 @@
   and doses ("1.500" is 1.5). Price fields (`localeMoneyParser`) read one mark
   followed by exactly three digits as thousands, so "1.500" ден is 1500.
 
+## Deleted attachments
+- Deleting an attachment is a soft delete: `deleted_at` is set and every read
+  filters `deleted_at IS NULL`. Two things delete one: the app, when it
+  replaces a regenerated document (`simple_report`, `pharmacy_note`,
+  `invoice`, `generated_pdf`), and the user, with the record page's Delete
+  button ("Delete this file? The file will be removed from this record.") on
+  a `file` or `test_result`.
+- 30 days after `deleted_at`, `services/attachment_purge.rs` removes the file
+  from `<app data>/files/medical` and sets `purged_at`. The row stays for the
+  record's history. Until then a mistaken delete is undone by clearing
+  `deleted_at`; after it the file is gone. It runs at start and daily in the
+  background and logs files removed, bytes freed, already-missing and skipped.
+- It only removes a plain file named by `file_id` directly inside the
+  attachment folder. A `file_id` with a path separator, `..` or an absolute
+  path, a directory, a symlink, an unreadable `deleted_at`, or a file still
+  listed in `file_access_history` is skipped. A file already gone is marked
+  purged. A missing attachment folder stops the run.
+- Backups mirror files additively, so a purged file stays in earlier backups.
+
 ## Release build secrets
 
 The release workflow (`.github/workflows/release.yml`) reads these GitHub

@@ -150,11 +150,11 @@ impl FileStorageService {
         })
     }
 
-    /// SOFT delete: the row keeps existing with `deleted_at` set and the blob
-    /// stays on disk — the attachment just stops appearing on the record (all
-    /// read paths filter `deleted_at IS NULL`). Medical data is never
-    /// destroyed by a UI action; a mistaken delete is recoverable by clearing
-    /// `deleted_at` in the DB. Same pattern as appointment soft deletion.
+    /// SOFT delete: the row keeps existing with `deleted_at` set — the
+    /// attachment just stops appearing on the record (all read paths filter
+    /// `deleted_at IS NULL`). The blob stays on disk for 30 days, so a
+    /// mistaken delete is recoverable by clearing `deleted_at` in the DB;
+    /// after that `attachment_purge` removes it and sets `purged_at`.
     pub async fn delete_attachment(
         db: &DatabaseConnection,
         attachment_id: i64,

@@ -66,6 +66,7 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, "048_google_sync_status", add_google_sync_status_columns).await?;
     run_migration(pool, "049_fix_medical_records_fts_triggers", fix_medical_records_fts_triggers).await?;
     run_migration(pool, "050_add_invoice_date", add_invoice_date_column).await?;
+    run_migration(pool, "051_add_attachment_purged_at", add_attachment_purged_at_column).await?;
 
     Ok(())
 }
@@ -3059,6 +3060,24 @@ fn add_invoice_date_column(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::futu
         .await?;
         if exists.0 == 0 {
             sqlx::query("ALTER TABLE medical_records ADD COLUMN invoice_date TEXT")
+                .execute(pool)
+                .await?;
+        }
+        Ok(())
+    })
+}
+
+/// When a deleted attachment's file was removed from disk. The row stays for
+/// the record's history; see `services::attachment_purge`.
+fn add_attachment_purged_at_column(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        let exists: (i32,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM pragma_table_info('medical_attachments') WHERE name = 'purged_at'"
+        )
+        .fetch_one(pool)
+        .await?;
+        if exists.0 == 0 {
+            sqlx::query("ALTER TABLE medical_attachments ADD COLUMN purged_at DATETIME")
                 .execute(pool)
                 .await?;
         }
