@@ -61,16 +61,10 @@ public class AmplificationCurveRenderer {
 
         // Get the final fluorescence value (last data point) and threshold
         double finalValue = 500; // Default
-        double thresholdValue = 400; // Default threshold
-
         if (curveData != null && !curveData.isEmpty()) {
             finalValue = curveData.get(curveData.size() - 1); // Last data point
-            // Threshold is typically at the baseline level (average of first few points or minimum)
-            double minValue = curveData.stream().mapToDouble(Double::doubleValue).min().orElse(0);
-            double avgValue = curveData.stream().mapToDouble(Double::doubleValue).average().orElse(0);
-            // Set threshold between min and average
-            thresholdValue = minValue + (avgValue - minValue) * 0.3;
         }
+        double thresholdValue = thresholdLine(parameter);
 
         // Create dataset with curve data and horizontal lines
         XYSeries curveSeries = new XYSeries("Curve");
@@ -196,18 +190,9 @@ public class AmplificationCurveRenderer {
         NumberFormat formatter = new DecimalFormat("#,##0.##");
         yAxis.setNumberFormatOverride(formatter);
 
-        // Set Y axis range based on curve data
-        double minY, maxY;
-        if (curveData != null && !curveData.isEmpty()) {
-            minY = curveData.stream().mapToDouble(Double::doubleValue).min().orElse(0);
-            maxY = curveData.stream().mapToDouble(Double::doubleValue).max().orElse(1000);
-        } else {
-            minY = Math.min(finalValue, thresholdValue);
-            maxY = Math.max(finalValue, thresholdValue);
-        }
-        double range = maxY - minY;
-        double padding = range * 0.1;
-        yAxis.setRange(minY - padding, maxY + padding);
+        double[] yRange = yAxisRange(curveData, thresholdValue);
+        yAxis.setRange(yRange[0], yRange[1]);
+        double range = (yRange[1] - yRange[0]) / 1.2;
 
         // Set nice tick units
         double tickUnit = calculateTickUnit(range);
@@ -261,6 +246,32 @@ public class AmplificationCurveRenderer {
         bottomMarker.setLabelAnchor(org.jfree.chart.ui.RectangleAnchor.BOTTOM_LEFT);
         bottomMarker.setLabelTextAnchor(org.jfree.chart.ui.TextAnchor.TOP_LEFT);
         plot.addRangeMarker(bottomMarker);
+    }
+
+    /** The threshold line to draw for this curve. */
+    static Double thresholdLine(PcrParameter parameter) {
+        List<Double> curveData = parameter.getCurveData();
+        if (curveData == null || curveData.isEmpty()) {
+            return 400.0;
+        }
+        double minValue = curveData.stream().mapToDouble(Double::doubleValue).min().orElse(0);
+        double avgValue = curveData.stream().mapToDouble(Double::doubleValue).average().orElse(0);
+        return minValue + (avgValue - minValue) * 0.3;
+    }
+
+    /** Y axis {lower, upper} for the curve and threshold. */
+    static double[] yAxisRange(List<Double> curveData, Double thresholdValue) {
+        double minY, maxY;
+        if (curveData != null && !curveData.isEmpty()) {
+            minY = curveData.stream().mapToDouble(Double::doubleValue).min().orElse(0);
+            maxY = curveData.stream().mapToDouble(Double::doubleValue).max().orElse(1000);
+        } else {
+            minY = Math.min(500, thresholdValue);
+            maxY = Math.max(500, thresholdValue);
+        }
+        double range = maxY - minY;
+        double padding = range * 0.1;
+        return new double[]{minY - padding, maxY + padding};
     }
 
     /**

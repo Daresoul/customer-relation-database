@@ -16,6 +16,7 @@ public class PcrParameter extends Parameter {
     private List<Double> curveData;
     private String sampleType;
     private String lotNumber;
+    private Double threshold;
 
     public PcrParameter() {
         super();
@@ -67,6 +68,14 @@ public class PcrParameter extends Parameter {
 
     public void setSampleType(String sampleType) {
         this.sampleType = sampleType;
+    }
+
+    public Double getThreshold() {
+        return threshold;
+    }
+
+    public void setThreshold(Double threshold) {
+        this.threshold = threshold;
     }
 
     public String getLotNumber() {
