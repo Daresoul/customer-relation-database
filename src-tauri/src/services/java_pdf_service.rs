@@ -13,6 +13,17 @@ use std::time::Duration;
 const JAVA_TIMEOUT: Duration = Duration::from_secs(60);
 const JAVA_VERSION_TIMEOUT: Duration = Duration::from_secs(15);
 
+/// A PDF job's working folder.
+struct JobDir {
+    path: PathBuf,
+}
+
+impl JobDir {
+    fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
 /// What a finished Java run printed.
 struct JavaOutput {
     success: bool,
@@ -260,8 +271,8 @@ impl JavaPdfService {
     }
 
     /// Folder for one PDF job's input file.
-    fn new_job_dir() -> Result<PathBuf, String> {
-        Ok(std::env::temp_dir())
+    fn new_job_dir() -> Result<JobDir, String> {
+        Ok(JobDir { path: std::env::temp_dir() })
     }
 
     /// Run a command and collect its output.
@@ -284,7 +295,7 @@ impl JavaPdfService {
         timeout: Duration,
     ) -> Result<(), String> {
         let job_dir = Self::new_job_dir()?;
-        let input_json_path = job_dir.join(format!("pdf_input_{}.json", Utc::now().timestamp()));
+        let input_json_path = job_dir.path().join(format!("pdf_input_{}.json", Utc::now().timestamp()));
         let json_str = serde_json::to_string_pretty(&input)
             .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
         fs::write(&input_json_path, json_str)
@@ -819,6 +830,108 @@ mod tests {
             analysis_datetime("exigo_eos_vet", serde_json::json!({"WBC": "10.4", "DATE": "garbled"})),
             "2026-07-12T09:30:12"
         );
+    }
+
+    #[test]
+    fn job_dirs_are_unique_per_job_and_removed_after() {
+        let a = JavaPdfService::new_job_dir().unwrap();
+        let b = JavaPdfService::new_job_dir().unwrap();
+        assert_ne!(a.path(), b.path(), "two jobs share a temp folder");
+        assert!(a.path().is_dir() && b.path().is_dir());
+        let a_path = a.path().to_path_buf();
+        fs::write(a_path.join("input.json"), "{}").unwrap();
+        drop(a);
+        assert!(!a_path.exists(), "job folder left behind");
+    }
+
+    #[test]
+    fn java_command_is_headless_and_isolated() {
+        let cmd = JavaPdfService::create_java_command(Path::new("x.jar"), &[OsStr::new("in.json")]);
+        assert_eq!(cmd.get_program(), "java");
+        let args: Vec<_> = cmd.get_args().map(|a| a.to_string_lossy().to_string()).collect();
+        assert!(args.contains(&"-Djava.awt.headless=true".to_string()));
+        assert!(args.contains(&"-Dapple.awt.UIElement=true".to_string()));
+        assert_eq!(args[args.len() - 3..], ["-jar", "x.jar", "in.json"]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_hung_process_is_stopped_at_the_time_limit() {
+        let mut cmd = Command::new("sleep");
+        cmd.arg("5").stdout(Stdio::piped()).stderr(Stdio::piped());
+        let started = std::time::Instant::now();
+        let result = JavaPdfService::run_with_timeout(cmd, Duration::from_millis(300));
+        let err = result.err().expect("a hung process must be an error");
+        assert!(err.contains("timed out"), "{}", err);
+        assert!(started.elapsed() < Duration::from_secs(3), "waited {:?}", started.elapsed());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn stderr_is_kept_on_success_and_large_output_does_not_block() {
+        let mut cmd = Command::new("sh");
+        cmd.arg("-c")
+            .arg("echo PARSED_SAMPLE; head -c 300000 /dev/zero | tr '\\0' x 1>&2; echo PDF_WARN code=x 1>&2")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        let out = JavaPdfService::run_with_timeout(cmd, Duration::from_secs(10)).unwrap();
+        assert!(out.success);
+        assert!(out.stdout.contains("PARSED_SAMPLE"));
+        assert!(out.stderr.contains("PDF_WARN code=x"));
+    }
+
+    const DEV_JAR: &str = "../pdf-generator-cli/build/libs/pdf-generator-cli-1.0.0.jar";
+
+    fn jar_available() -> bool {
+        Path::new(DEV_JAR).exists() && Command::new("java").arg("-version").output().is_ok()
+    }
+
+    // The JAR writes into the job's own folder; only the finished PDF is
+    // moved to the caller's path.
+    #[test]
+    fn jar_job_delivers_the_pdf_and_cleans_its_folder() {
+        if !jar_available() {
+            eprintln!("SKIP: JAR not built ({})", DEV_JAR);
+            return;
+        }
+        let dest_dir = tempfile::tempdir().unwrap();
+        let dest = dest_dir.path().join("Device Report - REX.pdf");
+        let patient = patient_with_dob(Some("2020-01-15"));
+        let input = JavaPdfService::build_java_input(
+            &patient,
+            &[sample("exigo_eos_vet", serde_json::json!({"WBC": "10.4", "WBC_L": "6.0", "WBC_H": "17.0"}))],
+            &dest.to_string_lossy(),
+            &chrono::Local,
+        );
+        JavaPdfService::run_jar_job(
+            Path::new(DEV_JAR),
+            serde_json::to_value(&input).unwrap(),
+            &dest.to_string_lossy(),
+            Duration::from_secs(60),
+        )
+        .unwrap();
+        assert!(fs::metadata(&dest).unwrap().len() > 1000, "PDF missing or empty");
+        assert_eq!(fs::read_dir(dest_dir.path()).unwrap().count(), 1, "stray files next to the PDF");
+    }
+
+    #[test]
+    fn jar_failure_leaves_no_pdf_and_no_folder() {
+        if !jar_available() {
+            eprintln!("SKIP: JAR not built ({})", DEV_JAR);
+            return;
+        }
+        let dest_dir = tempfile::tempdir().unwrap();
+        let dest = dest_dir.path().join("empty.pdf");
+        let input = serde_json::json!({
+            "patient": {"name": "REX", "owner": "", "species": "Dog", "gender": "Male"},
+            "samples": [{"device_type": "exigo_eos_vet", "sample_id": "1", "patient_id": "1",
+                         "detected_at": "2026-07-10T12:00:00Z", "test_results": {}}],
+            "output_path": dest.to_string_lossy(),
+        });
+        let err = JavaPdfService::run_jar_job(Path::new(DEV_JAR), input, &dest.to_string_lossy(), Duration::from_secs(60))
+            .unwrap_err();
+        assert!(err.contains("Java JAR failed"), "{}", err);
+        assert!(!dest.exists());
     }
 
     #[test]
