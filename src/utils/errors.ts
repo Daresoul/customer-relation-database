@@ -729,6 +729,10 @@ export function getErrorTranslationKey(error: AppError | unknown): string {
   return CATEGORY_TO_TRANSLATION_KEY[normalized.category] || 'errors:generic.unexpected';
 }
 
+export function knownErrorMessage(_error: unknown, _t: TFunction): string | null {
+  return null;
+}
+
 /**
  * Get a user-friendly error message (translated)
  * Uses multiple strategies:
