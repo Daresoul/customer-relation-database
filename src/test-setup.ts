@@ -5,7 +5,8 @@
  */
 
 import '@testing-library/jest-dom/vitest';
-import { vi } from 'vitest';
+import { afterEach, vi } from 'vitest';
+import type { ReactNode } from 'react';
 
 // Node 22+ ships its own global `localStorage`, which shadows jsdom's and is
 // unusable without --localstorage-file. Fall back to an in-memory Storage.
@@ -50,3 +51,33 @@ class ResizeObserverStub {
   disconnect() {}
 }
 (globalThis as any).ResizeObserver = ResizeObserverStub;
+
+// antd injects ~2000 CSS-in-JS rules into <head>, and jsdom re-matches every
+// rule on each getComputedStyle call (20-65 ms per call). ByRole queries and
+// user-event's pointer-events check make dozens of those calls per test, so
+// antd tests spent 75-95% of their time there and timed out under CPU load.
+// Every render gets a StyleProvider that writes antd's styles into a detached
+// node instead; no test relies on antd CSS for visibility.
+vi.mock('@testing-library/react', async (importOriginal) => {
+  const rtl = await importOriginal<typeof import('@testing-library/react')>();
+  const { createElement } = await import('react');
+  const { StyleProvider } = await import('@ant-design/cssinjs');
+  const antdStyleSink = document.createElement('div');
+
+  const render = ((ui, options) => {
+    const Outer = options?.wrapper;
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(StyleProvider, { container: antdStyleSink }, Outer ? createElement(Outer, null, children) : children);
+    return rtl.render(ui, { ...options, wrapper });
+  }) as typeof rtl.render;
+
+  return { ...rtl, render };
+});
+
+// RTL registers its auto-cleanup only when the module is first loaded, so in a
+// shared worker (--poolOptions.threads.singleThread) later files kept the
+// previous test's DOM and listeners mounted.
+afterEach(async () => {
+  const { cleanup } = await import('@testing-library/react');
+  cleanup();
+});

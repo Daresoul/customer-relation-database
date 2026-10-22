@@ -33,6 +33,10 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/test-setup.ts'],
+    // Headroom for CPU-starved runs (e.g. beside cargo builds): the slowest
+    // antd tests take ~0.3 s idle but reached ~4 s with every core busy, which
+    // is all CPU work, not waiting, so a longer budget hides no race.
+    testTimeout: 10000,
     // Exclude tests that don't belong in vitest:
     //   - e2e/ + e2e-fullstack/: WDio fullstack tests, run via tauri-driver
     //     against a real Tauri binary, not in jsdom.
