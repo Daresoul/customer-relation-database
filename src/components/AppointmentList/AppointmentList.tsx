@@ -85,10 +85,10 @@ const AppointmentList: React.FC<AppointmentListProps> = ({
 
   const getStatusTag = (status: string) => {
     const statusConfig: Record<string, { color: string; text: string }> = {
-      scheduled: { color: 'blue', text: 'Scheduled' },
-      in_progress: { color: 'orange', text: 'In Progress' },
-      completed: { color: 'green', text: 'Completed' },
-      cancelled: { color: 'red', text: 'Cancelled' },
+      scheduled: { color: 'blue', text: t('status.scheduled') },
+      in_progress: { color: 'orange', text: t('status.inProgress') },
+      completed: { color: 'green', text: t('status.completed') },
+      cancelled: { color: 'red', text: t('status.cancelled') },
     };
 
     const config = statusConfig[status] || { color: 'default', text: status };
@@ -98,14 +98,14 @@ const AppointmentList: React.FC<AppointmentListProps> = ({
   const getActionItems = (appointment: Appointment) => [
     {
       key: 'edit',
-      label: 'Edit',
+      label: t('common:edit'),
       icon: <EditOutlined />,
       onClick: () => onEdit(appointment),
       disabled: !appointmentService.isAppointmentEditable(appointment),
     },
     {
       key: 'duplicate',
-      label: 'Duplicate',
+      label: t('actions.duplicate'),
       icon: <CopyOutlined />,
       onClick: () => onDuplicate(appointment),
     },
@@ -115,7 +115,7 @@ const AppointmentList: React.FC<AppointmentListProps> = ({
     },
     {
       key: 'delete',
-      label: 'Delete',
+      label: t('actions.delete'),
       icon: <DeleteOutlined />,
       onClick: () => onDelete(appointment),
       danger: true,
@@ -156,7 +156,7 @@ const AppointmentList: React.FC<AppointmentListProps> = ({
                 </Title>
                 <Space size="small">
                   <Text type="secondary">
-                    <UserOutlined /> {appointment.patientName || 'Unknown Patient'}
+                    <UserOutlined /> {appointment.patientName || t('details.unknownPatient')}
                   </Text>
                   {appointment.species && (
                     <Text type="secondary">• {appointment.species}</Text>
@@ -188,20 +188,20 @@ const AppointmentList: React.FC<AppointmentListProps> = ({
                   <Text>
                     {startTime.format('MMM DD, HH:mm')} - {endTime.format('HH:mm')}
                   </Text>
-                  <Text type="secondary">({duration} min)</Text>
+                  <Text type="secondary">{t('list.durationMinutes', { duration })}</Text>
                 </Space>
               </Tooltip>
 
               {appointment.roomId && (
                 <Space size="small">
                   <EnvironmentOutlined />
-                  <Text>Room {appointment.roomId}</Text>
+                  <Text>{t('list.roomNumber', { id: appointment.roomId })}</Text>
                 </Space>
               )}
 
               {isToday && (
                 <Tag color="processing" icon={<ClockCircleOutlined />}>
-                  Today
+                  {t('stats.today')}
                 </Tag>
               )}
             </Space>
@@ -215,7 +215,7 @@ const AppointmentList: React.FC<AppointmentListProps> = ({
 
           <div className={styles.appointmentListFooter}>
             <Text type="secondary" style={{ fontSize: 12 }}>
-              Created {dayjs(appointment.createdAt).fromNow()} by {appointment.createdBy}
+              {t('list.createdBy', { when: dayjs(appointment.createdAt).fromNow(), user: appointment.createdBy })}
             </Text>
           </div>
         </div>
@@ -244,7 +244,7 @@ const AppointmentList: React.FC<AppointmentListProps> = ({
     <div className={styles.appointmentList}>
       <div className={styles.appointmentListHeaderInfo}>
         <Text type="secondary">
-          Showing {appointments.length} of {totalCount} appointments
+          {t('list.showing', { shown: appointments.length, total: totalCount })}
         </Text>
       </div>
 
@@ -260,7 +260,7 @@ const AppointmentList: React.FC<AppointmentListProps> = ({
         {isFetchingNextPage && (
           <div className={styles.loadingMore}>
             <Spin />
-            <Text type="secondary">Loading more appointments...</Text>
+            <Text type="secondary">{t('list.loadingMore')}</Text>
           </div>
         )}
       </div>

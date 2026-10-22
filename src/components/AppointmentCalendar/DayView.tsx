@@ -82,7 +82,7 @@ const DayView: React.FC<DayViewProps> = ({
                   icon={<PlusOutlined />}
                   className={`${styles.faded} add-btn`}
                 >
-                  Add appointment
+                  {t('calendar.addAppointment')}
                 </Button>
               </div>
             ) : (
@@ -116,7 +116,7 @@ const DayView: React.FC<DayViewProps> = ({
                         </Space>
                       </div>
                       <Tag color={getStatusColor(apt.status)} className={styles.tagMarginLeft}>
-                        {apt.status}
+                        {t(`status.${apt.status === 'in_progress' ? 'inProgress' : apt.status}`)}
                       </Tag>
                     </div>
                     {apt.description && (
@@ -160,7 +160,7 @@ const DayView: React.FC<DayViewProps> = ({
               icon={<PlusOutlined />}
               onClick={() => onCreateAppointment(selectedDate.hour(9).toDate())}
             >
-              Schedule First Appointment
+              {t('calendar.scheduleFirst')}
             </Button>
           </Empty>
         </Card>

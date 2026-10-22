@@ -174,24 +174,24 @@ const DayViewSimple: React.FC<DayViewSimpleProps> = ({
     return (
       <div>
         <div className={styles.tooltipInfo}>
-          <strong>Patient:</strong> {apt.patientName || 'Unknown Patient'}
+          <strong>{t('details.patient')}:</strong> {apt.patientName || t('details.unknownPatient')}
         </div>
         <div className={styles.tooltipInfo}>
-          <strong>Microchip ID:</strong> {apt.microchipId || '-'}
+          <strong>{t('patients:fields.microchipId')}:</strong> {apt.microchipId || '-'}
         </div>
         <div className={styles.tooltipInfo}>
-          <strong>Time:</strong> {dayjs(apt.startTime).format('HH:mm')} - {dayjs(apt.endTime).format('HH:mm')}
+          <strong>{t('details.time')}:</strong> {dayjs(apt.startTime).format('HH:mm')} - {dayjs(apt.endTime).format('HH:mm')}
         </div>
         <div className={styles.tooltipInfo}>
-          <strong>Date:</strong> {dayjs(apt.startTime).format('MMM DD, YYYY')}
+          <strong>{t('fields.date')}:</strong> {dayjs(apt.startTime).format('MMM DD, YYYY')}
         </div>
         {room && (
           <div className={styles.tooltipInfo}>
-            <strong>Room:</strong> {room.name}
+            <strong>{t('details.room')}:</strong> {room.name}
           </div>
         )}
         <div className={styles.tooltipInfo}>
-          <strong>Status:</strong> {apt.status.replace('_', ' ')}
+          <strong>{t('fields.status')}:</strong> {t(`status.${apt.status === 'in_progress' ? 'inProgress' : apt.status}`)}
         </div>
         <div className={styles.tooltipTitle}>{apt.title}</div>
         {apt.description && (
