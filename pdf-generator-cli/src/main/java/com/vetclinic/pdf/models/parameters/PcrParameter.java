@@ -2,6 +2,7 @@ package com.vetclinic.pdf.models.parameters;
 
 import com.vetclinic.pdf.constants.Indicator;
 import com.vetclinic.pdf.constants.PcrTestCode;
+import com.vetclinic.pdf.util.ResultClassifier;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -16,6 +17,8 @@ public class PcrParameter extends Parameter {
     private List<Double> curveData;
     private String sampleType;
     private String lotNumber;
+    private Double threshold;
+    private String deviceFlag;
 
     public PcrParameter() {
         super();
@@ -69,6 +72,14 @@ public class PcrParameter extends Parameter {
         this.sampleType = sampleType;
     }
 
+    public Double getThreshold() {
+        return threshold;
+    }
+
+    public void setThreshold(Double threshold) {
+        this.threshold = threshold;
+    }
+
     public String getLotNumber() {
         return lotNumber;
     }
@@ -101,58 +112,91 @@ public class PcrParameter extends Parameter {
         }
     }
 
+    private static final double DEFAULT_CUTOFF = 36;
+    private static final java.util.regex.Pattern NEGATIVE_ABOVE =
+            java.util.regex.Pattern.compile(">\\s*=?\\s*(\\d+(?:[.,]\\d+)?)");
+
     /**
-     * Determine indicator based on Ct value.
-     * - NoCt or empty result = Negative
-     * - Ct > 36 = Negative
-     * - Ct <= 36 = Positive (abnormal/HIGH indicator)
+     * Positive (HIGH) / negative (NORMAL) / no call (UNKNOWN). The device's own
+     * call wins; without one, the Ct is compared with the device's range
+     * ("&gt;36 or NoCt" means negative above 36), else 36. A value that is not a
+     * Ct or NoCt gets no call.
      */
     public void determineIndicator() {
-        String result = getResult();
-
-        if (result == null || result.isEmpty() || result.equalsIgnoreCase("NoCt")) {
-            setIndicator(Indicator.NORMAL); // Negative result
+        Indicator fromDevice = callFromDeviceFlag(deviceFlag);
+        if (fromDevice != null) {
+            setIndicator(fromDevice);
             return;
         }
-
-        try {
-            double ctValue = Double.parseDouble(result);
-            if (ctValue > 36) {
-                setIndicator(Indicator.NORMAL); // Negative
-            } else {
-                setIndicator(Indicator.HIGH); // Positive - using HIGH to flag abnormal
-            }
-        } catch (NumberFormatException e) {
-            // If result can't be parsed, treat as negative
+        String result = getResult();
+        if (result != null && result.trim().equalsIgnoreCase("NoCt")) {
             setIndicator(Indicator.NORMAL);
+            return;
         }
+        Double ct = ResultClassifier.parseNumber(result);
+        if (ct == null) {
+            setIndicator(Indicator.UNKNOWN);
+            return;
+        }
+        setIndicator(ct > negativeAbove() ? Indicator.NORMAL : Indicator.HIGH);
     }
 
-    /**
-     * Check if this PCR result is positive (Ct <= 36)
-     *
-     * @return true if positive, false if negative
-     */
+    private double negativeAbove() {
+        if (getReferentValues() != null) {
+            java.util.regex.Matcher m = NEGATIVE_ABOVE.matcher(getReferentValues());
+            if (m.find()) {
+                Double cutoff = ResultClassifier.parseNumber(m.group(1));
+                if (cutoff != null) {
+                    return cutoff;
+                }
+            }
+        }
+        return DEFAULT_CUTOFF;
+    }
+
+    /** The device spells its call "Postive(+)" / "Negative(-)"; match on the prefix. */
+    static Indicator callFromDeviceFlag(String flag) {
+        if (flag == null) {
+            return null;
+        }
+        String f = flag.trim().toLowerCase(java.util.Locale.ROOT);
+        if (f.startsWith("pos")) {
+            return Indicator.HIGH;
+        }
+        if (f.startsWith("neg")) {
+            return Indicator.NORMAL;
+        }
+        return null;
+    }
+
+    public String getDeviceFlag() {
+        return deviceFlag;
+    }
+
+    public void setDeviceFlag(String deviceFlag) {
+        this.deviceFlag = deviceFlag;
+    }
+
+    /** The internal control: amplification means the run worked, not a pathogen. */
+    public boolean isInternalControl() {
+        return testCode == PcrTestCode.IC || "IC".equalsIgnoreCase(getName());
+    }
+
     public boolean isPositive() {
         return getIndicator() == Indicator.HIGH;
     }
 
-    /**
-     * Get the indicator text for display
-     *
-     * @return "Positive(+)" or "Negative(-)"
-     */
     public String getIndicatorText() {
-        return isPositive() ? "Positive(+)" : "Negative(-)";
-    }
-
-    /**
-     * Get the Macedonian indicator text for display
-     *
-     * @return "Позитивен(+)" or "Негативен(-)"
-     */
-    public String getIndicatorTextMacedonian() {
-        return isPositive() ? "Позитивен(+)" : "Негативен(-)";
+        if (isInternalControl()) {
+            return isPositive() ? "Valid" : "INVALID";
+        }
+        if (getIndicator() == Indicator.HIGH) {
+            return "Positive(+)";
+        }
+        if (getIndicator() == Indicator.NORMAL) {
+            return "Negative(-)";
+        }
+        return "—";
     }
 
     @Override

@@ -892,19 +892,6 @@ pub async fn generate_configured_report(
 
     log::debug!("Patient info (with overrides): name={}, owner={}", patient_data.name, patient_data.owner);
 
-    // 3.5 Ensure we don't accumulate multiple generated PDFs: delete existing generated_pdf attachments for this record
-    if let Ok(rows) = pool.query_all(Statement::from_sql_and_values(
-        DbBackend::Sqlite,
-        "SELECT id FROM medical_attachments WHERE medical_record_id = ? AND attachment_type = 'generated_pdf' AND deleted_at IS NULL",
-        [medical_record_id.into()]
-    )).await {
-        for row in rows {
-            if let Ok(att_id) = row.try_get::<i64>("", "id") {
-                let _ = FileStorageService::delete_attachment(&pool, att_id).await;
-            }
-        }
-    }
-
     // 4. Fetch and parse selected attachments
     let mut all_device_data: Vec<DeviceTestData> = Vec::new();
 
@@ -1054,10 +1041,34 @@ pub async fn generate_configured_report(
 
     log::debug!("PDF attachment uploaded with id={}", pdf_attachment.id);
 
+    // Only now that the new PDF is stored: one generated PDF per record.
+    retire_generated_pdfs(&pool, medical_record_id, pdf_attachment.id).await;
+
     // Clean up temp file
     let _ = std::fs::remove_file(&pdf_path);
 
     Ok(pdf_attachment)
+}
+
+/// Soft-deletes the record's generated PDFs other than `keep_id`.
+pub(crate) async fn retire_generated_pdfs(db: &sea_orm::DatabaseConnection, medical_record_id: i64, keep_id: i64) {
+    match db.query_all(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "SELECT id FROM medical_attachments WHERE medical_record_id = ? AND attachment_type = 'generated_pdf' \
+         AND deleted_at IS NULL AND id != ?",
+        [medical_record_id.into(), keep_id.into()]
+    )).await {
+        Ok(rows) => {
+            for row in rows {
+                if let Ok(att_id) = row.try_get::<i64>("", "id") {
+                    if let Err(e) = FileStorageService::delete_attachment(db, att_id).await {
+                        log::warn!("Could not retire old generated PDF {}: {}", att_id, e);
+                    }
+                }
+            }
+        }
+        Err(e) => log::warn!("Could not list old generated PDFs for record {}: {}", medical_record_id, e),
+    }
 }
 
 // ============================================================================

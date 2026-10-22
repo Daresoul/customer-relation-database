@@ -75,6 +75,16 @@ public class PcrSample extends Sample {
         this.pcrParameters.add(parameter);
     }
 
+    /** A failed internal control invalidates every call on the panel. */
+    public boolean isInvalid() {
+        for (PcrParameter param : pcrParameters) {
+            if (param.isInternalControl()) {
+                return !param.isPositive();
+            }
+        }
+        return false;
+    }
+
     /**
      * Get the number of positive results in this sample
      *

@@ -9,6 +9,7 @@ import com.vetclinic.pdf.models.parameters.Parameter;
 import com.vetclinic.pdf.models.parameters.PcrParameter;
 import com.vetclinic.pdf.models.samples.*;
 import com.vetclinic.pdf.services.PDFReportService;
+import com.vetclinic.pdf.util.ResultClassifier;
 
 import java.io.File;
 import java.io.PrintStream;
@@ -32,15 +33,16 @@ import java.util.Map;
  *     "owner": "John Doe",
  *     "species": "Dog",
  *     "microchip_id": "123456",
- *     "gender": "MALE",
- *     "date_of_birth": "2020-01-15"
+ *     "gender": "Female",                 // Male/Female (en or mk); anything else prints as unknown
+ *     "date_of_birth": "2020-01-15"       // ISO yyyy-MM-dd or null
  *   },
  *   "samples": [
  *     {
  *       "device_type": "exigo_eos_vet",
  *       "sample_id": "12345",
  *       "test_results": { "RBC": "5.2", "HGB": "14.5", ... },
- *       "detected_at": "2025-10-14T10:30:00Z",
+ *       "detected_at": "2025-10-14T10:30:00Z",          // receive instant (fallback)
+ *       "analysis_datetime": "2025-10-14T12:28:41",     // analyzer clock, local wall time
  *       "patient_id": "123456"
  *     }
  *   ],
@@ -91,106 +93,7 @@ public class PdfGeneratorCLI {
             Gson gson = new Gson();
             JsonObject json = gson.fromJson(jsonContent, JsonObject.class);
 
-            // Check report type - default to "device" for backwards compatibility
-            String reportType = "device";
-            if (json.has("report_type") && !json.get("report_type").isJsonNull()) {
-                reportType = json.get("report_type").getAsString();
-            }
-
-            PDFReportService service = PDFReportService.getInstance();
-            String outputPath = json.get("output_path").getAsString();
-
-            if ("invoice".equals(reportType)) {
-                // Invoice mode - uses invoice.pdf template with dynamic table
-                String invoiceDate = json.has("date") ? json.get("date").getAsString() : "";
-                String invoiceNumber = json.has("invoice_number") ? json.get("invoice_number").getAsString() : "";
-                String recipient = json.has("recipient") ? json.get("recipient").getAsString() : "";
-                double discountPercent = json.has("discount_percent") ? json.get("discount_percent").getAsDouble() : 0;
-                String currency = json.has("currency") ? json.get("currency").getAsString() : "ден";
-
-                // Parse line items
-                List<PDFReportService.InvoiceLineItem> lineItems = new ArrayList<>();
-                if (json.has("line_items") && json.get("line_items").isJsonArray()) {
-                    JsonArray itemsArray = json.getAsJsonArray("line_items");
-                    for (JsonElement itemEl : itemsArray) {
-                        JsonObject itemObj = itemEl.getAsJsonObject();
-                        String name = itemObj.has("name") ? itemObj.get("name").getAsString() : "";
-                        int quantity = itemObj.has("quantity") ? itemObj.get("quantity").getAsInt() : 1;
-                        double unitPrice = itemObj.has("unit_price") ? itemObj.get("unit_price").getAsDouble() : 0;
-                        lineItems.add(new PDFReportService.InvoiceLineItem(name, quantity, unitPrice));
-                    }
-                }
-
-                File pdfFile = service.createInvoice(invoiceDate, invoiceNumber, recipient,
-                    lineItems, discountPercent, currency, outputPath);
-                System.out.println("Invoice PDF generated successfully: " + outputPath);
-
-            } else if ("pharmacy_note".equals(reportType)) {
-                // Pharmacy note mode - overlays prescription text on pharmacy_note.pdf template
-                String prescriptionText = json.has("prescription_text") ? json.get("prescription_text").getAsString() : "";
-
-                File pdfFile = service.createPharmacyNote(prescriptionText, outputPath);
-                System.out.println("Pharmacy note PDF generated successfully: " + outputPath);
-
-            } else if ("simple".equals(reportType)) {
-                // Simple report mode - uses template with title and description
-                String title = json.has("title") ? json.get("title").getAsString() : "";
-                String description = json.has("description") ? json.get("description").getAsString() : "";
-
-                // Patient info (all optional)
-                String patientName = null;
-                String ownerName = null;
-                String species = null;
-                String microchipId = null;
-                String gender = null;
-                String dateOfBirth = null;
-
-                if (json.has("patient") && !json.get("patient").isJsonNull()) {
-                    JsonObject patientJson = json.getAsJsonObject("patient");
-                    if (patientJson.has("name") && !patientJson.get("name").isJsonNull()) {
-                        patientName = patientJson.get("name").getAsString();
-                    }
-                    if (patientJson.has("owner") && !patientJson.get("owner").isJsonNull()) {
-                        ownerName = patientJson.get("owner").getAsString();
-                    }
-                    if (patientJson.has("species") && !patientJson.get("species").isJsonNull()) {
-                        species = patientJson.get("species").getAsString();
-                    }
-                    if (patientJson.has("microchip_id") && !patientJson.get("microchip_id").isJsonNull()) {
-                        microchipId = patientJson.get("microchip_id").getAsString();
-                    }
-                    if (patientJson.has("gender") && !patientJson.get("gender").isJsonNull()) {
-                        gender = patientJson.get("gender").getAsString();
-                    }
-                    if (patientJson.has("date_of_birth") && !patientJson.get("date_of_birth").isJsonNull()) {
-                        dateOfBirth = patientJson.get("date_of_birth").getAsString();
-                    }
-                }
-
-                File pdfFile;
-                boolean hasPatientInfo = patientName != null || ownerName != null || species != null ||
-                                         microchipId != null || gender != null || dateOfBirth != null;
-                if (hasPatientInfo) {
-                    pdfFile = service.createSimpleReportWithPatient(title, description,
-                        patientName, ownerName, species, microchipId, gender, dateOfBirth, outputPath);
-                } else {
-                    pdfFile = service.createSimpleReport(title, description, outputPath);
-                }
-                System.out.println("Simple report PDF generated successfully: " + outputPath);
-
-            } else {
-                // Device report mode (default) - existing behavior
-                // Parse patient
-                Patient patient = parsePatient(json.getAsJsonObject("patient"));
-
-                // Parse samples (pass patient type for Healvet reference ranges)
-                List<Sample> samples = parseSamples(json.getAsJsonArray("samples"), patient.getPatientType());
-
-                // Generate PDF using existing service
-                File pdfFile = service.createPDFReport(patient, samples, outputPath);
-
-                System.out.println("Device report PDF generated successfully: " + outputPath);
-            }
+            generate(json);
 
         } catch (Exception e) {
             System.err.println("Error generating PDF: " + e.getMessage());
@@ -199,7 +102,111 @@ public class PdfGeneratorCLI {
         }
     }
 
-    private static Patient parsePatient(JsonObject json) {
+    static void generate(JsonObject json) throws Exception {
+        // Check report type - default to "device" for backwards compatibility
+        String reportType = "device";
+        if (json.has("report_type") && !json.get("report_type").isJsonNull()) {
+            reportType = json.get("report_type").getAsString();
+        }
+
+        PDFReportService service = PDFReportService.getInstance();
+        String outputPath = json.get("output_path").getAsString();
+
+        if ("invoice".equals(reportType)) {
+            // Invoice mode - uses invoice.pdf template with dynamic table
+            String invoiceDate = json.has("date") ? json.get("date").getAsString() : "";
+            String invoiceNumber = json.has("invoice_number") ? json.get("invoice_number").getAsString() : "";
+            String recipient = json.has("recipient") ? json.get("recipient").getAsString() : "";
+            double discountPercent = json.has("discount_percent") ? json.get("discount_percent").getAsDouble() : 0;
+            String currency = json.has("currency") ? json.get("currency").getAsString() : "ден";
+
+            // Parse line items
+            List<PDFReportService.InvoiceLineItem> lineItems = new ArrayList<>();
+            if (json.has("line_items") && json.get("line_items").isJsonArray()) {
+                JsonArray itemsArray = json.getAsJsonArray("line_items");
+                for (JsonElement itemEl : itemsArray) {
+                    JsonObject itemObj = itemEl.getAsJsonObject();
+                    String name = itemObj.has("name") ? itemObj.get("name").getAsString() : "";
+                    int quantity = itemObj.has("quantity") ? itemObj.get("quantity").getAsInt() : 1;
+                    double unitPrice = itemObj.has("unit_price") ? itemObj.get("unit_price").getAsDouble() : 0;
+                    lineItems.add(new PDFReportService.InvoiceLineItem(name, quantity, unitPrice));
+                }
+            }
+
+            File pdfFile = service.createInvoice(invoiceDate, invoiceNumber, recipient,
+                lineItems, discountPercent, currency, outputPath);
+            System.out.println("Invoice PDF generated successfully: " + outputPath);
+
+        } else if ("pharmacy_note".equals(reportType)) {
+            // Pharmacy note mode - overlays prescription text on pharmacy_note.pdf template
+            String prescriptionText = json.has("prescription_text") ? json.get("prescription_text").getAsString() : "";
+
+            File pdfFile = service.createPharmacyNote(prescriptionText, outputPath);
+            System.out.println("Pharmacy note PDF generated successfully: " + outputPath);
+
+        } else if ("simple".equals(reportType)) {
+            // Simple report mode - uses template with title and description
+            String title = json.has("title") ? json.get("title").getAsString() : "";
+            String description = json.has("description") ? json.get("description").getAsString() : "";
+
+            // Patient info (all optional)
+            String patientName = null;
+            String ownerName = null;
+            String species = null;
+            String microchipId = null;
+            String gender = null;
+            String dateOfBirth = null;
+
+            if (json.has("patient") && !json.get("patient").isJsonNull()) {
+                JsonObject patientJson = json.getAsJsonObject("patient");
+                if (patientJson.has("name") && !patientJson.get("name").isJsonNull()) {
+                    patientName = patientJson.get("name").getAsString();
+                }
+                if (patientJson.has("owner") && !patientJson.get("owner").isJsonNull()) {
+                    ownerName = patientJson.get("owner").getAsString();
+                }
+                if (patientJson.has("species") && !patientJson.get("species").isJsonNull()) {
+                    species = patientJson.get("species").getAsString();
+                }
+                if (patientJson.has("microchip_id") && !patientJson.get("microchip_id").isJsonNull()) {
+                    microchipId = patientJson.get("microchip_id").getAsString();
+                }
+                if (patientJson.has("gender") && !patientJson.get("gender").isJsonNull()) {
+                    gender = patientJson.get("gender").getAsString();
+                }
+                if (patientJson.has("date_of_birth") && !patientJson.get("date_of_birth").isJsonNull()) {
+                    dateOfBirth = patientJson.get("date_of_birth").getAsString();
+                }
+            }
+
+            File pdfFile;
+            boolean hasPatientInfo = patientName != null || ownerName != null || species != null ||
+                                     microchipId != null || gender != null || dateOfBirth != null;
+            if (hasPatientInfo) {
+                pdfFile = service.createSimpleReportWithPatient(title, description,
+                    patientName, ownerName, species, microchipId, gender, dateOfBirth, outputPath);
+            } else {
+                pdfFile = service.createSimpleReport(title, description, outputPath);
+            }
+            System.out.println("Simple report PDF generated successfully: " + outputPath);
+
+        } else {
+            // Device report mode (default) - existing behavior
+            // Parse patient
+            Patient patient = parsePatient(json.getAsJsonObject("patient"));
+
+            // Parse samples (pass patient type for Healvet reference ranges)
+            List<Sample> samples = parseSamples(json.getAsJsonArray("samples"), patient.getPatientType());
+
+            // Generate PDF using existing service
+            File pdfFile = service.createPDFReport(patient, samples, outputPath);
+
+            System.out.println("Device report PDF generated successfully: " + outputPath);
+        }
+
+    }
+
+    static Patient parsePatient(JsonObject json) {
         Patient patient = new Patient();
         patient.setName(json.get("name").getAsString());
 
@@ -225,15 +232,9 @@ public class PdfGeneratorCLI {
             patient.setPatientIdMicrochip(json.get("microchip_id").getAsString());
         }
 
-        // Map gender string to Gender enum
-        String gender = json.get("gender").getAsString().toUpperCase();
-        if (gender.contains("MALE") || gender.equals("М")) {
-            patient.setGender(Gender.MALE);
-        } else if (gender.contains("FEMALE") || gender.equals("Ж")) {
-            patient.setGender(Gender.FEMALE);
-        } else {
-            patient.setGender(Gender.MALE); // Default to MALE
-        }
+        String gender = json.has("gender") && !json.get("gender").isJsonNull()
+                ? json.get("gender").getAsString() : null;
+        patient.setGender(Gender.fromPatientValue(gender));
 
         if (json.has("date_of_birth") && !json.get("date_of_birth").isJsonNull()) {
             String dobString = json.get("date_of_birth").getAsString();
@@ -243,7 +244,38 @@ public class PdfGeneratorCLI {
         return patient;
     }
 
-    private static List<Sample> parseSamples(JsonArray samplesJson, PatientType patientType) {
+    private static final java.time.format.DateTimeFormatter ANALYSIS_DISPLAY =
+            java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+
+    /**
+     * The analysis time as printed: the analyzer's own clock (`analysis_datetime`,
+     * local wall time) when sent, else the receive instant (`detected_at`)
+     * in this machine's zone. Never a raw ISO/UTC string.
+     */
+    static String analysisDisplayDate(JsonObject sampleJson) {
+        String local = getStr(sampleJson, "analysis_datetime", null);
+        if (local != null) {
+            try {
+                return java.time.LocalDateTime.parse(local).format(ANALYSIS_DISPLAY);
+            } catch (java.time.format.DateTimeParseException e) {
+                System.err.println("PDF_WARN code=bad_analysis_datetime value='" + local + "'");
+            }
+        }
+        String instant = getStr(sampleJson, "detected_at", null);
+        if (instant == null) {
+            return "";
+        }
+        try {
+            return java.time.OffsetDateTime.parse(instant)
+                    .atZoneSameInstant(java.time.ZoneId.systemDefault())
+                    .format(ANALYSIS_DISPLAY);
+        } catch (java.time.format.DateTimeParseException e) {
+            System.err.println("PDF_WARN code=bad_detected_at value='" + instant + "'");
+            return "";
+        }
+    }
+
+    static List<Sample> parseSamples(JsonArray samplesJson, PatientType patientType) {
         List<Sample> samples = new ArrayList<>();
 
         for (JsonElement element : samplesJson) {
@@ -276,19 +308,19 @@ public class PdfGeneratorCLI {
                 // this stdout into Arkivet.log (shipped to Loki), so "how many
                 // rows did each device table get?" is answerable remotely.
                 // params=0 means that device's table rendered header-only.
-                int paramCount = (sample.getParameters() == null) ? 0 : sample.getParameters().size();
+                int paramCount = (sample instanceof PcrSample)
+                        ? ((PcrSample) sample).getPcrParameters().size()
+                        : (sample.getParameters() == null) ? 0 : sample.getParameters().size();
                 System.out.println("PARSED_SAMPLE device=" + deviceType
                         + " sample_id=" + sample.getSampleId()
                         + " params=" + paramCount);
-                // A grid sample with zero parameters would render a header-only
+                // A sample with zero parameters would render a header-only
                 // table on a report that otherwise looks complete — the same
                 // silently-empty failure the Rust side guards against. Refuse
                 // (exit 1, logged by the Rust caller) rather than emit it. This
                 // also catches key-shape mismatches between Rust and this JAR
-                // that the Rust-side non-empty check cannot see. PCR samples
-                // are exempt: they render on their own page from a different
-                // structure and legitimately may carry no grid parameters.
-                if (paramCount == 0 && !"pcr".equals(deviceType)) {
+                // that the Rust-side non-empty check cannot see.
+                if (paramCount == 0) {
                     throw new IllegalStateException(
                             "Sample for device '" + deviceType + "' parsed to 0 parameters — "
                             + "refusing to render a report with an empty results table");
@@ -304,7 +336,7 @@ public class PdfGeneratorCLI {
         ExigoSample sample = new ExigoSample();
         sample.setSampleId(json.get("sample_id").getAsString());
         sample.setPatientId(json.get("patient_id").getAsString());
-        sample.setAnalysisDateAndTime(json.get("detected_at").getAsString());
+        sample.setAnalysisDateAndTime(analysisDisplayDate(json));
 
         // Parse test results into parameters
         JsonObject testResults = json.getAsJsonObject("test_results");
@@ -354,26 +386,13 @@ public class PdfGeneratorCLI {
 
                 parameter.setReferentValues(referenceValues);
 
-                // Determine indicator from reference ranges
-                try {
-                    double resultVal = Double.parseDouble(parameter.getResult());
-                    if (!referenceValues.isEmpty() && testResults.has(refLowKey) && testResults.has(refHighKey)) {
-                        double refLow = Double.parseDouble(testResults.get(refLowKey).getAsString());
-                        double refHigh = Double.parseDouble(testResults.get(refHighKey).getAsString());
-
-                        if (resultVal < refLow) {
-                            parameter.setIndicator(Indicator.LOW);
-                        } else if (resultVal > refHigh) {
-                            parameter.setIndicator(Indicator.HIGH);
-                        } else {
-                            parameter.setIndicator(Indicator.NORMAL);
-                        }
-                    } else {
-                        parameter.setIndicator(Indicator.NORMAL);
-                    }
-                } catch (NumberFormatException e) {
-                    parameter.setIndicator(Indicator.NORMAL);
+                Indicator indicator = indicatorFromFlag(getStr(testResults, key + "_F", null));
+                if (indicator == null) {
+                    indicator = ResultClassifier.classify(parameter.getResult(),
+                            ResultClassifier.parseNumber(getStr(testResults, refLowKey, null)),
+                            ResultClassifier.parseNumber(getStr(testResults, refHighKey, null)));
                 }
+                parameter.setIndicator(indicator);
 
                 parameters.add(parameter);
             }
@@ -387,7 +406,7 @@ public class PdfGeneratorCLI {
         PointcareSample sample = new PointcareSample();
         sample.setSampleId(json.get("sample_id").getAsString());
         sample.setPatientId(json.get("patient_id").getAsString());
-        sample.setAnalysisDateAndTime(json.get("detected_at").getAsString());
+        sample.setAnalysisDateAndTime(analysisDisplayDate(json));
 
         // Set sample type (default to SERUM for biochemistry)
         if (json.has("sample_type")) {
@@ -544,6 +563,42 @@ public class PdfGeneratorCLI {
         return sample;
     }
 
+    private static final java.util.regex.Pattern SEGMENT_FIELD_KEY =
+            java.util.regex.Pattern.compile("^[A-Z][A-Z0-9]{2}_\\d+$");
+
+    /**
+     * Every PCR test code the device sent: any key that is not metadata or a
+     * per-code suffix. Known codes keep the panel order, unknown ones follow
+     * by name, and the internal control comes last.
+     */
+    static List<String> pcrCodes(JsonObject testResults) {
+        List<String> known = new ArrayList<>();
+        List<String> unknown = new ArrayList<>();
+        String control = null;
+        for (String key : testResults.keySet()) {
+            if (isMetadataKey(key) || SEGMENT_FIELD_KEY.matcher(key).matches()
+                    || testResults.get(key).isJsonNull()) {
+                continue;
+            }
+            PcrTestCode code = PcrTestCode.fromCode(key);
+            if (code == PcrTestCode.IC) {
+                control = key;
+            } else if (code != null) {
+                known.add(key);
+            } else {
+                unknown.add(key);
+            }
+        }
+        known.sort(java.util.Comparator.comparingInt(k -> PcrTestCode.fromCode(k).ordinal()));
+        java.util.Collections.sort(unknown);
+        List<String> codes = new ArrayList<>(known);
+        codes.addAll(unknown);
+        if (control != null) {
+            codes.add(control);
+        }
+        return codes;
+    }
+
     /**
      * True for HL7 metadata / non-result keys that shouldn't be treated as
      * droppable analytes: message headers (MSH/PID/OBR/...), patient fields, and
@@ -551,7 +606,8 @@ public class PdfGeneratorCLI {
      */
     private static boolean isMetadataKey(String key) {
         if (key.endsWith("_unit") || key.endsWith("_range") || key.endsWith("_flag")
-            || key.endsWith("_sample_type") || key.endsWith("_curve") || key.endsWith("_lot")) {
+            || key.endsWith("_sample_type") || key.endsWith("_curve") || key.endsWith("_lot")
+            || key.endsWith("_threshold")) {
             return true;
         }
         String[] prefixes = {
@@ -612,55 +668,22 @@ public class PdfGeneratorCLI {
     }
 
     /**
-     * Compute LOW/HIGH/NORMAL by comparing the value to the device-supplied range
-     * (preferred, format "low-high") or the fallback low/high. Any parse failure
-     * yields NORMAL so a malformed range never paints a misleading flag.
+     * Compare the value with the device-supplied range (preferred, "low-high")
+     * or the table fallback. No readable range or value gives UNKNOWN, never NORMAL.
      */
     private static Indicator computeIndicator(String result, String deviceRange, String refLow, String refHigh) {
-        Double lo = null;
-        Double hi = null;
-        if (deviceRange != null && !deviceRange.isEmpty()) {
-            int dash = deviceRange.indexOf('-', 1); // skip a possible leading sign
-            if (dash > 0) {
-                try {
-                    lo = Double.parseDouble(deviceRange.substring(0, dash).trim());
-                    hi = Double.parseDouble(deviceRange.substring(dash + 1).trim());
-                } catch (NumberFormatException ignored) {
-                    lo = null;
-                    hi = null;
-                }
-            }
+        Double[] range = ResultClassifier.parseRange(deviceRange);
+        if (range == null) {
+            range = new Double[]{ResultClassifier.parseNumber(refLow), ResultClassifier.parseNumber(refHigh)};
         }
-        if ((lo == null || hi == null) && !refLow.isEmpty() && !refHigh.isEmpty()) {
-            try {
-                lo = Double.parseDouble(refLow);
-                hi = Double.parseDouble(refHigh);
-            } catch (NumberFormatException ignored) {
-                return Indicator.NORMAL;
-            }
-        }
-        if (lo == null || hi == null) {
-            return Indicator.NORMAL;
-        }
-        try {
-            double v = Double.parseDouble(result.trim());
-            if (v < lo) {
-                return Indicator.LOW;
-            }
-            if (v > hi) {
-                return Indicator.HIGH;
-            }
-            return Indicator.NORMAL;
-        } catch (NumberFormatException e) {
-            return Indicator.NORMAL;
-        }
+        return ResultClassifier.classify(result, range[0], range[1]);
     }
 
     private static HealvetSample parseHealvetSample(JsonObject json, PatientType patientType) {
         HealvetSample sample = new HealvetSample();
         sample.setSampleId(json.get("sample_id").getAsString());
         sample.setPatientId(json.get("patient_id").getAsString());
-        sample.setAnalysisDateAndTime(json.get("detected_at").getAsString());
+        sample.setAnalysisDateAndTime(analysisDisplayDate(json));
 
         // Parse test results - Healvet stores each parameter as a key-value pair
         // where key is the parameter code (e.g., "TSH-1", "T4-1", "cCRP") and value is result
@@ -714,7 +737,7 @@ public class PdfGeneratorCLI {
                 Parameter parameter = new Parameter();
                 parameter.setName(paramCode);
                 parameter.setResult(resultValue);
-                parameter.setIndicator(Indicator.NORMAL);
+                parameter.setIndicator(Indicator.UNKNOWN);
                 parameters.add(parameter);
             }
         }
@@ -745,7 +768,7 @@ public class PdfGeneratorCLI {
         PcrSample sample = new PcrSample();
         sample.setSampleId(json.get("sample_id").getAsString());
         sample.setPatientId(json.get("patient_id").getAsString());
-        sample.setAnalysisDateAndTime(json.get("detected_at").getAsString());
+        sample.setAnalysisDateAndTime(analysisDisplayDate(json));
 
         // Set analyzer info from sample_id if not explicitly provided
         if (json.has("analyzer_info") && !json.get("analyzer_info").isJsonNull()) {
@@ -768,53 +791,25 @@ public class PdfGeneratorCLI {
             sample.setReviewer(json.get("reviewer").getAsString());
         }
 
-        // Parse test results - look for PCR test codes
         JsonObject testResults = json.getAsJsonObject("test_results");
+        for (String testCode : pcrCodes(testResults)) {
+            PcrParameter param = new PcrParameter();
+            param.setTestCode(PcrTestCode.fromCode(testCode));
+            param.setName(testCode);
+            param.setResult(testResults.get(testCode).getAsString());
+            param.setReferentValues(getStr(testResults, testCode + "_range", PcrTestCode.getNegativeRange()));
 
-        // PCR test codes to look for
-        String[] pcrTestCodes = {"CDV", "CPIV", "CAV-2", "Bb", "MC", "IC"};
-
-        for (String testCode : pcrTestCodes) {
-            if (testResults.has(testCode)) {
-                String result = testResults.get(testCode).getAsString();
-
-                PcrTestCode pcrTestCode = PcrTestCode.fromCode(testCode);
-                PcrParameter param = new PcrParameter();
-                param.setTestCode(pcrTestCode);
-                param.setName(testCode);
-                param.setResult(result);
-
-                // Set reference values
-                String rangeKey = testCode + "_range";
-                if (testResults.has(rangeKey) && !testResults.get(rangeKey).isJsonNull()) {
-                    param.setReferentValues(testResults.get(rangeKey).getAsString());
-                } else {
-                    param.setReferentValues(PcrTestCode.getNegativeRange());
-                }
-
-                // Parse curve data
-                String curveKey = testCode + "_curve";
-                if (testResults.has(curveKey) && !testResults.get(curveKey).isJsonNull()) {
-                    param.parseCurveData(testResults.get(curveKey).getAsString());
-                }
-
-                // Set sample type
-                String sampleTypeKey = testCode + "_sample_type";
-                if (testResults.has(sampleTypeKey) && !testResults.get(sampleTypeKey).isJsonNull()) {
-                    param.setSampleType(testResults.get(sampleTypeKey).getAsString());
-                }
-
-                // Set lot number
-                String lotKey = testCode + "_lot";
-                if (testResults.has(lotKey) && !testResults.get(lotKey).isJsonNull()) {
-                    param.setLotNumber(testResults.get(lotKey).getAsString());
-                }
-
-                // Determine indicator based on Ct value
-                param.determineIndicator();
-
-                sample.addPcrParameter(param);
+            String curve = getStr(testResults, testCode + "_curve", null);
+            if (curve != null) {
+                param.parseCurveData(curve);
             }
+            param.setSampleType(getStr(testResults, testCode + "_sample_type", null));
+            param.setLotNumber(getStr(testResults, testCode + "_lot", null));
+            param.setThreshold(ResultClassifier.parseNumber(getStr(testResults, testCode + "_threshold", null)));
+            param.setDeviceFlag(getStr(testResults, testCode + "_flag", null));
+            param.determineIndicator();
+
+            sample.addPcrParameter(param);
         }
 
         return sample;

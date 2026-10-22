@@ -302,3 +302,29 @@ async fn soft_delete_twice_errors_and_keeps_first_stamp() {
     // Unknown id errors too.
     assert!(FileStorageService::delete_attachment(&db, 999_999).await.is_err());
 }
+
+async fn is_live(db: &DatabaseConnection, id: i64) -> bool {
+    let row = db.query_one(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "SELECT deleted_at FROM medical_attachments WHERE id = ?",
+        [id.into()],
+    )).await.unwrap().unwrap();
+    row.try_get::<Option<String>>("", "deleted_at").unwrap().is_none()
+}
+
+/// Regenerating a configured device report retires the record's older
+/// generated PDFs only once the new one is stored, and never the new one.
+#[tokio::test]
+async fn retiring_generated_pdfs_keeps_the_new_one_and_other_files() {
+    let db = create_test_db_with_migrations().await;
+    let record_id = seed_record(&db).await;
+    let old_pdf = insert_attachment(&db, record_id, "gp-old", "old.pdf", "generated_pdf").await;
+    let upload = insert_attachment(&db, record_id, "up-1", "scan.pdf", "file").await;
+    let new_pdf = insert_attachment(&db, record_id, "gp-new", "new.pdf", "generated_pdf").await;
+
+    crate::commands::medical::retire_generated_pdfs(&db, record_id, new_pdf).await;
+
+    assert!(!is_live(&db, old_pdf).await, "old generated PDF must be retired");
+    assert!(is_live(&db, new_pdf).await, "the new PDF must survive");
+    assert!(is_live(&db, upload).await, "uploaded files are not generated PDFs");
+}

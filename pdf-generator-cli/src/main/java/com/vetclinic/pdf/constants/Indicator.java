@@ -9,7 +9,9 @@ public enum Indicator {
 
     HIGH("H"),
     NORMAL("N"),
-    LOW("L");
+    LOW("L"),
+    // No colour: the value is not a number, or there is no range to compare with.
+    UNKNOWN("?");
 
     private String indicator;
 

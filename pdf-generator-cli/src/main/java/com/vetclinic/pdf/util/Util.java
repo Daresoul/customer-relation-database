@@ -36,22 +36,37 @@ public class Util {
     public static final BaseColor LIGHT_GRAY_COLOR = new BaseColor(236 , 239 , 241);
     private static Logger logger = Logger.getLogger(Util.class.getName());
 
+    private static final DateTimeFormatter[] DATE_OF_BIRTH_FORMATS = {
+            DateTimeFormatter.ISO_LOCAL_DATE,
+            DateTimeFormatter.ofPattern(Constants.DATE_PATTERN),
+    };
+
+    /** Parses the agreed ISO date (yyyy-MM-dd) sent by the app; dd/MM/yyyy is still read for old inputs. */
     public static LocalDate parseDateStringRepresentation(String date) {
-
-//            Date dateOfBirthObj = DateUtils.parseDate(date, Constants.DATE_PATTERN);
-//            Instant instant = dateOfBirthObj.toInstant();
-//            LocalDate localDate = instant.atZone(ZoneId.systemDefault()).toLocalDate();
-        if (date == null || date.isEmpty()) {
+        if (date == null || date.trim().isEmpty()) {
             return null;
         }
-
-        try {
-            DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern(Constants.DATE_PATTERN);
-            return LocalDate.parse(date, dateTimeFormatter);
-        } catch (DateTimeParseException ex) {
-            logger.info("[DateTimeParseException] String representation of " + date + " cannot be parsed" );
-            return null;
+        String trimmed = date.trim();
+        for (DateTimeFormatter format : DATE_OF_BIRTH_FORMATS) {
+            try {
+                return LocalDate.parse(trimmed, format);
+            } catch (DateTimeParseException ignored) {
+                // try the next accepted format
+            }
         }
+        logger.warning("Date of birth '" + date + "' is not yyyy-MM-dd; leaving it blank");
+        return null;
+    }
+
+    public static String formatAge(LocalDate dateOfBirth, LocalDate today) {
+        if (dateOfBirth == null || dateOfBirth.isAfter(today)) {
+            return "—";
+        }
+        java.time.Period age = java.time.Period.between(dateOfBirth, today);
+        if (age.getYears() >= 1) {
+            return age.getYears() + (age.getYears() == 1 ? " година" : " години");
+        }
+        return age.getMonths() + (age.getMonths() == 1 ? " месец" : " месеци");
     }
 
     public static String formatDate(LocalDate date) {

@@ -136,9 +136,8 @@ public class PDFReportService {
                 }
             }
             if (healvetSample == null) {
-                logger.severe("There is something wrong with the logic, there should be at least one Healvet" +
-                        " sample when the case is that tables are too large to fit one page");
-                return;
+                throw new GeneratingPDFReportException("Tables do not fit one page and there is no Healvet "
+                        + "table to move to a second page — refusing to emit a report with missing tables");
             }
 
             try {
@@ -163,8 +162,8 @@ public class PDFReportService {
                 return;
 
             } catch (TablesCannotFitPageException ex) {
-                logger.severe("Undefined behaviour: Two tables shouldn't be too large to fit one page.");
-                return;
+                throw new GeneratingPDFReportException("Two tables do not fit one page — refusing to emit "
+                        + "a report with missing tables");
             }
         }
 
@@ -565,11 +564,7 @@ public class PDFReportService {
             table.addCell(Util.createBorderlessCell());
             table.addCell(createParameterCell(parameter.getName()));
 //            System.out.println("parameter indicator: " + parameter.getIndicator());
-            if (parameter.getIndicator().equals(Indicator.NORMAL)) {
-                table.addCell(createOkayResultCell(String.valueOf(parameter.getResult())));
-            } else {
-                table.addCell(createBadResultCell(String.valueOf(parameter.getResult())));
-            }
+            table.addCell(createResultCell(parameter));
             table.addCell(createParameterCell(parameter.getUnit()));
             table.addCell(createParameterCell(parameter.getReferentValues()));
         }
@@ -624,11 +619,7 @@ public class PDFReportService {
             table.addCell(createResultsTableTitleCell(
                     theTitle, rowIndex++, startingIndexForVerticalTitle, parameters.size()));
             table.addCell(createParameterCell(parameter.getName()));
-            if (parameter.getIndicator().equals(Indicator.NORMAL)) {
-                table.addCell(createOkayResultCell(String.valueOf(parameter.getResult())));
-            } else {
-                table.addCell(createBadResultCell(String.valueOf(parameter.getResult())));
-            }
+            table.addCell(createResultCell(parameter));
             table.addCell(createParameterCell(parameter.getUnit()));
             table.addCell(createParameterCell(parameter.getReferentValues()));
         }
@@ -714,11 +705,7 @@ public class PDFReportService {
             table.addCell(createResultsTableTitleCell(
                     "ХЕМАТОЛОГИЈА", rowIndex++, 3, parameters.size()));
             table.addCell(createParameterCell(parameter.getName()));
-            if (parameter.getIndicator().equals(Indicator.NORMAL)) {
-                table.addCell(createOkayResultCell(String.valueOf(parameter.getResult())));
-            } else {
-                table.addCell(createBadResultCell(String.valueOf(parameter.getResult())));
-            }
+            table.addCell(createResultCell(parameter));
             table.addCell(createParameterCell(parameter.getUnit()));
             table.addCell(createParameterCell(parameter.getReferentValues()));
         }
@@ -803,6 +790,23 @@ public class PDFReportService {
         sampleInfoWrapperTable.addCell(Util.createBorderlessCell());
         sampleInfoWrapperTable.addCell(sampleInfo);
         return sampleInfoWrapperTable;
+    }
+
+    private static String displayOrDash(String value) {
+        return (value == null || value.trim().isEmpty()) ? "—" : value;
+    }
+
+    /** Teal for normal, red for high/low, plain for values without a call. */
+    private PdfPCell createResultCell(Parameter parameter) {
+        String result = String.valueOf(parameter.getResult());
+        Indicator indicator = parameter.getIndicator();
+        if (indicator == Indicator.NORMAL) {
+            return createOkayResultCell(result);
+        }
+        if (indicator == Indicator.HIGH || indicator == Indicator.LOW) {
+            return createBadResultCell(result);
+        }
+        return createParameterCell(result);
     }
 
     private PdfPCell createOkayResultCell(String name) {
@@ -992,7 +996,7 @@ public class PDFReportService {
 
         PdfPCell patientId = Util.createDefaultCellWithLeftRightAlignment(
                 "Микрочип: ",
-                patient.getPatientIdMicrochip(),
+                displayOrDash(patient.getPatientIdMicrochip()),
                 CELL_FONT_SIZE,
                 FontUtil.MACEDONIAN);
         patientId.setColspan(2);
@@ -1323,11 +1327,7 @@ public class PDFReportService {
         table.addCell(createPcrInfoCell("Сопственик:" + (patient.getOwner() != null ? patient.getOwner() : "")));
         String genderVal = patient.getGender() != null ? patient.getGender().getGenderTranslated() : "";
         table.addCell(createPcrInfoCell("Пол:" + genderVal));
-        String ageStr = "0 Години";
-        if (patient.getDateOfBirth() != null) {
-            java.time.Period age = java.time.Period.between(patient.getDateOfBirth(), java.time.LocalDate.now());
-            ageStr = age.getYears() + " Години";
-        }
+        String ageStr = Util.formatAge(patient.getDateOfBirth(), java.time.LocalDate.now());
         table.addCell(createPcrInfoCell("Возраст:" + ageStr));
 
         // Row 3: Analyzer Information, Diagnosis note (Macedonian)
@@ -1365,6 +1365,16 @@ public class PDFReportService {
         reportTitle.setSpacingAfter(5);
         document.add(reportTitle);
 
+        if (pcrSample.isInvalid()) {
+            Paragraph invalid = new Paragraph(
+                    "НЕВАЛИДЕН ТЕСТ (INVALID): интерната контрола не помина — повторете го тестот. "
+                            + "Резултатите подолу не се важечки.",
+                    FontUtil.getMacedonianFont(11, FontUtil.BAD_RESULT_FONT_COLOR));
+            invalid.setAlignment(Element.ALIGN_CENTER);
+            invalid.setSpacingAfter(5);
+            document.add(invalid);
+        }
+
         // Results table
         PdfPTable table = new PdfPTable(6);
         table.setWidthPercentage(95);
@@ -1380,27 +1390,25 @@ public class PDFReportService {
         table.addCell(createPcrHeaderCell("Индикатор", headerBg));
         table.addCell(createPcrHeaderCell("Лот", headerBg));
 
-        // Data rows
+        boolean invalidRun = pcrSample.isInvalid();
         for (PcrParameter param : pcrSample.getPcrParameters()) {
-            // Item name
+            boolean control = param.isInternalControl();
+            boolean redCall = control ? !param.isPositive() : (!invalidRun && param.isPositive());
+
             table.addCell(createPcrDataCell(param.getName(), false));
 
             // Sample type - empty to match reference
             table.addCell(createPcrDataCell("", false));
 
-            // Result (Ct) - highlight positive results in red
-            String result = param.getResult() != null ? param.getResult() : "NoCt";
-            table.addCell(createPcrDataCell(result, param.isPositive()));
+            String result = param.getResult() != null ? param.getResult() : "";
+            table.addCell(createPcrDataCell(result, !control && redCall));
 
-            // Ranges
             String ranges = param.getReferentValues() != null ? param.getReferentValues() : ">36 or NoCt";
             table.addCell(createPcrDataCell(ranges, false));
 
-            // Indicator
-            String indicator = param.isPositive() ? "Positive(+)" : "Negative(-)";
-            table.addCell(createPcrDataCell(indicator, param.isPositive()));
+            String indicator = (invalidRun && !control) ? "INVALID" : param.getIndicatorText();
+            table.addCell(createPcrDataCell(indicator, redCall));
 
-            // Lot
             String lot = param.getLotNumber() != null ? param.getLotNumber() : "";
             table.addCell(createPcrDataCell(lot, false));
         }

@@ -4,8 +4,41 @@ use std::process::{Command, Stdio};
 use chrono::{DateTime, Utc};
 use serde::{Serialize, Deserialize};
 use serde_json::Value;
-use std::path::PathBuf;
+use std::ffi::OsStr;
+use std::path::{Path, PathBuf};
 use std::fs;
+use std::time::Duration;
+
+/// Longest a PDF job may run before Java is stopped.
+const JAVA_TIMEOUT: Duration = Duration::from_secs(60);
+const JAVA_VERSION_TIMEOUT: Duration = Duration::from_secs(15);
+
+/// Parent of the per-job folders, inside the system temp folder.
+const PDF_JOBS_DIR: &str = "arkivet-pdf-jobs";
+
+/// A PDF job's own working folder; removed with everything in it on drop.
+struct JobDir {
+    path: PathBuf,
+}
+
+impl JobDir {
+    fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl Drop for JobDir {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.path);
+    }
+}
+
+/// What a finished Java run printed.
+struct JavaOutput {
+    success: bool,
+    stdout: String,
+    stderr: String,
+}
 
 /// Java PDF service - calls the iText 5 JAR for PDF generation
 /// This provides 100% identical output to the original print-app
@@ -24,7 +57,7 @@ enum JarVersionVerdict {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct JavaPdfInput {
+pub(crate) struct JavaPdfInput {
     patient: JavaPatient,
     samples: Vec<JavaSample>,
     output_path: String,
@@ -46,6 +79,8 @@ struct JavaSample {
     sample_id: String,
     patient_id: String,
     detected_at: String,
+    /// Local wall-clock time of the test, ISO `yyyy-MM-ddTHH:mm:ss`, no offset.
+    analysis_datetime: String,
     test_results: HashMap<String, String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     test_type: Option<String>,
@@ -69,6 +104,33 @@ impl JavaPdfService {
         // and diagnosably instead of producing a silently empty medical report.
         Self::reject_empty_samples(device_data_list)?;
 
+        let java_input = Self::build_java_input(patient, device_data_list, output_path, &chrono::Local);
+
+        log::debug!("   🔍 DEBUG - Samples being sent to Java:");
+        for (idx, sample) in java_input.samples.iter().enumerate() {
+            log::debug!("   Sample #{} ({}): {} test results", idx + 1, sample.device_type, sample.test_results.len());
+            for (key, value) in &sample.test_results {
+                log::debug!("      {} = {}", key, value);
+            }
+        }
+
+        let input = serde_json::to_value(&java_input)
+            .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
+        let jar_path = Self::get_jar_path(app_handle)?;
+        Self::run_jar_job(&jar_path, input, output_path, JAVA_TIMEOUT)?;
+
+        log::info!("✅ Java PDF generated successfully");
+        Ok(())
+    }
+
+    /// Builds the JSON contract sent to the JAR. Pure (no I/O), so the
+    /// Rust side of the Rust/Java contract is unit-testable.
+    pub(crate) fn build_java_input<Tz: chrono::TimeZone>(
+        patient: &crate::services::device_pdf_service::PatientData,
+        device_data_list: &[crate::services::device_pdf_service::DeviceTestData],
+        output_path: &str,
+        tz: &Tz,
+    ) -> JavaPdfInput {
         // Sort samples in the order Java expects: Exigo, Pointcare, Healvet, PCR
         // PCR samples go last as they are rendered on separate pages
         // This is critical for correct PDF layout (Java PDF code line 273)
@@ -110,6 +172,7 @@ impl JavaPdfService {
                 sample_id,
                 patient_id,
                 detected_at: device_data.detected_at.to_rfc3339(),
+                analysis_datetime: Self::analysis_datetime(device_data, tz),
                 test_results,
                 test_type: None,
             }
@@ -122,84 +185,77 @@ impl JavaPdfService {
             species: patient.species.clone(),
             microchip_id: patient.microchip_id.clone(),
             gender: patient.gender.clone(),
-            date_of_birth: patient.date_of_birth.clone(),
+            date_of_birth: patient.date_of_birth.as_deref().and_then(Self::iso_date_of_birth),
         };
 
-        // Create Java PDF input
-        let java_input = JavaPdfInput {
+        JavaPdfInput {
             patient: java_patient,
             samples: java_samples,
             output_path: output_path.to_string(),
-        };
+        }
+    }
 
-        // Create temp JSON file for input
-        let temp_dir = std::env::temp_dir();
-        let input_json_path = temp_dir.join(format!("pdf_input_{}.json", Utc::now().timestamp()));
-
-        // Write JSON to temp file
-        let json_str = serde_json::to_string_pretty(&java_input)
-            .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
-
-        log::debug!("   🔍 DEBUG - Samples being sent to Java:");
-        for (idx, sample) in java_input.samples.iter().enumerate() {
-            log::debug!("   Sample #{} ({}): {} test results", idx + 1, sample.device_type, sample.test_results.len());
-            for (key, value) in &sample.test_results {
-                log::debug!("      {} = {}", key, value);
+    /// Date of birth as the JAR expects it (`yyyy-MM-dd`), whatever shape the
+    /// database row or a typed override holds; None when it can't be read.
+    fn iso_date_of_birth(raw: &str) -> Option<String> {
+        let raw = raw.trim();
+        if raw.is_empty() {
+            return None;
+        }
+        let date_part = raw.split(|c| c == 'T' || c == ' ').next().unwrap_or(raw);
+        for format in ["%Y-%m-%d", "%d/%m/%Y", "%d.%m.%Y"] {
+            if let Ok(date) = chrono::NaiveDate::parse_from_str(date_part, format) {
+                return Some(date.format("%Y-%m-%d").to_string());
             }
         }
+        log::warn!("Date of birth {:?} is not a recognised date; sending none to the PDF", raw);
+        None
+    }
 
-        fs::write(&input_json_path, json_str)
-            .map_err(|e| format!("Failed to write temp JSON file: {}", e))?;
-
-        log::debug!("   📄 Input JSON created: {:?}", input_json_path);
-
-        // Get JAR path (in pdf-generator-cli/build/libs/)
-        let jar_path = Self::get_jar_path(app_handle)?;
-
-        log::info!("   ☕ JAR path: {:?}", jar_path);
-        log::info!("   📂 Output path: {}", output_path);
-
-        // Call Java JAR
-        let output = Self::create_java_command(&jar_path, &input_json_path)
-            .output()
-            .map_err(|e| format!("Failed to execute Java: {}", e))?;
-
-        // Clean up temp JSON file
-        let _ = fs::remove_file(&input_json_path);
-
-        // Check if command was successful
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            return Err(format!(
-                "Java JAR failed:\nSTDOUT: {}\nSTDERR: {}",
-                stdout, stderr
-            ));
-        }
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        log::info!("   ✅ Java output: {}", stdout);
-
-        // Verify PDF was created
-        if !PathBuf::from(output_path).exists() {
-            return Err(format!("PDF was not created at: {}", output_path));
-        }
-
-        log::info!("✅ Java PDF generated successfully");
-        Ok(())
+    /// The analyzer's own run time, read from the keys each parser keeps
+    /// (Exigo `DATE`/`DateTime`, HL7 OBR-7 `test_datetime` then MSH-7
+    /// `message_datetime`, Healvet `test_datetime`). Device clocks are local
+    /// wall time, so they pass through unconverted. Without one, the receive
+    /// instant is converted to `tz`.
+    fn analysis_datetime<Tz: chrono::TimeZone>(
+        device_data: &crate::services::device_pdf_service::DeviceTestData,
+        tz: &Tz,
+    ) -> String {
+        const DEVICE_TIME_KEYS: [&str; 4] = ["DATE", "DateTime", "test_datetime", "message_datetime"];
+        const DEVICE_TIME_FORMATS: [&str; 6] = [
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%dT%H:%M:%S",
+            "%Y%m%d%H%M%S",
+            "%d-%m-%Y %H:%M:%S",
+            "%d.%m.%Y %H:%M:%S",
+            "%Y/%m/%d %H:%M:%S",
+        ];
+        let device_time = DEVICE_TIME_KEYS
+            .iter()
+            .filter_map(|k| device_data.test_results.get(*k).and_then(|v| v.as_str()))
+            .find_map(|raw| {
+                DEVICE_TIME_FORMATS
+                    .iter()
+                    .find_map(|f| chrono::NaiveDateTime::parse_from_str(raw.trim(), f).ok())
+            });
+        device_time
+            .unwrap_or_else(|| device_data.detected_at.with_timezone(tz).naive_local())
+            .format("%Y-%m-%dT%H:%M:%S")
+            .to_string()
     }
 
     /// Create a Java command configured to prevent macOS focus-stealing.
     /// Sets headless mode flags, redirects stdin to null, and on macOS
     /// creates a new process group to isolate the child process.
-    fn create_java_command(jar_path: &PathBuf, input_json_path: &PathBuf) -> Command {
+    /// Every Java invocation goes through here.
+    fn create_java_command(jar_path: &Path, args: &[&OsStr]) -> Command {
         let mut cmd = Command::new("java");
         cmd.arg("-Djava.awt.headless=true")
             .arg("-Dapple.awt.UIElement=true")
             .arg("-Djava.awt.GraphicsEnvironment=sun.java2d.HeadlessGraphicsEnvironment")
             .arg("-jar")
             .arg(jar_path)
-            .arg(input_json_path)
+            .args(args)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
@@ -223,42 +279,128 @@ impl JavaPdfService {
         cmd
     }
 
+    /// A fresh folder for one PDF job, so concurrent jobs never share files.
+    fn new_job_dir() -> Result<JobDir, String> {
+        let path = std::env::temp_dir()
+            .join(PDF_JOBS_DIR)
+            .join(uuid::Uuid::new_v4().to_string());
+        fs::create_dir_all(&path)
+            .map_err(|e| format!("Failed to create PDF job folder {:?}: {}", path, e))?;
+        Ok(JobDir { path })
+    }
+
+    /// Run a command, reading stdout and stderr as it goes (a full pipe would
+    /// stall the child), and stop it once `timeout` has passed.
+    fn run_with_timeout(mut cmd: Command, timeout: Duration) -> Result<JavaOutput, String> {
+        use std::io::Read;
+
+        let mut child = cmd
+            .spawn()
+            .map_err(|e| format!("Failed to execute Java: {}", e))?;
+        let drain = |pipe: Option<Box<dyn Read + Send>>| {
+            std::thread::spawn(move || {
+                let mut buf = Vec::new();
+                if let Some(mut p) = pipe {
+                    let _ = p.read_to_end(&mut buf);
+                }
+                String::from_utf8_lossy(&buf).to_string()
+            })
+        };
+        let stdout = drain(child.stdout.take().map(|p| Box::new(p) as Box<dyn Read + Send>));
+        let stderr = drain(child.stderr.take().map(|p| Box::new(p) as Box<dyn Read + Send>));
+
+        let deadline = std::time::Instant::now() + timeout;
+        let status = loop {
+            match child.try_wait() {
+                Ok(Some(status)) => break status,
+                Ok(None) if std::time::Instant::now() >= deadline => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    let stderr = stderr.join().unwrap_or_default();
+                    return Err(format!(
+                        "Java PDF generator timed out after {}s and was stopped. STDERR: {}",
+                        timeout.as_secs_f32(),
+                        stderr
+                    ));
+                }
+                Ok(None) => std::thread::sleep(Duration::from_millis(25)),
+                Err(e) => return Err(format!("Failed to wait for Java: {}", e)),
+            }
+        };
+        Ok(JavaOutput {
+            success: status.success(),
+            stdout: stdout.join().unwrap_or_default(),
+            stderr: stderr.join().unwrap_or_default(),
+        })
+    }
+
+    /// One JAR run in its own job folder: Java writes the PDF there, and only
+    /// a finished, non-empty PDF is moved to `output_path`. Java's stderr is
+    /// logged even when it succeeds, so its warnings reach the log.
+    pub(crate) fn run_jar_job(
+        jar_path: &Path,
+        mut input: Value,
+        output_path: &str,
+        timeout: Duration,
+    ) -> Result<(), String> {
+        let job_dir = Self::new_job_dir()?;
+        let input_json_path = job_dir.path().join("input.json");
+        let job_pdf = job_dir.path().join("out.pdf");
+        input["output_path"] = Value::String(job_pdf.to_string_lossy().to_string());
+        let json_str = serde_json::to_string_pretty(&input)
+            .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
+        fs::write(&input_json_path, json_str)
+            .map_err(|e| format!("Failed to write temp JSON file: {}", e))?;
+
+        log::info!("   ☕ JAR path: {:?}", jar_path);
+        log::info!("   📂 Output path: {}", output_path);
+
+        let output = Self::run_with_timeout(
+            Self::create_java_command(jar_path, &[input_json_path.as_os_str()]),
+            timeout,
+        )?;
+
+        if !output.success {
+            return Err(format!(
+                "Java JAR failed:\nSTDOUT: {}\nSTDERR: {}",
+                output.stdout, output.stderr
+            ));
+        }
+        log::info!("   ✅ Java output: {}", output.stdout);
+        for line in output.stderr.lines().filter(|l| !l.trim().is_empty()) {
+            log::warn!("   ☕ Java stderr: {}", line);
+        }
+
+        match fs::metadata(&job_pdf) {
+            Ok(m) if m.len() > 0 => {}
+            _ => return Err(format!("PDF was not created at: {}", output_path)),
+        }
+        let dest = Path::new(output_path);
+        if let Some(parent) = dest.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create folder for {}: {}", output_path, e))?;
+        }
+        if fs::rename(&job_pdf, dest).is_err() {
+            fs::copy(&job_pdf, dest)
+                .map_err(|e| format!("Failed to move PDF to {}: {}", output_path, e))?;
+        }
+        Ok(())
+    }
+
     /// Ask the bundled JAR which app version it was built for (`java -jar … --version`,
     /// printing the manifest's Implementation-Version). Returns the trimmed string,
     /// or an Err if the JAR can't be located or Java can't run it.
     fn read_jar_version(app_handle: &tauri::AppHandle) -> Result<String, String> {
         let jar_path = Self::get_jar_path(app_handle)?;
-        let mut cmd = Command::new("java");
-        cmd.arg("-Djava.awt.headless=true")
-            .arg("-Dapple.awt.UIElement=true")
-            .arg("-Djava.awt.GraphicsEnvironment=sun.java2d.HeadlessGraphicsEnvironment")
-            .arg("-jar")
-            .arg(&jar_path)
-            .arg("--version")
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-        #[cfg(unix)]
-        {
-            use std::os::unix::process::CommandExt;
-            cmd.process_group(0);
+        let output = Self::run_with_timeout(
+            Self::create_java_command(&jar_path, &[OsStr::new("--version")]),
+            JAVA_VERSION_TIMEOUT,
+        )
+        .map_err(|e| format!("Failed to run JAR --version: {}", e))?;
+        if !output.success {
+            return Err(format!("JAR --version exited non-zero: {}", output.stderr));
         }
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            const CREATE_NO_WINDOW: u32 = 0x08000000;
-            cmd.creation_flags(CREATE_NO_WINDOW);
-        }
-        let output = cmd
-            .output()
-            .map_err(|e| format!("Failed to run JAR --version: {}", e))?;
-        if !output.status.success() {
-            return Err(format!(
-                "JAR --version exited non-zero: {}",
-                String::from_utf8_lossy(&output.stderr)
-            ));
-        }
-        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+        Ok(output.stdout.trim().to_string())
     }
 
     /// Verify the bundled PDF-generator JAR was built for the same app version
@@ -541,50 +683,8 @@ impl JavaPdfService {
             });
         }
 
-        // Create temp JSON file for input
-        let temp_dir = std::env::temp_dir();
-        let input_json_path = temp_dir.join(format!("simple_report_input_{}.json", Utc::now().timestamp()));
-
-        // Write JSON to temp file
-        let json_str = serde_json::to_string_pretty(&json_obj)
-            .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
-
-        fs::write(&input_json_path, json_str)
-            .map_err(|e| format!("Failed to write temp JSON file: {}", e))?;
-
-        log::debug!("   📄 Simple report input JSON created: {:?}", input_json_path);
-
-        // Get JAR path
         let jar_path = Self::get_jar_path(app_handle)?;
-
-        log::info!("   ☕ JAR path: {:?}", jar_path);
-        log::info!("   📂 Output path: {}", output_path);
-
-        // Call Java JAR
-        let output = Self::create_java_command(&jar_path, &input_json_path)
-            .output()
-            .map_err(|e| format!("Failed to execute Java: {}", e))?;
-
-        // Clean up temp JSON file
-        let _ = fs::remove_file(&input_json_path);
-
-        // Check if command was successful
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            return Err(format!(
-                "Java JAR failed:\nSTDOUT: {}\nSTDERR: {}",
-                stdout, stderr
-            ));
-        }
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        log::info!("   ✅ Java output: {}", stdout);
-
-        // Verify PDF was created
-        if !PathBuf::from(output_path).exists() {
-            return Err(format!("PDF was not created at: {}", output_path));
-        }
+        Self::run_jar_job(&jar_path, json_obj, output_path, JAVA_TIMEOUT)?;
 
         log::info!("✅ Simple report PDF generated successfully");
         Ok(())
@@ -627,50 +727,8 @@ impl JavaPdfService {
             "output_path": output_path
         });
 
-        // Create temp JSON file for input
-        let temp_dir = std::env::temp_dir();
-        let input_json_path = temp_dir.join(format!("invoice_input_{}.json", Utc::now().timestamp()));
-
-        // Write JSON to temp file
-        let json_str = serde_json::to_string_pretty(&json_obj)
-            .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
-
-        fs::write(&input_json_path, &json_str)
-            .map_err(|e| format!("Failed to write temp JSON file: {}", e))?;
-
-        log::debug!("   📄 Invoice input JSON created: {:?}", input_json_path);
-
-        // Get JAR path
         let jar_path = Self::get_jar_path(app_handle)?;
-
-        log::info!("   ☕ JAR path: {:?}", jar_path);
-        log::info!("   📂 Output path: {}", output_path);
-
-        // Call Java JAR
-        let output = Self::create_java_command(&jar_path, &input_json_path)
-            .output()
-            .map_err(|e| format!("Failed to execute Java: {}", e))?;
-
-        // Clean up temp JSON file
-        let _ = fs::remove_file(&input_json_path);
-
-        // Check if command was successful
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            return Err(format!(
-                "Java JAR failed:\nSTDOUT: {}\nSTDERR: {}",
-                stdout, stderr
-            ));
-        }
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        log::info!("   ✅ Java output: {}", stdout);
-
-        // Verify PDF was created
-        if !PathBuf::from(output_path).exists() {
-            return Err(format!("PDF was not created at: {}", output_path));
-        }
+        Self::run_jar_job(&jar_path, json_obj, output_path, JAVA_TIMEOUT)?;
 
         log::info!("✅ Invoice PDF generated successfully");
         Ok(())
@@ -691,44 +749,8 @@ impl JavaPdfService {
             "output_path": output_path
         });
 
-        // Create temp JSON file for input
-        let temp_dir = std::env::temp_dir();
-        let input_json_path = temp_dir.join(format!("pharmacy_note_input_{}.json", Utc::now().timestamp()));
-
-        let json_str = serde_json::to_string_pretty(&json_obj)
-            .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
-
-        fs::write(&input_json_path, &json_str)
-            .map_err(|e| format!("Failed to write temp JSON file: {}", e))?;
-
-        log::debug!("   📄 Pharmacy note input JSON created: {:?}", input_json_path);
-
         let jar_path = Self::get_jar_path(app_handle)?;
-
-        log::info!("   ☕ JAR path: {:?}", jar_path);
-        log::info!("   📂 Output path: {}", output_path);
-
-        let output = Self::create_java_command(&jar_path, &input_json_path)
-            .output()
-            .map_err(|e| format!("Failed to execute Java: {}", e))?;
-
-        let _ = fs::remove_file(&input_json_path);
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            return Err(format!(
-                "Java JAR failed:\nSTDOUT: {}\nSTDERR: {}",
-                stdout, stderr
-            ));
-        }
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        log::info!("   ✅ Java output: {}", stdout);
-
-        if !PathBuf::from(output_path).exists() {
-            return Err(format!("PDF was not created at: {}", output_path));
-        }
+        Self::run_jar_job(&jar_path, json_obj, output_path, JAVA_TIMEOUT)?;
 
         log::info!("✅ Pharmacy note PDF generated successfully");
         Ok(())
@@ -787,6 +809,191 @@ mod tests {
             sample("exigo_eos_vet", serde_json::json!({"WBC": "10.4", "HGB": "17.4"})),
         ])
         .expect("non-empty samples must pass");
+    }
+
+    fn patient_with_dob(dob: Option<&str>) -> crate::services::device_pdf_service::PatientData {
+        crate::services::device_pdf_service::PatientData {
+            name: "REX".to_string(),
+            owner: "Owner".to_string(),
+            species: "Dog".to_string(),
+            microchip_id: None,
+            gender: "Male".to_string(),
+            date_of_birth: dob.map(str::to_string),
+        }
+    }
+
+    fn contract_json(
+        patient: &crate::services::device_pdf_service::PatientData,
+        samples: &[crate::services::device_pdf_service::DeviceTestData],
+    ) -> serde_json::Value {
+        let skopje_summer = chrono::FixedOffset::east_opt(2 * 3600).unwrap();
+        let input = JavaPdfService::build_java_input(patient, samples, "/tmp/out.pdf", &skopje_summer);
+        serde_json::to_value(&input).unwrap()
+    }
+
+    // The JAR parses date_of_birth as ISO yyyy-MM-dd. Whatever shape the
+    // database or a typed override holds, the contract carries ISO or null.
+    #[test]
+    fn date_of_birth_is_sent_as_iso_date() {
+        let exigo = sample("exigo_eos_vet", serde_json::json!({"WBC": "10.4"}));
+        for (stored, sent) in [
+            ("2020-01-15", serde_json::json!("2020-01-15")),
+            ("2020-01-15T00:00:00Z", serde_json::json!("2020-01-15")),
+            ("2020-01-15 00:00:00", serde_json::json!("2020-01-15")),
+            ("15/01/2020", serde_json::json!("2020-01-15")),
+            ("15.01.2020", serde_json::json!("2020-01-15")),
+            ("", serde_json::Value::Null),
+            ("sometime in spring", serde_json::Value::Null),
+        ] {
+            let json = contract_json(&patient_with_dob(Some(stored)), &[exigo.clone()]);
+            assert_eq!(json["patient"]["date_of_birth"], sent, "stored {:?}", stored);
+        }
+    }
+
+    fn analysis_datetime(device_type: &str, results: serde_json::Value) -> serde_json::Value {
+        let mut s = sample(device_type, results);
+        s.detected_at = chrono::DateTime::parse_from_rfc3339("2026-07-12T07:30:12Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let json = contract_json(&patient_with_dob(None), &[s]);
+        json["samples"][0]["analysis_datetime"].clone()
+    }
+
+    // The test time is the analyzer's own clock (local wall time, sent as
+    // ISO without offset); only when the device gave none does the receive
+    // time stand in, converted to local time. Never raw UTC.
+    #[test]
+    fn analysis_datetime_is_the_device_time_in_local_wall_clock() {
+        assert_eq!(
+            analysis_datetime("exigo_eos_vet", serde_json::json!({"WBC": "10.4", "DATE": "2026-07-10 14:52:11"})),
+            "2026-07-10T14:52:11"
+        );
+        assert_eq!(
+            analysis_datetime("mnchip_pcr_analyzer", serde_json::json!({"IC": "32.03", "test_datetime": "20260604101801"})),
+            "2026-06-04T10:18:01"
+        );
+        assert_eq!(
+            analysis_datetime("mnchip_pointcare_chemistry", serde_json::json!({"GLU": "95", "message_datetime": "20260115003112"})),
+            "2026-01-15T00:31:12"
+        );
+        assert_eq!(
+            analysis_datetime("healvet_hv_fia_3000", serde_json::json!({"cCRP": "12.5", "test_datetime": "06-04-2026 11:49:53"})),
+            "2026-04-06T11:49:53"
+        );
+    }
+
+    #[test]
+    fn analysis_datetime_falls_back_to_receive_time_in_local_zone() {
+        assert_eq!(
+            analysis_datetime("exigo_eos_vet", serde_json::json!({"WBC": "10.4"})),
+            "2026-07-12T09:30:12"
+        );
+        assert_eq!(
+            analysis_datetime("exigo_eos_vet", serde_json::json!({"WBC": "10.4", "DATE": "garbled"})),
+            "2026-07-12T09:30:12"
+        );
+    }
+
+    #[test]
+    fn job_dirs_are_unique_per_job_and_removed_after() {
+        let a = JavaPdfService::new_job_dir().unwrap();
+        let b = JavaPdfService::new_job_dir().unwrap();
+        assert_ne!(a.path(), b.path(), "two jobs share a temp folder");
+        assert!(a.path().is_dir() && b.path().is_dir());
+        let a_path = a.path().to_path_buf();
+        fs::write(a_path.join("input.json"), "{}").unwrap();
+        drop(a);
+        assert!(!a_path.exists(), "job folder left behind");
+    }
+
+    #[test]
+    fn java_command_is_headless_and_isolated() {
+        let cmd = JavaPdfService::create_java_command(Path::new("x.jar"), &[OsStr::new("in.json")]);
+        assert_eq!(cmd.get_program(), "java");
+        let args: Vec<_> = cmd.get_args().map(|a| a.to_string_lossy().to_string()).collect();
+        assert!(args.contains(&"-Djava.awt.headless=true".to_string()));
+        assert!(args.contains(&"-Dapple.awt.UIElement=true".to_string()));
+        assert_eq!(args[args.len() - 3..], ["-jar", "x.jar", "in.json"]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_hung_process_is_stopped_at_the_time_limit() {
+        let mut cmd = Command::new("sleep");
+        cmd.arg("5").stdout(Stdio::piped()).stderr(Stdio::piped());
+        let started = std::time::Instant::now();
+        let result = JavaPdfService::run_with_timeout(cmd, Duration::from_millis(300));
+        let err = result.err().expect("a hung process must be an error");
+        assert!(err.contains("timed out"), "{}", err);
+        assert!(started.elapsed() < Duration::from_secs(3), "waited {:?}", started.elapsed());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn stderr_is_kept_on_success_and_large_output_does_not_block() {
+        let mut cmd = Command::new("sh");
+        cmd.arg("-c")
+            .arg("echo PARSED_SAMPLE; head -c 300000 /dev/zero | tr '\\0' x 1>&2; echo PDF_WARN code=x 1>&2")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        let out = JavaPdfService::run_with_timeout(cmd, Duration::from_secs(10)).unwrap();
+        assert!(out.success);
+        assert!(out.stdout.contains("PARSED_SAMPLE"));
+        assert!(out.stderr.contains("PDF_WARN code=x"));
+    }
+
+    const DEV_JAR: &str = "../pdf-generator-cli/build/libs/pdf-generator-cli-1.0.0.jar";
+
+    fn jar_available() -> bool {
+        Path::new(DEV_JAR).exists() && Command::new("java").arg("-version").output().is_ok()
+    }
+
+    // The JAR writes into the job's own folder; only the finished PDF is
+    // moved to the caller's path.
+    #[test]
+    fn jar_job_delivers_the_pdf_and_cleans_its_folder() {
+        if !jar_available() {
+            eprintln!("SKIP: JAR not built ({})", DEV_JAR);
+            return;
+        }
+        let dest_dir = tempfile::tempdir().unwrap();
+        let dest = dest_dir.path().join("Device Report - REX.pdf");
+        let patient = patient_with_dob(Some("2020-01-15"));
+        let input = JavaPdfService::build_java_input(
+            &patient,
+            &[sample("exigo_eos_vet", serde_json::json!({"WBC": "10.4", "WBC_L": "6.0", "WBC_H": "17.0"}))],
+            &dest.to_string_lossy(),
+            &chrono::Local,
+        );
+        JavaPdfService::run_jar_job(
+            Path::new(DEV_JAR),
+            serde_json::to_value(&input).unwrap(),
+            &dest.to_string_lossy(),
+            Duration::from_secs(60),
+        )
+        .unwrap();
+        assert!(fs::metadata(&dest).unwrap().len() > 1000, "PDF missing or empty");
+        assert_eq!(fs::read_dir(dest_dir.path()).unwrap().count(), 1, "stray files next to the PDF");
+    }
+
+    #[test]
+    fn jar_failure_leaves_no_pdf_and_no_folder() {
+        if !jar_available() {
+            eprintln!("SKIP: JAR not built ({})", DEV_JAR);
+            return;
+        }
+        let dest_dir = tempfile::tempdir().unwrap();
+        let dest = dest_dir.path().join("empty.pdf");
+        let input = serde_json::json!({
+            "patient": {"name": "REX", "owner": "", "species": "Dog", "gender": "Male"},
+            "samples": [{"device_type": "exigo_eos_vet", "sample_id": "1", "patient_id": "1",
+                         "detected_at": "2026-07-10T12:00:00Z", "test_results": {}}],
+            "output_path": dest.to_string_lossy(),
+        });
+        let err = JavaPdfService::run_jar_job(Path::new(DEV_JAR), input, &dest.to_string_lossy(), Duration::from_secs(60))
+            .unwrap_err();
+        assert!(err.contains("Java JAR failed"), "{}", err);
+        assert!(!dest.exists());
     }
 
     #[test]

@@ -350,6 +350,7 @@ impl DeviceParserService {
         // Parse all parameters into a flat HashMap
         let mut test_results: HashMap<String, String> = HashMap::new();
         let mut patient_id: Option<String> = None;
+        let mut analyte_count = 0usize;
 
         for (_idx, message) in messages.iter().enumerate() {
             // Split by & to get fields
@@ -399,7 +400,16 @@ impl DeviceParserService {
 
             if !param_code.is_empty() && !result.is_empty() {
                 test_results.insert(param_code.to_string(), result.to_string());
+                analyte_count += 1;
             }
+        }
+
+        if analyte_count == 0 {
+            return Err(format!(
+                "Healvet data yielded no analyte values ({} message(s), {} metadata field(s))",
+                messages.len(),
+                test_results.len()
+            ));
         }
 
         // Generate filename for the chemistry panel
@@ -454,6 +464,7 @@ impl DeviceParserService {
         // Parse HL7 message line by line
         let mut test_results: HashMap<String, String> = HashMap::new();
         let mut patient_id: Option<String> = None;
+        let mut analyte_count = 0usize;
 
         for line in data_str.split('\r') {
             let line = line.trim();
@@ -551,9 +562,12 @@ impl DeviceParserService {
                     let sample_type = fields.get(11).map(|s| s.trim()).unwrap_or("");
                     let curve_data = fields.get(12).map(|s| s.trim()).unwrap_or("");
                     let lot_number = fields.get(16).map(|s| s.trim()).unwrap_or("");
+                    // OBX-18 on a PCR result: the device's threshold for its curve.
+                    let threshold = fields.get(18).map(|s| s.trim()).unwrap_or("");
 
                     if !param_code.is_empty() && !result.is_empty() {
                         test_results.insert(param_code.to_string(), result.to_string());
+                        analyte_count += 1;
 
                         // Also store unit, range, and flag if present
                         if !unit.is_empty() {
@@ -572,6 +586,9 @@ impl DeviceParserService {
                         }
                         if !curve_data.is_empty() {
                             test_results.insert(format!("{}_curve", param_code), curve_data.to_string());
+                            if !threshold.is_empty() {
+                                test_results.insert(format!("{}_threshold", param_code), threshold.to_string());
+                            }
                         }
                         if !lot_number.is_empty() {
                             test_results.insert(format!("{}_lot", param_code), lot_number.to_string());
@@ -588,6 +605,14 @@ impl DeviceParserService {
                     }
                 }
             }
+        }
+
+        if analyte_count == 0 {
+            return Err(format!(
+                "HL7 data from {} yielded no analyte values (no OBX result; {} other field(s))",
+                device_type,
+                test_results.len()
+            ));
         }
 
         // Generate filename based on device type
@@ -893,9 +918,8 @@ mod tests {
 
         let result = DeviceParserService::parse_healvet_serial("Test Healvet", serial_data, "serial_port");
 
-        assert!(result.is_ok());
-        let device_data = result.unwrap();
-        assert_eq!(device_data.device_type, "healvet_hv_fia_3000");
+        // Not the Healvet wire format: no analyte value, so an error.
+        assert!(result.is_err());
     }
 
     #[test]
@@ -910,10 +934,7 @@ mod tests {
             "file_watch",
         );
 
-        assert!(result.is_ok());
-        let device_data = result.unwrap();
-        assert_eq!(device_data.device_type, "mnchip_pointcare_chemistry");
-        // Note: patient_identifier is extracted from PID segment field 6, not from JSON content
-        // This test passes empty HL7 data, so patient_identifier will be None
+        // JSON is not HL7: no OBX result, so an error.
+        assert!(result.is_err());
     }
 }

@@ -10,6 +10,7 @@ public enum PcrTestCode {
     CAV2("CAV-2", "Canine Adenovirus Type 2", "Кучешки аденовирус тип 2"),
     Bb("Bb", "Bordetella bronchiseptica", "Бордетела бронхисептика"),
     MC("MC", "Mycoplasma cynos", "Микоплазма цинос"),
+    TOX("TOX", "Toxoplasma gondii", "Токсоплазма гонди"),
     IC("IC", "Internal Control", "Интерна контрола");
 
     private final String code;
