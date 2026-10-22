@@ -166,6 +166,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+          # Baked into the binary with option_env! by services/loki_shipper.rs.
+          # Missing secrets leave log shipping off; the build still succeeds.
+          ARKIVET_LOKI_URL: ${{ secrets.ARKIVET_LOKI_URL }}
+          ARKIVET_LOKI_USER: ${{ secrets.ARKIVET_LOKI_USER }}
+          ARKIVET_LOKI_PASSWORD: ${{ secrets.ARKIVET_LOKI_PASSWORD }}
           # Enable incremental compilation in release mode. Cargo disables it
           # by default for --release; on a frequently-rebuilt runner this
           # forces re-codegen of every untouched module per build. With
