@@ -2,6 +2,7 @@ import React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { App } from 'antd';
 
 vi.mock('react-i18next', () => ({
@@ -16,8 +17,12 @@ const getPatients = vi.fn();
 vi.mock('../../services', () => ({ PatientService: { getPatients: () => getPatients() } }));
 
 const householdSearch = vi.fn();
+const createPatient = vi.fn();
 vi.mock('../../services/api.integration', () => ({
-  default: { household: { search: (...a: unknown[]) => householdSearch(...a) }, patient: {} },
+  default: {
+    household: { search: (...a: unknown[]) => householdSearch(...a) },
+    patient: { create: (...a: unknown[]) => createPatient(...a) },
+  },
   setAppInstance: vi.fn(),
 }));
 
@@ -37,18 +42,24 @@ vi.mock('../../components/tables/PatientTable', () => ({
 vi.mock('../../components/tables/HouseholdTable', () => ({ HouseholdTable: () => null }));
 vi.mock('../../components/PendingDeviceTable', () => ({ default: () => null }));
 vi.mock('../Appointments/AppointmentsTab', () => ({ default: () => null }));
-vi.mock('../../components/forms/PatientFormWithOwner', () => ({ PatientFormWithOwner: () => null }));
+vi.mock('../../components/forms/PatientFormWithOwner', () => ({
+  PatientFormWithOwner: ({ onSubmit }: { onSubmit: (d: unknown) => Promise<void> }) => (
+    <button onClick={() => onSubmit({ name: 'Bella' }).catch(() => {})}>stub-submit</button>
+  ),
+}));
 vi.mock('../../components/forms/HouseholdForm', () => ({ HouseholdForm: () => null }));
 
 import { MainDashboard } from '../MainDashboard';
 
-function renderDashboard() {
+function renderDashboard(client = new QueryClient()) {
   return render(
-    <MemoryRouter>
-      <App>
-        <MainDashboard />
-      </App>
-    </MemoryRouter>,
+    <QueryClientProvider client={client}>
+      <MemoryRouter>
+        <App>
+          <MainDashboard />
+        </App>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 
@@ -82,5 +93,22 @@ describe('MainDashboard load', () => {
 
     await waitFor(() => expect(screen.getByText('Bella')).toBeInTheDocument());
     expect(screen.queryByText('patients:dashboard.loadFailed')).not.toBeInTheDocument();
+  });
+
+  it('a patient added on the dashboard shows up in the other pickers', async () => {
+    invokeMock.mockResolvedValue(stats);
+    getPatients.mockResolvedValue([]);
+    householdSearch.mockResolvedValue([]);
+    createPatient.mockResolvedValue({ id: 2, name: 'Bella' });
+    const client = new QueryClient();
+    const spy = vi.spyOn(client, 'invalidateQueries');
+    renderDashboard(client);
+
+    fireEvent.click(await screen.findByTestId('add-patient-btn'));
+    fireEvent.click(await screen.findByText('stub-submit'));
+
+    await waitFor(() =>
+      expect(spy.mock.calls.map((c) => (c[0] as { queryKey?: unknown[] })?.queryKey?.[0])).toContain('patients'),
+    );
   });
 });
