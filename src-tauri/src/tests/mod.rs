@@ -72,3 +72,6 @@ pub mod device_patient_match_tests;
 
 #[cfg(test)]
 pub mod table_rebuild_tests;
+
+#[cfg(test)]
+pub mod command_registration_tests;

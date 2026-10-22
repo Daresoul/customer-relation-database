@@ -7,23 +7,35 @@
  * → Loki). The original error is re-thrown so existing handling at call
  * sites continues to work unchanged.
  *
+ * Only the command name, error message and duration are reported. Args
+ * carry client data and file bytes, so they never leave the frontend.
+ *
  * Use this instead of importing from `@tauri-apps/api/tauri` so error
  * reporting is automatic and the user never needs to think about it.
  */
 
 import { invoke as tauriInvoke } from '@tauri-apps/api/tauri';
 
+const MAX_MESSAGE_LENGTH = 1_000;
+
 export async function invoke<T = unknown>(
   command: string,
   args?: Record<string, unknown>,
 ): Promise<T> {
+  const startedAt = performance.now();
   try {
     return await tauriInvoke<T>(command, args);
   } catch (error) {
-    const msg =
+    const durationMs = Math.round(performance.now() - startedAt);
+    const fullMsg = String(
       typeof error === 'string'
         ? error
-        : (error as { message?: string })?.message ?? JSON.stringify(error);
+        : (error as { message?: string })?.message ?? JSON.stringify(error),
+    );
+    const msg =
+      fullMsg.length > MAX_MESSAGE_LENGTH
+        ? `${fullMsg.slice(0, MAX_MESSAGE_LENGTH)}…`
+        : fullMsg;
 
     // Fire-and-forget: don't await, and catch any failure of log_event
     // itself. We must not let a reporting failure shadow the real error
@@ -35,7 +47,7 @@ export async function invoke<T = unknown>(
         message: `Tauri ${command}: ${msg}`,
         extras: {
           command,
-          args: args ?? null,
+          durationMs,
           errorType: typeof error,
         },
       },

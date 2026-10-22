@@ -470,7 +470,7 @@ fn main() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![
+        .invoke_handler(with_debug_commands(tauri::generate_handler![
             // Patient commands
             commands::get_patients,
             commands::get_patient,
@@ -544,12 +544,6 @@ fn main() {
             // View preference commands
             commands::get_view_preference,
             commands::set_view_preference,
-            // Debug commands
-            commands::debug_database_info,
-            // Database reset commands
-            commands::reset_database,
-            commands::wipe_database_data,
-            commands::populate_database,
             // Stats commands
             commands::get_dashboard_stats,
             // Appointment commands
@@ -624,14 +618,6 @@ fn main() {
             commands::list_pending_device_entries,
             commands::mark_pending_entry_processed,
             commands::get_device_data_from_history,
-            // Dev tools commands (function in debug builds only)
-            commands::get_virtual_port_status,
-            commands::start_virtual_ports,
-            commands::stop_virtual_ports,
-            commands::send_test_healvet,
-            commands::send_test_pointcare,
-            commands::send_test_pcr,
-            commands::send_test_exigo,
             // Line item template commands
             commands::get_line_item_templates,
             commands::get_line_item_template,
@@ -661,7 +647,7 @@ fn main() {
             // into Rust's structured logger so frontend events flow through
             // the same Arkivet.log → Loki pipeline.
             commands::log_event,
-        ])
+        ]))
         .run(context);
 
     // A setup error (database won't open, migration fails) or a plugin that
@@ -675,4 +661,54 @@ fn main() {
         );
         std::process::exit(1);
     }
+}
+
+/// Database reset/wipe/populate and the device simulator exist only in
+/// debug builds; a release webview cannot reach them.
+#[cfg(debug_assertions)]
+const DEBUG_ONLY_COMMANDS: &[&str] = &[
+    "debug_database_info",
+    "reset_database",
+    "wipe_database_data",
+    "populate_database",
+    "get_virtual_port_status",
+    "start_virtual_ports",
+    "stop_virtual_ports",
+    "send_test_healvet",
+    "send_test_pointcare",
+    "send_test_pcr",
+    "send_test_exigo",
+];
+
+#[cfg(debug_assertions)]
+fn with_debug_commands(
+    app_handler: impl Fn(tauri::Invoke) + Send + Sync + 'static,
+) -> impl Fn(tauri::Invoke) + Send + Sync + 'static {
+    let debug_handler: Box<dyn Fn(tauri::Invoke) + Send + Sync> = Box::new(tauri::generate_handler![
+        commands::debug_database_info,
+        commands::reset_database,
+        commands::wipe_database_data,
+        commands::populate_database,
+        commands::get_virtual_port_status,
+        commands::start_virtual_ports,
+        commands::stop_virtual_ports,
+        commands::send_test_healvet,
+        commands::send_test_pointcare,
+        commands::send_test_pcr,
+        commands::send_test_exigo,
+    ]);
+    move |invoke: tauri::Invoke| {
+        if DEBUG_ONLY_COMMANDS.contains(&invoke.message.command()) {
+            debug_handler(invoke)
+        } else {
+            app_handler(invoke)
+        }
+    }
+}
+
+#[cfg(not(debug_assertions))]
+fn with_debug_commands(
+    app_handler: impl Fn(tauri::Invoke) + Send + Sync + 'static,
+) -> impl Fn(tauri::Invoke) + Send + Sync + 'static {
+    app_handler
 }

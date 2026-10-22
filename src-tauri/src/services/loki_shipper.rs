@@ -32,12 +32,14 @@
 //!
 //! ## Threat model note
 //!
-//! Bearer credentials (URL + user + password) are taken from env vars
-//! at startup, with a compile-time fallback for production builds. Same
-//! trust posture as the old Sentry DSN — anyone with the binary can
-//! extract the credential. Mitigated by server-side rate limits in
-//! `loki-config.yml`. See `docs/logging.md` in the sadgegames repo and
-//! the long-form plan in `.claude/plans/`.
+//! Bearer credentials (URL + user + password) are taken from the
+//! `ARKIVET_LOKI_URL` / `_USER` / `_PASSWORD` env vars at startup, falling
+//! back to the same names read with `option_env!` when a release build is
+//! compiled (the release workflow passes them from CI secrets). Nothing is
+//! hard-coded in source. Anyone with the binary can still extract a baked
+//! credential, so the Loki user must be push-only and rate-limited
+//! server-side (`loki-config.yml`). See `docs/logging.md` in the
+//! sadgegames repo.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -51,8 +53,8 @@ use tauri::AppHandle;
 // =============================================================================
 
 /// Runtime configuration. Built once at startup; if any of URL/user/password
-/// are unresolvable (no env var AND no compile-time fallback), the shipper
-/// is disabled (this is the normal case for dev builds).
+/// are unresolvable (no env var AND nothing baked in at build time), the
+/// shipper is disabled (this is the normal case for dev builds).
 #[derive(Debug, Clone)]
 pub struct ShipperConfig {
     pub url: String,
@@ -71,25 +73,17 @@ pub struct ShipperConfig {
     pub state_file: PathBuf,
 }
 
-/// Build a config from env vars, with a compile-time fallback for
-/// production builds (where the credentials are baked into the binary
-/// the same way the old Sentry DSN was). Returns `None` if no config
-/// is available — caller should skip spawning the shipper in that case.
+/// Build a config from runtime env vars, falling back to the values baked
+/// in at build time. Returns `None` if no config is available — caller
+/// should skip spawning the shipper in that case.
 pub fn config_from_env(
     app_handle: &AppHandle,
     clinic: String,
     environment: &str,
     version: String,
 ) -> Option<ShipperConfig> {
-    let url = std::env::var("ARKIVET_LOKI_URL")
-        .ok()
-        .or_else(prod_url)?;
-    let user = std::env::var("ARKIVET_LOKI_USER")
-        .ok()
-        .or_else(prod_user)?;
-    let password = std::env::var("ARKIVET_LOKI_PASSWORD")
-        .ok()
-        .or_else(prod_password)?;
+    let LokiCredentials { url, user, password } =
+        resolve_credentials(|key| std::env::var(key).ok(), &baked_credentials())?;
 
     let app_data_dir = app_handle.path_resolver().app_data_dir()?;
     let log_dir = tauri::api::path::app_log_dir(&app_handle.config())?;
@@ -109,35 +103,50 @@ pub fn config_from_env(
     })
 }
 
-/// Compile-time-baked production credential URL.
-///
-/// Same trust model as the embedded Sentry DSN we used to have: anyone
-/// with the binary can extract it, mitigated by server-side rate limits.
-#[cfg(not(debug_assertions))]
-fn prod_url() -> Option<String> {
-    Some("https://loki.stage.sagdegames.com/loki/api/v1/push".to_string())
-}
-#[cfg(debug_assertions)]
-fn prod_url() -> Option<String> {
-    None
+#[derive(Debug, Clone, PartialEq)]
+struct LokiCredentials {
+    url: String,
+    user: String,
+    password: String,
 }
 
-#[cfg(not(debug_assertions))]
-fn prod_user() -> Option<String> {
-    Some("arkivet".to_string())
-}
-#[cfg(debug_assertions)]
-fn prod_user() -> Option<String> {
-    None
+#[derive(Debug, Clone, Copy)]
+struct BakedCredentials {
+    url: Option<&'static str>,
+    user: Option<&'static str>,
+    password: Option<&'static str>,
 }
 
+/// Values injected by the release workflow from CI secrets. Dev builds
+/// never bake them in, so they ship only when the runtime env is set.
 #[cfg(not(debug_assertions))]
-fn prod_password() -> Option<String> {
-    Some("XV9vw0HVCRjeFyZxO0xzhdhOvODT".to_string())
+fn baked_credentials() -> BakedCredentials {
+    BakedCredentials {
+        url: option_env!("ARKIVET_LOKI_URL"),
+        user: option_env!("ARKIVET_LOKI_USER"),
+        password: option_env!("ARKIVET_LOKI_PASSWORD"),
+    }
 }
 #[cfg(debug_assertions)]
-fn prod_password() -> Option<String> {
-    None
+fn baked_credentials() -> BakedCredentials {
+    BakedCredentials { url: None, user: None, password: None }
+}
+
+fn resolve_credentials(
+    env: impl Fn(&str) -> Option<String>,
+    baked: &BakedCredentials,
+) -> Option<LokiCredentials> {
+    let present = |v: &String| !v.trim().is_empty();
+    let pick = |key: &str, fallback: Option<&str>| {
+        env(key)
+            .filter(present)
+            .or_else(|| fallback.map(str::to_string).filter(present))
+    };
+    Some(LokiCredentials {
+        url: pick("ARKIVET_LOKI_URL", baked.url)?,
+        user: pick("ARKIVET_LOKI_USER", baked.user)?,
+        password: pick("ARKIVET_LOKI_PASSWORD", baked.password)?,
+    })
 }
 
 // =============================================================================
@@ -183,7 +192,9 @@ pub fn start(config: Option<ShipperConfig>) {
     let config = match config {
         Some(c) => c,
         None => {
-            log::info!("loki_shipper: disabled (no URL/credentials configured)");
+            log::info!(
+                "loki_shipper: disabled (no ARKIVET_LOKI_URL/USER/PASSWORD at build time or in the environment)"
+            );
             return;
         }
     };
@@ -718,6 +729,68 @@ async fn push(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ----- credential resolution -----
+
+    fn env_of(pairs: &'static [(&'static str, &'static str)]) -> impl Fn(&str) -> Option<String> {
+        move |key| pairs.iter().find(|(k, _)| *k == key).map(|(_, v)| v.to_string())
+    }
+
+    const BAKED: BakedCredentials = BakedCredentials {
+        url: Some("https://baked.example/push"),
+        user: Some("baked-user"),
+        password: Some("baked-pass"),
+    };
+
+    #[test]
+    fn credentials_from_runtime_env_override_baked_values() {
+        let env = env_of(&[
+            ("ARKIVET_LOKI_URL", "https://env.example/push"),
+            ("ARKIVET_LOKI_USER", "env-user"),
+            ("ARKIVET_LOKI_PASSWORD", "env-pass"),
+        ]);
+        let creds = resolve_credentials(env, &BAKED).unwrap();
+        assert_eq!(creds.url, "https://env.example/push");
+        assert_eq!(creds.user, "env-user");
+        assert_eq!(creds.password, "env-pass");
+    }
+
+    #[test]
+    fn credentials_fall_back_to_baked_values() {
+        let creds = resolve_credentials(env_of(&[]), &BAKED).unwrap();
+        assert_eq!(creds.url, "https://baked.example/push");
+        assert_eq!(creds.user, "baked-user");
+        assert_eq!(creds.password, "baked-pass");
+    }
+
+    #[test]
+    fn credentials_missing_any_part_disable_the_shipper() {
+        let none = BakedCredentials { url: None, user: None, password: None };
+        assert!(resolve_credentials(env_of(&[]), &none).is_none());
+
+        let no_password = BakedCredentials { password: None, ..BAKED };
+        assert!(resolve_credentials(env_of(&[]), &no_password).is_none());
+
+        let empty_env_password = env_of(&[("ARKIVET_LOKI_PASSWORD", "")]);
+        assert!(resolve_credentials(empty_env_password, &no_password).is_none());
+    }
+
+    #[test]
+    fn source_has_no_hard_coded_credentials() {
+        let src = include_str!("loki_shipper.rs");
+        let non_test = src.split("#[cfg(test)]\nmod tests").next().unwrap();
+        assert!(
+            !non_test.contains("Some(\"https://"),
+            "Loki URL must come from build-time env, not a literal"
+        );
+        for name in ["ARKIVET_LOKI_URL", "ARKIVET_LOKI_USER", "ARKIVET_LOKI_PASSWORD"] {
+            assert!(
+                non_test.contains(&format!("option_env!(\"{name}\")")),
+                "{name} must be read with option_env! at build time"
+            );
+        }
+        assert!(!non_test.contains("fn prod_password"));
+    }
 
     // ----- timestamp parsing -----
 

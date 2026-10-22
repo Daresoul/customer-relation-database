@@ -5,11 +5,13 @@ import { invoke, convertFileSrc } from '@/services/invoke';
 import { useTranslation } from 'react-i18next';
 import PdfInlineViewer from '@/components/PdfInlineViewer';
 import PdfMultiPagePreview from '@/components/PdfMultiPagePreview';
+import { getAttachmentPreviewKind, HtmlAttachmentNotice, TextAttachmentPreview } from '@/components/AttachmentPreview';
 import RecentDeviceFiles from '@/components/RecentDeviceFiles';
 import { HomeOutlined, ArrowLeftOutlined, EditOutlined, SaveOutlined, CloseOutlined, ReloadOutlined, HistoryOutlined, PrinterOutlined } from '@ant-design/icons';
 import { useMedicalRecord, useUpdateMedicalRecord, useCurrencies, useUploadAttachment } from '@/hooks/useMedicalRecords';
 import { usePatientDetail } from '@/hooks/usePatient';
 import { MedicalService } from '@/services/medicalService';
+import { isTauri as detectTauri } from '@/utils/isTauri';
 import PrintReportModal from '@/components/PrintReportModal';
 import type { PatientOverrides, PatientInfo } from '@/types/report';
 import type { MedicalAttachment } from '@/types/medical';
@@ -25,212 +27,6 @@ import styles from './MedicalRecordDetailPage.module.css';
 
 const { Content } = Layout;
 const { Title, Text, Paragraph } = Typography;
-
-// Inline JSON/XML preview component with prettification
-interface JsonXmlPreviewProps {
-  blob: Blob | null;
-  fileName: string;
-  mimeType: string;
-  isJson: boolean;
-  isXml: boolean;
-}
-
-const JsonXmlPreview: React.FC<JsonXmlPreviewProps> = ({ blob, fileName, mimeType, isJson, isXml }) => {
-  const [content, setContent] = useState<string>('');
-  const [highlightedContent, setHighlightedContent] = useState<React.ReactNode>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!blob) {
-      setLoading(false);
-      return;
-    }
-
-    const loadContent = async () => {
-      try {
-        setLoading(true);
-        const text = await blob.text();
-        const prettified = prettifyContent(text, isJson, isXml);
-        setContent(prettified);
-
-        // Apply syntax highlighting
-        if (isJson) {
-          setHighlightedContent(highlightJson(prettified));
-        } else if (isXml) {
-          setHighlightedContent(highlightXml(prettified));
-        } else {
-          setHighlightedContent(prettified);
-        }
-      } catch (error) {
-        console.error('Failed to load file content:', error);
-        setContent('Error loading file content');
-        setHighlightedContent('Error loading file content');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadContent();
-  }, [blob, isJson, isXml]);
-
-  const highlightJson = (json: string): React.ReactNode => {
-    const lines = json.split('\n');
-    return lines.map((line, idx) => {
-      let highlightedLine = line;
-
-      // Highlight strings (including keys and values)
-      highlightedLine = highlightedLine.replace(/"([^"]*)":/g, '<span style="color: #9CDCFE">"$1"</span>:');
-      highlightedLine = highlightedLine.replace(/:\s*"([^"]*)"/g, ': <span style="color: #CE9178">"$1"</span>');
-
-      // Highlight numbers
-      highlightedLine = highlightedLine.replace(/:\s*(\d+\.?\d*)/g, ': <span style="color: #B5CEA8">$1</span>');
-
-      // Highlight booleans
-      highlightedLine = highlightedLine.replace(/:\s*(true|false)/g, ': <span style="color: #569CD6">$1</span>');
-
-      // Highlight null
-      highlightedLine = highlightedLine.replace(/:\s*(null)/g, ': <span style="color: #569CD6">$1</span>');
-
-      // Highlight brackets and braces
-      highlightedLine = highlightedLine.replace(/([{}[\],])/g, '<span style="color: #FFD700">$1</span>');
-
-      return <div key={idx} dangerouslySetInnerHTML={{ __html: highlightedLine }} />;
-    });
-  };
-
-  const highlightXml = (xml: string): React.ReactNode => {
-    const lines = xml.split('\n');
-    return lines.map((lineText, lineIdx) => {
-      const parts: React.ReactNode[] = [];
-      let remaining = lineText;
-      let keyCounter = 0;
-
-      while (remaining.length > 0) {
-        // Match XML declaration: <?xml ... ?>
-        const xmlDeclMatch = remaining.match(/^(<\?)([\w-:]+)([^?]*?)(\?>)/);
-        if (xmlDeclMatch) {
-          const [full, openBracket, tagName, attributes, closeBracket] = xmlDeclMatch;
-
-          parts.push(<span key={`${lineIdx}-${keyCounter++}`} style={{ color: '#808080' }}>{openBracket}</span>);
-          parts.push(<span key={`${lineIdx}-${keyCounter++}`} style={{ color: '#569CD6' }}>{tagName}</span>);
-
-          // Process attributes in XML declaration
-          if (attributes) {
-            let attrRemaining = attributes;
-            while (attrRemaining.length > 0) {
-              const attrMatch = attrRemaining.match(/^(\s+)([\w-:]+)(=)("([^"]*)")?/);
-              if (attrMatch) {
-                const [fullAttr, space, attrName, equals, quotedValue] = attrMatch;
-                parts.push(<span key={`${lineIdx}-${keyCounter++}`}>{space}</span>);
-                parts.push(<span key={`${lineIdx}-${keyCounter++}`} style={{ color: '#9CDCFE' }}>{attrName}</span>);
-                parts.push(<span key={`${lineIdx}-${keyCounter++}`}>{equals}</span>);
-                if (quotedValue) {
-                  parts.push(<span key={`${lineIdx}-${keyCounter++}`} style={{ color: '#CE9178' }}>{quotedValue}</span>);
-                }
-                attrRemaining = attrRemaining.substring(fullAttr.length);
-              } else {
-                parts.push(<span key={`${lineIdx}-${keyCounter++}`}>{attrRemaining}</span>);
-                break;
-              }
-            }
-          }
-
-          parts.push(<span key={`${lineIdx}-${keyCounter++}`} style={{ color: '#808080' }}>{closeBracket}</span>);
-          remaining = remaining.substring(full.length);
-          continue;
-        }
-
-        // Match regular tags: <tagname attr="value">
-        const tagMatch = remaining.match(/^(<\/?)([\w-:]+)([^>]*?)(\/?>)/);
-        if (tagMatch) {
-          const [full, openBracket, tagName, attributes, closeBracket] = tagMatch;
-
-          parts.push(<span key={`${lineIdx}-${keyCounter++}`} style={{ color: '#808080' }}>{openBracket}</span>);
-          parts.push(<span key={`${lineIdx}-${keyCounter++}`} style={{ color: '#569CD6' }}>{tagName}</span>);
-
-          // Process attributes
-          if (attributes) {
-            let attrRemaining = attributes;
-            while (attrRemaining.length > 0) {
-              const attrMatch = attrRemaining.match(/^(\s+)([\w-:]+)(=)("([^"]*)")?/);
-              if (attrMatch) {
-                const [fullAttr, space, attrName, equals, quotedValue] = attrMatch;
-                parts.push(<span key={`${lineIdx}-${keyCounter++}`}>{space}</span>);
-                parts.push(<span key={`${lineIdx}-${keyCounter++}`} style={{ color: '#9CDCFE' }}>{attrName}</span>);
-                parts.push(<span key={`${lineIdx}-${keyCounter++}`}>{equals}</span>);
-                if (quotedValue) {
-                  parts.push(<span key={`${lineIdx}-${keyCounter++}`} style={{ color: '#CE9178' }}>{quotedValue}</span>);
-                }
-                attrRemaining = attrRemaining.substring(fullAttr.length);
-              } else {
-                parts.push(<span key={`${lineIdx}-${keyCounter++}`}>{attrRemaining}</span>);
-                break;
-              }
-            }
-          }
-
-          parts.push(<span key={`${lineIdx}-${keyCounter++}`} style={{ color: '#808080' }}>{closeBracket}</span>);
-          remaining = remaining.substring(full.length);
-        } else {
-          // No tag found - check if there's a tag later in the line
-          const nextTagIndex = remaining.search(/</);
-          if (nextTagIndex > 0) {
-            // Add text before the tag
-            parts.push(<span key={`${lineIdx}-${keyCounter++}`}>{remaining.substring(0, nextTagIndex)}</span>);
-            remaining = remaining.substring(nextTagIndex);
-          } else {
-            // No more tags, add rest as plain text
-            parts.push(<span key={`${lineIdx}-${keyCounter++}`}>{remaining}</span>);
-            break;
-          }
-        }
-      }
-
-      return <div key={lineIdx}>{parts.length > 0 ? parts : '\u00A0'}</div>;
-    });
-  };
-
-  const prettifyContent = (text: string, isJson: boolean, isXml: boolean): string => {
-    try {
-      if (isJson) {
-        const parsed = JSON.parse(text);
-        return JSON.stringify(parsed, null, 2);
-      }
-      if (isXml) {
-        return formatXml(text);
-      }
-      return text;
-    } catch (error) {
-      return text;
-    }
-  };
-
-  const formatXml = (xml: string): string => {
-    let formatted = '';
-    let indent = 0;
-    const tab = '  ';
-
-    xml.split(/>\s*</).forEach((node) => {
-      if (node.match(/^\/\w/)) indent--;
-      formatted += tab.repeat(indent) + '<' + node + '>\n';
-      if (node.match(/^<?\w[^>]*[^\/]$/)) indent++;
-    });
-
-    return formatted.substring(1, formatted.length - 2);
-  };
-
-  if (loading) {
-    return <Spin />;
-  }
-
-  return (
-    <div className={styles.codePreview}>
-      <pre className={styles.codeBlock}>
-        {highlightedContent}
-      </pre>
-    </div>
-  );
-};
 
 export const MedicalRecordDetailPage: React.FC = () => {
   const { t } = useTranslation(['medical', 'common', 'navigation']);
@@ -474,24 +270,8 @@ export const MedicalRecordDetailPage: React.FC = () => {
   // Track if we need to auto-expand an attachment
   const [shouldAutoExpand, setShouldAutoExpand] = useState(true);
 
-  const isPreviewable = (mime?: string, name?: string) => {
-    if (mime) {
-      if (mime.startsWith('image/')) return true;
-      if (mime === 'application/pdf') return true;
-      if (mime.startsWith('text/')) return true;
-      if (mime === 'application/json') return true;
-      if (mime.includes('xml')) return true;
-    }
-    if (name) {
-      const ext = String(name).split('.').pop()?.toLowerCase();
-      if (!ext) return false;
-      if (["png","jpg","jpeg","gif","bmp","svg"].includes(ext)) return true;
-      if (ext === 'pdf') return true;
-      if (["json","xml","txt","csv","log"].includes(ext)) return true;
-      if (["txt","csv","md","log"].includes(ext)) return true;
-    }
-    return false;
-  };
+  const isPreviewable = (mime?: string, name?: string) =>
+    getAttachmentPreviewKind(mime, name) !== 'none';
 
   // Check if there are any device data attachments that can be used to regenerate PDF
   // This includes test_result attachments and legacy files with device metadata (not PDFs)
@@ -594,10 +374,10 @@ export const MedicalRecordDetailPage: React.FC = () => {
       // Only one open at a time
       setExpandedRowKeys([key]);
       // Create blob URL if not already present
-      if (!previewUrls[key]) {
+      if (!previewUrls[key] && getAttachmentPreviewKind(row.mimeType, row.originalName) !== 'html') {
         try {
           const isPdf = (row.mimeType || '').toLowerCase() === 'application/pdf' || String(row.originalName).toLowerCase().endsWith('.pdf');
-          const isTauri = typeof (window as any).__TAURI__ !== 'undefined';
+          const isTauri = detectTauri();
           if (isPdf && isTauri) {
             // Try fast, reliable PDFium PNG preview (requires system PDFium for now)
             try {
@@ -765,13 +545,15 @@ export const MedicalRecordDetailPage: React.FC = () => {
           const key = String(row.id);
           const url = previewUrls[key];
           const pblob = previewBlobs[key];
-          const mime = (row.mimeType || '').toLowerCase();
-          const isPdf = mime === 'application/pdf' || String(row.originalName).toLowerCase().endsWith('.pdf');
-          const isTauri = typeof (window as any).__TAURI__ !== 'undefined';
-          if (!isPreviewable(mime, row.originalName)) {
+          const kind = getAttachmentPreviewKind(row.mimeType, row.originalName);
+          const isTauri = detectTauri();
+          if (kind === 'none') {
             return <Text type="secondary">{t('medical:detail.previewNotAvailable')}</Text>;
           }
-          if (isPdf) {
+          if (kind === 'html') {
+            return <HtmlAttachmentNotice onOpenExternally={() => MedicalService.openAttachmentExternally(row.id)} />;
+          }
+          if (kind === 'pdf') {
             if (isTauri) {
               if (previewKinds[key] === 'pdfium' && url) {
                 return <PdfMultiPagePreview attachmentId={row.id} initialPageUrl={url} />;
@@ -789,18 +571,10 @@ export const MedicalRecordDetailPage: React.FC = () => {
           if (!url) {
             return <Text type="secondary">{t('medical:detail.loadingPreview')}</Text>;
           }
-          if (mime.startsWith('image/')) {
+          if (kind === 'image') {
             return <img src={url} alt={row.originalName} className={styles.image} />;
           }
-          const isJson = mime === 'application/json' || String(row.originalName).toLowerCase().endsWith('.json');
-          const isXml = mime.includes('xml') || String(row.originalName).toLowerCase().endsWith('.xml');
-          if (isJson || isXml) {
-            return <JsonXmlPreview blob={pblob} fileName={row.originalName} mimeType={mime} isJson={isJson} isXml={isXml} />;
-          }
-          if (mime.startsWith('text/')) {
-            return <iframe src={url} title={row.originalName} className={styles.iframe} />;
-          }
-          return <Text type="secondary">{t('medical:detail.previewNotAvailable')}</Text>;
+          return <TextAttachmentPreview blob={pblob} kind={kind} />;
         }
       }}
       columns={[

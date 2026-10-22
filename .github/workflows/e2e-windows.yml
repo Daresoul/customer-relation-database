@@ -237,6 +237,9 @@ jobs:
           # optimizes per-cgu). For a Tauri E2E test binary, that's a fine
           # cost.
           CARGO_INCREMENTAL: '1'
+          # e2e-fullstack specs drive the app through window.__TAURI__,
+          # which shipped builds no longer expose.
+          TAURI_CONFIG: '{"build":{"withGlobalTauri":true}}'
         run: cargo build --release
 
       - name: Run Rust unit tests

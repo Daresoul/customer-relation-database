@@ -45,7 +45,7 @@ function lastLogEventInput(): {
   level: string;
   subsystem: string;
   message: string;
-  extras: { command: string; args: unknown; errorType: string };
+  extras: Record<string, unknown>;
 } {
   const logEventCall = mocks.tauriInvoke.mock.calls
     .slice()
@@ -94,7 +94,6 @@ describe('wrapped invoke', () => {
     expect(input.message).toContain('create_patient');
     expect(input.message).toContain('DB failed');
     expect(input.extras.command).toBe('create_patient');
-    expect(input.extras.args).toEqual({ name: 'Rex' });
   });
 
   it('extracts message from error objects', async () => {
@@ -128,13 +127,56 @@ describe('wrapped invoke', () => {
     expect(caught).toBe(originalError);
   });
 
-  it('passes null args context when invoke is called without args', async () => {
-    setupErrorWithReporting('err');
+  it('never sends args, personal data or file bytes to log_event', async () => {
+    setupErrorWithReporting('validation failed');
+    const personal = {
+      input: {
+        firstName: 'Marija',
+        lastName: 'Petrovska',
+        phone: '+389 70 123 456',
+        email: 'marija@example.mk',
+        address: 'Ulica Makedonija 12',
+      },
+      fileData: [37, 80, 68, 70, 45, 49, 46, 55],
+    };
 
-    await expect(invoke('no_args_cmd')).rejects.toBe('err');
+    await expect(invoke('create_household_with_people', personal)).rejects.toBe(
+      'validation failed',
+    );
 
     const input = lastLogEventInput();
-    expect(input.extras.args).toBe(null);
+    const sent = JSON.stringify(input);
+    for (const value of ['Marija', 'Petrovska', '123 456', 'example.mk', 'Makedonija']) {
+      expect(sent).not.toContain(value);
+    }
+    expect(sent).not.toContain('37,80,68,70');
+    expect(Object.keys(input.extras).sort()).toEqual(['command', 'durationMs', 'errorType']);
+    expect(input.extras.command).toBe('create_household_with_people');
+    expect(input.message).toBe('Tauri create_household_with_people: validation failed');
+  });
+
+  it('reports how long the failed command took', async () => {
+    setupErrorWithReporting('err');
+
+    await expect(invoke('slow_cmd')).rejects.toBe('err');
+
+    const { durationMs } = lastLogEventInput().extras;
+    expect(typeof durationMs).toBe('number');
+    expect(durationMs as number).toBeGreaterThanOrEqual(0);
+  });
+
+  it('re-throws an undefined rejection unchanged', async () => {
+    setupErrorWithReporting(undefined);
+
+    await expect(invoke('odd_cmd')).rejects.toBeUndefined();
+  });
+
+  it('caps very long error messages', async () => {
+    setupErrorWithReporting('x'.repeat(50_000));
+
+    await expect(invoke('big_error')).rejects.toBeTruthy();
+
+    expect(lastLogEventInput().message.length).toBeLessThanOrEqual(2_000);
   });
 
   it('still re-throws when log_event itself fails (fire-and-forget)', async () => {
