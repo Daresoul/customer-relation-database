@@ -43,9 +43,6 @@ const { Text } = Typography;
 interface PatientTableProps extends Partial<BaseTableProps<PatientWithHousehold>> {
   patients: PatientWithHousehold[];
   loading?: boolean;
-  onView?: (patient: PatientWithHousehold) => void;
-  onEdit?: (patient: PatientWithHousehold) => void;
-  onDelete?: (patient: PatientWithHousehold) => void;
   searchText?: string;
   onSearchTextChange?: (text: string) => void;
 }
@@ -53,9 +50,6 @@ interface PatientTableProps extends Partial<BaseTableProps<PatientWithHousehold>
 export const PatientTable: React.FC<PatientTableProps> = ({
   patients,
   loading = false,
-  onView,
-  onEdit,
-  onDelete,
   searchText: controlledSearchText,
   onSearchTextChange,
 }) => {

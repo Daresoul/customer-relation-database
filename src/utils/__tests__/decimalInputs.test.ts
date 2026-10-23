@@ -7,7 +7,6 @@ import { resolve } from 'node:path';
 const FILES = [
   'src/components/forms/fieldGroups/LineItemsFieldGroup.tsx',
   'src/components/forms/fieldGroups/PatientFieldGroup.tsx',
-  'src/components/forms/fields/index.tsx',
   'src/components/DeviceImportModal/CreatePatientSection.tsx',
   'src/pages/PatientDetail/chart/AddWeightModal.tsx',
   'src/components/MedicalRecordModal/MedicalRecordForm.tsx',

@@ -10,8 +10,6 @@ import { useTranslation } from 'react-i18next';
 // Removed AppLayout - using simpler layout
 import { PatientTable } from '../components/tables/PatientTable';
 import { HouseholdTable } from '../components/tables/HouseholdTable';
-import { PatientSearch } from '../components/search/PatientSearch';
-import { HouseholdSearch } from '../components/search/HouseholdSearch';
 import { Button } from '../components/common/Button';
 import LabInboxList from '../components/LabInbox/LabInboxList';
 import { useLabInboxCount } from '../hooks/useLabInbox';
@@ -61,13 +59,11 @@ export const MainDashboard: React.FC = () => {
   const [filteredHouseholds, setFilteredHouseholds] = useState<HouseholdTableRecord[]>([]);
   const [showPatientForm, setShowPatientForm] = useState(false);
   const [showHouseholdForm, setShowHouseholdForm] = useState(false);
-  const [selectedPatient, setSelectedPatient] = useState<PatientWithHousehold | null>(null);
   // Chip ID captured from a dashboard scan that didn't match any existing
   // patient — fed into PatientFormWithOwner via the defaultMicrochipId prop
   // so the vet doesn't have to retype it. Cleared when the form modal
   // closes (success OR cancel).
   const [scannedChipForNewPatient, setScannedChipForNewPatient] = useState<string | null>(null);
-  const [selectedHousehold, setSelectedHousehold] = useState<HouseholdTableRecord | null>(null);
   const [seedOpen, setSeedOpen] = useState(false);
   const [seedCount, setSeedCount] = useState<number>(1000);
   const [seeding, setSeeding] = useState(false);
@@ -82,7 +78,6 @@ export const MainDashboard: React.FC = () => {
     if (!scannedChip) return;
     setActiveTab('patients');
     setCurrentView('animal');
-    setSelectedPatient(null);
     setScannedChipForNewPatient(scannedChip);
     setShowPatientForm(true);
     navigate('.', { replace: true, state: null });
@@ -161,80 +156,20 @@ export const MainDashboard: React.FC = () => {
     return () => { if (unlistenCreated) unlistenCreated(); };
   }, []);
 
-  const handleHouseholdSearch = async (query: string) => {
-    if (!query || query.trim().length === 0) {
-      setFilteredHouseholds(households);
-      return households;
-    }
-
-    const results = await api.household.search(query);
-    setFilteredHouseholds(results);
-    return results;
-  };
-
-  // Handle patient operations
-  const handleViewPatient = (patient: PatientWithHousehold) => {
-    setSelectedPatient(patient);
-    // Open detail view modal
-  };
-
-  const handleEditPatient = (patient: PatientWithHousehold) => {
-    setSelectedPatient(patient);
-    setShowPatientForm(true);
-  };
-
-  const handleDeletePatient = async (patient: PatientWithHousehold) => {
-    if (!window.confirm(t('patients:confirmDelete', { name: patient.name }))) {
-      return;
-    }
-    await api.patient.delete(patient.id);
-    invalidatePatientData(queryClient);
-    loadData();
-  };
-
+  // The dashboard only adds; editing happens on the patient and household pages.
   const handleSavePatient = async (values: any) => {
-    if (selectedPatient) {
-      await api.patient.update(selectedPatient.id, values);
-    } else {
-      await api.patient.create(values);
-    }
+    await api.patient.create(values);
     invalidatePatientData(queryClient);
     setShowPatientForm(false);
-    setSelectedPatient(null);
     // Clear any scan-prefill so subsequent "Add patient" clicks start blank.
     setScannedChipForNewPatient(null);
     loadData();
   };
 
-  // Handle household operations
-  const handleViewHousehold = (household: HouseholdTableRecord) => {
-    setSelectedHousehold(household);
-    // Open detail view modal
-  };
-
-  const handleEditHousehold = (household: HouseholdTableRecord) => {
-    setSelectedHousehold(household);
-    setShowHouseholdForm(true);
-  };
-
-  const handleDeleteHousehold = async (household: HouseholdTableRecord) => {
-    if (!window.confirm(t('patients:confirmDeleteHousehold', { name: household.lastName }))) {
-      return;
-    }
-    await api.household.delete(household.id);
-    invalidateHouseholdData(queryClient);
-    loadData();
-  };
-
   const handleSaveHousehold = async (values: any) => {
-    if (selectedHousehold) {
-      await api.household.update(selectedHousehold.id, values);
-    } else {
-      await api.household.create(values);
-    }
+    await api.household.create(values);
     invalidateHouseholdData(queryClient);
     setShowHouseholdForm(false);
-    setSelectedHousehold(null);
     loadData();
   };
 
@@ -306,9 +241,6 @@ export const MainDashboard: React.FC = () => {
                 children: !hasLoaded ? null : filteredPatients.length > 0 || patients.length > 0 ? (
                   <PatientTable
                     patients={filteredPatients}
-                    onView={handleViewPatient}
-                    onEdit={handleEditPatient}
-                    onDelete={handleDeletePatient}
                     searchText={patientSearchText}
                     onSearchTextChange={(text) => {
                       // Normalize FDX-B hex reads to the 15-digit passport form.
@@ -338,9 +270,6 @@ export const MainDashboard: React.FC = () => {
                 children: !hasLoaded ? null : filteredHouseholds.length > 0 || households.length > 0 ? (
                   <HouseholdTable
                     households={filteredHouseholds}
-                    onView={handleViewHousehold}
-                    onEdit={handleEditHousehold}
-                    onDelete={handleDeleteHousehold}
                   />
                 ) : (
                   <NoData />
@@ -376,11 +305,10 @@ export const MainDashboard: React.FC = () => {
 
       {/* Patient Form Modal */}
       <FormModal
-        title={selectedPatient ? t('patients:editPatient') : t('patients:addPatient')}
+        title={t('patients:addPatient')}
         open={showPatientForm}
         onCancel={() => {
           setShowPatientForm(false);
-          setSelectedPatient(null);
           // Clear the pre-fill so the next "Add patient" click starts blank.
           setScannedChipForNewPatient(null);
         }}
@@ -388,12 +316,10 @@ export const MainDashboard: React.FC = () => {
         width={800}
       >
         <PatientFormWithOwner
-          patient={selectedPatient || undefined}
-          defaultMicrochipId={selectedPatient ? undefined : (scannedChipForNewPatient ?? undefined)}
+          defaultMicrochipId={scannedChipForNewPatient ?? undefined}
           onSubmit={handleSavePatient}
           onCancel={() => {
             setShowPatientForm(false);
-            setSelectedPatient(null);
             setScannedChipForNewPatient(null);
           }}
         />
@@ -401,21 +327,18 @@ export const MainDashboard: React.FC = () => {
 
       {/* Household Form Modal */}
       <FormModal
-        title={selectedHousehold ? t('patients:editHousehold') : t('patients:addHousehold')}
+        title={t('patients:addHousehold')}
         open={showHouseholdForm}
         onCancel={() => {
           setShowHouseholdForm(false);
-          setSelectedHousehold(null);
         }}
         footer={null}
         width={800}
       >
         <HouseholdForm
-          initialValues={selectedHousehold || undefined}
           onSubmit={handleSaveHousehold}
           onCancel={() => {
             setShowHouseholdForm(false);
-            setSelectedHousehold(null);
           }}
         />
       </FormModal>
