@@ -55,10 +55,13 @@ interface MedicalRecordFormProps {
   recordId: number | null;
   /** Called with true once the user changes anything. */
   onDirtyChange?: (dirty: boolean) => void;
+  /** New records only: a starting title, e.g. the appointment's reason. */
+  defaultTitle?: string;
 }
 
 const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
   initialValues,
+  defaultTitle,
   onSubmit,
   onCancel,
   loading,
@@ -118,6 +121,12 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
       setManualTotal(initialValues.manualTotal ?? null);
     }
   }, [initialValues?.id, form]);
+
+  useEffect(() => {
+    if (!initialValues && defaultTitle && !form.getFieldValue('name')) {
+      form.setFieldsValue({ name: defaultTitle });
+    }
+  }, [defaultTitle, initialValues, form]);
 
   // Load the picker's available diagnoses (active only — inactive ones
   // are still rendered on edit if they were already applied, but they

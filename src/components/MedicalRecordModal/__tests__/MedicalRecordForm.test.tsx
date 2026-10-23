@@ -224,7 +224,9 @@ describe('MedicalRecordForm: new record from an appointment', () => {
           onSubmit={vi.fn()}
           onCancel={vi.fn()}
           loading={false}
+          isEdit={false}
           patientId={3}
+          recordId={null}
           defaultTitle="Vaccination"
         />
       </App>,

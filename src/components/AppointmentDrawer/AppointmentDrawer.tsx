@@ -344,6 +344,7 @@ export const AppointmentDrawer: React.FC<AppointmentDrawerProps> = ({ appointmen
           patientId={apt.patientId}
           patientName={patientName}
           recordId={null}
+          defaultTitle={apt.title}
         />
       )}
     </>

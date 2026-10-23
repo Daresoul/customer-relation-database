@@ -19,6 +19,8 @@ interface MedicalRecordModalProps {
   patientId: number;
   patientName: string;
   recordId: number | null;
+  /** New records only: a starting title, e.g. the appointment's reason. */
+  defaultTitle?: string;
 }
 
 const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
@@ -27,6 +29,7 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
   patientId,
   patientName,
   recordId,
+  defaultTitle,
 }) => {
   const { t } = useTranslation('medical');
   const { notification } = App.useApp();
@@ -246,6 +249,7 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
             isEdit={isEdit}
             patientId={patientId}
             recordId={recordId}
+            defaultTitle={isEdit ? undefined : defaultTitle}
           />
 
           {isEdit && recordDetail?.history && recordDetail.history.length > 0 && (
