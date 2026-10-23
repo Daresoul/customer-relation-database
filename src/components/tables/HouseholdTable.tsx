@@ -3,7 +3,6 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { formatDate } from '../../utils/dateFormatter';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
 import {
@@ -69,19 +68,6 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
       household.address?.toLowerCase().includes(searchLower)
     );
   }, [households, searchText]);
-
-  // Get activity status color
-  const getActivityStatus = (lastActivity?: string) => {
-    if (!lastActivity) return { color: 'default', text: t('entities:defaults.noActivity') };
-
-    const daysSince = Math.floor(
-      (Date.now() - new Date(lastActivity).getTime()) / (1000 * 60 * 60 * 24)
-    );
-
-    if (daysSince <= 30) return { color: 'success', text: t('entities:status.active') };
-    if (daysSince <= 90) return { color: 'warning', text: t('entities:status.recent') };
-    return { color: 'default', text: t('entities:status.inactive') };
-  };
 
   const columns: ColumnsType<HouseholdTableRecord> = [
     {
@@ -180,43 +166,6 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
         ) : (
           <Text type="secondary">{t('entities:defaults.noAddress')}</Text>
         ),
-    },
-    {
-      title: t('patients:tableColumns.status'),
-      key: 'status',
-      width: 100,
-      render: (_, record) => {
-        const status = getActivityStatus(record.lastActivity);
-        return <Tag color={status.color}>{status.text}</Tag>;
-      },
-      filters: [
-        { text: t('entities:status.active'), value: 'active' },
-        { text: t('entities:status.recent'), value: 'recent' },
-        { text: t('entities:status.inactive'), value: 'inactive' },
-      ],
-      onFilter: (value, record) => {
-        const status = getActivityStatus(record.lastActivity);
-        return status.text.toLowerCase() === value;
-      },
-    },
-    {
-      title: t('patients:tableColumns.lastActivity'),
-      dataIndex: 'lastActivity',
-      key: 'lastActivity',
-      width: 120,
-      render: (date) =>
-        date ? (
-          <Tooltip title={new Date(date).toLocaleString()}>
-            <Text>{formatDate(date)}</Text>
-          </Tooltip>
-        ) : (
-          <Text type="secondary">{t('common:never')}</Text>
-        ),
-      sorter: (a, b) => {
-        const dateA = a.lastActivity ? new Date(a.lastActivity).getTime() : 0;
-        const dateB = b.lastActivity ? new Date(b.lastActivity).getTime() : 0;
-        return dateA - dateB;
-      },
     },
   ];
 
@@ -344,20 +293,6 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
                         {t('households:table.viewPetsHint')}
                       </Text>
                     )}
-                  </div>
-
-                  <div>
-                    <Text type="secondary">{t('households:table.lastActivity')}</Text>
-                    <br />
-                    <Text>{record.lastActivity ? formatDate(record.lastActivity) : t('common:never')}</Text>
-                  </div>
-
-                  <div>
-                    <Text type="secondary">{t('households:table.status')}</Text>
-                    <br />
-                    <Tag color={getActivityStatus(record.lastActivity).color}>
-                      {getActivityStatus(record.lastActivity).text}
-                    </Tag>
                   </div>
 
                   {record.notes && (

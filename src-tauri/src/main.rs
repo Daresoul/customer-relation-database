@@ -572,6 +572,9 @@ fn main() {
             commands::set_view_preference,
             // Stats commands
             commands::get_dashboard_stats,
+            // App header search and the dashboard Today strip
+            commands::global_patient_search,
+            commands::count_patients_seen,
             // Appointment commands
             commands::get_appointments,
             commands::get_appointment,

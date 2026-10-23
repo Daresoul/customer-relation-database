@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { App } from 'antd';
 import { MedicalRecordDetailPage } from '..';
 
@@ -55,11 +55,11 @@ describe('record page total', () => {
   it('is the sum of the line items, not a leftover manual total', () => {
     render(
       <App>
-        <MemoryRouter initialEntries={['/medical-records/7']}>
-          <Routes>
-            <Route path="/medical-records/:id" element={<MedicalRecordDetailPage />} />
-          </Routes>
-        </MemoryRouter>
+        <RouterProvider
+          router={createMemoryRouter([{ path: '/medical-records/:id', element: <MedicalRecordDetailPage /> }], {
+            initialEntries: ['/medical-records/7'],
+          })}
+        />
       </App>,
     );
 

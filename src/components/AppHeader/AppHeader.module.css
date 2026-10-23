@@ -1,0 +1,78 @@
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+}
+
+.appName {
+  font-weight: 600;
+  font-size: 16px;
+  white-space: nowrap;
+  color: inherit;
+}
+
+.searchTrigger {
+  flex: 1;
+  max-width: 480px;
+  justify-content: flex-start;
+}
+
+.shortcut {
+  margin-left: auto;
+  font-size: 12px;
+  opacity: 0.65;
+}
+
+.status {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.paletteBody {
+  margin-top: 12px;
+  min-height: 40px;
+}
+
+.sectionLabel {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.results {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.result {
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.resultMeta {
+  display: block;
+  font-size: 12px;
+}
+
+.inactiveTag {
+  margin-left: 8px;
+}
+
+.backupLight {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}

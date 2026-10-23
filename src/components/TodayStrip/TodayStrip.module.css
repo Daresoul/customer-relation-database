@@ -1,0 +1,67 @@
+.sectionLabel {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.appointments {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.appointment {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.appointment:hover,
+.appointment:focus-visible {
+  background: rgba(127, 127, 127, 0.12);
+}
+
+.time {
+  min-width: 48px;
+  font-variant-numeric: tabular-nums;
+}
+
+.patient {
+  min-width: 120px;
+}
+
+.title {
+  flex: 1;
+  min-width: 0;
+}
+
+.tile {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+
+button.tile {
+  cursor: pointer;
+}
+
+button.tile:hover,
+button.tile:focus-visible {
+  background: rgba(127, 127, 127, 0.12);
+}

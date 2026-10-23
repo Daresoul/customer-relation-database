@@ -16,7 +16,7 @@ import {
   FolderOpenOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useThemeColors } from '../../utils/themeStyles';
 import { useAppSettings } from '../../hooks/useAppSettings';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -42,6 +42,9 @@ const { Content, Sider } = Layout;
 
 type SettingsCategory = 'general' | 'business' | 'appointments' | 'rooms' | 'species' | 'devices' | 'managedScanners' | 'deviceFiles' | 'templates' | 'lineItems' | 'diagnoses' | 'backups' | 'updates';
 
+// Sections a link can open with `/settings?section=<key>`.
+const LINKABLE_SECTIONS: readonly string[] = ['general', 'business', 'appointments', 'rooms', 'species', 'devices', 'managedScanners', 'deviceFiles', 'templates', 'lineItems', 'diagnoses', 'backups', 'updates'];
+
 interface MenuItem {
   key: SettingsCategory;
   icon: React.ReactNode;
@@ -55,7 +58,11 @@ const SettingsLayout: React.FC = () => {
   const navigate = useNavigate();
   const { themeMode, setThemeMode } = useTheme();
   const themeColors = useThemeColors();
-  const [selectedCategory, setSelectedCategory] = useState<SettingsCategory>('general');
+  const [searchParams] = useSearchParams();
+  const requested = searchParams.get('section');
+  const [selectedCategory, setSelectedCategory] = useState<SettingsCategory>(
+    requested && LINKABLE_SECTIONS.includes(requested) ? (requested as SettingsCategory) : 'general',
+  );
 
   // Only create form for tabs that need it (not for rooms tab which has its own form)
   const [form] = Form.useForm();

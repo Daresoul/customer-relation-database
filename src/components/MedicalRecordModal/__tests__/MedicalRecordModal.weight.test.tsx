@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
 import { App } from 'antd';
 import dayjs from 'dayjs';
+import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import MedicalRecordModal from '../MedicalRecordModal';
 
 vi.mock('react-i18next', () => ({
@@ -31,15 +32,23 @@ afterEach(() => {
   createRecord.mockReset();
 });
 
+// The modal guards navigation with useBlocker, which needs a data router.
+function renderInRouter(modal: React.ReactElement) {
+  const router = createMemoryRouter([{ path: '/', element: modal }]);
+  return render(
+    <App>
+      <RouterProvider router={router} />
+    </App>,
+  );
+}
+
 describe('MedicalRecordModal: weight taken during the visit', () => {
   it('adds the weight to the log, pointing at the new record', async () => {
     createRecord.mockResolvedValue({ id: 77 });
     invokeMock.mockResolvedValue({ id: 1 });
     const onClose = vi.fn();
-    render(
-      <App>
-        <MedicalRecordModal open onClose={onClose} patientId={3} patientName="Rex" recordId={null} />
-      </App>,
+    renderInRouter(
+      <MedicalRecordModal open onClose={onClose} patientId={3} patientName="Rex" recordId={null} />,
     );
 
     fireEvent.click(screen.getByText('stub-save'));
@@ -61,10 +70,8 @@ describe('MedicalRecordModal: weight taken during the visit', () => {
       if (cmd === 'add_patient_weight') throw new Error('database is locked');
       return null;
     });
-    render(
-      <App>
-        <MedicalRecordModal open onClose={vi.fn()} patientId={3} patientName="Rex" recordId={null} />
-      </App>,
+    renderInRouter(
+      <MedicalRecordModal open onClose={vi.fn()} patientId={3} patientName="Rex" recordId={null} />,
     );
 
     fireEvent.click(screen.getByText('stub-save'));

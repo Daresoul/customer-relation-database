@@ -1,0 +1,46 @@
+{
+  "header": {
+    "appName": "Arkivet",
+    "home": "Go to the dashboard",
+    "settings": "Settings",
+    "searchButton": "Find a patient",
+    "searchShortcut": "Ctrl+K"
+  },
+  "search": {
+    "placeholder": "Pet name, owner, phone or chip",
+    "recent": "Recently viewed",
+    "hint": "Type at least 2 letters or digits",
+    "noResults": "No patient matches",
+    "failed": "The search failed. Try again.",
+    "noName": "No name",
+    "inactive": "Inactive"
+  },
+  "scan": {
+    "notFoundTitle": "No patient has this chip",
+    "notFoundBody": "Chip {{chip}} is not on any patient. Create a new patient with this chip?",
+    "createPatient": "Create patient",
+    "cancel": "Cancel",
+    "failed": "Could not look up the scanned chip. Try again."
+  },
+  "backup": {
+    "label": "Backup",
+    "ok": "Last backup {{ago}}",
+    "old": "Last backup {{ago}}. Backups should run every day.",
+    "never": "No backup has run yet.",
+    "notConfigured": "Backups are not set up. Choose a backup folder.",
+    "failed": "The last backup failed: {{error}}",
+    "unknown": "Backup status could not be read.",
+    "open": "Open backup settings"
+  },
+  "today": {
+    "title": "Today",
+    "appointments": "Today's appointments",
+    "noAppointments": "No appointments today",
+    "appointmentsFailed": "Could not load today's appointments.",
+    "labWaiting": "Lab results waiting",
+    "openLabResults": "Open waiting lab results",
+    "seenToday": "Patients seen today",
+    "seenFailed": "Could not count",
+    "noName": "No name"
+  }
+}
