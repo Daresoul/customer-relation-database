@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { errorText } from '@/utils/notifyError';
+import { formatDateTime } from '../utils/dateFormatter';
 
 dayjs.extend(relativeTime);
 
@@ -84,13 +85,13 @@ const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, da
           <p><strong>{t('medical:recentFiles.fileName')}:</strong> {file.originalName}</p>
           <p><strong>{t('medical:recentFiles.device')}:</strong> {file.deviceName} ({file.deviceType})</p>
           <p><strong>{t('medical:recentFiles.connection')}:</strong> {file.connectionMethod || t('medical:recentFiles.unknown')}</p>
-          <p><strong>{t('medical:recentFiles.received')}:</strong> {new Date(file.receivedAt).toLocaleString()}</p>
+          <p><strong>{t('medical:recentFiles.received')}:</strong> {formatDateTime(file.receivedAt)}</p>
           <p><strong>{t('medical:recentFiles.fileSize')}:</strong> {file.fileSize ? `${(file.fileSize / 1024).toFixed(2)} KB` : t('medical:recentFiles.unknown')}</p>
           <p><strong>{t('medical:recentFiles.mimeType')}:</strong> {file.mimeType || t('medical:recentFiles.unknown')}</p>
           {file.firstAttachedToRecordId && (
             <>
               <p><strong>{t('medical:recentFiles.attachedTo')}:</strong> {file.patientName} - {file.recordName}</p>
-              <p><strong>{t('medical:recentFiles.attachedAt')}:</strong> {file.firstAttachedAt ? new Date(file.firstAttachedAt).toLocaleString() : t('medical:recentFiles.unknown')}</p>
+              <p><strong>{t('medical:recentFiles.attachedAt')}:</strong> {file.firstAttachedAt ? formatDateTime(file.firstAttachedAt) : t('medical:recentFiles.unknown')}</p>
             </>
           )}
           <p><strong>{t('medical:recentFiles.attachmentCount')}:</strong> {file.attachmentCount}</p>

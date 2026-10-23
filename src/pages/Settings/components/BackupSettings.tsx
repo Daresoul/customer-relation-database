@@ -11,6 +11,7 @@ import { invoke } from '@/services/invoke';
 import { open as openDialog } from '@tauri-apps/api/dialog';
 import { useTranslation } from 'react-i18next';
 import { backupErrorText } from '@/utils/backupErrors';
+import { formatDateTime } from '../../../utils/dateFormatter';
 
 const { Text, Paragraph } = Typography;
 
@@ -95,7 +96,7 @@ const BackupSettings: React.FC = () => {
   };
 
   const lastRunDisplay = config.lastBackupAt
-    ? new Date(config.lastBackupAt).toLocaleString()
+    ? formatDateTime(config.lastBackupAt)
     : t('settings:backups.never', 'Never');
 
   return (

@@ -39,6 +39,7 @@ import {
 import { invoke } from '@/services/invoke';
 import { useTranslation } from 'react-i18next';
 import { errorText } from '@/utils/notifyError';
+import { formatDateTime } from '../../../utils/dateFormatter';
 
 const { Text, Paragraph } = Typography;
 
@@ -314,7 +315,7 @@ const ManagedScannersSettings: React.FC = () => {
                 {detectAt && (
                   <Text type="secondary" style={{ fontSize: 12 }}>
                     {t('settings:managedScanners.detect.lastScanned', 'Last scanned')}:{' '}
-                    {detectAt.toLocaleTimeString()}
+                    {formatDateTime(detectAt)}
                   </Text>
                 )}
               </Space>
