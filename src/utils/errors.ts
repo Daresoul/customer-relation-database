@@ -307,6 +307,15 @@ function categorizeByStatusCode(statusCode?: number): ErrorCategory {
   return 'unknown';
 }
 
+/** The `message` text an error carries, if it has one (no fallback text). */
+export function messageOf(error: unknown): string | undefined {
+  if (error && typeof error === 'object' && 'message' in error) {
+    const { message } = error as { message: unknown };
+    if (typeof message === 'string') return message;
+  }
+  return undefined;
+}
+
 /**
  * Extract error message from any error type
  * This is the main utility for getting a displayable error message
