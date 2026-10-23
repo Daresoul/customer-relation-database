@@ -540,3 +540,41 @@ mod person_writes_are_all_or_nothing {
         assert_eq!(people, 1, "Marko must not be saved without the contact that failed");
     }
 }
+
+/// dates-time.md #7: SQLite stores UTC without a zone, so the page read the
+/// household's Created/Updated as local time and showed them 1–2 h early.
+mod household_dates_are_marked_utc {
+    use crate::models::household::{Household, Person, PersonContact};
+    use chrono::NaiveDate;
+
+    fn at_nine() -> chrono::NaiveDateTime {
+        NaiveDate::from_ymd_opt(2026, 10, 23).unwrap().and_hms_opt(9, 0, 0).unwrap()
+    }
+
+    #[test]
+    fn household_person_and_contact_times_serialize_with_a_z() {
+        let h = Household {
+            id: 1, household_name: None, address: None, city: None, postal_code: None, notes: None,
+            created_at: at_nine(), updated_at: at_nine(),
+        };
+        let json = serde_json::to_value(&h).unwrap();
+        assert_eq!(json["created_at"], "2026-10-23T09:00:00Z");
+        assert_eq!(json["updated_at"], "2026-10-23T09:00:00Z");
+
+        let p = Person { id: 1, household_id: 1, first_name: "A".into(), last_name: "B".into(), is_primary: true, created_at: at_nine(), updated_at: at_nine() };
+        assert_eq!(serde_json::to_value(&p).unwrap()["updated_at"], "2026-10-23T09:00:00Z");
+
+        let c = PersonContact { id: 1, person_id: 1, contact_type: "phone".into(), contact_value: "070".into(), is_primary: false, created_at: at_nine() };
+        assert_eq!(serde_json::to_value(&c).unwrap()["created_at"], "2026-10-23T09:00:00Z");
+    }
+
+    #[test]
+    fn both_forms_read_back() {
+        let with_z: Household = serde_json::from_value(serde_json::json!({
+            "id": 1, "household_name": null, "address": null, "city": null, "postal_code": null, "notes": null,
+            "created_at": "2026-10-23T09:00:00Z", "updated_at": "2026-10-23T09:00:00"
+        })).unwrap();
+        assert_eq!(with_z.created_at, at_nine());
+        assert_eq!(with_z.updated_at, at_nine());
+    }
+}
