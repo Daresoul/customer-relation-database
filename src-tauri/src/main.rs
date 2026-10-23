@@ -642,11 +642,14 @@ fn main() {
             commands::cleanup_old_file_history,
             commands::download_device_file,
             commands::open_device_file,
-            // Pending device entries (Save for later)
-            commands::save_device_files_for_later,
-            commands::list_pending_device_entries,
-            commands::mark_pending_entry_processed,
             commands::get_device_data_from_history,
+            // Lab inbox
+            commands::list_lab_inbox,
+            commands::get_lab_inbox_count,
+            commands::discard_lab_result,
+            commands::restore_lab_result,
+            commands::attach_lab_result,
+            commands::move_lab_result,
             // Line item template commands
             commands::get_line_item_templates,
             commands::get_line_item_template,

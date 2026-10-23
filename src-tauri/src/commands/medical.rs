@@ -154,16 +154,8 @@ pub async fn upload_medical_attachment(
             // Don't fail the upload, just log the warning
         }
 
-        // Also mark any matching "Save for later" entry as processed so it disappears from the list
-        if let Err(e) = pool
-            .execute(Statement::from_sql_and_values(
-                DbBackend::Sqlite,
-                "UPDATE pending_device_entries SET status = 'processed' WHERE file_id = ? AND status = 'pending'",
-                [file_id.into()],
-            ))
-            .await
-        {
-            log::warn!("Failed to mark pending entry processed for attached file: {}", e);
+        if let Err(e) = crate::services::lab_inbox::mark_attached(&pool, &file_id, medical_record_id, Some(attachment.id)).await {
+            log::warn!("Failed to mark lab result {} attached: {}", file_id, e);
         }
     }
 
@@ -193,7 +185,7 @@ pub async fn delete_medical_attachment(
     pool: State<'_, SeaOrmPool>,
     attachment_id: i64,
 ) -> Result<(), String> {
-    FileStorageService::delete_attachment(&pool, attachment_id).await
+    crate::services::lab_inbox::delete_attachment(&pool, attachment_id).await
 }
 
 // Get attachment content for text file viewer
@@ -594,252 +586,44 @@ pub async fn regenerate_pdf_from_attachment(
     Ok(pdf_attachment)
 }
 
-// T030: Regenerate PDF from ALL test_result attachments in a medical record
+// T030: Regenerate the lab report from ALL lab results on a record; the
+// record's earlier lab reports are retired once the new one is stored.
 #[tauri::command]
 pub async fn regenerate_pdf_from_medical_record(
     app_handle: AppHandle,
     pool: State<'_, SeaOrmPool>,
     medical_record_id: i64,
 ) -> Result<MedicalAttachment, String> {
-    log::debug!("regenerate_pdf_from_medical_record medical_record_id={}", medical_record_id);
-
-    // 1. Get all device data attachments for this medical record
-    // Check for attachment_type = 'test_result' OR files with device metadata that aren't PDFs
-    // This handles both new files (with proper attachment_type) and legacy files (with device_type set)
-    let attachment_rows = pool.query_all(Statement::from_sql_and_values(
+    let env = crate::services::medical_record::PdfEnv::from_app(&app_handle)?;
+    let pdf_id = crate::services::lab_inbox::regenerate_lab_report(&env, &pool, medical_record_id).await?;
+    let row = pool.query_one(Statement::from_sql_and_values(
         DbBackend::Sqlite,
-        "SELECT id, medical_record_id, file_id, original_name, mime_type, \
-         file_size, uploaded_at, device_type, device_name, connection_method, attachment_type \
-         FROM medical_attachments \
-         WHERE medical_record_id = ? \
-         AND deleted_at IS NULL \
-         AND device_type IS NOT NULL \
-         AND device_name IS NOT NULL \
-         AND (attachment_type = 'test_result' \
-              OR (attachment_type != 'generated_pdf' AND mime_type != 'application/pdf'))",
-        [medical_record_id.into()]
+        "SELECT id, medical_record_id, file_id, original_name, mime_type, file_size, uploaded_at, \
+         device_type, device_name, connection_method, attachment_type \
+         FROM medical_attachments WHERE id = ?",
+        [pdf_id.into()]
     ))
     .await
-    .map_err(|e| format!("Failed to fetch device data attachments: {}", e))?;
-
-    if attachment_rows.is_empty() {
-        return Err("No device data attachments found for this medical record.".to_string());
-    }
-
-    log::debug!("Found {} test_result attachments", attachment_rows.len());
-
-    // 2. Get patient info from the medical record
-    let record_row = pool.query_one(Statement::from_sql_and_values(
-        DbBackend::Sqlite,
-        "SELECT patient_id FROM medical_records WHERE id = ?",
-        [medical_record_id.into()]
-    ))
-    .await
-    .map_err(|e| format!("Failed to fetch medical record: {}", e))?
-    .ok_or("Medical record not found".to_string())?;
-
-    let patient_id: i64 = record_row.try_get("", "patient_id")
-        .map_err(|e| format!("Failed to get patient_id: {}", e))?;
-
-    // 3. Fetch patient details using the same query pattern as MedicalRecordService
-    let patient_row = pool.query_one(Statement::from_sql_and_values(
-        DbBackend::Sqlite,
-        "SELECT p.name, p.gender, p.date_of_birth, p.microchip_id, \
-         s.name as species_name \
-         FROM patients p \
-         LEFT JOIN species s ON p.species_id = s.id \
-         WHERE p.id = ?",
-        [patient_id.into()]
-    ))
-    .await
-    .map_err(|e| format!("Failed to fetch patient: {}", e))?
-    .ok_or("Patient not found".to_string())?;
-
-    let owner_name = lookup_owner_name(&pool, patient_id).await.unwrap_or_else(|e| {
-        log::error!("{} (patient {}); the PDF is printed without an owner", e, patient_id);
-        String::new()
-    });
-
-    let patient_data = PatientData {
-        name: patient_row.try_get("", "name").unwrap_or_else(|_| "Непознат Пациент".to_string()),
-        owner: owner_name,
-        species: patient_row.try_get("", "species_name").unwrap_or_else(|_| "Непознат Вид".to_string()),
-        microchip_id: patient_row.try_get("", "microchip_id").ok(),
-        gender: patient_row.try_get("", "gender").unwrap_or_else(|_| "Непознат".to_string()),
-        date_of_birth: patient_row.try_get("", "date_of_birth").ok(),
-    };
-
-    log::debug!("Patient info: name={}, microchip={:?}", patient_data.name, patient_data.microchip_id);
-
-    // 4. Parse each attachment and collect device data
-    let record_time = MedicalRecordService::record_time(&pool, medical_record_id).await?;
-    let mut all_device_data: Vec<DeviceTestData> = Vec::new();
-
-    for attachment_row in &attachment_rows {
-        let attachment_id: i64 = attachment_row.try_get("", "id")
-            .map_err(|e| format!("Failed to get attachment id: {}", e))?;
-        let device_type: Option<String> = attachment_row.try_get("", "device_type").ok();
-        let device_name: Option<String> = attachment_row.try_get("", "device_name").ok();
-        let connection_method: Option<String> = attachment_row.try_get("", "connection_method").ok();
-        let original_name: String = attachment_row.try_get("", "original_name")
-            .map_err(|e| format!("Failed to get original_name: {}", e))?;
-
-        // Skip if missing device metadata
-        let device_type = match device_type {
-            Some(dt) => dt,
-            None => {
-                log::debug!("Skipping attachment {} - no device_type", attachment_id);
-                continue;
-            }
-        };
-        let device_name = match device_name {
-            Some(dn) => dn,
-            None => {
-                log::debug!("Skipping attachment {} - no device_name", attachment_id);
-                continue;
-            }
-        };
-        let connection_method = connection_method.unwrap_or_else(|| "unknown".to_string());
-
-        log::debug!("Processing attachment {} - device_type={}, device_name={}", attachment_id, device_type, device_name);
-
-        // Download the file data
-        let file_data = FileStorageService::download_attachment(&app_handle, &pool, attachment_id).await?;
-
-        // Parse the device data (works for XML, JSON, etc.)
-        match DeviceParserService::parse_device_data(
-            &device_type,
-            &device_name,
-            &file_data.file_name,
-            &file_data.file_data,
-            &connection_method,
-        ) {
-            Ok(parsed_data) => {
-                log::debug!("Parsed device data from {}", original_name);
-                all_device_data.push(DeviceTestData {
-                    device_type: parsed_data.device_type.clone(),
-                    device_name: parsed_data.device_name.clone(),
-                    test_results: parsed_data.test_results.clone(),
-                    detected_at: record_time,
-                    patient_identifier: patient_data.microchip_id.clone().or_else(|| Some(patient_data.name.clone())),
-                });
-            }
-            Err(e) => {
-                log::debug!("Failed to parse attachment {}: {}", attachment_id, e);
-                // Continue with other attachments
-            }
-        }
-    }
-
-    if all_device_data.is_empty() {
-        return Err("Could not parse any device data from test_result attachments.".to_string());
-    }
-
-    log::debug!("Parsed {} device data sets", all_device_data.len());
-
-    // 5. Generate combined PDF using Java service
-    use crate::services::java_pdf_service::JavaPdfService;
-
-    // Build a user-friendly filename — same pattern as the
-    // per-record device report in medical_record.rs:
-    //   "Device Report - <Patient> - <Device> - <YYYY-MM-DD HH-MM>.pdf"
-    // (single device), or just patient+date for the combined case.
-    let sanitize = |s: &str| -> String {
-        let cleaned: String = s.chars().map(|c| match c {
-            '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
-            c if c.is_control() => '_',
-            c => c,
-        }).collect();
-        let trimmed = cleaned.trim_matches(|c: char| c == '.' || c.is_whitespace());
-        if trimmed.chars().count() > 60 {
-            trimmed.chars().take(60).collect::<String>().trim_end().to_string()
-        } else {
-            trimmed.to_string()
-        }
-    };
-    let timestamp = chrono::Utc::now().format("%Y-%m-%d %H-%M").to_string();
-    let patient_part = sanitize(&patient_data.name);
-    let pdf_filename = if all_device_data.len() == 1 {
-        let device = &all_device_data[0];
-        let device_part = sanitize(&device.device_name);
-        format!("Device Report - {} - {} - {}.pdf", patient_part, device_part, timestamp)
-    } else {
-        format!("Device Report - {} - {}.pdf", patient_part, timestamp)
-    };
-
-    let pdf_path = std::env::temp_dir().join(&pdf_filename);
-
-    // Convert PatientData to the format expected by Java PDF service
-    let java_patient_data = crate::services::device_pdf_service::PatientData {
-        name: patient_data.name.clone(),
-        owner: patient_data.owner.clone(),
-        species: patient_data.species.clone(),
-        microchip_id: patient_data.microchip_id.clone(),
-        gender: patient_data.gender.clone(),
-        date_of_birth: patient_data.date_of_birth.clone(),
-    };
-
-    // Convert DeviceTestData to the format expected by Java PDF service
-    let java_device_data: Vec<crate::services::device_pdf_service::DeviceTestData> = all_device_data
-        .iter()
-        .map(|d| crate::services::device_pdf_service::DeviceTestData {
-            device_type: d.device_type.clone(),
-            device_name: d.device_name.clone(),
-            test_results: d.test_results.clone(),
-            detected_at: d.detected_at,
-            patient_identifier: d.patient_identifier.clone(),
-        })
-        .collect();
-
-    // Generate PDF with all devices
-    log::info!("Generating combined PDF report using Java...");
-    JavaPdfService::generate_pdf_multi(
-        &app_handle,
-        pdf_path.to_str().ok_or("Invalid PDF path")?,
-        &java_patient_data,
-        &java_device_data,
-    )?;
-
-    log::debug!("PDF generated at {:?}", pdf_path);
-
-    // 6. Read the generated PDF
-    let pdf_bytes = std::fs::read(&pdf_path)
-        .map_err(|e| format!("Failed to read generated PDF: {}", e))?;
-
-    log::debug!("Read {} bytes from PDF", pdf_bytes.len());
-
-    // 7. Determine device metadata for the attachment
-    let device_type_str = if all_device_data.len() > 1 {
-        "combined".to_string()
-    } else {
-        all_device_data[0].device_type.clone()
-    };
-    let device_name_str = if all_device_data.len() > 1 {
-        "Multiple Devices".to_string()
-    } else {
-        all_device_data[0].device_name.clone()
-    };
-
-    // 8. Upload the PDF as a new attachment
-    let pdf_attachment = FileStorageService::upload_attachment(
-        &app_handle,
-        &pool,
+    .map_err(|e| format!("Failed to read the new lab report: {}", e))?
+    .ok_or("The new lab report was not stored".to_string())?;
+    Ok(MedicalAttachment {
+        id: pdf_id,
         medical_record_id,
-        pdf_filename.clone(),
-        pdf_bytes,
-        "application/pdf".to_string(),
-        Some(format!("{}_report", device_type_str)),
-        Some(format!("{} Report (Regenerated)", device_name_str)),
-        Some("regenerated".to_string()),
-        Some("generated_pdf".to_string()),
-    ).await?;
-
-    log::debug!("PDF attachment uploaded with id={}", pdf_attachment.id);
-
-    // Clean up temp file
-    let _ = std::fs::remove_file(&pdf_path);
-
-    Ok(pdf_attachment)
+        file_id: row.try_get("", "file_id").map_err(|e| e.to_string())?,
+        original_name: row.try_get("", "original_name").map_err(|e| e.to_string())?,
+        mime_type: row.try_get("", "mime_type").ok(),
+        file_size: row.try_get("", "file_size").ok(),
+        uploaded_at: row
+            .try_get::<String>("", "uploaded_at")
+            .ok()
+            .and_then(|t| chrono::DateTime::parse_from_rfc3339(&t).ok())
+            .map(|t| t.with_timezone(&chrono::Utc))
+            .unwrap_or_else(chrono::Utc::now),
+        device_type: row.try_get("", "device_type").ok(),
+        device_name: row.try_get("", "device_name").ok(),
+        connection_method: row.try_get("", "connection_method").ok(),
+        attachment_type: row.try_get("", "attachment_type").ok(),
+    })
 }
 
 // T031: Generate PDF from selected test_result attachments with patient overrides

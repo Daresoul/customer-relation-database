@@ -13,7 +13,6 @@ import enHouseholds from './locales/en/households.json';
 import enSettings from './locales/en/settings.json';
 import enAppointments from './locales/en/appointments.json';
 import enDevices from './locales/en/devices.json';
-import enDevicesPending from './locales/en/devices.pending.json';
 import enErrors from './locales/en/errors.json';
 import enShell from './locales/en/shell.json';
 
@@ -27,7 +26,6 @@ import mkHouseholds from './locales/mk/households.json';
 import mkSettings from './locales/mk/settings.json';
 import mkAppointments from './locales/mk/appointments.json';
 import mkDevices from './locales/mk/devices.json';
-import mkDevicesPending from './locales/mk/devices.pending.json';
 import mkErrors from './locales/mk/errors.json';
 import mkShell from './locales/mk/shell.json';
 
@@ -42,7 +40,7 @@ const resources = {
     households: enHouseholds,
     settings: enSettings,
     appointments: enAppointments,
-    devices: { ...enDevices, pending: enDevicesPending },
+    devices: enDevices,
     errors: enErrors,
     shell: enShell,
   },
@@ -56,7 +54,7 @@ const resources = {
     households: mkHouseholds,
     settings: mkSettings,
     appointments: mkAppointments,
-    devices: { ...mkDevices, pending: mkDevicesPending },
+    devices: mkDevices,
     errors: mkErrors,
     shell: mkShell,
   },

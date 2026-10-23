@@ -18,6 +18,7 @@ import { DeviceImportProvider } from './contexts/DeviceImportContext';
 import { useDeviceDataListener } from './hooks/useDeviceDataListener';
 import { useDeviceEvents } from './hooks/useDeviceEvents';
 import { appRoutes } from './layouts/routes';
+import { useLabInboxLiveUpdates } from './hooks/useLabInbox';
 import { invoke } from '@/services/invoke';
 
 // Import global styles
@@ -38,6 +39,7 @@ const queryClient = new QueryClient({
 function DeviceDataHandler() {
   useDeviceDataListener();
   useDeviceEvents();
+  useLabInboxLiveUpdates();
   return null;
 }
 

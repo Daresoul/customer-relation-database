@@ -8,7 +8,7 @@ import PdfMultiPagePreview from '@/components/PdfMultiPagePreview';
 import { getAttachmentPreviewKind, HtmlAttachmentNotice, TextAttachmentPreview } from '@/components/AttachmentPreview';
 import RecentDeviceFiles from '@/components/RecentDeviceFiles';
 import { HomeOutlined, ArrowLeftOutlined, EditOutlined, SaveOutlined, CloseOutlined, ReloadOutlined, HistoryOutlined, PrinterOutlined } from '@ant-design/icons';
-import { useMedicalRecord, useUpdateMedicalRecord, useCurrencies, useUploadAttachment } from '@/hooks/useMedicalRecords';
+import { useMedicalRecord, useUpdateMedicalRecord, useCurrencies } from '@/hooks/useMedicalRecords';
 import { usePatientDetail } from '@/hooks/usePatient';
 import { MedicalService } from '@/services/medicalService';
 import { isTauri as detectTauri } from '@/utils/isTauri';
@@ -24,6 +24,9 @@ import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import type { MedicalRecord, MedicalRecordHistory, UpdateMedicalRecordInput } from '@/types/medical';
 import type { MedicalRecordLineItem } from '@/types/lineItem';
 import { DeviceStatusInline } from '@/components/DeviceStatusBar';
+import MoveLabResultModal from '@/components/LabInbox/MoveLabResultModal';
+import { labInboxService } from '@/services/labInboxService';
+import { invalidateLabInboxData } from '@/hooks/invalidation';
 import styles from './MedicalRecordDetailPage.module.css';
 
 const { Content } = Layout;
@@ -41,7 +44,6 @@ export const MedicalRecordDetailPage: React.FC = () => {
   const { data, isLoading, isError, error, refetch } = useMedicalRecord(recordId, true);
   const updateMutation = useUpdateMedicalRecord();
   const queryClient = useQueryClient();
-  const uploadMutation = useUploadAttachment();
   const { data: currencies } = useCurrencies();
   const [isEditing, setIsEditing] = useState(false);
   const [editDirty, setEditDirty] = useState(false);
@@ -55,6 +57,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
   const [displayRecord, setDisplayRecord] = useState<MedicalRecord | null>(null);
   const [regeneratingId, setRegeneratingId] = useState<number | null>(null);
   const [deletingAttachmentId, setDeletingAttachmentId] = useState<number | null>(null);
+  const [movingAttachment, setMovingAttachment] = useState<MedicalAttachment | null>(null);
   const [recentFilesDrawerOpen, setRecentFilesDrawerOpen] = useState(false);
   const [refreshRecentFiles, setRefreshRecentFiles] = useState<(() => void) | null>(null);
   const [printReportModalOpen, setPrintReportModalOpen] = useState(false);
@@ -325,23 +328,19 @@ export const MedicalRecordDetailPage: React.FC = () => {
 
   const handleAddRecentFile = async (fileId: string, originalName: string) => {
     try {
-      console.log('[MedicalRecordDetail] Adding recent file:', fileId, originalName);
-
-      // Fetch the file data from backend using the fileId
-      const fileData = await MedicalService.getDeviceFileById(fileId);
-
-      // Create a File object from the fetched data
-      const file = new File([new Uint8Array(fileData.fileData)], originalName, {
-        type: fileData.mimeType || 'application/octet-stream',
-      });
-
-      // Upload the file as an attachment to this medical record
-      await uploadMutation.mutateAsync({
-        medicalRecordId: recordId,
-        file,
-        attachmentType: 'file', // Mark as regular file, not test_result
-        sourceFileId: fileId, // Link to the file_access_history entry
-      });
+      // Added as a lab result with its device type, so the lab report includes it
+      await labInboxService.attach(fileId, recordId);
+      invalidateLabInboxData(queryClient);
+      try {
+        await labInboxService.regenerateLabReport(recordId);
+      } catch (pdfError) {
+        notification.warning({
+          message: t('medical:deviceImport.pdfGenerationFailed'),
+          description: t('medical:deviceImport.pdfGenerationFailedDesc'),
+          placement: 'bottomRight',
+          duration: 5,
+        });
+      }
 
       notification.success({
         message: t('common:success'),
@@ -527,6 +526,11 @@ export const MedicalRecordDetailPage: React.FC = () => {
     }
   };
 
+  // A raw device result (not a generated PDF) that can be moved to another patient
+  const isLabResult = (att: MedicalAttachment) =>
+    att.attachmentType === 'test_result' ||
+    (!!att.deviceType && !!att.deviceName && att.attachmentType !== 'generated_pdf' && att.mimeType !== 'application/pdf');
+
   const renderAttachmentsTable = (dataSource: any[], emptyText: string) => (
     <Table
       size="small"
@@ -634,6 +638,17 @@ export const MedicalRecordDetailPage: React.FC = () => {
               >
                 {t('common:download')}
               </Button>
+              {isLabResult(row) && (
+                <Button
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMovingAttachment(row);
+                  }}
+                >
+                  {t('devices:inbox.move')}
+                </Button>
+              )}
               <Popconfirm
                 title={t('medical:detail.deleteAttachmentConfirm', 'Delete this file?')}
                 description={t(
@@ -1074,6 +1089,17 @@ export const MedicalRecordDetailPage: React.FC = () => {
           onRefreshNeeded={(fn) => setRefreshRecentFiles(() => fn)}
         />
       </Drawer>
+
+      {movingAttachment && (
+        <MoveLabResultModal
+          open
+          attachmentId={movingAttachment.id}
+          fileName={movingAttachment.originalName}
+          currentPatientId={record?.patientId}
+          onClose={() => setMovingAttachment(null)}
+          onMoved={() => refetch()}
+        />
+      )}
 
       {/* Print Report Modal */}
       <PrintReportModal

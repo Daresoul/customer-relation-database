@@ -2,8 +2,6 @@ import { invoke } from '@tauri-apps/api';
 import type {
   FileAccessHistoryWithRecord,
   RecordDeviceFileAccessInput,
-  PendingFileMeta,
-  PendingDeviceEntryWithFile,
 } from '../types/fileHistory';
 
 /** Raw device file pulled back from history (bytes + device metadata). */
@@ -51,29 +49,6 @@ export const fileHistoryService = {
    */
   async cleanupOldFileHistory(days?: number): Promise<number> {
     return await invoke('cleanup_old_file_history', { days });
-  },
-
-  /**
-   * Save incoming device files for later processing by associating a user-entered patient serial
-   */
-  async saveDeviceFilesForLater(patientSerial: string, files: PendingFileMeta[], patientIdentifier?: string): Promise<number> {
-    return await invoke('save_device_files_for_later', {
-      patientSerial,
-      patientIdentifier: patientIdentifier || null,
-      files,
-    });
-  },
-
-  /**
-   * List pending device entries (optionally filter by serial)
-   */
-  async listPendingDeviceEntries(query?: string, status: 'pending' | 'processed' | 'cancelled' = 'pending', limit = 100, offset = 0): Promise<PendingDeviceEntryWithFile[]> {
-    return await invoke('list_pending_device_entries', { query: query || null, status, limit, offset });
-  },
-
-  /** Mark a pending device entry processed */
-  async markPendingEntryProcessed(id: number): Promise<void> {
-    return await invoke('mark_pending_entry_processed', { id });
   },
 
   /**

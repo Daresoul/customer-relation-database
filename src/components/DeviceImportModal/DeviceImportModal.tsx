@@ -4,11 +4,10 @@
  * Refactored to use MedicalRecordFieldGroup for reusable field definitions.
  */
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   Modal,
   Form,
-  Input,
   Select,
   Button,
   Space,
@@ -21,6 +20,7 @@ import {
   Drawer,
   Checkbox,
   Alert,
+  Radio,
 } from 'antd';
 import {
   SaveOutlined,
@@ -46,6 +46,8 @@ import { Patient } from '@/types';
 import type { MedicalRecordLineItem, CreateLineItemInput } from '@/types/lineItem';
 import { MedicalService } from '@/services/medicalService';
 import { fileHistoryService } from '@/services/fileHistoryService';
+import { labInboxService } from '@/services/labInboxService';
+import PatientRecordSelect from '@/components/LabInbox/PatientRecordSelect';
 import RecentDeviceFiles from '../RecentDeviceFiles';
 import CreatePatientSection from './CreatePatientSection';
 import { TabbedMedicalRecordFields } from '@/components/forms/fieldGroups';
@@ -86,7 +88,10 @@ const DeviceImportDialog: React.FC = () => {
   const [recentFilesDrawerOpen, setRecentFilesDrawerOpen] = useState(false);
   const [createPatientExpanded, setCreatePatientExpanded] = useState(false);
   const [printAfterSave, setPrintAfterSave] = useState(true);
-  const [patientSerial, setPatientSerial] = useState<string>('');
+  // Make a new record, or add the result to one the patient already has
+  const [target, setTarget] = useState<'new' | 'existing'>('new');
+  const [existingRecordId, setExistingRecordId] = useState<number | undefined>();
+  const onExistingRecordChange = useCallback((id?: number) => setExistingRecordId(id), []);
   const [scannedMicrochipId, setScannedMicrochipId] = useState<string>('');
   const [titleSearchTerm, setTitleSearchTerm] = useState<string>('');
   const debouncedSearchTerm = useDebounce(titleSearchTerm, 300);
@@ -127,16 +132,6 @@ const DeviceImportDialog: React.FC = () => {
   const matchStrength = getMatchStrength(pendingFiles, pickedForCheck);
   const mismatches = pickedForCheck ? validatePatientSelection(pickedForCheck, pendingFiles).warnings : [];
 
-  // Prefill the "save for later" serial once — from the matched patient's name or
-  // the device-supplied identifier — so staff don't retype what we already know.
-  const firstIdentifier = pendingFiles[0]?.patientIdentifier;
-  useEffect(() => {
-    if (patientSerial.trim()) return; // never clobber manual entry
-    const matched = suggestedPatientId ? patients.find((p) => p.id === suggestedPatientId) : undefined;
-    const prefill = matched?.name || firstIdentifier || '';
-    if (prefill) setPatientSerial(prefill);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [suggestedPatientId, firstIdentifier, patients]);
   const { settings } = useAppSettings();
   const createMutation = useCreateMedicalRecord();
   const uploadMutation = useUploadAttachment();
@@ -155,8 +150,6 @@ const DeviceImportDialog: React.FC = () => {
       return;
     }
     lastProcessedScanRef.current = { code, time: now };
-
-    setPatientSerial(code);
 
     // Look up an existing patient by microchip ID. If found, auto-select.
     // If not, open the create-patient section and prefill the chip ID so the
@@ -382,49 +375,104 @@ const DeviceImportDialog: React.FC = () => {
     }
   };
 
-  const handleSaveForLater = async () => {
-    const serial = patientSerial.trim();
-    if (!serial) {
+  // The result is already stored in the lab inbox; closing just leaves it waiting there
+  const handleNotNow = () => {
+    finishImport();
+    notification.info({
+      message: t('medical:deviceImport.keptInInbox'),
+      placement: 'bottomRight',
+      duration: 4,
+    });
+  };
+
+  // Upload every pending file to the record as a lab result, keeping its device type
+  const uploadFiles = async (recordId: number) => {
+    const results = await Promise.all(
+      pendingFiles.map((file) =>
+        uploadMutation
+          .mutateAsync({
+            medicalRecordId: recordId,
+            file: new File([new Uint8Array(file.fileData)], file.fileName, {
+              type: file.mimeType,
+            }),
+            deviceType: file.deviceType,
+            deviceName: file.deviceName,
+            connectionMethod: file.connectionMethod,
+            attachmentType: 'test_result',
+            sourceFileId: file.sourceFileId,
+          })
+          .then((res: any) => ({ status: 'fulfilled' as const, file, fileName: file.fileName, value: res }))
+          .catch((err: any) => ({ status: 'rejected' as const, file, fileName: file.fileName, reason: err }))
+      )
+    );
+    const successes = results.filter(r => r.status === 'fulfilled') as Array<{status: 'fulfilled'; file: GroupedDeviceFile; fileName: string; value: any}>;
+    const failures = results.filter(r => r.status === 'rejected') as Array<{status: 'rejected'; fileName: string; reason: any}>;
+
+    if (successes.length > 0) {
+      notification.success({
+        message: t('common:success'),
+        description: t('medical:deviceImport.filesUploaded', { done: successes.length, total: pendingFiles.length }) + (failures.length ? t('medical:deviceImport.filesFailedSuffix', { failed: failures.length }) : ''),
+        placement: 'bottomRight',
+        duration: 3,
+      });
+    }
+    if (failures.length > 0) {
+      const lines = failures.slice(0, 5).map(f => `• ${f.fileName}: ${f?.reason?.message || String(f.reason)}`).join('\n');
       notification.warning({
-        message: t('common:warning'),
-        description: t('medical:deviceImport.serialRequired', 'Enter a patient name or serial to save this result for later.'),
+        message: t('medical:deviceImport.partialSuccess', 'Some files failed to upload'),
+        description: lines,
+        placement: 'bottomRight',
+        duration: 6,
+      });
+      console.warn('Attachment upload failures:', failures);
+    }
+    return successes;
+  };
+
+  const warnPdfFailed = () =>
+    notification.warning({
+      message: t('medical:deviceImport.pdfGenerationFailed', 'PDF Generation Failed'),
+      description: t('medical:deviceImport.pdfGenerationFailedDesc', 'The record was saved but PDF generation failed. You can regenerate it from the medical record view.'),
+      placement: 'bottomRight',
+      duration: 5,
+    });
+
+  // Add the result to a record the patient already has, then rebuild that record's lab report
+  const attachToExisting = async () => {
+    try {
+      await form.validateFields(['patientId']);
+    } catch {
+      return;
+    }
+    if (!existingRecordId) {
+      notification.error({
+        message: t('common:error'),
+        description: t('medical:deviceImport.pickRecord'),
         placement: 'bottomRight',
       });
       return;
     }
+    if (mismatches.length > 0 && !(await confirmMismatch(mismatches, pickedPatient?.name || ''))) {
+      return;
+    }
+    setLoading(true);
     try {
-      setLoading(true);
-      const filesMeta = pendingFiles.map((f) => ({
-        originalName: f.fileName,
-        fileSize: f.fileData?.length,
-      }));
-      const savedCount = await fileHistoryService.saveDeviceFilesForLater(serial, filesMeta, pendingFiles[0]?.patientIdentifier);
-      if (!savedCount) {
-        notification.error({
-          message: t('common:error'),
-          description: t('medical:deviceImport.savedNone', 'Nothing was saved for later: the result file was not found. The result is still open.'),
-          placement: 'bottomRight',
-          duration: 0,
-        });
-        return;
+      const successes = await uploadFiles(existingRecordId);
+      if (successes.length === 0) return;
+      if (printAfterSave) {
+        try {
+          const pdf = await labInboxService.regenerateLabReport(existingRecordId);
+          const autoOpenReport = (typeof window !== 'undefined') && localStorage.getItem('autoOpenGeneratedReport') === 'true';
+          if (pdf?.id && autoOpenReport) {
+            await MedicalService.openAttachmentExternally(pdf.id);
+          }
+        } catch (pdfError) {
+          console.error('Failed to rebuild the lab report:', pdfError);
+          warnPdfFailed();
+        }
       }
-      notification.success({
-        message: t('common:success'),
-        description: t('medical:deviceImport.savedForLater', {
-          defaultValue: "Saved {{n}} file(s) for later under '{{serial}}'.",
-          n: savedCount,
-          serial,
-        }),
-        placement: 'bottomRight',
-      });
       finishImport();
-    } catch (e: any) {
-      console.error('Save for later failed:', e);
-      notification.error({
-        message: t('common:error'),
-        description: e?.message || t('medical:deviceImport.saveForLaterFailed', 'Failed to save for later'),
-        placement: 'bottomRight',
-      });
+      navigate(`/medical-records/${existingRecordId}`);
     } finally {
       setLoading(false);
     }
@@ -438,6 +486,10 @@ const DeviceImportDialog: React.FC = () => {
   };
 
   const handleSubmit = async () => {
+    if (target === 'existing') {
+      await attachToExisting();
+      return;
+    }
     let values: any;
     try {
       values = await form.validateFields();
@@ -511,53 +563,7 @@ const DeviceImportDialog: React.FC = () => {
       const createdRecord = await createMutation.mutateAsync(input);
 
       if (createdRecord && pendingFiles.length > 0) {
-        const tasks = pendingFiles.map((file) =>
-          uploadMutation
-            .mutateAsync({
-              medicalRecordId: createdRecord.id,
-              file: new File([new Uint8Array(file.fileData)], file.fileName, {
-                type: file.mimeType,
-              }),
-              deviceType: file.deviceType,
-              deviceName: file.deviceName,
-              connectionMethod: file.connectionMethod,
-              attachmentType: 'test_result',
-              sourceFileId: file.sourceFileId,
-            })
-            .then((res: any) => ({ status: 'fulfilled' as const, file, fileName: file.fileName, value: res }))
-            .catch((err: any) => ({ status: 'rejected' as const, file, fileName: file.fileName, reason: err }))
-        );
-
-        const results = await Promise.all(tasks);
-        const successes = results.filter(r => r.status === 'fulfilled') as Array<{status: 'fulfilled'; file: GroupedDeviceFile; fileName: string; value: any}>;
-        const failures = results.filter(r => r.status === 'rejected') as Array<{status: 'rejected'; fileName: string; reason: any}>;
-
-        if (successes.length > 0) {
-          notification.success({
-            message: t('common:success'),
-            description: t('medical:deviceImport.filesUploaded', { done: successes.length, total: pendingFiles.length }) + (failures.length ? t('medical:deviceImport.filesFailedSuffix', { failed: failures.length }) : ''),
-            placement: 'bottomRight',
-            duration: 3,
-          });
-
-          try {
-            const uniquePendingIds = Array.from(new Set(successes.map(s => s.file.pendingEntryId).filter(Boolean))) as number[];
-            await Promise.all(uniquePendingIds.map(id => fileHistoryService.markPendingEntryProcessed(id)));
-          } catch (e) {
-            console.warn('Failed to mark some pending entries processed:', e);
-          }
-        }
-
-        if (failures.length > 0) {
-          const lines = failures.slice(0, 5).map(f => `• ${f.fileName}: ${f?.reason?.message || String(f.reason)}`).join('\n');
-          notification.warning({
-            message: t('medical:deviceImport.partialSuccess', 'Some files failed to upload'),
-            description: lines,
-            placement: 'bottomRight',
-            duration: 6,
-          });
-          console.warn('Attachment upload failures:', failures);
-        }
+        const successes = await uploadFiles(createdRecord.id);
 
         const attachmentIds = successes.map(s => s.value?.id).filter(Boolean);
         if (printAfterSave && attachmentIds.length > 0) {
@@ -728,21 +734,6 @@ const DeviceImportDialog: React.FC = () => {
         />
       </Card>
 
-      {/* Save for later controls */}
-      <Card size="small" style={{ marginBottom: 16 }}>
-        <Space wrap>
-          <Input
-            placeholder={t('medical:deviceImport.serialPlaceholder', 'Patient name or serial')}
-            value={patientSerial}
-            onChange={(e) => setPatientSerial(e.target.value)}
-            style={{ width: 300 }}
-          />
-          <Button onClick={handleSaveForLater} disabled={pendingFiles.length === 0} loading={loading}>
-            {t('medical:deviceImport.saveForLater', 'Save for later')}
-          </Button>
-        </Space>
-      </Card>
-
       <Divider>{t('medical:deviceImport.medicalRecordDetails')}</Divider>
 
       {/* Medical Record Form */}
@@ -801,6 +792,24 @@ const DeviceImportDialog: React.FC = () => {
           />
         )}
 
+        <Form.Item label={t('medical:deviceImport.target.label')}>
+          <Radio.Group value={target} onChange={(e) => setTarget(e.target.value)}>
+            <Radio value="new">{t('medical:deviceImport.target.new')}</Radio>
+            <Radio value="existing">{t('medical:deviceImport.target.existing')}</Radio>
+          </Radio.Group>
+        </Form.Item>
+
+        {target === 'existing' && (
+          <Form.Item label={t('medical:deviceImport.target.record')} required>
+            <PatientRecordSelect
+              key={pickedPatientId ?? 'none'}
+              patientId={pickedPatientId}
+              value={existingRecordId}
+              onChange={onExistingRecordChange}
+            />
+          </Form.Item>
+        )}
+
         {/* Inline Patient Creation Section */}
         <CreatePatientSection
           extractedData={extractedPatientData}
@@ -813,6 +822,7 @@ const DeviceImportDialog: React.FC = () => {
         />
 
         {/* Medical Record Fields using tabbed component */}
+        {target === 'new' && (
         <TabbedMedicalRecordFields
           form={form}
           recordType={recordType}
@@ -832,6 +842,7 @@ const DeviceImportDialog: React.FC = () => {
           lineItemsCount={lineItems.length}
           errorFields={errorFields}
         />
+        )}
 
         <Form.Item style={{ marginTop: 16, marginBottom: 16 }}>
           <Checkbox
@@ -854,7 +865,10 @@ const DeviceImportDialog: React.FC = () => {
               onClick={handleSubmit}
               data-testid="device-import-submit-btn"
             >
-              {t('common:buttons.create')}
+              {target === 'existing' ? t('medical:deviceImport.target.attach') : t('common:buttons.create')}
+            </Button>
+            <Button onClick={handleNotNow} disabled={loading}>
+              {t('medical:deviceImport.notNow')}
             </Button>
             <Button onClick={handleCancel} icon={<CloseOutlined />}>
               {t('common:buttons.cancel')}

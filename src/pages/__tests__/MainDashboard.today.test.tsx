@@ -40,7 +40,8 @@ vi.mock('../../components/tables/PatientTable', () => ({
   ),
 }));
 vi.mock('../../components/tables/HouseholdTable', () => ({ HouseholdTable: () => null }));
-vi.mock('../../components/PendingDeviceTable', () => ({ default: () => <div>saved lab results table</div> }));
+vi.mock('../../components/LabInbox/LabInboxList', () => ({ default: () => <div>lab inbox list</div> }));
+vi.mock('../../hooks/useLabInbox', () => ({ useLabInboxCount: () => ({ data: 2 }) }));
 vi.mock('../Appointments/AppointmentsTab', () => ({ default: () => null }));
 vi.mock('../../components/forms/PatientFormWithOwner', () => ({
   PatientFormWithOwner: ({ defaultMicrochipId }: { defaultMicrochipId?: string }) => (
@@ -90,7 +91,7 @@ describe('MainDashboard today', () => {
     renderDashboard();
     const strip = await screen.findByText('today strip, 2 lab results waiting');
     fireEvent.click(strip);
-    expect(await screen.findByText('saved lab results table')).toBeInTheDocument();
+    expect(await screen.findByText('lab inbox list')).toBeInTheDocument();
   });
 
   it('opens Add patient with the chip filled in when a scan found nobody', async () => {

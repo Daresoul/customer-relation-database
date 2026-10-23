@@ -105,3 +105,6 @@ pub mod patient_chart_tests;
 
 #[cfg(test)]
 pub mod shell_search_tests;
+
+#[cfg(test)]
+pub mod lab_inbox_tests;

@@ -985,7 +985,7 @@ impl MedicalRecordService {
     }
 
     /// Helper to get patient data for PDF generation
-    async fn get_patient_for_pdf(
+    pub(crate) async fn get_patient_for_pdf(
         db: &DatabaseConnection,
         patient_id: i64,
     ) -> Result<crate::services::device_pdf_service::PatientData, String> {
@@ -1054,7 +1054,7 @@ impl MedicalRecordService {
     }
 
     /// Generate Java PDF report with multiple device samples and save as attachment
-    async fn generate_and_save_pdfs_multi(
+    pub(crate) async fn generate_and_save_pdfs_multi(
         env: &PdfEnv,
         db: &DatabaseConnection,
         medical_record_id: i64,

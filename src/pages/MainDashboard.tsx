@@ -13,8 +13,8 @@ import { HouseholdTable } from '../components/tables/HouseholdTable';
 import { PatientSearch } from '../components/search/PatientSearch';
 import { HouseholdSearch } from '../components/search/HouseholdSearch';
 import { Button } from '../components/common/Button';
-import PendingDeviceTable from '../components/PendingDeviceTable';
-import { fileHistoryService } from '../services/fileHistoryService';
+import LabInboxList from '../components/LabInbox/LabInboxList';
+import { useLabInboxCount } from '../hooks/useLabInbox';
 import { invoke } from '@/services/invoke';
 import { FormModal } from '../components/common/Modal';
 import { PatientFormWithOwner } from '../components/forms/PatientFormWithOwner';
@@ -46,27 +46,12 @@ export const MainDashboard: React.FC = () => {
   const app = App.useApp();
   const themeColors = useThemeColors();
   const activeView = currentView === 'animal' ? 'patients' : currentView === 'household' ? 'households' : 'appointments';
-  // Local tab state so we can include custom tabs (like 'saved')
+  // Local tab state so we can include custom tabs (like the lab inbox)
   const [activeTab, setActiveTab] = useState<string>(activeView);
   useEffect(() => setActiveTab(activeView), [activeView]);
 
-  // Count of device results parked in "Saved for Later", shown as a badge on the
-  // tab so staff can see there's a queue without opening it. The table only mounts
-  // when its tab is active, so the dashboard tracks the count independently.
-  const [pendingCount, setPendingCount] = useState(0);
-  const loadPendingCount = React.useCallback(async () => {
-    try {
-      const res = await fileHistoryService.listPendingDeviceEntries();
-      setPendingCount(res.length);
-    } catch {
-      // non-critical
-    }
-  }, []);
-  useEffect(() => {
-    loadPendingCount();
-    const interval = setInterval(loadPendingCount, 60000);
-    return () => clearInterval(interval);
-  }, [loadPendingCount]);
+  // Lab results waiting in the inbox, shown as a badge on its tab
+  const { data: labWaiting } = useLabInboxCount();
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<unknown>(null);
   const [patients, setPatients] = useState<PatientWithHousehold[]>([]);
@@ -267,11 +252,8 @@ export const MainDashboard: React.FC = () => {
       <Space direction="vertical" size="large" className={styles.contentWrapper}>
         {loadErrorAlert}
         <TodayStrip
-          waitingLabCount={pendingCount}
-          onOpenLabResults={() => {
-            setActiveTab('saved');
-            loadPendingCount();
-          }}
+          waitingLabCount={labWaiting ?? 0}
+          onOpenLabResults={() => setActiveTab('labInbox')}
         />
 
         {/* Data Tables with integrated search */}
@@ -283,9 +265,7 @@ export const MainDashboard: React.FC = () => {
               if (key === 'patients') setCurrentView('animal');
               else if (key === 'households') setCurrentView('household');
               else if (key === 'appointments') setCurrentView('appointments');
-              // 'saved' is a local-only tab; no view context update needed
-              // Keep the badge fresh as staff move between tabs.
-              loadPendingCount();
+              // 'labInbox' is a local-only tab; no view context update needed
             }}
             tabBarExtraContent={
               <Space>
@@ -377,17 +357,17 @@ export const MainDashboard: React.FC = () => {
                 children: <AppointmentsTab />,
               },
               {
-                key: 'saved',
+                key: 'labInbox',
                 label: (
                   <span>
                     <FileTextOutlined />
-                    {t('devices:pending.title')}
-                    {pendingCount > 0 && (
-                      <Badge count={pendingCount} size="small" style={{ marginLeft: 8 }} />
+                    {t('devices:inbox.title')}
+                    {!!labWaiting && (
+                      <Badge count={labWaiting} size="small" style={{ marginLeft: 8 }} />
                     )}
                   </span>
                 ),
-                children: <PendingDeviceTable onItemsLoaded={setPendingCount} />,
+                children: <LabInboxList />,
               },
             ]}
           />
