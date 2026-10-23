@@ -8,8 +8,16 @@ use sea_orm::{DatabaseConnection, ConnectionTrait, Statement, DbBackend};
 pub struct SyncScheduler;
 
 /// Delete sync log rows older than 30 days; returns how many went.
-pub async fn prune_sync_logs(_db: &DatabaseConnection, _now: DateTime<Utc>) -> Result<u64, String> {
-    Ok(0)
+pub async fn prune_sync_logs(db: &DatabaseConnection, now: DateTime<Utc>) -> Result<u64, String> {
+    let cutoff = (now - Duration::days(30)).format("%Y-%m-%d %H:%M:%S").to_string();
+    db.execute(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "DELETE FROM sync_logs WHERE started_at < ?",
+        [cutoff.into()],
+    ))
+    .await
+    .map(|r| r.rows_affected())
+    .map_err(|e| format!("Failed to prune sync logs: {}", e))
 }
 
 /// Query for the Google events the cancellation pull reads: every event
@@ -29,9 +37,16 @@ impl SyncScheduler {
     pub fn start(db: Arc<DatabaseConnection>) {
         tokio::spawn(async move {
             log::info!("Running initial sync on startup...");
+            match prune_sync_logs(&db, Utc::now()).await {
+                Ok(n) if n > 0 => log::info!("Pruned {} sync log rows older than 30 days", n),
+                Ok(_) => {}
+                Err(e) => log::warn!("{}", e),
+            }
             Self::run_once(&db).await;
 
-            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(60)); // 1 minute
+            // After sleep, run once instead of firing every missed minute.
+            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(60));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
             loop {
                 interval.tick().await;
