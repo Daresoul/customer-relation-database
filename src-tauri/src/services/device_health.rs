@@ -251,8 +251,13 @@ impl HealthTracker {
     }
 }
 
+/// The clinic's date setting (DD/MM/YYYY …) as a chrono day-and-month pattern.
+pub fn day_month_pattern(_date_format: &str) -> &'static str {
+    "%d.%m."
+}
+
 /// "10:42" today, "17.10. 18:05" on an earlier day.
-fn when(at: DateTime<FixedOffset>, now: DateTime<FixedOffset>) -> String {
+fn when(at: DateTime<FixedOffset>, now: DateTime<FixedOffset>, _day_month: &str) -> String {
     let at = at.with_timezone(now.offset());
     if at.date_naive() == now.date_naive() {
         at.format("%H:%M").to_string()
@@ -261,13 +266,13 @@ fn when(at: DateTime<FixedOffset>, now: DateTime<FixedOffset>) -> String {
     }
 }
 
-pub fn problem_line(problem: &DeviceProblem, now: DateTime<FixedOffset>, lang: Lang) -> String {
+pub fn problem_line(problem: &DeviceProblem, now: DateTime<FixedOffset>, lang: Lang, day_month: &str) -> String {
     let name = &problem.name;
     match (&problem.kind, lang) {
-        (ProblemKind::NoConnection { since }, Lang::En) => format!("{name}: no connection since {}", when(*since, now)),
-        (ProblemKind::NoConnection { since }, Lang::Mk) => format!("{name}: нема врска од {}", when(*since, now)),
-        (ProblemKind::Quiet { last_result: Some(at) }, Lang::En) => format!("{name}: no results since {}", when(*at, now)),
-        (ProblemKind::Quiet { last_result: Some(at) }, Lang::Mk) => format!("{name}: нема резултати од {}", when(*at, now)),
+        (ProblemKind::NoConnection { since }, Lang::En) => format!("{name}: no connection since {}", when(*since, now, day_month)),
+        (ProblemKind::NoConnection { since }, Lang::Mk) => format!("{name}: нема врска од {}", when(*since, now, day_month)),
+        (ProblemKind::Quiet { last_result: Some(at) }, Lang::En) => format!("{name}: no results since {}", when(*at, now, day_month)),
+        (ProblemKind::Quiet { last_result: Some(at) }, Lang::Mk) => format!("{name}: нема резултати од {}", when(*at, now, day_month)),
         (ProblemKind::Quiet { last_result: None }, Lang::En) => format!("{name}: no results today"),
         (ProblemKind::Quiet { last_result: None }, Lang::Mk) => format!("{name}: нема резултати денес"),
     }
@@ -287,6 +292,7 @@ pub fn tray_summary(
     device_count: usize,
     now: DateTime<FixedOffset>,
     lang: Lang,
+    day_month: &str,
 ) -> TraySummary {
     if problems.is_empty() {
         let tooltip = match (device_count, lang) {
@@ -299,7 +305,7 @@ pub fn tray_summary(
     let mut tooltip = String::from("Arkivet");
     for p in problems {
         tooltip.push('\n');
-        tooltip.push_str(&problem_line(p, now, lang));
+        tooltip.push_str(&problem_line(p, now, lang, day_month));
     }
     if tooltip.chars().count() > TOOLTIP_MAX_CHARS {
         tooltip = tooltip.chars().take(TOOLTIP_MAX_CHARS - 1).collect::<String>() + "…";
@@ -313,23 +319,23 @@ pub struct NotificationText {
     pub body: String,
 }
 
-pub fn alert_text(alert: &Alert, now: DateTime<FixedOffset>, lang: Lang) -> NotificationText {
+pub fn alert_text(alert: &Alert, now: DateTime<FixedOffset>, lang: Lang, day_month: &str) -> NotificationText {
     let (title, body) = match (alert, lang) {
         (Alert::Down(p), Lang::En) => (
             "Lab machine not connected",
-            format!("{}. Check that it is on and the cable is plugged in, then press Reconnect in Arkivet.", problem_line(p, now, lang)),
+            format!("{}. Check that it is on and the cable is plugged in, then press Reconnect in Arkivet.", problem_line(p, now, lang, day_month)),
         ),
         (Alert::Down(p), Lang::Mk) => (
             "Лабораторискиот уред не е поврзан",
-            format!("{}. Проверете дали е вклучен и дали кабелот е приклучен, па притиснете Повторно поврзи во Arkivet.", problem_line(p, now, lang)),
+            format!("{}. Проверете дали е вклучен и дали кабелот е приклучен, па притиснете Повторно поврзи во Arkivet.", problem_line(p, now, lang, day_month)),
         ),
         (Alert::Quiet(p), Lang::En) => (
             "Lab machine is quiet",
-            format!("{}. If tests were run, check that it is on and connected.", problem_line(p, now, lang)),
+            format!("{}. If tests were run, check that it is on and connected.", problem_line(p, now, lang, day_month)),
         ),
         (Alert::Quiet(p), Lang::Mk) => (
             "Лабораторискиот уред не праќа резултати",
-            format!("{}. Ако се правени тестови, проверете дали е вклучен и поврзан.", problem_line(p, now, lang)),
+            format!("{}. Ако се правени тестови, проверете дали е вклучен и поврзан.", problem_line(p, now, lang, day_month)),
         ),
         (Alert::BackOnline { name, .. }, Lang::En) => ("Lab machine back online", format!("{name} is connected again.")),
         (Alert::BackOnline { name, .. }, Lang::Mk) => ("Лабораторискиот уред повторно работи", format!("{name} е повторно поврзан.")),
@@ -746,10 +752,9 @@ async fn check_once(
         log::warn!("Device alerts: using defaults, settings not readable: {e}");
         DeviceAlertSettings::default()
     });
-    let lang = crate::services::settings::SettingsService::get_settings(db, "default")
-        .await
-        .map(|s| Lang::from_code(&s.settings.language))
-        .unwrap_or(Lang::En);
+    let app_settings = crate::services::settings::SettingsService::get_settings(db, "default").await.ok();
+    let lang = app_settings.as_ref().map(|s| Lang::from_code(&s.settings.language)).unwrap_or(Lang::En);
+    let day_month = day_month_pattern(app_settings.as_ref().map(|s| s.settings.date_format.as_str()).unwrap_or(""));
     let integrations = DeviceIntegrationService::get_all(db).await.unwrap_or_default();
     let stored = DeviceIntegrationService::last_result_times(db).await.unwrap_or_default();
 
@@ -766,13 +771,13 @@ async fn check_once(
     let now = chrono::Local::now().fixed_offset();
     let observed = tracker.observe(now, &devices, &settings);
 
-    let summary = tray_summary(&observed.problems, devices.len(), now, lang);
+    let summary = tray_summary(&observed.problems, devices.len(), now, lang, day_month);
     if shown.as_ref() != Some(&summary) {
         show_in_tray(app, &summary);
         *shown = Some(summary);
     }
     for alert in &observed.alerts {
-        let text = alert_text(alert, now, lang);
+        let text = alert_text(alert, now, lang, day_month);
         log::info!("Device alert: {} | {}", text.title, text.body);
         let identifier = app.config().tauri.bundle.identifier.clone();
         if let Err(e) = tauri::api::notification::Notification::new(identifier)
@@ -1033,32 +1038,44 @@ mod tests {
     }
 
     #[test]
+    fn earlier_days_follow_the_clinics_date_setting() {
+        assert_eq!(day_month_pattern("DD/MM/YYYY"), "%d/%m");
+        assert_eq!(day_month_pattern("DD.MM.YYYY"), "%d.%m");
+        assert_eq!(day_month_pattern("MM/DD/YYYY"), "%m/%d");
+        assert_eq!(day_month_pattern("YYYY-MM-DD"), "%m-%d");
+        assert_eq!(day_month_pattern(""), "%d/%m");
+        let now = local(2026, 10, 19, 11, 0);
+        let quiet = DeviceProblem { integration_id: 1, name: "Exigo".into(), kind: ProblemKind::Quiet { last_result: Some(local(2026, 10, 17, 18, 5)) } };
+        assert_eq!(problem_line(&quiet, now, Lang::En, day_month_pattern("DD/MM/YYYY")), "Exigo: no results since 17/10 18:05");
+    }
+
+    #[test]
     fn tray_says_all_ok_or_names_the_problem_in_the_app_language() {
         let now = monday(11, 0);
-        assert_eq!(tray_summary(&[], 2, now, Lang::En), TraySummary { warning: false, tooltip: "Arkivet — All devices OK".into() });
-        assert_eq!(tray_summary(&[], 2, now, Lang::Mk).tooltip, "Arkivet — Сите уреди работат");
-        assert_eq!(tray_summary(&[], 0, now, Lang::En), TraySummary { warning: false, tooltip: "Arkivet".into() });
+        assert_eq!(tray_summary(&[], 2, now, Lang::En, "%d.%m."), TraySummary { warning: false, tooltip: "Arkivet — All devices OK".into() });
+        assert_eq!(tray_summary(&[], 2, now, Lang::Mk, "%d.%m.").tooltip, "Arkivet — Сите уреди работат");
+        assert_eq!(tray_summary(&[], 0, now, Lang::En, "%d.%m."), TraySummary { warning: false, tooltip: "Arkivet".into() });
 
         let down = DeviceProblem {
             integration_id: 1,
             name: "Blood analyzer".into(),
             kind: ProblemKind::NoConnection { since: monday(10, 42) },
         };
-        let s = tray_summary(&[down.clone()], 2, now, Lang::En);
+        let s = tray_summary(&[down.clone()], 2, now, Lang::En, "%d.%m.");
         assert!(s.warning);
         assert_eq!(s.tooltip, "Arkivet\nBlood analyzer: no connection since 10:42");
-        assert_eq!(tray_summary(&[down], 2, now, Lang::Mk).tooltip, "Arkivet\nBlood analyzer: нема врска од 10:42");
+        assert_eq!(tray_summary(&[down], 2, now, Lang::Mk, "%d.%m.").tooltip, "Arkivet\nBlood analyzer: нема врска од 10:42");
     }
 
     #[test]
     fn problem_lines_show_the_date_when_it_was_not_today() {
         let now = monday(11, 0);
         let quiet = |last| DeviceProblem { integration_id: 1, name: "Exigo".into(), kind: ProblemKind::Quiet { last_result: last } };
-        assert_eq!(problem_line(&quiet(Some(monday(9, 10))), now, Lang::En), "Exigo: no results since 09:10");
-        assert_eq!(problem_line(&quiet(Some(local(2026, 10, 17, 18, 5))), now, Lang::En), "Exigo: no results since 17.10. 18:05");
-        assert_eq!(problem_line(&quiet(None), now, Lang::En), "Exigo: no results today");
-        assert_eq!(problem_line(&quiet(None), now, Lang::Mk), "Exigo: нема резултати денес");
-        assert_eq!(problem_line(&quiet(Some(monday(9, 10))), now, Lang::Mk), "Exigo: нема резултати од 09:10");
+        assert_eq!(problem_line(&quiet(Some(monday(9, 10))), now, Lang::En, "%d.%m."), "Exigo: no results since 09:10");
+        assert_eq!(problem_line(&quiet(Some(local(2026, 10, 17, 18, 5))), now, Lang::En, "%d.%m."), "Exigo: no results since 17.10. 18:05");
+        assert_eq!(problem_line(&quiet(None), now, Lang::En, "%d.%m."), "Exigo: no results today");
+        assert_eq!(problem_line(&quiet(None), now, Lang::Mk, "%d.%m."), "Exigo: нема резултати денес");
+        assert_eq!(problem_line(&quiet(Some(monday(9, 10))), now, Lang::Mk, "%d.%m."), "Exigo: нема резултати од 09:10");
     }
 
     #[test]
@@ -1070,7 +1087,7 @@ mod tests {
                 kind: ProblemKind::NoConnection { since: monday(10, 42) },
             })
             .collect();
-        let s = tray_summary(&problems, 6, monday(11, 0), Lang::Mk);
+        let s = tray_summary(&problems, 6, monday(11, 0), Lang::Mk, "%d.%m.");
         assert!(s.tooltip.chars().count() <= TOOLTIP_MAX_CHARS);
         assert!(s.tooltip.ends_with('…'));
     }
@@ -1083,17 +1100,17 @@ mod tests {
             name: "Blood analyzer".into(),
             kind: ProblemKind::NoConnection { since: monday(10, 42) },
         };
-        let en = alert_text(&Alert::Down(down.clone()), now, Lang::En);
+        let en = alert_text(&Alert::Down(down.clone()), now, Lang::En, "%d.%m.");
         assert_eq!(en.title, "Lab machine not connected");
         assert!(en.body.starts_with("Blood analyzer: no connection since 10:42."));
-        let mk = alert_text(&Alert::Down(down), now, Lang::Mk);
+        let mk = alert_text(&Alert::Down(down), now, Lang::Mk, "%d.%m.");
         assert!(mk.body.starts_with("Blood analyzer: нема врска од 10:42."));
 
-        let back = alert_text(&Alert::BackOnline { integration_id: 1, name: "Blood analyzer".into() }, now, Lang::En);
+        let back = alert_text(&Alert::BackOnline { integration_id: 1, name: "Blood analyzer".into() }, now, Lang::En, "%d.%m.");
         assert_eq!(back.title, "Lab machine back online");
         assert!(back.body.contains("Blood analyzer"));
         let quiet = DeviceProblem { integration_id: 1, name: "Exigo".into(), kind: ProblemKind::Quiet { last_result: None } };
-        assert!(alert_text(&Alert::Quiet(quiet), now, Lang::Mk).body.starts_with("Exigo: нема резултати денес."));
+        assert!(alert_text(&Alert::Quiet(quiet), now, Lang::Mk, "%d.%m.").body.starts_with("Exigo: нема резултати денес."));
     }
 
     #[test]
