@@ -150,3 +150,6 @@ pub mod log_prune_tests;
 
 #[cfg(test)]
 pub mod master_data_names_tests;
+
+#[cfg(all(test, debug_assertions))]
+pub mod dev_bridge_tests;

@@ -40,3 +40,6 @@ pub mod app_launch;
 pub mod session_marker;
 pub mod temp_cleanup;
 pub mod names;
+
+#[cfg(debug_assertions)]
+pub mod dev_bridge;
