@@ -11,7 +11,6 @@ import {
   Col,
   Popconfirm,
   App,
-  Radio,
   Typography
 } from 'antd';
 import {
@@ -23,11 +22,14 @@ import {
   MinusCircleOutlined,
   UserOutlined,
   PhoneOutlined,
-  MailOutlined
+  MailOutlined,
+  StarOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { PersonWithContacts, PersonContact } from '../../../types/household';
 import { useUpdatePerson, useDeletePerson, useUpdatePersonContacts } from '../../../hooks/useHousehold';
+import { useSetPrimaryPerson } from '../../../hooks/useHouseholdActions';
+import { knownErrorMessage } from '@/utils/errors';
 import styles from '../HouseholdDetail.module.css';
 
 const { Text } = Typography;
@@ -36,7 +38,6 @@ interface PersonCardProps {
   person: PersonWithContacts;
   householdId: number;
   canDelete: boolean;
-  onPrimaryChange?: (personId: number) => void;
 }
 
 
@@ -47,8 +48,7 @@ const getContactIcon = (type: string) => {
 export const PersonCard: React.FC<PersonCardProps> = ({
   person,
   householdId,
-  canDelete,
-  onPrimaryChange
+  canDelete
 }) => {
   const { notification } = App.useApp();
   const { t } = useTranslation('households');
@@ -57,6 +57,7 @@ export const PersonCard: React.FC<PersonCardProps> = ({
   const updatePerson = useUpdatePerson();
   const deletePerson = useDeletePerson();
   const updateContacts = useUpdatePersonContacts();
+  const setPrimary = useSetPrimaryPerson();
 
   const contactTypeOptions = [
     { label: t('detail.people.modal.contactTypes.phone'), value: 'phone', icon: <PhoneOutlined /> },
@@ -79,7 +80,6 @@ export const PersonCard: React.FC<PersonCardProps> = ({
     form.setFieldsValue({
       firstName: person.firstName,
       lastName: person.lastName,
-      isPrimary: person.isPrimary,
       contacts: person.contacts.map(c => ({
         contactType: c.contactType,
         contactValue: c.contactValue,
@@ -104,8 +104,7 @@ export const PersonCard: React.FC<PersonCardProps> = ({
         householdId,
         updates: {
           firstName: values.firstName,
-          lastName: values.lastName,
-          isPrimary: values.isPrimary
+          lastName: values.lastName
         }
       });
 
@@ -120,13 +119,23 @@ export const PersonCard: React.FC<PersonCardProps> = ({
 
       setIsEditing(false);
       notification.success({ message: t('common:success'), description: t('detail.people.personUpdated'), placement: "bottomRight", duration: 3 });
-
-      if (values.isPrimary && !person.isPrimary) {
-        onPrimaryChange?.(person.id);
-      }
     } catch (error) {
       notification.error({ message: t('common:error'), description: t('detail.householdInfo.failedToSave'), placement: "bottomRight", duration: 5 });
       console.error('Save failed:', error);
+    }
+  };
+
+  const handleMakePrimary = async () => {
+    try {
+      await setPrimary.mutateAsync(person.id);
+      notification.success({ message: t('detail.people.primaryChanged'), placement: 'bottomRight', duration: 3 });
+    } catch (error) {
+      notification.error({
+        message: t('detail.people.primaryFailed'),
+        description: knownErrorMessage(error, t) || undefined,
+        placement: 'bottomRight',
+        duration: 5,
+      });
     }
   };
 
@@ -171,7 +180,6 @@ export const PersonCard: React.FC<PersonCardProps> = ({
           initialValues={{
             firstName: person.firstName,
             lastName: person.lastName,
-            isPrimary: person.isPrimary,
             contacts: person.contacts
           }}
         >
@@ -195,16 +203,6 @@ export const PersonCard: React.FC<PersonCardProps> = ({
               </Form.Item>
             </Col>
           </Row>
-
-          <Form.Item
-            name="isPrimary"
-            label={t('detail.people.modal.labels.primaryContact')}
-          >
-            <Radio.Group>
-              <Radio value={true}>{t('detail.people.modal.labels.yes')}</Radio>
-              <Radio value={false}>{t('detail.people.modal.labels.no')}</Radio>
-            </Radio.Group>
-          </Form.Item>
 
           <Form.Item label={t('detail.people.modal.labels.contactMethods')}>
             <Form.List name="contacts">
@@ -291,6 +289,16 @@ export const PersonCard: React.FC<PersonCardProps> = ({
       }
       extra={
         <Space>
+          {!person.isPrimary && (
+            <Button
+              icon={<StarOutlined />}
+              onClick={handleMakePrimary}
+              loading={setPrimary.isPending}
+              size="small"
+            >
+              {t('detail.people.makePrimary')}
+            </Button>
+          )}
           <Button
             icon={<EditOutlined />}
             onClick={handleEdit}

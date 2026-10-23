@@ -42,11 +42,6 @@ export const PeopleSection: React.FC<PeopleSectionProps> = ({ people, householdI
     notification.success({ message: t('common:success'), description: t('detail.people.personAdded'), placement: 'bottomRight', duration: 3 });
   };
 
-  const handlePrimaryChange = (personId: number) => {
-    // This is handled by the backend when updating isPrimary
-    // The backend ensures only one person is primary
-  };
-
   return (
     <div className={styles.sectionContainer}>
       <div className={styles.sectionHeaderRow}>
@@ -68,7 +63,6 @@ export const PeopleSection: React.FC<PeopleSectionProps> = ({ people, householdI
               person={person}
               householdId={householdId}
               canDelete={people.length > 1}
-              onPrimaryChange={handlePrimaryChange}
             />
           ))}
         </div>
