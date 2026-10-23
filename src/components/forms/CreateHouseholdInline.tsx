@@ -10,6 +10,7 @@ import type {
   CreateContactDto,
   CreateHouseholdWithPeopleDto,
 } from '../../types/household';
+import { isPhoneNumber } from '../../types/household';
 import { errorText } from '@/utils/notifyError';
 
 const { Text } = Typography;
@@ -292,6 +293,10 @@ export const CreateHouseholdInline: React.FC<CreateHouseholdInlineProps> = ({
           <Form.Item
             name="phone"
             label={t('forms:labels.phone', 'Phone Number')}
+            rules={[{
+              validator: (_, value?: string) =>
+                !value?.trim() || isPhoneNumber(value.trim()) ? Promise.resolve() : Promise.reject(new Error(t('forms:validation.phone'))),
+            }]}
           >
             <Input placeholder={t('forms:placeholders.enterPhone', 'Enter phone number')} />
           </Form.Item>

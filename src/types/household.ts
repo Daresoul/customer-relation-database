@@ -147,6 +147,11 @@ export interface CreatePatientWithHouseholdResponse {
 }
 
 // Validation helpers
+/** Digits with the usual separators; 6+ digits covers 02 3100 200 and 070 111 222. */
+export function isPhoneNumber(value: string): boolean {
+  return /^[\d\s\-+()./]+$/.test(value) && value.replace(/\D/g, '').length >= 6;
+}
+
 export function validateHouseholdDto(dto: CreateHouseholdWithPeopleDto): string | null {
   // Must have at least 1 person, max 5
   if (!dto.people || dto.people.length === 0) {
@@ -183,12 +188,8 @@ export function validateHouseholdDto(dto: CreateHouseholdWithPeopleDto): string 
         return `Invalid email: ${contact.contact_value}`;
       }
 
-      // Basic phone validation (at least 10 digits)
-      if (['phone', 'mobile', 'work_phone'].includes(contact.contact_type)) {
-        const digits = contact.contact_value.replace(/\D/g, '');
-        if (digits.length < 10) {
-          return `Phone number must have at least 10 digits: ${contact.contact_value}`;
-        }
+      if (['phone', 'mobile', 'work_phone'].includes(contact.contact_type) && !isPhoneNumber(contact.contact_value)) {
+        return `Invalid phone number: ${contact.contact_value}`;
       }
     }
   }
