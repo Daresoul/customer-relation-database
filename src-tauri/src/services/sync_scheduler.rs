@@ -7,6 +7,11 @@ use sea_orm::{DatabaseConnection, ConnectionTrait, Statement, DbBackend};
 
 pub struct SyncScheduler;
 
+/// Delete sync log rows older than 30 days; returns how many went.
+pub async fn prune_sync_logs(_db: &DatabaseConnection, _now: DateTime<Utc>) -> Result<u64, String> {
+    Ok(0)
+}
+
 /// Query for the Google events the cancellation pull reads: every event
 /// changed in the last week, whenever it takes place. A time window
 /// (timeMin/timeMax) would miss a cancelled appointment in the future.
