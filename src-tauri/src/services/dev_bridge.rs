@@ -16,7 +16,7 @@ use std::convert::Infallible;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tokio::sync::{broadcast, oneshot};
+use tokio::sync::{broadcast, oneshot, watch};
 use warp::Filter;
 
 pub const PORT: u16 = 1421;
@@ -48,25 +48,46 @@ pub struct Bridge {
     eval: Evaluator,
     next_id: AtomicU64,
     pending: Mutex<HashMap<u64, oneshot::Sender<Reply>>>,
+    /// Events the browser asked for, sent again whenever the host page loads.
+    wanted: Mutex<HashSet<String>>,
+    /// Events subscribed in the current host page.
     subscribed: Mutex<HashSet<String>>,
     events: broadcast::Sender<BridgeEvent>,
+    /// True while the hidden window shows the host page.
+    ready: watch::Sender<bool>,
 }
 
 impl Bridge {
     pub fn new(eval: Evaluator) -> Arc<Self> {
+        Self::build(eval, true)
+    }
+
+    /// Like `new`, but holds calls and subscriptions until `host_ready`.
+    pub fn new_waiting(eval: Evaluator) -> Arc<Self> {
+        Self::build(eval, false)
+    }
+
+    fn build(eval: Evaluator, ready: bool) -> Arc<Self> {
         let (events, _) = broadcast::channel(256);
         Arc::new(Bridge {
             eval,
             next_id: AtomicU64::new(1),
             pending: Mutex::new(HashMap::new()),
+            wanted: Mutex::new(HashSet::new()),
             subscribed: Mutex::new(HashSet::new()),
             events,
+            ready: watch::channel(ready).0,
         })
     }
 
     /// Replays one IPC message (as `@tauri-apps/api` sends it, minus the
     /// callback ids) in the window and waits for its result.
     pub async fn call(&self, message: Value, timeout: Duration) -> Reply {
+        let mut ready = self.ready.subscribe();
+        if tokio::time::timeout(timeout, ready.wait_for(|r| *r)).await.is_err() {
+            return Reply { ok: false, payload: json!("dev bridge: the app window is not ready (timed out)") };
+        }
+
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         let (tx, rx) = oneshot::channel();
         self.pending.lock().unwrap().insert(id, tx);
@@ -96,6 +117,10 @@ impl Bridge {
 
     /// Starts forwarding an app event from the window, once per name.
     pub fn subscribe(&self, event: &str) -> Result<(), String> {
+        self.wanted.lock().unwrap().insert(event.to_string());
+        if !*self.ready.borrow() {
+            return Ok(());
+        }
         if !self.subscribed.lock().unwrap().insert(event.to_string()) {
             return Ok(());
         }
@@ -106,13 +131,23 @@ impl Bridge {
         result
     }
 
-    /// Like `new`, but holds calls and subscriptions until `host_ready`.
-    pub fn new_waiting(eval: Evaluator) -> Arc<Self> {
-        Self::new(eval)
+    /// The host page (re)loaded: its listeners are gone, so subscribe again,
+    /// then let held calls through.
+    pub fn host_ready(&self) {
+        self.subscribed.lock().unwrap().clear();
+        self.ready.send_replace(true);
+        let wanted: Vec<String> = self.wanted.lock().unwrap().iter().cloned().collect();
+        for event in wanted {
+            if let Err(e) = self.subscribe(&event) {
+                log::warn!("Dev bridge: could not subscribe to {event}: {e}");
+            }
+        }
     }
 
-    /// The host page (re)loaded: its listeners are fresh.
-    pub fn host_ready(&self) {}
+    /// The window left the host page (it is loading something else).
+    pub fn host_gone(&self) {
+        self.ready.send_replace(false);
+    }
 
     pub fn publish(&self, event: &str, payload: Value) {
         // No browser listening is fine.
@@ -250,7 +285,7 @@ pub fn start(app: &tauri::AppHandle) {
     ENABLED.store(true, Ordering::Relaxed);
 
     let handle = app.clone();
-    let bridge = Bridge::new(Box::new(move |script: String| {
+    let bridge = Bridge::new_waiting(Box::new(move |script: String| {
         let window = handle.get_window("main").ok_or_else(|| "no main window".to_string())?;
         window.eval(&script).map_err(|e| e.to_string())
     }));
@@ -264,7 +299,16 @@ pub fn start(app: &tauri::AppHandle) {
 
 /// Keeps the hidden window on the empty host page while the bridge runs.
 pub fn on_page_load(window: tauri::Window, payload: tauri::PageLoadPayload) {
-    if enabled() && !payload.url().contains(HOST_PAGE) {
+    use tauri::Manager;
+
+    if !enabled() {
+        return;
+    }
+    let Some(bridge) = window.try_state::<Arc<Bridge>>() else { return };
+    if payload.url().contains(HOST_PAGE) {
+        bridge.host_ready();
+    } else {
+        bridge.host_gone();
         let _ = window.eval(&format!("window.location.replace('{HOST_PAGE}')"));
     }
 }
