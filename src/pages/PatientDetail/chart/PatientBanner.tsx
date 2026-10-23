@@ -182,6 +182,8 @@ export const PatientBanner: React.FC<PatientBannerProps> = ({ patient, onDelete,
                 </Text>
               )}
             </>
+          ) : patient.household ? (
+            <Link to={`/households/${patient.household.id}`}>{patient.household.householdName}</Link>
           ) : (
             <Text type="secondary">{t('patients:chart.banner.noOwner')}</Text>
           )}
