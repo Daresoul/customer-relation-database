@@ -247,6 +247,7 @@ public class PdfGeneratorCLI {
         }
 
         // Map species string to PatientType
+        patient.setSpeciesName(json.get("species").getAsString());
         String species = json.get("species").getAsString().toLowerCase();
         if (species.contains("dog") || species.contains("куче")) {
             patient.setPatientType(PatientType.DOG);

@@ -1,5 +1,8 @@
 package com.vetclinic.pdf.services;
 
+import com.vetclinic.pdf.constants.Gender;
+import com.vetclinic.pdf.constants.SpeciesName;
+
 import com.vetclinic.pdf.FontUtil;
 import com.vetclinic.pdf.Util;
 import com.vetclinic.pdf.constants.Constants;
@@ -1006,7 +1009,7 @@ public class PDFReportService {
         PatientType patientType = patient.getPatientType();
         PdfPCell type = Util.createDefaultCellWithLeftRightAlignment(
                 "Вид: ",
-                patientType.getProfileTranslated(),
+                patient.getSpeciesName() != null ? SpeciesName.macedonian(patient.getSpeciesName()) : patientType.getProfileTranslated(),
                 CELL_FONT_SIZE,
                 FontUtil.MACEDONIAN);
         type.setColspan(2);
@@ -1340,7 +1343,7 @@ public class PDFReportService {
         table.setSpacingAfter(5);
 
         // Row 1: Species, ID, Patient name (Macedonian)
-        String speciesVal = patient.getPatientType() != null ? patient.getPatientType().getCode() : "";
+        String speciesVal = SpeciesName.macedonian(patient.getSpeciesName());
         table.addCell(createPcrInfoCell("Вид:" + speciesVal));
         table.addCell(createPcrInfoCell("ИД:" + (pcrSample.getPatientId() != null ? pcrSample.getPatientId() : "")));
         table.addCell(createPcrInfoCell("Име на пациент:" + (patient.getName() != null ? patient.getName() : "")));
@@ -1919,12 +1922,13 @@ public class PDFReportService {
             Paragraph p = new Paragraph();
             if (species != null && !species.isEmpty()) {
                 p.add(new Chunk("Вид: ", labelFont));
-                p.add(new Chunk(species, valueFont));
+                p.add(new Chunk(SpeciesName.macedonian(species), valueFont));
             }
             if (gender != null && !gender.isEmpty()) {
                 if (species != null && !species.isEmpty()) p.add(new Chunk("          ", valueFont));
+                Gender sex = Gender.fromPatientValue(gender);
                 p.add(new Chunk("Пол: ", labelFont));
-                p.add(new Chunk(gender, valueFont));
+                p.add(new Chunk(sex == Gender.UNKNOWN ? gender : sex.getGenderTranslated(), valueFont));
             }
             ColumnText col = new ColumnText(canvas);
             col.setSimpleColumn(leftMargin, infoY - 18, rightMargin, infoY + 2);

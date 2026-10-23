@@ -13,6 +13,7 @@ public class Patient {
     private int id;
     private String name;
     private PatientType patientType;
+    private String speciesName;
     private String owner;
     private String patientIdMicrochip;
     private LocalDate dateOfBirth;
@@ -55,6 +56,15 @@ public class Patient {
         this.patientType = patientType;
     }
 
+    /** The species as the app stores it ("Hamster", or a name the clinic added). */
+    public String getSpeciesName() {
+        return speciesName;
+    }
+
+    public void setSpeciesName(String speciesName) {
+        this.speciesName = speciesName;
+    }
+
     public String getOwner() {
         return owner;
     }
@@ -82,6 +92,7 @@ public class Patient {
     public Patient shallowCopy() {
         Patient newPatient = new Patient();
         newPatient.setPatientType(this.getPatientType());
+        newPatient.setSpeciesName(this.getSpeciesName());
         newPatient.setId(this.getId());
         newPatient.setName(this.getName());
         newPatient.setOwner(this.getOwner());
