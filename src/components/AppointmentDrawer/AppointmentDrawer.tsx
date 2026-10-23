@@ -23,8 +23,8 @@ import MedicalRecordModal from '@/components/MedicalRecordModal/MedicalRecordMod
 import type { PatientDetail } from '@/types/patient';
 import type { AppointmentStatus, UpdateAppointmentInput } from '@/types/appointments';
 import {
-  isClosedStatus,
   nextStatuses,
+  forwardStep,
   statusActionKey,
   statusColor,
   statusLabelKey,
@@ -185,12 +185,12 @@ export const AppointmentDrawer: React.FC<AppointmentDrawerProps> = ({ appointmen
           {moves.map((next, i) => (
             <Button
               key={next}
-              type={i === 0 && !isClosedStatus(next) ? 'primary' : 'default'}
+              type={i === 0 && next === forwardStep(apt.status) ? 'primary' : 'default'}
               danger={next === 'cancelled'}
               loading={busy && i === 0}
               onClick={() => changeStatus(next)}
             >
-              {t(statusActionKey(next))}
+              {t(statusActionKey(next, apt.status))}
             </Button>
           ))}
         </Space>

@@ -63,6 +63,7 @@
     "startRecord": "Започни медицински запис",
     "checkIn": "Пријави доаѓање",
     "startConsult": "Започни преглед",
+    "backToConsult": "Врати во преглед",
     "markDone": "Заврши",
     "reopen": "Врати во закажан",
     "cancelAppointment": "Откажи термин",

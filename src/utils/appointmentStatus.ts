@@ -50,7 +50,18 @@ export const isClosedStatus = (status: AppointmentStatus): boolean =>
 
 export const nextStatuses = (status: AppointmentStatus): AppointmentStatus[] => NEXT[status] ?? [];
 
-export const statusActionKey = (target: AppointmentStatus): string => ACTION_KEY[target];
+/** Taking a finished visit back into the exam is an undo, not a new exam. */
+export const statusActionKey = (target: AppointmentStatus, from?: AppointmentStatus): string =>
+  from === 'completed' && target === 'in_progress' ? 'appointments:actions.backToConsult' : ACTION_KEY[target];
+
+const FORWARD: Partial<Record<AppointmentStatus, AppointmentStatus>> = {
+  scheduled: 'checked_in',
+  checked_in: 'in_progress',
+  in_progress: 'completed',
+};
+
+/** The visit's next step, if it has one (a finished or called-off visit has none). */
+export const forwardStep = (status: AppointmentStatus): AppointmentStatus | undefined => FORWARD[status];
 
 /** Whole minutes since check-in; null when not checked in. */
 export const waitingMinutes = (checkedInAt: string | null | undefined, now: Date = new Date()): number | null => {

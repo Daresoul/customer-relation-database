@@ -21,7 +21,7 @@ export const AppointmentStatusMenu: React.FC<AppointmentStatusMenuProps> = ({
 
   const items = nextStatuses(appointment.status).map((status) => ({
     key: status,
-    label: t(statusActionKey(status)),
+    label: t(statusActionKey(status, appointment.status)),
   }));
 
   return (

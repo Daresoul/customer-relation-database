@@ -63,6 +63,7 @@
     "startRecord": "Start medical record",
     "checkIn": "Check in",
     "startConsult": "Start consult",
+    "backToConsult": "Back to exam",
     "markDone": "Done",
     "reopen": "Back to scheduled",
     "cancelAppointment": "Cancel appointment",

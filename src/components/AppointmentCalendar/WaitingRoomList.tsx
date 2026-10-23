@@ -6,7 +6,7 @@ import type { Appointment, AppointmentStatus } from '../../types/appointments';
 import { useRooms } from '../../hooks/useRooms';
 import {
   isClosedStatus,
-  nextStatuses,
+  forwardStep,
   statusActionKey,
   statusColor,
   statusLabelKey,
@@ -56,7 +56,7 @@ const WaitingRoomList: React.FC<WaitingRoomListProps> = ({ appointments, onSelec
         const closed = isClosedStatus(apt.status);
         const room = rooms.find((r) => r.id === apt.roomId);
         const waited = apt.status === 'checked_in' ? waitingMinutes(apt.checkedInAt, now) : null;
-        const next = nextStatuses(apt.status)[0];
+        const next = forwardStep(apt.status);
         return (
           <li key={apt.id} className={styles.row} data-closed={closed ? 'true' : undefined}>
             <button type="button" className={styles.main} onClick={() => onSelect(apt)}>
