@@ -67,6 +67,7 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, "049_fix_medical_records_fts_triggers", fix_medical_records_fts_triggers).await?;
     run_migration(pool, "050_add_invoice_date", add_invoice_date_column).await?;
     run_migration(pool, "051_add_attachment_purged_at", add_attachment_purged_at_column).await?;
+    run_migration(pool, "05x_lab_inbox", add_lab_inbox).await?;
 
     Ok(())
 }
@@ -3081,6 +3082,93 @@ fn add_attachment_purged_at_column(pool: &SqlitePool) -> std::pin::Pin<Box<dyn s
                 .execute(pool)
                 .await?;
         }
+        Ok(())
+    })
+}
+
+// Migration 05x: the lab inbox. Each `file_access_history` row (one per result
+// or Exigo sample) gets a state: waiting, attached or discarded. A lab
+// attachment remembers the result it came from, and moves to another patient
+// are logged in `lab_result_moves`. On upgrade, results already attached are
+// `attached`, saved-for-later ones `waiting`, and every other older result is
+// `discarded` with reason `before_inbox` (restorable from the inbox).
+fn add_lab_inbox(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        let columns = [
+            ("file_access_history", "inbox_state", "ALTER TABLE file_access_history ADD COLUMN inbox_state TEXT NOT NULL DEFAULT 'waiting'"),
+            ("file_access_history", "discard_reason", "ALTER TABLE file_access_history ADD COLUMN discard_reason TEXT"),
+            ("file_access_history", "discard_note", "ALTER TABLE file_access_history ADD COLUMN discard_note TEXT"),
+            ("file_access_history", "discarded_at", "ALTER TABLE file_access_history ADD COLUMN discarded_at TEXT"),
+            ("file_access_history", "attached_record_id", "ALTER TABLE file_access_history ADD COLUMN attached_record_id INTEGER"),
+            ("file_access_history", "attached_at", "ALTER TABLE file_access_history ADD COLUMN attached_at TEXT"),
+            ("medical_attachments", "source_file_id", "ALTER TABLE medical_attachments ADD COLUMN source_file_id TEXT"),
+        ];
+        for (table, column, alter) in columns {
+            let exists: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?")
+                .bind(table)
+                .bind(column)
+                .fetch_one(pool)
+                .await?;
+            if exists.0 == 0 {
+                sqlx::query(alter).execute(pool).await?;
+            }
+        }
+
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS lab_result_moves (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                file_id TEXT,
+                from_attachment_id INTEGER NOT NULL,
+                to_attachment_id INTEGER NOT NULL,
+                from_record_id INTEGER NOT NULL,
+                to_record_id INTEGER NOT NULL,
+                moved_at TEXT NOT NULL,
+                moved_by TEXT
+            )
+            "#,
+        )
+        .execute(pool)
+        .await?;
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_file_access_history_inbox_state ON file_access_history(inbox_state)")
+            .execute(pool)
+            .await?;
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_medical_attachments_source_file_id ON medical_attachments(source_file_id)")
+            .execute(pool)
+            .await?;
+
+        let pending = "SELECT file_id FROM pending_device_entries WHERE status = 'pending'";
+        sqlx::query(
+            "UPDATE file_access_history SET inbox_state = 'attached', \
+                 attached_record_id = first_attached_to_record_id, attached_at = first_attached_at \
+             WHERE first_attached_to_record_id IS NOT NULL",
+        )
+        .execute(pool)
+        .await?;
+        sqlx::query(&format!(
+            "UPDATE file_access_history SET inbox_state = 'waiting' \
+             WHERE first_attached_to_record_id IS NULL AND file_id IN ({pending})"
+        ))
+        .execute(pool)
+        .await?;
+        sqlx::query(&format!(
+            "UPDATE file_access_history SET inbox_state = 'discarded', discard_reason = 'before_inbox', \
+                 discarded_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') \
+             WHERE first_attached_to_record_id IS NULL AND file_id NOT IN ({pending})"
+        ))
+        .execute(pool)
+        .await?;
+        let same_result = "fah.first_attached_to_record_id = medical_attachments.medical_record_id \
+                           AND fah.original_name = medical_attachments.original_name";
+        sqlx::query(&format!(
+            "UPDATE medical_attachments SET source_file_id = ( \
+                 SELECT fah.file_id FROM file_access_history fah WHERE {same_result} ORDER BY fah.id LIMIT 1) \
+             WHERE source_file_id IS NULL AND attachment_type IN ('test_result', 'file') \
+               AND EXISTS (SELECT 1 FROM file_access_history fah WHERE {same_result})"
+        ))
+        .execute(pool)
+        .await?;
+
         Ok(())
     })
 }
