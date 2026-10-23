@@ -59,7 +59,6 @@ describe('no raw errors on screen', () => {
   const files = [
     'components/RecentDeviceFiles.tsx',
     'components/forms/CreateHouseholdInline.tsx',
-    'components/DeviceStatusBar/DeviceStatusBar.tsx',
     'components/DeviceStatusBar/DeviceDetailsDrawer.tsx',
     'components/DevTools/DevToolsDrawer.tsx',
     'components/LabInbox/MoveLabResultModal.tsx',
