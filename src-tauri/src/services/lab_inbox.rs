@@ -593,8 +593,8 @@ async fn retire_lab_reports<C: ConnectionTrait>(db: &C, record_id: i64, keep: Op
 
 fn pdf_status(kind: &str, result: Result<i64, String>) -> PdfStatus {
     match result {
-        Ok(_) => PdfStatus { kind: kind.to_string(), ok: true, error: None },
-        Err(e) => PdfStatus { kind: kind.to_string(), ok: false, error: Some(e) },
+        Ok(_) => PdfStatus::ok(kind),
+        Err(e) => PdfStatus::failed(kind, e),
     }
 }
 

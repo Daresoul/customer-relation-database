@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   regenerateLabReport: vi.fn(),
   downloadDeviceFile: vi.fn(),
   generateReport: vi.fn(),
+  openAttachment: vi.fn(),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -58,7 +59,7 @@ vi.mock('@/services/fileHistoryService', () => ({
   },
 }));
 vi.mock('@/services/medicalService', () => ({
-  MedicalService: { generateConfiguredReport: mocks.generateReport, openAttachmentExternally: vi.fn() },
+  MedicalService: { generateConfiguredReport: mocks.generateReport, openAttachmentExternally: mocks.openAttachment },
 }));
 vi.mock('@/components/forms/fieldGroups', () => ({
   TabbedMedicalRecordFields: () => (
@@ -151,6 +152,7 @@ beforeEach(() => {
   mocks.upload.mockReset().mockResolvedValue({ id: 500 });
   mocks.regenerateLabReport.mockReset().mockResolvedValue({ id: 700 });
   mocks.generateReport.mockReset().mockResolvedValue({ id: 600 });
+  mocks.openAttachment.mockReset();
 });
 
 describe('DeviceImportModal — one result at a time', () => {
@@ -192,6 +194,29 @@ describe('DeviceImportModal — save', () => {
     expect(await screen.findByText('record page 99')).toBeInTheDocument();
     expect(window.location.href).toBe(hrefBefore);
     expect(mocks.createRecord).toHaveBeenCalledWith(expect.objectContaining({ patientId: 1 }));
+  });
+
+  // device-import #14: the backend builds the lab report on create; the
+  // import built a second one.
+  it('builds the lab report once and opens the one the save made', async () => {
+    const user = userEvent.setup();
+    localStorage.setItem('autoOpenGeneratedReport', 'true');
+    mocks.createRecord.mockResolvedValue({
+      id: 99,
+      pdfs: [{ kind: 'device_report', ok: true, error: null, attachmentId: 801 }],
+    });
+    try {
+      renderModal();
+      receive(maxResult());
+
+      await user.click(await screen.findByTestId('device-import-submit-btn'));
+
+      expect(await screen.findByText('record page 99')).toBeInTheDocument();
+      expect(mocks.generateReport).not.toHaveBeenCalled();
+      expect(mocks.openAttachment).toHaveBeenCalledWith(801);
+    } finally {
+      localStorage.removeItem('autoOpenGeneratedReport');
+    }
   });
 });
 

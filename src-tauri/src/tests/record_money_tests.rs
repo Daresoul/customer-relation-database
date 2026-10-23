@@ -471,3 +471,44 @@ async fn one_document_can_be_retried_on_its_own() {
     assert_eq!(active_documents(&db, record.id, "invoice").await, 1);
     assert_eq!(active_documents(&db, record.id, "simple_report").await, 0);
 }
+
+// device-health #12: PointCare values without a row were only logged.
+// device-import #14: the import opens this report instead of building another.
+#[tokio::test]
+async fn the_lab_report_status_names_values_not_on_the_pdf_and_its_attachment() {
+    use crate::models::medical::DeviceDataInput;
+    let storage = tempfile::tempdir().unwrap();
+    let Some(env) = jar_env(&storage) else { return };
+    let db = create_test_db_with_migrations().await;
+    let patient_id = seed_patient(&db).await;
+    let mut input = new_record(patient_id, vec![]);
+    input.line_items = None;
+    input.device_data_list = Some(vec![DeviceDataInput {
+        device_test_data: serde_json::json!({ "GLU": "95", "XYZ": "1.0", "ABC": "2", "sample_id": "45512" }),
+        device_type: "mnchip_pointcare_chemistry".to_string(),
+        device_name: "PointCare".to_string(),
+    }]);
+    let record = MedicalRecordService::save_new_record(&db, input.clone()).await.unwrap();
+
+    let status = MedicalRecordService::generate_device_report(&env, &db, &record, &input).await.unwrap();
+
+    assert!(status.ok, "{:?}", status);
+    assert_eq!(status.missing_values, Some(vec!["ABC".to_string(), "XYZ".to_string()]));
+    let newest = count(
+        &db,
+        &format!(
+            "SELECT MAX(id) FROM medical_attachments WHERE medical_record_id = {} AND attachment_type = 'generated_pdf'",
+            record.id
+        ),
+    )
+    .await;
+    assert_eq!(status.attachment_id, Some(newest));
+}
+
+#[test]
+fn pdf_warnings_name_the_codes_without_a_row() {
+    use crate::services::java_pdf_service::JavaPdfService;
+    let stderr = "Warning: something\nPDF_WARN code=unmapped_analytes device=pointcare codes=ABC,XYZ\nPDF_WARN code=bad_detected_at value='x'\n";
+    assert_eq!(JavaPdfService::unmapped_codes(stderr), vec!["ABC".to_string(), "XYZ".to_string()]);
+    assert!(JavaPdfService::unmapped_codes("all fine").is_empty());
+}

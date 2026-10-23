@@ -266,3 +266,24 @@ impl PdfRenderService {
         }
     }
 }
+
+fn page_index(requested: u32, page_count: u16) -> Result<u16, String> {
+    if page_count == 0 {
+        return Err("PDF has no pages".to_string());
+    }
+    Ok(if requested < page_count as u32 { requested as u16 } else { 0 })
+}
+
+/// gaps L14: a page past the end silently rendered page 1.
+#[cfg(test)]
+mod tests {
+    use super::page_index;
+
+    #[test]
+    fn a_page_past_the_end_is_an_error() {
+        assert_eq!(page_index(0, 3), Ok(0));
+        assert_eq!(page_index(2, 3), Ok(2));
+        assert!(page_index(3, 3).is_err());
+        assert!(page_index(0, 0).is_err());
+    }
+}

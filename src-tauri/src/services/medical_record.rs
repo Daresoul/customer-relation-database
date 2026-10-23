@@ -76,15 +76,23 @@ pub struct PdfStatus {
     pub kind: String,
     pub ok: bool,
     pub error: Option<String>,
+    /// The stored PDF, when one was made (the lab report).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub attachment_id: Option<i64>,
+    /// Analyte codes the machine sent that have no row on the PDF.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub missing_values: Option<Vec<String>>,
 }
 
 impl PdfStatus {
-    fn ok(kind: &str) -> Self {
-        Self { kind: kind.to_string(), ok: true, error: None }
+    pub(crate) fn ok(kind: &str) -> Self {
+        Self { kind: kind.to_string(), ok: true, error: None, attachment_id: None, missing_values: None }
     }
 
-    fn failed(kind: &str, error: impl Into<String>) -> Self {
-        Self { kind: kind.to_string(), ok: false, error: Some(error.into()) }
+    pub(crate) fn failed(kind: &str, error: impl Into<String>) -> Self {
+        Self { kind: kind.to_string(), ok: false, error: Some(error.into()), attachment_id: None, missing_values: None }
     }
 }
 
@@ -678,7 +686,7 @@ impl MedicalRecordService {
     }
 
     /// The lab report for device results sent with a new record, if any.
-    async fn generate_device_report(
+    pub(crate) async fn generate_device_report(
         env: &PdfEnv,
         db: &DatabaseConnection,
         record: &MedicalRecord,

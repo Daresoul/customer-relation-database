@@ -689,6 +689,10 @@ impl JavaPdfService {
             .to_string()
     }
 
+    pub fn unmapped_codes(_stderr: &str) -> Vec<String> {
+        Vec::new()
+    }
+
     /// Map detailed device type names to Java-expected format
     /// Java expects: "exigo_eos_vet", "healvet", "pointcare", or "pcr"
     /// We use: "exigo_eos_vet", "healvet_hv_fia_3000", "mnchip_pointcare_chemistry", "mnchip_pcr_analyzer"
