@@ -703,3 +703,8 @@ pub async fn move_result(
 
     Ok(MoveOutcome { attachment_id: new_id, from_record_id, to_record_id: target_record_id, pdfs })
 }
+
+/// Soft-delete an attachment (see `FileStorageService::delete_attachment`).
+pub async fn delete_attachment(_db: &DatabaseConnection, _attachment_id: i64) -> Result<(), String> {
+    Err("not implemented".to_string())
+}

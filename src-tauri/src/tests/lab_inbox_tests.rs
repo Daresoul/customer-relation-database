@@ -516,3 +516,50 @@ async fn upgrade_sorts_existing_results_into_the_inbox() {
     // The saved-for-later rows stay as they were.
     assert_eq!(scalar_i64(&db, "SELECT COUNT(*) FROM pending_device_entries").await, 1);
 }
+
+// ---------------------------------------------------------------------------
+// Deleting a lab attachment
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn deleting_the_lab_attachment_puts_its_result_back_in_waiting() {
+    let db = create_test_db_with_migrations().await;
+    let dir = tempfile::tempdir().unwrap();
+    let patient = seed_patient(&db, "Rex", None).await;
+    let record = seed_record(&db, patient, "Consult").await;
+    receive(&db, dir.path(), "r1", &koko_xml(), "ok", "2026-10-23T08:00:00+00:00").await;
+    let attachment = lab_inbox::attach_to_record(&db, dir.path(), "r1", record).await.unwrap();
+
+    lab_inbox::delete_attachment(&db, attachment).await.unwrap();
+
+    let item = lab_inbox::list_inbox(&db, Some("waiting")).await.unwrap().remove(0);
+    assert_eq!(item.attached_record_id, None);
+    assert_eq!(
+        scalar_i64(&db, &format!("SELECT COUNT(*) FROM medical_attachments WHERE id = {} AND deleted_at IS NOT NULL", attachment)).await,
+        1
+    );
+}
+
+#[tokio::test]
+async fn deleting_another_file_leaves_the_inbox_alone() {
+    let db = create_test_db_with_migrations().await;
+    let dir = tempfile::tempdir().unwrap();
+    let patient = seed_patient(&db, "Rex", None).await;
+    let record = seed_record(&db, patient, "Consult").await;
+    receive(&db, dir.path(), "r1", &koko_xml(), "ok", "2026-10-23T08:00:00+00:00").await;
+    lab_inbox::attach_to_record(&db, dir.path(), "r1", record).await.unwrap();
+    let photo = db
+        .execute(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "INSERT INTO medical_attachments (medical_record_id, file_id, original_name, mime_type, attachment_type) \
+             VALUES (?, 'photo', 'xray.png', 'image/png', 'file')",
+            [record.into()],
+        ))
+        .await
+        .unwrap()
+        .last_insert_id() as i64;
+
+    lab_inbox::delete_attachment(&db, photo).await.unwrap();
+
+    assert_eq!(lab_inbox::waiting_count(&db).await.unwrap(), 0);
+}
