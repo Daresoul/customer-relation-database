@@ -457,11 +457,8 @@ impl AppointmentService {
             return Err("Cannot duplicate deleted appointment".to_string());
         }
 
-        // Calculate new times maintaining the same time of day
         let duration = original.end_time - original.start_time;
-        let original_time_of_day = original.start_time.time();
-        let new_start = input.target_date.date_naive().and_time(original_time_of_day);
-        let new_start = DateTime::<Utc>::from_naive_utc_and_offset(new_start, Utc);
+        let new_start = Self::duplicate_start(original.start_time, input.target_date, &chrono::Local)?;
         let new_end = new_start + duration;
 
         // Create new appointment
@@ -475,6 +472,15 @@ impl AppointmentService {
         };
 
         Self::create_appointment(db, create_input, created_by).await
+    }
+
+    pub(crate) fn duplicate_start<Tz: chrono::TimeZone>(
+        original_start: DateTime<Utc>,
+        target_date: DateTime<Utc>,
+        _tz: &Tz,
+    ) -> Result<DateTime<Utc>, String> {
+        let naive = target_date.date_naive().and_time(original_start.time());
+        Ok(DateTime::<Utc>::from_naive_utc_and_offset(naive, Utc))
     }
 
     // Internal helper to check conflicts
@@ -1169,6 +1175,33 @@ mod tests {
         assert_ne!(duplicated.id, original.id);
         // Should be same time of day but different date
         assert_eq!(duplicated.start_time.time(), original.start_time.time());
+    }
+
+    #[test]
+    fn duplicate_keeps_local_time_on_the_chosen_local_day_east_of_utc() {
+        use chrono::{FixedOffset, TimeZone};
+        let skopje_summer = FixedOffset::east_opt(2 * 3600).unwrap();
+        // 09:30 local on 15 July
+        let original = skopje_summer.with_ymd_and_hms(2024, 7, 15, 9, 30, 0).unwrap().with_timezone(&Utc);
+        // The picker sends local midnight of 20 July, which is 19 July 22:00 UTC
+        let target = skopje_summer.with_ymd_and_hms(2024, 7, 20, 0, 0, 0).unwrap().with_timezone(&Utc);
+
+        let start = AppointmentService::duplicate_start(original, target, &skopje_summer).unwrap();
+
+        assert_eq!(start, skopje_summer.with_ymd_and_hms(2024, 7, 20, 9, 30, 0).unwrap().with_timezone(&Utc));
+    }
+
+    #[test]
+    fn duplicate_keeps_local_time_west_of_utc_late_evening() {
+        use chrono::{FixedOffset, TimeZone};
+        let west = FixedOffset::west_opt(5 * 3600).unwrap();
+        // 21:00 local is 02:00 UTC the next day
+        let original = west.with_ymd_and_hms(2024, 3, 1, 21, 0, 0).unwrap().with_timezone(&Utc);
+        let target = west.with_ymd_and_hms(2024, 3, 10, 0, 0, 0).unwrap().with_timezone(&Utc);
+
+        let start = AppointmentService::duplicate_start(original, target, &west).unwrap();
+
+        assert_eq!(start, west.with_ymd_and_hms(2024, 3, 10, 21, 0, 0).unwrap().with_timezone(&Utc));
     }
 
     #[tokio::test]
