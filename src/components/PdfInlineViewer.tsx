@@ -91,7 +91,7 @@ const PdfInlineViewer: React.FC<PdfInlineViewerProps> = ({ blob, fileName, attac
         watchdog = setTimeout(() => {
           if (active && !rendered) {
             console.warn('[PDF Viewer] Render timeout after', Date.now() - start, 'ms, falling back to embed');
-            try { renderTaskRef.current?.cancel?.(); } catch {}
+            try { renderTaskRef.current?.cancel?.(); } catch { /* already finished */ }
             setError(t('medical:pdfPreview.inlineTimedOut'));
           }
         }, 10000);
@@ -114,8 +114,8 @@ const PdfInlineViewer: React.FC<PdfInlineViewerProps> = ({ blob, fileName, attac
     return () => {
       active = false;
       if (watchdog) clearTimeout(watchdog);
-      try { renderTaskRef.current?.cancel?.(); } catch {}
-      try { loadingTaskRef.current?.destroy?.(); } catch {}
+      try { renderTaskRef.current?.cancel?.(); } catch { /* already finished */ }
+      try { loadingTaskRef.current?.destroy?.(); } catch { /* already destroyed */ }
     };
   }, [blob, fileName]);
 

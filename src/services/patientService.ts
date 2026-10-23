@@ -62,7 +62,7 @@ export class PatientService {
     if (input.microchipId !== undefined) (dto as any).microchipId = input.microchipId || null;
 
     const created = await ApiService.invokeRaw<Patient>('create_patient', { dto });
-    try { await emit('patient-created', created as any); } catch {}
+    try { await emit('patient-created', created as any); } catch { /* the event is a hint; the patient is saved */ }
     return created;
   }
 

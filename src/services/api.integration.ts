@@ -66,7 +66,7 @@ export const patientApi = {
       const result = await invoke<Patient>('create_patient', { dto: patient });
       hide();
       showSuccess(i18n.t('common:api.success.patientCreated'), i18n.t('common:api.success.patientCreatedDesc', { name: patient.name }));
-      try { await emit('patient-created', result as any); } catch {}
+      try { await emit('patient-created', result as any); } catch { /* the event is a hint; the patient is saved */ }
       return result;
     } catch (error) {
       hide();
