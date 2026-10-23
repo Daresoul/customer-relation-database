@@ -92,10 +92,8 @@ describe('AppointmentModal create', () => {
     expect(screen.getByText('appointments:validation.conflictCheckFailed')).toBeInTheDocument();
 
     checkConflicts.mockResolvedValueOnce({ conflicts: [], patientConflicts: [] });
-    fireEvent.change(screen.getByPlaceholderText('appointments:placeholders.title'), { target: { value: 'x' } });
-    const patientSelect = container.ownerDocument.querySelectorAll('.ant-select-selector')[0];
-    fireEvent.mouseDown(patientSelect);
-    fireEvent.click((await screen.findAllByText('Rex · Dog')).at(-1)!);
+    // Clearing the room runs the check again (the patient is still there).
+    fireEvent.mouseDown(container.ownerDocument.querySelector('.ant-select-clear')!);
 
     await waitFor(() => expect(checkConflicts).toHaveBeenCalledTimes(2));
     await waitFor(() =>
