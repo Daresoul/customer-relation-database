@@ -11,7 +11,8 @@ import {
   Col,
   Popconfirm,
   App,
-  Typography
+  Typography,
+  Switch
 } from 'antd';
 import {
   EditOutlined,
@@ -108,14 +109,16 @@ export const PersonCard: React.FC<PersonCardProps> = ({
         }
       });
 
-      // Update contacts
-      if (values.contacts && values.contacts.length > 0) {
-        await updateContacts.mutateAsync({
-          personId: person.id,
-          householdId,
-          contacts: values.contacts
-        });
-      }
+      // Always sent: an empty list is how the last contact gets removed.
+      await updateContacts.mutateAsync({
+        personId: person.id,
+        householdId,
+        contacts: (values.contacts ?? []).map((c: { contactType: string; contactValue: string; isPrimary?: boolean }) => ({
+          contactType: c.contactType,
+          contactValue: c.contactValue,
+          isPrimary: !!c.isPrimary,
+        })),
+      });
 
       setIsEditing(false);
       notification.success({ message: t('common:success'), description: t('detail.people.personUpdated'), placement: "bottomRight", duration: 3 });
@@ -177,6 +180,7 @@ export const PersonCard: React.FC<PersonCardProps> = ({
         <Form
           form={form}
           layout="vertical"
+          scrollToFirstError={{ focus: true }}
           initialValues={{
             firstName: person.firstName,
             lastName: person.lastName,
@@ -188,7 +192,7 @@ export const PersonCard: React.FC<PersonCardProps> = ({
               <Form.Item
                 name="firstName"
                 label={t('detail.people.modal.labels.firstName')}
-                rules={[{ required: true, message: t('detail.people.modal.validation.firstNameRequired') }]}
+                rules={[{ required: true, whitespace: true, message: t('detail.people.modal.validation.firstNameRequired') }]}
               >
                 <Input placeholder={t('detail.people.modal.placeholders.firstName')} />
               </Form.Item>
@@ -197,7 +201,7 @@ export const PersonCard: React.FC<PersonCardProps> = ({
               <Form.Item
                 name="lastName"
                 label={t('detail.people.modal.labels.lastName')}
-                rules={[{ required: true, message: t('detail.people.modal.validation.lastNameRequired') }]}
+                rules={[{ required: true, whitespace: true, message: t('detail.people.modal.validation.lastNameRequired') }]}
               >
                 <Input placeholder={t('detail.people.modal.placeholders.lastName')} />
               </Form.Item>
@@ -240,7 +244,29 @@ export const PersonCard: React.FC<PersonCardProps> = ({
                       >
                         <Input placeholder={t('detail.people.modal.placeholders.contactValue')} />
                       </Form.Item>
-                      <MinusCircleOutlined onClick={() => remove(name)} />
+                      <Form.Item {...restField} name={[name, 'isPrimary']} valuePropName="checked">
+                        <Switch
+                          size="small"
+                          aria-label={t('detail.people.preferredContact')}
+                          checkedChildren={t('detail.people.preferred')}
+                          unCheckedChildren={t('detail.people.preferred')}
+                          onChange={(checked) => {
+                            if (!checked) return;
+                            // One preferred contact per person.
+                            const contacts = form.getFieldValue('contacts') ?? [];
+                            form.setFieldValue(
+                              'contacts',
+                              contacts.map((c: Record<string, unknown>, i: number) => ({ ...c, isPrimary: i === name })),
+                            );
+                          }}
+                        />
+                      </Form.Item>
+                      <Button
+                        type="text"
+                        icon={<MinusCircleOutlined />}
+                        aria-label={t('detail.people.removeContact')}
+                        onClick={() => remove(name)}
+                      />
                     </Space>
                   ))}
                   <Button
