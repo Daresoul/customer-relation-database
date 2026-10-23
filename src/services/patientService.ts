@@ -9,7 +9,9 @@ import {
   Patient,
   PatientWithOwners,
   CreatePatientInput,
-  UpdatePatientInput
+  UpdatePatientInput,
+  PatientAlert,
+  PatientWeight,
 } from '../types';
 
 export class PatientService {
@@ -82,6 +84,7 @@ export class PatientService {
     if (updates.color !== undefined) dto.color = updates.color || null;
     if (updates.microchipId !== undefined) dto.microchipId = updates.microchipId || null;
     if (updates.isActive !== undefined) dto.isActive = updates.isActive;
+    if (updates.neutered !== undefined) dto.neutered = updates.neutered;
 
     // Use raw invoke to preserve camelCase DTO expected by backend
     return ApiService.invokeRaw<PatientWithOwners>('update_patient', { id, dto });
@@ -189,6 +192,50 @@ export class PatientService {
       patientId,
       ownerId,
     });
+  }
+
+  /** `deceasedOn` is YYYY-MM-DD. */
+  static async markDeceased(id: number, deceasedOn: string, note: string | null): Promise<Patient | null> {
+    return ApiService.invokeRaw<Patient | null>('mark_patient_deceased', { id, deceasedOn, note });
+  }
+
+  static async markInactive(id: number, reason: string | null): Promise<Patient | null> {
+    return ApiService.invokeRaw<Patient | null>('mark_patient_inactive', { id, reason });
+  }
+
+  static async reactivate(id: number): Promise<Patient | null> {
+    return ApiService.invokeRaw<Patient | null>('reactivate_patient', { id });
+  }
+
+  static async addAlert(patientId: number, alertType: string, note: string | null): Promise<PatientAlert> {
+    return ApiService.invokeRaw<PatientAlert>('add_patient_alert', { patientId, alertType, note });
+  }
+
+  static async updateAlert(id: number, alertType: string, note: string | null): Promise<PatientAlert> {
+    return ApiService.invokeRaw<PatientAlert>('update_patient_alert', { id, alertType, note });
+  }
+
+  static async deleteAlert(id: number): Promise<boolean> {
+    return ApiService.invokeRaw<boolean>('delete_patient_alert', { id });
+  }
+
+  /** Newest first. */
+  static async getWeights(patientId: number): Promise<PatientWeight[]> {
+    return ApiService.invokeRaw<PatientWeight[]>('get_patient_weights', { patientId });
+  }
+
+  /** `measuredOn` is YYYY-MM-DD. */
+  static async addWeight(
+    patientId: number,
+    weight: number,
+    measuredOn: string,
+    medicalRecordId: number | null = null,
+  ): Promise<PatientWeight> {
+    return ApiService.invokeRaw<PatientWeight>('add_patient_weight', { patientId, weight, measuredOn, medicalRecordId });
+  }
+
+  static async deleteWeight(id: number): Promise<boolean> {
+    return ApiService.invokeRaw<boolean>('delete_patient_weight', { id });
   }
 }
 

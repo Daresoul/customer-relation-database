@@ -26,4 +26,6 @@ export interface UpdatePatientInput {
   microchipId?: string;
   notes?: string;
   isActive?: boolean;
+  /** null clears it to "not recorded" */
+  neutered?: boolean | null;
 }

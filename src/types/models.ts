@@ -17,7 +17,19 @@ export interface Patient {
   householdId?: number;
   createdAt: string;
   updatedAt: string;
+  /** null: not recorded */
+  neutered?: boolean | null;
+  deceasedAt?: string | null;
+  deceasedNote?: string | null;
+  inactiveReason?: string | null;
+  /** Date of the newest weight-log entry, the one `weight` holds. */
+  lastWeightAt?: string | null;
+  alerts?: PatientAlert[];
 }
+
+export type { PatientAlert } from './generated/PatientAlert';
+export type { PatientWeight } from './generated/PatientWeight';
+import type { PatientAlert } from './generated/PatientAlert';
 
 export interface PatientWithHousehold extends Patient {
   household?: {
