@@ -35,7 +35,7 @@ const BackupSettings: React.FC = () => {
     try {
       const c = await invoke<BackupConfig>('get_backup_config');
       setConfig(c || {});
-    } catch (e: any) {
+    } catch (e) {
       const t = tRef.current;
       notification.error({
         message: t('common:error'),
@@ -66,7 +66,7 @@ const BackupSettings: React.FC = () => {
         description: t('settings:backups.directorySaved', 'Backup destination saved'),
         placement: 'bottomRight',
       });
-    } catch (e: any) {
+    } catch (e) {
       notification.error({
         message: t('common:error'),
         description: backupErrorText(e, t),
@@ -87,7 +87,7 @@ const BackupSettings: React.FC = () => {
         description: t('settings:backups.runSuccess', 'Backup completed'),
         placement: 'bottomRight',
       });
-    } catch (e: any) {
+    } catch (e) {
       notification.error({
         message: t('common:error'),
         description: backupErrorText(e, t),

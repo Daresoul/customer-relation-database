@@ -167,7 +167,7 @@ const PrintReportModal: React.FC<PrintReportModalProps> = ({
 
       await onGenerate(selectedIds, overrides);
       onClose();
-    } catch (error: any) {
+    } catch (error) {
       notification.error({
         message: t('common:error'),
         description: error?.toString() || t('medical:printReport.generateFailed'),

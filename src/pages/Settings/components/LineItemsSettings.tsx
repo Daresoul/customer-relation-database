@@ -107,7 +107,13 @@ const LineItemsSettings: React.FC<LineItemsSettingsProps> = () => {
     }
   };
 
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: {
+    name: string;
+    description?: string;
+    defaultPrice: number;
+    currencyId: number;
+    defaultTaxRateId?: number | null;
+  }) => {
     try {
       const itemData = {
         name: values.name,
@@ -171,7 +177,7 @@ const LineItemsSettings: React.FC<LineItemsSettingsProps> = () => {
       title: t('common:actionsLabel', 'Actions'),
       key: 'actions',
       width: 200,
-      render: (_: any, record: LineItemTemplate) => (
+      render: (_: unknown, record: LineItemTemplate) => (
         <Space>
           <Button
             icon={<EditOutlined />}

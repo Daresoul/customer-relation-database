@@ -36,6 +36,7 @@ import {
 import type { HouseholdFormValues, ContactFormValues } from '../../types/ui.types';
 import { invoke } from '@/services/invoke';
 import { DuplicateHouseholdWarning } from './DuplicateHouseholdWarning';
+import { messageOf } from '../../utils/errors';
 import styles from './Forms.module.css';
 
 /** Subset of the Patient model that's enough to render the
@@ -165,9 +166,9 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
       setSearchValue('');
       setSearchResults([]);
       await refreshHouseholdPatients();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Add patient failed:', err);
-      message.error(t('form.addPatientFailed', { error: err?.message || err }));
+      message.error(t('form.addPatientFailed', { error: messageOf(err) || err }));
     }
   };
 
@@ -177,9 +178,9 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
       await invoke('unlink_patient_from_household', { patientId, householdId });
       message.success(t('form.patientRemoved'));
       await refreshHouseholdPatients();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Remove patient failed:', err);
-      message.error(t('form.removePatientFailed', { error: err?.message || err }));
+      message.error(t('form.removePatientFailed', { error: messageOf(err) || err }));
     }
   };
 

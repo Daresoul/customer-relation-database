@@ -52,7 +52,7 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({
     }
   };
 
-  const validateEmail = (_: any, value: string) => {
+  const validateEmail = (_: unknown, value: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (value && !emailRegex.test(value)) {
       return Promise.reject(t('detail.people.modal.validation.invalidEmail'));
@@ -60,7 +60,7 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({
     return Promise.resolve();
   };
 
-  const validatePhone = (_: any, value: string) => {
+  const validatePhone = (_: unknown, value: string) => {
     const phoneRegex = /^[\d\s\-+()]+$/;
     if (value && !phoneRegex.test(value)) {
       return Promise.reject(t('detail.people.modal.validation.invalidPhone'));

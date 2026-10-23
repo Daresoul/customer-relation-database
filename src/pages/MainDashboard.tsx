@@ -33,6 +33,7 @@ import { useTauriEvent } from '../hooks/useTauriEvent';
 import { BackupWarning } from '../components/BackupWarning';
 import { TodayStrip } from '../components/TodayStrip';
 import type { NewPatientFromScan } from '../layouts/ChipScanHandler';
+import { messageOf } from '../utils/errors';
 import styles from './MainDashboard.module.css';
 
 // Removed TabPane - using items prop instead
@@ -157,8 +158,8 @@ export const MainDashboard: React.FC = () => {
       app.notification.success({ message: res || `Seeded ${households} households` });
       setSeedOpen(false);
       await loadData();
-    } catch (e: any) {
-      app.notification.error({ message: e?.message || 'Failed to seed database' });
+    } catch (e) {
+      app.notification.error({ message: messageOf(e) || 'Failed to seed database' });
     } finally {
       setSeeding(false);
     }

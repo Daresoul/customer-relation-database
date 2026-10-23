@@ -445,7 +445,18 @@ const DeviceInputSettings: React.FC = () => {
     }
   };
 
-  const handleIntegrationSubmit = async (values: any) => {
+  const handleIntegrationSubmit = async (values: {
+    name: string;
+    device_type: string;
+    connection_type: string;
+    watch_directory?: string;
+    file_pattern?: string;
+    serial_port_name?: string;
+    serial_baud_rate?: number;
+    tcp_host?: string;
+    tcp_port?: number;
+    enabled?: boolean;
+  }) => {
     try {
       const integrationData = {
         name: values.name,
@@ -522,22 +533,22 @@ const DeviceInputSettings: React.FC = () => {
       title: t('table.device'),
       dataIndex: 'deviceType',
       key: 'deviceType',
-      render: (_: any, record: DeviceIntegration) => (
-        <Tag color="blue">{getDeviceTypeDisplayName(record.deviceType as any)}</Tag>
+      render: (_: unknown, record: DeviceIntegration) => (
+        <Tag color="blue">{getDeviceTypeDisplayName(record.deviceType)}</Tag>
       ),
     },
     {
       title: t('table.connection'),
       dataIndex: 'connection_type',
       key: 'connection_type',
-      render: (_: any, record: DeviceIntegration) => (
+      render: (_: unknown, record: DeviceIntegration) => (
         <Tag color="green">{getConnectionTypeDisplayName(record.connectionType)}</Tag>
       ),
     },
     {
       title: t('table.configuration'),
       key: 'config',
-      render: (_: any, record: DeviceIntegration) => {
+      render: (_: unknown, record: DeviceIntegration) => {
         if (record.connectionType === 'file_watch') {
           return <Text type="secondary">{record.watchDirectory || '-'}</Text>;
         } else if (record.connectionType === 'serial_port') {
@@ -551,7 +562,7 @@ const DeviceInputSettings: React.FC = () => {
     {
       title: t('table.actions'),
       key: 'actions',
-      render: (_: any, record: DeviceIntegration) => (
+      render: (_: unknown, record: DeviceIntegration) => (
         <Space>
           <Button
             icon={<PoweroffOutlined />}

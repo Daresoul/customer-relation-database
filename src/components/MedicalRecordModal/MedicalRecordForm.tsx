@@ -239,7 +239,7 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
     setManualTotal(value);
   };
 
-  const handleFinish = (values: any) => {
+  const handleFinish = (values: Pick<CreateMedicalRecordInput, 'recordType' | 'name' | 'description'> & { visitWeight?: number | null }) => {
     // Convert MedicalRecordLineItem to CreateLineItemInput for submission
     // Cleared values go out as [] / null: a missing field means "unchanged"
     // to the backend, so leaving them out would keep the old ones.

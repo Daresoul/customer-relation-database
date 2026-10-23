@@ -82,7 +82,7 @@ const DiagnosesSettings: React.FC = () => {
         activeOnly: !showInactive,
       });
       setRows(data || []);
-    } catch (e: any) {
+    } catch (e) {
       notification.error({
         message: t('common:error', 'Error'),
         description: errorText(e, t),
@@ -116,7 +116,7 @@ const DiagnosesSettings: React.FC = () => {
     setModalOpen(true);
   };
 
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: { name: string; description?: string; color?: string | { toHexString: () => string } }) => {
     // Ant's ColorPicker passes a Color object when interacted with; if
     // untouched it stays as the string we seeded. Normalize both forms
     // to a hex string for the backend.
@@ -155,7 +155,7 @@ const DiagnosesSettings: React.FC = () => {
           : t('settings:diagnoses.created', 'Diagnosis created'),
         placement: 'bottomRight',
       });
-    } catch (e: any) {
+    } catch (e) {
       notification.error({
         message: t('common:error', 'Error'),
         description: errorText(e, t),
@@ -168,7 +168,7 @@ const DiagnosesSettings: React.FC = () => {
     try {
       await invoke('delete_diagnosis', { id: d.id, hardDelete: false });
       await reload();
-    } catch (e: any) {
+    } catch (e) {
       notification.error({
         message: t('common:error', 'Error'),
         description: errorText(e, t),
@@ -184,7 +184,7 @@ const DiagnosesSettings: React.FC = () => {
         input: { isActive: true },
       });
       await reload();
-    } catch (e: any) {
+    } catch (e) {
       notification.error({
         message: t('common:error', 'Error'),
         description: errorText(e, t),

@@ -31,6 +31,7 @@ import {
 } from '../../types/appointments';
 import { useQuery } from '@tanstack/react-query';
 import { useRooms } from '../../hooks/useRooms';
+import type { Room } from '../../types/rooms';
 import appointmentService from '../../services/appointmentService';
 import { invoke } from '../../services/invoke';
 import { usePatients } from '../../hooks/usePatients';
@@ -55,7 +56,7 @@ interface AppointmentModalProps {
   onCancel: () => void;
   onSave: (data: CreateAppointmentInput | UpdateAppointmentInput) => Promise<void>;
   mode?: 'create' | 'edit';
-  rooms?: any[];
+  rooms?: Room[];
 }
 
 const EDIT_STATUSES: AppointmentStatus[] = ['scheduled', 'checked_in', 'in_progress', 'completed', 'cancelled', 'no_show'];
@@ -283,7 +284,7 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
         }
       }
 
-      const data: any = {
+      const data: UpdateAppointmentInput = {
         patientId: values.patientId,
         title: values.title,
         description: values.description,

@@ -368,7 +368,7 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
       title: t('medical:lineItems.subtotal', 'Subtotal'),
       key: 'subtotal',
       width: 120,
-      render: (_: any, record: MedicalRecordLineItem, index: number) => (
+      render: (_: unknown, record: MedicalRecordLineItem, index: number) => (
         <Text strong>
           {formatPrice(totals?.lineAmounts[index] ?? record.unitPrice * record.quantity, record.currencyId)}
         </Text>
@@ -378,7 +378,7 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
       title: '',
       key: 'actions',
       width: 80,
-      render: (_: any, __: MedicalRecordLineItem, index: number) => (
+      render: (_: unknown, __: MedicalRecordLineItem, index: number) => (
         <Space>
           <Tooltip title={t('common:edit', 'Edit')}>
             <Button

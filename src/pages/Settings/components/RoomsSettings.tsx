@@ -63,7 +63,13 @@ const RoomsSettings: React.FC<RoomsSettingsProps> = () => {
     }
   };
 
-  const handleRoomSubmit = async (values: any) => {
+  const handleRoomSubmit = async (values: {
+    name: string;
+    description?: string;
+    capacity?: number;
+    color?: string;
+    isActive?: boolean;
+  }) => {
     try {
       const roomData = {
         name: values.name,
@@ -132,7 +138,7 @@ const RoomsSettings: React.FC<RoomsSettingsProps> = () => {
     {
       title: t('common:actionsLabel'),
       key: 'actions',
-      render: (_: any, record: Room) => (
+      render: (_: unknown, record: Room) => (
         <Space>
           <Button
             icon={<EditOutlined />}

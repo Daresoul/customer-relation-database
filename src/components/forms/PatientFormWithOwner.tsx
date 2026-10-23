@@ -6,7 +6,7 @@
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { knownErrorMessage } from '@/utils/errors';
+import { knownErrorMessage, messageOf } from '@/utils/errors';
 import {
   Form,
   Select,
@@ -223,13 +223,14 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
       // points at a real row.
       await onSubmit(formData);
       form.resetFields();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Form submission error:', error);
-      if (error?.errorFields) {
-        const firstError = error.errorFields[0]?.errors[0];
+      const { errorFields } = (error ?? {}) as { errorFields?: Array<{ errors: string[] }> };
+      if (errorFields) {
+        const firstError = errorFields[0]?.errors[0];
         setFormError(firstError || t('forms:validation.checkRequired'));
       } else {
-        setFormError(knownErrorMessage(error, t) || error?.message || t('forms:errors.saveFailed'));
+        setFormError(knownErrorMessage(error, t) || messageOf(error) || t('forms:errors.saveFailed'));
       }
     } finally {
       setSubmitting(false);

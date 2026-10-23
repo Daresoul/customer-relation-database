@@ -116,7 +116,7 @@ const ManagedScannersSettings: React.FC = () => {
     try {
       const data = await invoke<ManagedHidScanner[]>('get_managed_hid_scanners');
       setRows(data || []);
-    } catch (e: any) {
+    } catch (e) {
       const t = tRef.current;
       notification.error({
         message: t('common:error'),
@@ -151,7 +151,7 @@ const ManagedScannersSettings: React.FC = () => {
       const data = await invoke<HidDeviceInfo[]>('list_hid_devices');
       setDetected(data || []);
       setDetectAt(new Date());
-    } catch (e: any) {
+    } catch (e) {
       setDetectError(errorText(e, t));
       notification.error({
         message: t('common:error'),
@@ -189,7 +189,7 @@ const ManagedScannersSettings: React.FC = () => {
     ? detected
     : detected.filter((d) => d.looksLikeKeyboard || d.looksLikeScanner);
 
-  const handleAdd = async (values: any) => {
+  const handleAdd = async (values: Omit<CreateInput, 'enabled'> & { enabled?: boolean }) => {
     const input: CreateInput = {
       name: values.name,
       vendorId: values.vendorId,
@@ -210,7 +210,7 @@ const ManagedScannersSettings: React.FC = () => {
         ),
         placement: 'bottomRight',
       });
-    } catch (e: any) {
+    } catch (e) {
       notification.error({
         message: t('common:error'),
         description: errorText(e, t),
@@ -228,7 +228,7 @@ const ManagedScannersSettings: React.FC = () => {
         input: { enabled },
       });
       await reload();
-    } catch (e: any) {
+    } catch (e) {
       notification.error({
         message: t('common:error'),
         description: errorText(e, t),
@@ -241,7 +241,7 @@ const ManagedScannersSettings: React.FC = () => {
     try {
       await invoke('delete_managed_hid_scanner', { id: row.id });
       await reload();
-    } catch (e: any) {
+    } catch (e) {
       notification.error({
         message: t('common:error'),
         description: errorText(e, t),

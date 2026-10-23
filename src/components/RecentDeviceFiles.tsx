@@ -159,7 +159,7 @@ const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, da
       key: 'status',
       width: 100,
       align: 'center' as const,
-      render: (_: any, record: FileAccessHistoryWithRecord) => {
+      render: (_: unknown, record: FileAccessHistoryWithRecord) => {
         if (record.status === 'failed') {
           return (
             <Tooltip title={`${t('recentFiles.couldNotReadHint')}${record.error ? ` (${record.error})` : ''}`}>
@@ -187,7 +187,7 @@ const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, da
       key: 'actions',
       width: 210,
       fixed: 'right' as const,
-      render: (_: any, record: FileAccessHistoryWithRecord) => (
+      render: (_: unknown, record: FileAccessHistoryWithRecord) => (
         <Space size="small">
           <Tooltip title={t('medical:recentFiles.fileDetailsTooltip')}>
             <Button
