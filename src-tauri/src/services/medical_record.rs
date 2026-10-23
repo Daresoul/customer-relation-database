@@ -845,13 +845,24 @@ impl MedicalRecordService {
     }
 
     /// The document's name at the start of its file name, in the app language.
-    pub fn pdf_kind_name(kind: PdfKind, _lang: Lang) -> &'static str {
-        match kind {
-            PdfKind::Report => "Medical Report",
-            PdfKind::PharmacyNote => "Pharmacy Note",
-            PdfKind::Invoice => "Invoice",
-            PdfKind::DeviceReport => "Device Report",
+    pub fn pdf_kind_name(kind: PdfKind, lang: Lang) -> &'static str {
+        match (kind, lang) {
+            (PdfKind::Report, Lang::En) => "Medical Report",
+            (PdfKind::Report, Lang::Mk) => "Медицински извештај",
+            (PdfKind::PharmacyNote, Lang::En) => "Pharmacy Note",
+            (PdfKind::PharmacyNote, Lang::Mk) => "Рецепт за аптека",
+            (PdfKind::Invoice, Lang::En) => "Invoice",
+            (PdfKind::Invoice, Lang::Mk) => "Фактура",
+            (PdfKind::DeviceReport, Lang::En) => "Device Report",
+            (PdfKind::DeviceReport, Lang::Mk) => "Лабораториски извештај",
         }
+    }
+
+    pub(crate) async fn app_lang(db: &DatabaseConnection) -> Lang {
+        crate::services::settings::SettingsService::get_settings(db, "default")
+            .await
+            .map(|s| Lang::from_code(&s.settings.language))
+            .unwrap_or(Lang::En)
     }
 
     /// Where one PDF job writes `file_name`: a fresh folder of its own.
@@ -900,7 +911,8 @@ impl MedicalRecordService {
         let patient_part = Self::sanitize_filename_part(&patient_data.name);
         let title_part = Self::sanitize_filename_part(&record.name);
         let pdf_filename = format!(
-            "Medical Report - {} - {} - {}.pdf",
+            "{} - {} - {} - {}.pdf",
+            Self::pdf_kind_name(PdfKind::Report, Self::app_lang(db).await),
             patient_part,
             title_part,
             Self::pdf_timestamp(),
@@ -951,7 +963,8 @@ impl MedicalRecordService {
         let patient_part = Self::sanitize_filename_part(&patient_data.name);
         let title_part = Self::sanitize_filename_part(&record.name);
         let pdf_filename = format!(
-            "Pharmacy Note - {} - {} - {}.pdf",
+            "{} - {} - {} - {}.pdf",
+            Self::pdf_kind_name(PdfKind::PharmacyNote, Self::app_lang(db).await),
             patient_part,
             title_part,
             Self::pdf_timestamp(),
@@ -1074,7 +1087,8 @@ impl MedicalRecordService {
         let invoice_part = Self::sanitize_filename_part(&invoice.number);
         let recipient_part = Self::sanitize_filename_part(&recipient);
         let pdf_filename = format!(
-            "Invoice {} - {} - {}.pdf",
+            "{} {} - {} - {}.pdf",
+            Self::pdf_kind_name(PdfKind::Invoice, Self::app_lang(db).await),
             invoice_part,
             recipient_part,
             invoice.date.format("%Y-%m-%d"),
@@ -1158,18 +1172,21 @@ impl MedicalRecordService {
         // name would blow the filename length budget on a typical
         // batch import.
         let patient_part = Self::sanitize_filename_part(&patient_data.name);
+        let kind_name = Self::pdf_kind_name(PdfKind::DeviceReport, Self::app_lang(db).await);
         let pdf_filename = if device_data_list.len() == 1 {
             let device = &device_data_list[0];
             let device_part = Self::sanitize_filename_part(&device.device_name);
             format!(
-                "Device Report - {} - {} - {}.pdf",
+                "{} - {} - {} - {}.pdf",
+                kind_name,
                 patient_part,
                 device_part,
                 Self::pdf_timestamp(),
             )
         } else {
             format!(
-                "Device Report - {} - {}.pdf",
+                "{} - {} - {}.pdf",
+                kind_name,
                 patient_part,
                 Self::pdf_timestamp(),
             )

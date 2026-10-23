@@ -586,11 +586,15 @@ pub async fn generate_configured_report(
     // (single device), or just patient+date for the combined case.
     let timestamp = MedicalRecordService::pdf_timestamp();
     let patient_part = MedicalRecordService::sanitize_filename_part(&patient_data.name);
+    let kind_name = MedicalRecordService::pdf_kind_name(
+        crate::services::medical_record::PdfKind::DeviceReport,
+        MedicalRecordService::app_lang(&pool).await,
+    );
     let pdf_filename = if all_device_data.len() == 1 {
         let device_part = MedicalRecordService::sanitize_filename_part(&all_device_data[0].device_name);
-        format!("Device Report - {} - {} - {}.pdf", patient_part, device_part, timestamp)
+        format!("{} - {} - {} - {}.pdf", kind_name, patient_part, device_part, timestamp)
     } else {
-        format!("Device Report - {} - {}.pdf", patient_part, timestamp)
+        format!("{} - {} - {}.pdf", kind_name, patient_part, timestamp)
     };
 
     let (_job_folder, pdf_path) = MedicalRecordService::job_output(&pdf_filename)?;
