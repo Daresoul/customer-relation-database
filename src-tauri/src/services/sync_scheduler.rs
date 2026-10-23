@@ -7,13 +7,15 @@ use sea_orm::{DatabaseConnection, ConnectionTrait, Statement, DbBackend};
 
 pub struct SyncScheduler;
 
-/// Query for the Google events the cancellation pull reads.
+/// Query for the Google events the cancellation pull reads: every event
+/// changed in the last week, whenever it takes place. A time window
+/// (timeMin/timeMax) would miss a cancelled appointment in the future.
 pub fn cancellation_query(now: DateTime<Utc>) -> Vec<(&'static str, String)> {
     vec![
-        ("timeMin", (now - Duration::days(7)).to_rfc3339()),
-        ("timeMax", now.to_rfc3339()),
+        ("updatedMin", (now - Duration::days(7)).to_rfc3339()),
         ("showDeleted", "true".to_string()),
         ("singleEvents", "true".to_string()),
+        ("maxResults", "2500".to_string()),
     ]
 }
 
