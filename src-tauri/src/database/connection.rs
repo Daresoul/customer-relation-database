@@ -40,10 +40,3 @@ pub async fn create_pool(database_url: &str) -> Result<DatabasePool, sea_orm::Db
     Ok(legacy_pool)
 }
 
-pub async fn test_connection(pool: &DatabasePool) -> Result<(), sqlx::Error> {
-    let pool = pool.lock().await;
-    sqlx::query("SELECT 1")
-        .fetch_one(&*pool)
-        .await?;
-    Ok(())
-}

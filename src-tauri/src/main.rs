@@ -499,8 +499,6 @@ fn main() {
             commands::update_patient,
             commands::delete_patient,
             commands::search_patients,
-            commands::get_patients_by_species,
-            commands::advanced_patient_search,
             commands::mark_patient_deceased,
             commands::mark_patient_inactive,
             commands::reactivate_patient,
@@ -522,8 +520,6 @@ fn main() {
             commands::quick_search_households,
             commands::rebuild_household_search_index,
             // Household detail view commands
-            commands::get_household_detail,
-            commands::update_household_fields,
             commands::add_person_to_household,
             commands::update_person,
             commands::delete_person,
@@ -584,13 +580,10 @@ fn main() {
             commands::get_record_invoice_totals,
             // Note: get_currencies is already registered above for medical
             // Database commands
-            commands::init_database,
-            commands::test_database_connection,
             // View preference commands
             commands::get_view_preference,
             commands::set_view_preference,
             // Stats commands
-            commands::get_dashboard_stats,
             // App header search and the dashboard Today strip
             commands::global_patient_search,
             commands::count_patients_seen,

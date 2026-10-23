@@ -675,21 +675,6 @@ impl PatientService {
         Ok(result.rows_affected > 0)
     }
 
-    pub async fn get_by_species(db: &DatabaseConnection, species: &str) -> Result<Vec<Patient>, String> {
-        let rows = db
-            .query_all(Statement::from_sql_and_values(
-                DbBackend::Sqlite,
-                &format!("{} {}", PATIENT_SELECT, "WHERE s.name = ? ORDER BY p.name"),
-                [species.into()],
-            ))
-            .await
-            .map_err(|e| format!("Failed to fetch patients by species: {}", e))?;
-
-        rows.iter()
-            .map(Self::row_to_patient)
-            .collect()
-    }
-
     /// Active patients only; see `search_including_inactive`.
     pub async fn search(db: &DatabaseConnection, query: &str) -> Result<Vec<Patient>, String> {
         Self::search_including_inactive(db, query, false).await
@@ -750,59 +735,4 @@ impl PatientService {
         Ok(matched)
     }
 
-    pub async fn advanced_search(
-        db: &DatabaseConnection,
-        patient_name: Option<&str>,
-        species: Option<&str>,
-    ) -> Result<Vec<Patient>, String> {
-        // Same Cyrillic-safe approach as search(): fetch then filter in
-        // Rust with to_lowercase() instead of ASCII-only SQL LIKE. Both
-        // filters (name + species) are optional and ANDed.
-        let name_needle = patient_name
-            .map(|s| s.trim().to_lowercase())
-            .filter(|s| !s.is_empty());
-        let species_needle = species
-            .map(|s| s.trim().to_lowercase())
-            .filter(|s| !s.is_empty());
-
-        let rows = db
-            .query_all(Statement::from_string(
-                DbBackend::Sqlite,
-                PATIENT_SELECT.to_string(),
-            ))
-            .await
-            .map_err(|e| format!("Failed to search patients: {}", e))?;
-
-        let mut matched: Vec<Patient> = rows
-            .iter()
-            .filter_map(|r| Self::row_to_patient(r).ok())
-            .filter(|p| {
-                let name_ok = match &name_needle {
-                    Some(n) => p
-                        .name
-                        .as_deref()
-                        .is_some_and(|v| v.to_lowercase().contains(n)),
-                    None => true,
-                };
-                let species_ok = match &species_needle {
-                    Some(s) => p
-                        .species
-                        .as_deref()
-                        .is_some_and(|v| v.to_lowercase().contains(s)),
-                    None => true,
-                };
-                name_ok && species_ok
-            })
-            .collect();
-
-        matched.sort_by(|a, b| {
-            a.name
-                .as_deref()
-                .unwrap_or("")
-                .to_lowercase()
-                .cmp(&b.name.as_deref().unwrap_or("").to_lowercase())
-        });
-        matched.truncate(100);
-        Ok(matched)
-    }
 }

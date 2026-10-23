@@ -111,20 +111,3 @@ pub async fn delete_patient_weight(pool: State<'_, SeaOrmPool>, id: i64) -> Resu
     PatientService::delete_weight(&pool, id).await
 }
 
-#[tauri::command]
-pub async fn get_patients_by_species(pool: State<'_, SeaOrmPool>, species: String) -> Result<Vec<Patient>, String> {
-    PatientService::get_by_species(&pool, &species).await
-}
-
-#[tauri::command]
-pub async fn advanced_patient_search(
-    pool: State<'_, SeaOrmPool>,
-    patient_name: Option<String>,
-    species: Option<String>,
-) -> Result<Vec<Patient>, String> {
-    PatientService::advanced_search(
-        &pool,
-        patient_name.as_deref(),
-        species.as_deref(),
-    ).await
-}
