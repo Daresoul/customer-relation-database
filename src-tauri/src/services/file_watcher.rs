@@ -319,6 +319,17 @@ async fn claim(ctx: &WatchContext, key: &str, file_name: &str) -> Result<bool, S
     Ok(result.rows_affected() == 1)
 }
 
+/// A per-day file's `<samples>` or `<sample …>` element. XML names are
+/// case-sensitive, so the single-result format's `<SampleId>` doesn't count.
+fn has_day_file_element(text: &str) -> bool {
+    text.match_indices("<sample").any(|(at, tag)| {
+        matches!(
+            text[at + tag.len()..].chars().next(),
+            Some(c) if c.is_whitespace() || c == '>' || c == '/' || c == 's'
+        )
+    })
+}
+
 /// Read a watched file and deliver each result in it that hasn't been handled
 /// before. Returns how many results were offered.
 pub async fn process_file(
@@ -348,7 +359,7 @@ pub async fn process_file(
             let suffix = s.seq.clone().unwrap_or_else(|| (index + 1).to_string());
             units.push((s.key, format!("{}_{}.xml", stem, suffix), s.xml));
         }
-        if units.is_empty() && String::from_utf8_lossy(&data).to_ascii_lowercase().contains("<sample") {
+        if units.is_empty() && has_day_file_element(&String::from_utf8_lossy(&data)) {
             // First sample of the day still being written.
             return Ok(0);
         }
