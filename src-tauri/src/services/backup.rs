@@ -6,7 +6,7 @@
 //! readable before the DB pool is ready (e.g. at startup before migrations).
 
 use std::path::{Path, PathBuf};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Local, TimeZone, Utc};
 use sea_orm::{ConnectionTrait, DatabaseConnection, Statement, DbBackend};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -29,7 +29,7 @@ const PRE_UPDATE_MARKER: &str = "_pre-update-";
 /// Which snapshot a backup run writes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SnapshotKind {
-    /// One per UTC day; a rerun the same day replaces it.
+    /// One per local day; a rerun the same day replaces it.
     Daily,
     /// Taken right before installing an update. Never replaced by a daily
     /// run, and pruned on its own count, so the post-update startup backup
@@ -37,7 +37,11 @@ pub enum SnapshotKind {
     PreUpdate { app_version: String },
 }
 
-pub fn snapshot_file_name(kind: &SnapshotKind, now: DateTime<Utc>) -> String {
+/// Named by the wall-clock date and time of `now` (the app passes local time).
+pub fn snapshot_file_name<Tz: TimeZone>(kind: &SnapshotKind, now: DateTime<Tz>) -> String
+where
+    Tz::Offset: std::fmt::Display,
+{
     match kind {
         SnapshotKind::Daily => format!("vet_clinic_{}.db", now.format("%Y-%m-%d")),
         SnapshotKind::PreUpdate { app_version } => format!(
@@ -219,7 +223,7 @@ impl BackupService {
         // require quiescing other writers (unlike a raw file copy + WAL).
         // Written to a temporary name first, so an earlier snapshot of the
         // same name survives until the new one is complete.
-        let db_target = db_dir.join(snapshot_file_name(kind, Utc::now()));
+        let db_target = db_dir.join(snapshot_file_name(kind, Local::now()));
         let mut part_name = db_target.file_name().unwrap_or_default().to_os_string();
         part_name.push(".part");
         let db_part = db_dir.join(part_name);

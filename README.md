@@ -439,6 +439,8 @@
 ## Backups (`services/backup.rs`)
 - The database snapshot is written as `<name>.part` and renamed over the old
   one only when complete, so a failed rerun keeps today's earlier snapshot.
+- Snapshot names use the local date and time (`vet_clinic_<local day>.db`),
+  so a backup just after midnight doesn't replace the previous day's.
 - `backup_config.json` is saved through a `.tmp` file. A config that exists
   but can't be read comes back with `last_error` set (the backup light turns
   red and says to choose the folder again), instead of silently reading as
