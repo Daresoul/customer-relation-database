@@ -9,7 +9,7 @@ use sea_orm::*;
 pub struct SettingsService;
 
 /// The clinic writes dates day first, with dots (31.01.2024).
-pub const DEFAULT_DATE_FORMAT: &str = "DD.MM.YYYY";
+pub const DEFAULT_DATE_FORMAT: &str = "DD/MM/YYYY";
 
 impl SettingsService {
     /// Convert a SeaORM currency model to the API Currency model

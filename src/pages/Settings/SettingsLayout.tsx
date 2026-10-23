@@ -39,6 +39,7 @@ import BackupSettings from './components/BackupSettings';
 import ManagedScannersSettings from './components/ManagedScannersSettings';
 import { UpdateSettings } from './UpdateSettings';
 import { LoadError } from '../../components/common/LoadError';
+import { DEFAULT_DATE_FORMAT } from '@/utils/dateFormatter';
 
 const { Content, Sider } = Layout;
 
@@ -179,7 +180,7 @@ const SettingsLayout: React.FC = () => {
       // The currency field lives on the Business section; cleared there, it is undefined and saves as null.
       currencyId: selectedCategory === 'business' ? (values.currencyId ?? null) : (settings?.currencyId ?? null),
       theme: values.theme !== undefined ? values.theme : (settings?.theme || 'light'),
-      dateFormat: values.dateFormat !== undefined ? values.dateFormat : (settings?.dateFormat || 'DD.MM.YYYY'),
+      dateFormat: values.dateFormat !== undefined ? values.dateFormat : (settings?.dateFormat || DEFAULT_DATE_FORMAT),
     };
 
 

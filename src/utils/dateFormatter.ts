@@ -1,8 +1,8 @@
 import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
 
-/** The clinic writes dates day first, with dots (31.01.2024). */
-export const DEFAULT_DATE_FORMAT = 'DD.MM.YYYY';
+/** The clinic writes dates day first, with slashes (31/01/2024), as its PDFs do. */
+export const DEFAULT_DATE_FORMAT = 'DD/MM/YYYY';
 
 // Get date format from localStorage or use default
 export const getUserDateFormat = (): string => {

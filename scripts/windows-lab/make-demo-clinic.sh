@@ -32,7 +32,7 @@ until grep -q '\[dev-bridge\] ready' "$SANDBOX.log" 2>/dev/null; do
 done
 
 echo "[demo] clinic settings and profile…"
-call '{"cmd":"update_app_settings","updates":{"language":"mk","currency_id":1,"date_format":"DD.MM.YYYY","theme":"light"}}'
+call '{"cmd":"update_app_settings","updates":{"language":"mk","currency_id":1,"date_format":"DD/MM/YYYY","theme":"light"}}'
 call '{"cmd":"update_clinic_profile","input":{"name":"Ветеринарна амбуланта Демо","address":"ул. Партизанска 12","city":"Скопје","phone":"02 3100 200","email":"demo@ambulanta.mk","taxNumber":"4030000000000","registrationNumber":"7000000","bankAccount":"300000000000000","bankName":"Демо Банка","pricesIncludeVat":true}}'
 
 echo "[demo] stopping the app…"
