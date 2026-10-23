@@ -106,6 +106,8 @@ impl SyncService {
                 species: row.try_get("", "species").unwrap_or(None),
                 breed: row.try_get("", "breed").unwrap_or(None),
                 microchip_id: row.try_get("", "microchip_id").unwrap_or(None),
+                checked_in_at: None,
+                medical_record_id: None,
             };
 
             // Check if already synced

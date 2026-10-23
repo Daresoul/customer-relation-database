@@ -21,6 +21,12 @@ pub struct Appointment {
     pub species: Option<String>,
     pub breed: Option<String>,
     pub microchip_id: Option<String>,
+    /// Arrival time; set by check-in, kept through the consult.
+    #[serde(default)]
+    pub checked_in_at: Option<DateTime<Utc>>,
+    /// The record started from this appointment.
+    #[serde(default)]
+    pub medical_record_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::Type)]
@@ -29,6 +35,9 @@ pub enum AppointmentStatus {
     #[serde(rename = "scheduled")]
     #[sqlx(rename = "scheduled")]
     Scheduled,
+    #[serde(rename = "checked_in")]
+    #[sqlx(rename = "checked_in")]
+    CheckedIn,
     #[serde(rename = "in_progress")]
     #[sqlx(rename = "in_progress")]
     InProgress,
@@ -38,15 +47,20 @@ pub enum AppointmentStatus {
     #[serde(rename = "cancelled")]
     #[sqlx(rename = "cancelled")]
     Cancelled,
+    #[serde(rename = "no_show")]
+    #[sqlx(rename = "no_show")]
+    NoShow,
 }
 
 impl std::fmt::Display for AppointmentStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             AppointmentStatus::Scheduled => write!(f, "scheduled"),
+            AppointmentStatus::CheckedIn => write!(f, "checked_in"),
             AppointmentStatus::InProgress => write!(f, "in_progress"),
             AppointmentStatus::Completed => write!(f, "completed"),
             AppointmentStatus::Cancelled => write!(f, "cancelled"),
+            AppointmentStatus::NoShow => write!(f, "no_show"),
         }
     }
 }
@@ -57,6 +71,9 @@ pub struct AppointmentDetail {
     pub appointment: Appointment,
     pub patient: Option<PatientInfo>,
     pub room: Option<Room>,
+    /// `off`, `synced`, `not_synced` or `reconnect`.
+    pub google_sync_state: String,
+    pub google_synced_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -89,12 +106,16 @@ pub struct CreateAppointmentInput {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct UpdateAppointmentInput {
+    pub patient_id: Option<i64>,
     pub title: Option<String>,
     pub description: Option<String>,
     pub start_time: Option<DateTime<Utc>>,
     pub end_time: Option<DateTime<Utc>>,
-    pub room_id: Option<i64>,
+    /// Left out: keep the room. `null`: no room.
+    #[serde(default)]
+    pub room_id: MaybeNull<i64>,
     pub status: Option<AppointmentStatus>,
+    pub medical_record_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -142,12 +163,17 @@ pub struct ConflictCheckInput {
     pub end_time: DateTime<Utc>,
     pub room_id: Option<i64>,
     pub exclude_appointment_id: Option<i64>,
+    /// Also list this patient's other appointments at the same time.
+    #[serde(default)]
+    pub patient_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConflictCheckResponse {
     pub has_conflicts: bool,
     pub conflicts: Vec<Appointment>,
+    #[serde(default)]
+    pub patient_conflicts: Vec<Appointment>,
 }
 
 // Validation helpers
@@ -229,6 +255,7 @@ impl UpdateAppointmentInput {
 
 // Import Room from rooms module
 use crate::models::rooms::Room;
+use crate::models::dto::MaybeNull;
 
 #[cfg(test)]
 mod tests {
@@ -439,8 +466,9 @@ mod tests {
                 description: None,
                 start_time: None,
                 end_time: None,
-                room_id: None,
+                room_id: MaybeNull::Undefined,
                 status: None,
+                ..Default::default()
             };
             assert!(input.validate().is_ok());
         }
@@ -452,8 +480,9 @@ mod tests {
                 description: None,
                 start_time: None,
                 end_time: None,
-                room_id: None,
+                room_id: MaybeNull::Undefined,
                 status: None,
+                ..Default::default()
             };
             let result = input.validate();
             assert!(result.is_err());
@@ -467,8 +496,9 @@ mod tests {
                 description: None,
                 start_time: Some(make_time(14, 0)),
                 end_time: Some(make_time(15, 30)),
-                room_id: None,
+                room_id: MaybeNull::Undefined,
                 status: None,
+                ..Default::default()
             };
             assert!(input.validate().is_ok());
         }
@@ -480,8 +510,9 @@ mod tests {
                 description: None,
                 start_time: Some(make_time(15, 0)),
                 end_time: Some(make_time(14, 0)),
-                room_id: None,
+                room_id: MaybeNull::Undefined,
                 status: None,
+                ..Default::default()
             };
             let result = input.validate();
             assert!(result.is_err());
@@ -496,8 +527,9 @@ mod tests {
                 description: None,
                 start_time: Some(make_time(10, 7)), // Invalid interval but no end_time to compare
                 end_time: None,
-                room_id: None,
+                room_id: MaybeNull::Undefined,
                 status: None,
+                ..Default::default()
             };
             assert!(input.validate().is_ok());
         }
@@ -509,8 +541,9 @@ mod tests {
                 description: None,
                 start_time: None,
                 end_time: None,
-                room_id: None,
+                room_id: MaybeNull::Undefined,
                 status: Some(AppointmentStatus::Completed),
+                ..Default::default()
             };
             assert!(input.validate().is_ok());
         }

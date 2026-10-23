@@ -8,6 +8,7 @@ use crate::models::{
     AppointmentListResponse, DuplicateAppointmentInput,
     ConflictCheckInput, ConflictCheckResponse, Room
 };
+use crate::models::dto::MaybeNull;
 
 pub struct AppointmentService;
 
@@ -174,6 +175,8 @@ impl AppointmentService {
             appointment,
             patient,
             room,
+            google_sync_state: "off".to_string(),
+            google_synced_at: None,
         })
     }
 
@@ -245,7 +248,7 @@ impl AppointmentService {
 
         if input.title.is_none() && input.description.is_none()
             && input.start_time.is_none() && input.end_time.is_none()
-            && input.room_id.is_none() && input.status.is_none() {
+            && matches!(input.room_id, MaybeNull::Undefined) && input.status.is_none() {
             return Self::get_appointment_simple(db, id).await;
         }
 
@@ -264,7 +267,7 @@ impl AppointmentService {
         if let Some(end_time) = input.end_time {
             model.end_time = Set(end_time);
         }
-        if let Some(room_id) = input.room_id {
+        if let MaybeNull::Value(room_id) = input.room_id {
             model.room_id = Set(Some(room_id));
         }
         if let Some(status) = input.status {
@@ -324,6 +327,7 @@ impl AppointmentService {
         Ok(ConflictCheckResponse {
             has_conflicts: !conflicts.is_empty(),
             conflicts,
+            patient_conflicts: Vec::new(),
         })
     }
 
@@ -471,6 +475,8 @@ impl AppointmentService {
             species: row.try_get("", "species").ok(),
             breed: row.try_get("", "breed").ok(),
             microchip_id: row.try_get("", "microchip_id").ok(),
+            checked_in_at: None,
+            medical_record_id: None,
         })
     }
 }
@@ -744,8 +750,9 @@ mod tests {
             description: Some("Updated description".to_string()),
             start_time: None,
             end_time: None,
-            room_id: None,
+            room_id: MaybeNull::Undefined,
             status: None,
+            ..Default::default()
         };
 
         let result = AppointmentService::update_appointment(
@@ -778,8 +785,9 @@ mod tests {
             description: None,
             start_time: None,
             end_time: None,
-            room_id: None,
+            room_id: MaybeNull::Undefined,
             status: Some(AppointmentStatus::InProgress),
+            ..Default::default()
         };
 
         let updated = AppointmentService::update_appointment(
@@ -913,6 +921,7 @@ mod tests {
             end_time: test_time_slot(11, 2),
             room_id: Some(room_id),
             exclude_appointment_id: None,
+            patient_id: None,
         };
 
         let result = AppointmentService::check_conflicts(&db, input).await.unwrap();
@@ -940,6 +949,7 @@ mod tests {
             end_time: test_time_slot(10, 3),   // 10:45
             room_id: Some(room_id),
             exclude_appointment_id: None,
+            patient_id: None,
         };
 
         let result = AppointmentService::check_conflicts(&db, input).await.unwrap();
@@ -968,6 +978,7 @@ mod tests {
             end_time: test_time_slot(10, 2),
             room_id: Some(room2_id),
             exclude_appointment_id: None,
+            patient_id: None,
         };
 
         let result = AppointmentService::check_conflicts(&db, input).await.unwrap();
@@ -994,6 +1005,7 @@ mod tests {
             end_time: test_time_slot(10, 2),
             room_id: Some(room_id),
             exclude_appointment_id: Some(created.id),
+            patient_id: None,
         };
 
         let result = AppointmentService::check_conflicts(&db, input).await.unwrap();

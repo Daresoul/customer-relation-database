@@ -451,6 +451,8 @@ async fn fetch_appointment_detail_seaorm(
         species: row.try_get("", "species").ok(),
         breed: row.try_get("", "breed").ok(),
         microchip_id: row.try_get("", "microchip_id").ok(),
+        checked_in_at: None,
+        medical_record_id: None,
     };
 
     // Get patient info
@@ -501,5 +503,7 @@ async fn fetch_appointment_detail_seaorm(
         appointment,
         patient,
         room,
+        google_sync_state: String::new(),
+        google_synced_at: None,
     })
 }
