@@ -29,7 +29,9 @@ function fill(phone: string) {
       </App>
     </QueryClientProvider>,
   );
-  const [household, first, last] = screen.getAllByPlaceholderText('forms:placeholders.enterName') as HTMLInputElement[];
+  const household = screen.getByLabelText(/householdName/);
+  const first = screen.getByLabelText('forms:labels.firstName');
+  const last = screen.getByLabelText('forms:labels.lastName');
   fireEvent.change(household, { target: { value: 'Петровски' } });
   fireEvent.change(first, { target: { value: 'Петар' } });
   fireEvent.change(last, { target: { value: 'Петровски' } });

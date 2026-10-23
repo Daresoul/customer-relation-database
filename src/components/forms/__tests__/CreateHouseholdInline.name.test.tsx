@@ -24,7 +24,8 @@ function renderForm() {
       </App>
     </QueryClientProvider>,
   );
-  const [household, , lastName] = screen.getAllByPlaceholderText('forms:placeholders.enterName') as HTMLInputElement[];
+  const household = screen.getByLabelText(/householdName/) as HTMLInputElement;
+  const lastName = screen.getByLabelText('forms:labels.lastName') as HTMLInputElement;
   return { household, lastName };
 }
 
@@ -44,5 +45,10 @@ describe('CreateHouseholdInline household name', () => {
     fireEvent.change(household, { target: { value: 'Фарма Петровски' } });
     fireEvent.change(lastName, { target: { value: 'Петровски' } });
     expect(household.value).toBe('Фарма Петровски');
+  });
+
+  it('asks for the surname in the surname box', () => {
+    const { lastName } = renderForm();
+    expect(lastName).toHaveAttribute('placeholder', 'forms:placeholders.enterLastName');
   });
 });
