@@ -86,6 +86,12 @@ pub struct PdfStatus {
     pub missing_values: Option<Vec<String>>,
 }
 
+/// A stored lab report and the analyte codes it has no row for.
+pub(crate) struct LabReportPdf {
+    pub attachment_id: i64,
+    pub missing_values: Vec<String>,
+}
+
 impl PdfStatus {
     pub(crate) fn ok(kind: &str) -> Self {
         Self { kind: kind.to_string(), ok: true, error: None, attachment_id: None, missing_values: None }
@@ -731,7 +737,16 @@ impl MedicalRecordService {
         }
         .await;
         Some(match result {
-            Ok(()) => PdfStatus::ok("device_report"),
+            Ok(report) => {
+                let mut status = PdfStatus::ok("device_report");
+                if let Some(report) = report {
+                    status.attachment_id = Some(report.attachment_id);
+                    if !report.missing_values.is_empty() {
+                        status.missing_values = Some(report.missing_values);
+                    }
+                }
+                status
+            }
             Err(e) => {
                 log::error!("❌ Device report for record {} failed: {}", record.id, e);
                 PdfStatus::failed("device_report", e)
@@ -1111,11 +1126,11 @@ impl MedicalRecordService {
         medical_record_id: i64,
         patient_data: &crate::services::device_pdf_service::PatientData,
         device_data_list: &[crate::services::device_pdf_service::DeviceTestData],
-    ) -> Result<(), String> {
+    ) -> Result<Option<LabReportPdf>, String> {
         use crate::services::java_pdf_service::JavaPdfService;
 
         if device_data_list.is_empty() {
-            return Ok(());
+            return Ok(None);
         }
 
         // Create reports directory
@@ -1151,7 +1166,7 @@ impl MedicalRecordService {
         // Generate Java PDF with all devices
         log::debug!("Generating combined PDF report using Java...");
         let clinic = crate::services::settings::SettingsService::get_clinic_profile(db).await?;
-        JavaPdfService::generate_pdf_multi_with_clinic(
+        let missing_values = JavaPdfService::generate_pdf_multi_with_clinic(
             &env.jar_path,
             pdf_path.to_str().ok_or("Invalid PDF path")?,
             patient_data,
@@ -1187,7 +1202,7 @@ impl MedicalRecordService {
 
         let _ = std::fs::remove_file(&pdf_path);
         log::debug!("PDF report generated and saved as attachment {}", attachment_id);
-        Ok(())
+        Ok(Some(LabReportPdf { attachment_id, missing_values }))
     }
 
     /// Save a PDF file as an attachment to a medical record

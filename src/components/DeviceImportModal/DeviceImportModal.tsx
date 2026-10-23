@@ -38,6 +38,7 @@ import { useDeviceImport } from '@/contexts/DeviceImportContext';
 import type { GroupedDeviceFile } from '@/contexts/DeviceImportContext';
 import { usePatients } from '@/hooks/usePatients';
 import { useCreateMedicalRecord, useUploadAttachment } from '@/hooks/useMedicalRecords';
+import type { SavedRecordDocuments } from '@/hooks/useDocumentStatusNotice';
 import { useSearchRecordTemplates } from '@/hooks/useRecordTemplates';
 import { useAppSettings } from '@/hooks/useAppSettings';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -563,56 +564,19 @@ const DeviceImportDialog: React.FC = () => {
       const createdRecord = await createMutation.mutateAsync(input);
 
       if (createdRecord && pendingFiles.length > 0) {
-        const successes = await uploadFiles(createdRecord.id);
+        await uploadFiles(createdRecord.id);
 
-        const attachmentIds = successes.map(s => s.value?.id).filter(Boolean);
-        if (printAfterSave && attachmentIds.length > 0) {
-          const autoOpenReport = (typeof window !== 'undefined') && localStorage.getItem('autoOpenGeneratedReport') === 'true';
-          const regenerate = async () => {
-            try {
-              const pdfAttachment = await MedicalService.generateConfiguredReport(createdRecord.id, attachmentIds, {});
-              if (pdfAttachment?.id && autoOpenReport) {
-                await MedicalService.openAttachmentExternally(pdfAttachment.id);
-              }
-            } catch (e) {
-              console.error('Regenerate PDF failed:', e);
-              notification.warning({
-                message: t('medical:deviceImport.pdfGenerationFailed', 'PDF Generation Failed'),
-                description: t('medical:deviceImport.pdfGenerationFailedDesc', 'The record was saved but PDF generation failed. You can regenerate it from the medical record view.'),
-                placement: 'bottomRight',
-              });
-            }
-          };
-
+        // The save already built the lab report (its status, and any values
+        // missing from it, are shown by the create mutation); open that one.
+        const labReport = (createdRecord as SavedRecordDocuments).pdfs?.find(
+          (p) => p.kind === 'device_report' && p.ok,
+        );
+        const autoOpenReport = (typeof window !== 'undefined') && localStorage.getItem('autoOpenGeneratedReport') === 'true';
+        if (printAfterSave && autoOpenReport && labReport?.attachmentId) {
           try {
-            notification.info({
-              message: t('medical:deviceImport.generatingPdf', 'Generating PDF...'),
-              description: t('medical:deviceImport.pleaseWait', 'Please wait while the report is being generated.'),
-              placement: 'bottomRight',
-              duration: 2,
-            });
-            const pdfAttachment = await MedicalService.generateConfiguredReport(createdRecord.id, attachmentIds, {});
-            if (pdfAttachment?.id && autoOpenReport) {
-              await MedicalService.openAttachmentExternally(pdfAttachment.id);
-            }
-            notification.open({
-              message: t('medical:deviceImport.pdfReady', 'PDF Ready'),
-              description: t('medical:deviceImport.pdfReadyDesc', 'Click to regenerate if needed.'),
-              placement: 'bottomRight',
-              btn: (
-                <Button size="small" type="primary" onClick={regenerate}>
-                  {t('medical:deviceImport.regenerate', 'Regenerate PDF')}
-                </Button>
-              ),
-            });
-          } catch (pdfError) {
-            console.error('Failed to generate PDF report:', pdfError);
-            notification.warning({
-              message: t('medical:deviceImport.pdfGenerationFailed', 'PDF Generation Failed'),
-              description: t('medical:deviceImport.pdfGenerationFailedDesc', 'The record was saved but PDF generation failed. You can regenerate it from the medical record view.'),
-              placement: 'bottomRight',
-              duration: 5,
-            });
+            await MedicalService.openAttachmentExternally(labReport.attachmentId);
+          } catch (openError) {
+            console.error('Failed to open the lab report:', openError);
           }
         }
       }

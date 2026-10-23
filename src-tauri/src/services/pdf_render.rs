@@ -44,11 +44,7 @@ impl PdfRenderService {
             .load_pdf_from_file(pdf_path, None)
             .map_err(|e| format!("Failed to open PDF: {}", e))?;
         let pages = document.pages();
-        let page_count: u16 = pages.len();
-        if page_count == 0 {
-            return Err("PDF has no pages".to_string());
-        }
-        let index_u16: u16 = if page_index < page_count as u32 { page_index as u16 } else { 0 };
+        let index_u16 = self::page_index(page_index, pages.len())?;
         let page = pages
             .get(index_u16)
             .map_err(|e| format!("Failed to get page: {}", e))?;
@@ -90,9 +86,7 @@ impl PdfRenderService {
             .load_pdf_from_file(pdf_path, None)
             .map_err(|e| format!("Failed to open PDF: {}", e))?;
         let pages = document.pages();
-        let page_count: u16 = pages.len();
-        if page_count == 0 { return Err("PDF has no pages".into()); }
-        let index_u16: u16 = if page_index < page_count as u32 { page_index as u16 } else { 0 };
+        let index_u16 = self::page_index(page_index, pages.len())?;
         let page = pages.get(index_u16).map_err(|e| format!("Failed to get page: {}", e))?;
         let cfg = PdfRenderConfig::new()
             .set_target_width(target_width as i32)
@@ -267,11 +261,15 @@ impl PdfRenderService {
     }
 }
 
+/// The page to render; a page past the end is an error, never page 1.
 fn page_index(requested: u32, page_count: u16) -> Result<u16, String> {
     if page_count == 0 {
         return Err("PDF has no pages".to_string());
     }
-    Ok(if requested < page_count as u32 { requested as u16 } else { 0 })
+    if requested >= page_count as u32 {
+        return Err(format!("Page {} does not exist; the PDF has {} page(s)", requested + 1, page_count));
+    }
+    Ok(requested as u16)
 }
 
 /// gaps L14: a page past the end silently rendered page 1.

@@ -110,18 +110,19 @@ impl JavaPdfService {
         patient: &crate::services::device_pdf_service::PatientData,
         device_data_list: &[crate::services::device_pdf_service::DeviceTestData],
     ) -> Result<(), String> {
-        Self::generate_pdf_multi_with_clinic(jar_path, output_path, patient, device_data_list, None)
+        Self::generate_pdf_multi_with_clinic(jar_path, output_path, patient, device_data_list, None).map(|_| ())
     }
 
     /// `generate_pdf_multi_with_jar` with the clinic profile for the
-    /// letterhead; without one the current letterhead is used.
+    /// letterhead; without one the current letterhead is used. Returns the
+    /// analyte codes that have no row on the report.
     pub fn generate_pdf_multi_with_clinic(
         jar_path: &Path,
         output_path: &str,
         patient: &crate::services::device_pdf_service::PatientData,
         device_data_list: &[crate::services::device_pdf_service::DeviceTestData],
         clinic: Option<&ClinicProfile>,
-    ) -> Result<(), String> {
+    ) -> Result<Vec<String>, String> {
         log::info!("☕ Generating PDF using Java JAR (iText 5) with {} samples...", device_data_list.len());
 
         // A sample with no test results must never reach the renderer: Java
@@ -145,10 +146,10 @@ impl JavaPdfService {
         let input = serde_json::to_value(&java_input)
             .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
         let input = Self::attach_clinic(input, clinic);
-        Self::run_jar_job(jar_path, input, output_path, JAVA_TIMEOUT)?;
+        let stderr = Self::run_jar_job(jar_path, input, output_path, JAVA_TIMEOUT)?;
 
         log::info!("✅ Java PDF generated successfully");
-        Ok(())
+        Ok(Self::unmapped_codes(&stderr))
     }
 
     /// Builds the JSON contract sent to the JAR. Pure (no I/O), so the
@@ -368,13 +369,14 @@ impl JavaPdfService {
 
     /// One JAR run in its own job folder: Java writes the PDF there, and only
     /// a finished, non-empty PDF is moved to `output_path`. Java's stderr is
-    /// logged even when it succeeds, so its warnings reach the log.
+    /// logged even when it succeeds, so its warnings reach the log, and
+    /// returned so callers can read its `PDF_WARN` lines.
     pub(crate) fn run_jar_job(
         jar_path: &Path,
         mut input: Value,
         output_path: &str,
         timeout: Duration,
-    ) -> Result<(), String> {
+    ) -> Result<String, String> {
         let job_dir = Self::new_job_dir()?;
         let input_json_path = job_dir.path().join("input.json");
         let job_pdf = job_dir.path().join("out.pdf");
@@ -417,7 +419,7 @@ impl JavaPdfService {
             fs::copy(&job_pdf, dest)
                 .map_err(|e| format!("Failed to move PDF to {}: {}", output_path, e))?;
         }
-        Ok(())
+        Ok(output.stderr)
     }
 
     /// Ask the bundled JAR which app version it was built for (`java -jar … --version`,
@@ -689,8 +691,18 @@ impl JavaPdfService {
             .to_string()
     }
 
-    pub fn unmapped_codes(_stderr: &str) -> Vec<String> {
-        Vec::new()
+    /// The analyte codes the JAR said have no row on the report
+    /// (`PDF_WARN code=unmapped_analytes ... codes=A,B`).
+    pub fn unmapped_codes(stderr: &str) -> Vec<String> {
+        let mut codes: Vec<String> = stderr
+            .lines()
+            .filter(|l| l.starts_with("PDF_WARN code=unmapped_analytes"))
+            .filter_map(|l| l.split_once(" codes=").map(|(_, c)| c.trim()))
+            .flat_map(|c| c.split(',').map(str::trim).filter(|s| !s.is_empty()).map(String::from))
+            .collect();
+        codes.sort();
+        codes.dedup();
+        codes
     }
 
     /// Map detailed device type names to Java-expected format
