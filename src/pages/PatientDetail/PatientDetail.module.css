@@ -208,12 +208,12 @@
 
 /* Household Section styles */
 .householdCard {
-  background: #1f1f1f;
-  border-color: #303030;
+  background: var(--bg-container);
+  border-color: var(--border-base);
 }
 
 .householdTitle {
-  color: #E6E6E6;
+  color: var(--text-primary);
   margin: 0;
 }
 

@@ -166,7 +166,7 @@ export const PatientDetail: React.FC = () => {
   };
 
   // Save scroll position before navigating away
-  const handleNavigateToMedicalRecord = (recordId: number) => {
+  const handleNavigateToMedicalRecord = (recordId: number, attachmentId?: number) => {
     // Save window scroll position
     sessionStorage.setItem(
       `patient-detail-scroll-${patientId}`,
@@ -177,7 +177,7 @@ export const PatientDetail: React.FC = () => {
       `patient-detail-active-tab-${patientId}`,
       activeTab
     );
-    navigate(`/medical-records/${recordId}`);
+    navigate(`/medical-records/${recordId}${attachmentId != null ? `?attachmentId=${attachmentId}` : ''}`);
   };
 
   const tabItems = [
