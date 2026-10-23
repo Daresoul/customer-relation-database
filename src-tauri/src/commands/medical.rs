@@ -185,7 +185,7 @@ pub async fn delete_medical_attachment(
     pool: State<'_, SeaOrmPool>,
     attachment_id: i64,
 ) -> Result<(), String> {
-    FileStorageService::delete_attachment(&pool, attachment_id).await
+    crate::services::lab_inbox::delete_attachment(&pool, attachment_id).await
 }
 
 // Get attachment content for text file viewer

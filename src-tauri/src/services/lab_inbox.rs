@@ -705,6 +705,31 @@ pub async fn move_result(
 }
 
 /// Soft-delete an attachment (see `FileStorageService::delete_attachment`).
-pub async fn delete_attachment(_db: &DatabaseConnection, _attachment_id: i64) -> Result<(), String> {
-    Err("not implemented".to_string())
+/// When it was the record's copy of a lab result, the result goes back to
+/// waiting in the inbox.
+pub async fn delete_attachment(db: &DatabaseConnection, attachment_id: i64) -> Result<(), String> {
+    let source = db
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "SELECT source_file_id, medical_record_id FROM medical_attachments WHERE id = ?",
+            [attachment_id.into()],
+        ))
+        .await
+        .map_err(|e| format!("Failed to read the attachment: {}", e))?;
+    crate::services::file_storage::FileStorageService::delete_attachment(db, attachment_id).await?;
+
+    let Some(row) = source else { return Ok(()) };
+    let Some(file_id) = row.try_get::<Option<String>>("", "source_file_id").ok().flatten() else { return Ok(()) };
+    let record_id: i64 = row.try_get("", "medical_record_id").map_err(|e| e.to_string())?;
+    db.execute(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "UPDATE file_access_history SET inbox_state = 'waiting', attached_record_id = NULL, attached_at = NULL \
+         WHERE file_id = ? AND inbox_state = 'attached' AND attached_record_id = ? \
+           AND NOT EXISTS (SELECT 1 FROM medical_attachments ma \
+                           WHERE ma.source_file_id = ? AND ma.medical_record_id = ? AND ma.deleted_at IS NULL)",
+        [file_id.clone().into(), record_id.into(), file_id.into(), record_id.into()],
+    ))
+    .await
+    .map_err(|e| format!("Failed to put the lab result back in the inbox: {}", e))?;
+    Ok(())
 }
