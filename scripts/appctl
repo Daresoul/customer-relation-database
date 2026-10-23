@@ -16,6 +16,7 @@
 #   appctl pw <command> …               Playwright in the real app (scripts/windows-lab/pw.mjs)
 #   appctl log [lines]                  tail the app log
 #   appctl ps <powershell>              run a PowerShell command on the lab
+#   appctl psx <powershell>             same, sent encoded (no quoting troubles)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -138,5 +139,9 @@ case "$cmd" in
     lab_ssh "Get-Content (Join-Path \$env:APPDATA 'com.vetclinic.app\\logs\\Arkivet.log') -Tail ${1:-60}"
     ;;
   ps) lab_ssh "$*" ;;
-  help | *) sed -n '2,20p' "$0" ;;
+  psx)
+    encoded=$(python3 -c 'import base64,sys; print(base64.b64encode(sys.argv[1].encode("utf-16-le")).decode())' "$*")
+    lab_ssh "powershell -NoProfile -EncodedCommand $encoded"
+    ;;
+  help | *) sed -n '2,21p' "$0" ;;
 esac
