@@ -4,6 +4,7 @@ import { App } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { createMutationErrorHandler } from '@/utils/errors';
 import { useDocumentStatusNotice, type SavedRecordDocuments } from './useDocumentStatusNotice';
+import { invalidateLabResultRecords } from './invalidation';
 import type {
   MedicalRecordFilter,
   UpdateMedicalRecordInput,
@@ -216,6 +217,9 @@ export function useUploadAttachment() {
           return key[0] === 'medical-records';
         },
       });
+      if (variables.attachmentType === 'test_result' || variables.sourceFileId) {
+        invalidateLabResultRecords(queryClient);
+      }
     },
     onError: createMutationErrorHandler(notification, 'uploadFile', t, 'useMedicalRecords'),
   });
