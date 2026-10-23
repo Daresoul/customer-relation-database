@@ -2,7 +2,7 @@
 //! notifications when a machine is down or quiet during clinic hours, and the
 //! data behind the device details drawer. Read-only: nothing here talks to a port.
 
-use chrono::{DateTime, Duration, FixedOffset, Utc};
+use chrono::{DateTime, Datelike, Duration, FixedOffset, NaiveTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 
@@ -17,7 +17,7 @@ pub enum Lang {
 
 impl Lang {
     pub fn from_code(code: &str) -> Lang {
-        todo!("{code}")
+        if code == "mk" { Lang::Mk } else { Lang::En }
     }
 }
 
@@ -42,13 +42,38 @@ pub struct DeviceAlertSettings {
 
 impl Default for DeviceAlertSettings {
     fn default() -> Self {
-        todo!()
+        DeviceAlertSettings {
+            notify_enabled: true,
+            down_after_minutes: 10,
+            clinic_open: "07:00".to_string(),
+            clinic_close: "20:00".to_string(),
+            clinic_days: vec![1, 2, 3, 4, 5, 6],
+            quiet_alerts: Vec::new(),
+        }
     }
 }
 
 impl DeviceAlertSettings {
     pub fn validate(&self) -> Result<(), String> {
-        todo!()
+        if !(1..=24 * 60).contains(&self.down_after_minutes) {
+            return Err("Minutes before a notification must be between 1 and 1440".to_string());
+        }
+        let open = parse_time(&self.clinic_open).ok_or("Opening time must look like 07:00")?;
+        let close = parse_time(&self.clinic_close).ok_or("Closing time must look like 20:00")?;
+        if open >= close {
+            return Err("Opening time must be before closing time".to_string());
+        }
+        if self.clinic_days.iter().any(|d| !(1..=7).contains(d)) {
+            return Err("Clinic days run from 1 (Monday) to 7 (Sunday)".to_string());
+        }
+        if self.quiet_alerts.iter().any(|q| !(1..=72).contains(&q.after_hours)) {
+            return Err("Quiet hours must be between 1 and 72".to_string());
+        }
+        Ok(())
+    }
+
+    fn hours(&self) -> Option<(NaiveTime, NaiveTime)> {
+        Some((parse_time(&self.clinic_open)?, parse_time(&self.clinic_close)?))
     }
 
     fn quiet_hours_for(&self, integration_id: i64) -> Option<u32> {
@@ -56,8 +81,20 @@ impl DeviceAlertSettings {
     }
 }
 
+fn parse_time(text: &str) -> Option<NaiveTime> {
+    NaiveTime::parse_from_str(text.trim(), "%H:%M").ok()
+}
+
 pub fn is_clinic_hours(settings: &DeviceAlertSettings, at: DateTime<FixedOffset>) -> bool {
-    todo!("{settings:?} {at}")
+    let day = at.weekday().number_from_monday() as u8;
+    let Some((open, close)) = settings.hours() else { return false };
+    settings.clinic_days.contains(&day) && at.time() >= open && at.time() < close
+}
+
+/// Today's opening time, in the same offset as `at`.
+fn opening_on(settings: &DeviceAlertSettings, at: DateTime<FixedOffset>) -> Option<DateTime<FixedOffset>> {
+    let (open, _) = settings.hours()?;
+    at.date_naive().and_time(open).and_local_timezone(*at.offset()).single()
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -71,11 +108,19 @@ pub enum Health {
 }
 
 pub fn serial_health(status: &DeviceConnectionStatus) -> Health {
-    todo!("{status:?}")
+    match status.status {
+        ConnectionState::Connected => Health::Working,
+        ConnectionState::Connecting if status.retry_count == 0 && status.error_kind.is_none() => Health::Starting,
+        ConnectionState::Connecting | ConnectionState::Error | ConnectionState::Disconnected => Health::Down,
+    }
 }
 
 pub fn folder_health(status: &FileWatcherStatus) -> Health {
-    todo!("{status:?}")
+    match status.status {
+        FileWatcherState::Watching => Health::Working,
+        FileWatcherState::Error => Health::Down,
+        FileWatcherState::Stopped => Health::Off,
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -138,12 +183,89 @@ impl HealthTracker {
         devices: &[DeviceSnapshot],
         settings: &DeviceAlertSettings,
     ) -> Observation {
-        todo!("{now} {devices:?} {settings:?}")
+        let mut out = Observation::default();
+        let in_hours = is_clinic_hours(settings, now);
+        self.tracks.retain(|id, _| devices.iter().any(|d| d.integration_id == *id));
+
+        for d in devices {
+            let track = self.tracks.entry(d.integration_id).or_default();
+            let problem = |kind| DeviceProblem { integration_id: d.integration_id, name: d.name.clone(), kind };
+            // A retry after an outage restarts at attempt 0; it is still the same outage.
+            let down = d.health == Health::Down || (d.health == Health::Starting && track.bad_since.is_some());
+
+            if down {
+                let since = *track.bad_since.get_or_insert(now);
+                let down_for = now - since;
+                if down_for < Duration::seconds(GRACE_SECS) {
+                    continue;
+                }
+                let p = problem(ProblemKind::NoConnection { since });
+                out.problems.push(p.clone());
+                let due = down_for >= Duration::minutes(settings.down_after_minutes as i64);
+                if settings.notify_enabled && in_hours && due && !track.down_notified {
+                    track.down_notified = true;
+                    out.alerts.push(Alert::Down(p));
+                }
+                continue;
+            }
+
+            match d.health {
+                Health::Off => *track = Track::default(),
+                Health::Working => {
+                    if track.down_notified {
+                        out.alerts.push(Alert::BackOnline { integration_id: d.integration_id, name: d.name.clone() });
+                    }
+                    track.bad_since = None;
+                    track.down_notified = false;
+                    if track.quiet_notified_for.is_some_and(|at| at != d.last_result_at) {
+                        track.quiet_notified_for = None;
+                    }
+
+                    let Some(hours) = settings.quiet_hours_for(d.integration_id) else { continue };
+                    if !in_hours {
+                        continue;
+                    }
+                    let quiet_from = match (d.last_result_at, opening_on(settings, now)) {
+                        (Some(last), Some(open)) => last.max(open),
+                        (last, open) => last.or(open).unwrap_or(now),
+                    };
+                    if now - quiet_from < Duration::hours(hours as i64) {
+                        continue;
+                    }
+                    let p = problem(ProblemKind::Quiet { last_result: d.last_result_at });
+                    out.problems.push(p.clone());
+                    if settings.notify_enabled && track.quiet_notified_for.is_none() {
+                        track.quiet_notified_for = Some(d.last_result_at);
+                        out.alerts.push(Alert::Quiet(p));
+                    }
+                }
+                Health::Starting | Health::Down => {}
+            }
+        }
+        out
+    }
+}
+
+/// "10:42" today, "17.10. 18:05" on an earlier day.
+fn when(at: DateTime<FixedOffset>, now: DateTime<FixedOffset>) -> String {
+    let at = at.with_timezone(now.offset());
+    if at.date_naive() == now.date_naive() {
+        at.format("%H:%M").to_string()
+    } else {
+        at.format("%d.%m. %H:%M").to_string()
     }
 }
 
 pub fn problem_line(problem: &DeviceProblem, now: DateTime<FixedOffset>, lang: Lang) -> String {
-    todo!("{problem:?} {now} {lang:?}")
+    let name = &problem.name;
+    match (&problem.kind, lang) {
+        (ProblemKind::NoConnection { since }, Lang::En) => format!("{name}: no connection since {}", when(*since, now)),
+        (ProblemKind::NoConnection { since }, Lang::Mk) => format!("{name}: нема врска од {}", when(*since, now)),
+        (ProblemKind::Quiet { last_result: Some(at) }, Lang::En) => format!("{name}: no results since {}", when(*at, now)),
+        (ProblemKind::Quiet { last_result: Some(at) }, Lang::Mk) => format!("{name}: нема резултати од {}", when(*at, now)),
+        (ProblemKind::Quiet { last_result: None }, Lang::En) => format!("{name}: no results today"),
+        (ProblemKind::Quiet { last_result: None }, Lang::Mk) => format!("{name}: нема резултати денес"),
+    }
 }
 
 /// Windows cuts tray tooltips at 127 characters.
@@ -161,7 +283,23 @@ pub fn tray_summary(
     now: DateTime<FixedOffset>,
     lang: Lang,
 ) -> TraySummary {
-    todo!("{problems:?} {device_count} {now} {lang:?}")
+    if problems.is_empty() {
+        let tooltip = match (device_count, lang) {
+            (0, _) => "Arkivet".to_string(),
+            (_, Lang::En) => "Arkivet — All devices OK".to_string(),
+            (_, Lang::Mk) => "Arkivet — Сите уреди работат".to_string(),
+        };
+        return TraySummary { warning: false, tooltip };
+    }
+    let mut tooltip = String::from("Arkivet");
+    for p in problems {
+        tooltip.push('\n');
+        tooltip.push_str(&problem_line(p, now, lang));
+    }
+    if tooltip.chars().count() > TOOLTIP_MAX_CHARS {
+        tooltip = tooltip.chars().take(TOOLTIP_MAX_CHARS - 1).collect::<String>() + "…";
+    }
+    TraySummary { warning: true, tooltip }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -171,7 +309,27 @@ pub struct NotificationText {
 }
 
 pub fn alert_text(alert: &Alert, now: DateTime<FixedOffset>, lang: Lang) -> NotificationText {
-    todo!("{alert:?} {now} {lang:?}")
+    let (title, body) = match (alert, lang) {
+        (Alert::Down(p), Lang::En) => (
+            "Lab machine not connected",
+            format!("{}. Check that it is on and the cable is plugged in, then press Reconnect in Arkivet.", problem_line(p, now, lang)),
+        ),
+        (Alert::Down(p), Lang::Mk) => (
+            "Лабораторискиот уред не е поврзан",
+            format!("{}. Проверете дали е вклучен и дали кабелот е приклучен, па притиснете Повторно поврзи во Arkivet.", problem_line(p, now, lang)),
+        ),
+        (Alert::Quiet(p), Lang::En) => (
+            "Lab machine is quiet",
+            format!("{}. If tests were run, check that it is on and connected.", problem_line(p, now, lang)),
+        ),
+        (Alert::Quiet(p), Lang::Mk) => (
+            "Лабораторискиот уред не праќа резултати",
+            format!("{}. Ако се правени тестови, проверете дали е вклучен и поврзан.", problem_line(p, now, lang)),
+        ),
+        (Alert::BackOnline { name, .. }, Lang::En) => ("Lab machine back online", format!("{name} is connected again.")),
+        (Alert::BackOnline { name, .. }, Lang::Mk) => ("Лабораторискиот уред повторно работи", format!("{name} е повторно поврзан.")),
+    };
+    NotificationText { title: title.to_string(), body }
 }
 
 /// Bytes received per machine, for the "N bytes in the last minute" counter.
@@ -182,11 +340,14 @@ pub struct ByteWindow {
 
 impl ByteWindow {
     pub fn add(&mut self, at: DateTime<Utc>, bytes: usize) {
-        todo!("{at} {bytes} {:?}", self.samples)
+        while self.samples.front().is_some_and(|(t, _)| at - *t > Duration::seconds(60)) {
+            self.samples.pop_front();
+        }
+        self.samples.push_back((at, bytes));
     }
 
     pub fn in_last_minute(&self, now: DateTime<Utc>) -> usize {
-        todo!("{now}")
+        self.samples.iter().filter(|(t, _)| now - *t <= Duration::seconds(60)).map(|(_, n)| n).sum()
     }
 }
 
@@ -204,7 +365,32 @@ pub struct RawMessage {
 }
 
 pub fn raw_message(bytes: &[u8], at: &str) -> RawMessage {
-    todo!("{bytes:?} {at}")
+    let kept = &bytes[..bytes.len().min(RAW_KEEP_BYTES)];
+    let mut text = String::new();
+    let mut after_cr = false;
+    for c in String::from_utf8_lossy(kept).chars() {
+        match c {
+            // CR, LF and CR LF all read as one line break.
+            '\n' if after_cr => {}
+            '\r' | '\n' => text.push('\n'),
+            '\t' => text.push(c),
+            c if (c as u32) < 0x20 || c as u32 == 0x7f => text.push_str(&format!("<{:02X}>", c as u32)),
+            c => text.push(c),
+        }
+        after_cr = c == '\r';
+    }
+    let hex = kept
+        .chunks(16)
+        .map(|line| line.iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join(" "))
+        .collect::<Vec<_>>()
+        .join("\n");
+    RawMessage {
+        at: at.to_string(),
+        byte_count: bytes.len(),
+        text,
+        hex,
+        truncated: bytes.len() > kept.len(),
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -220,11 +406,18 @@ pub struct LogEntry {
 pub const LOG_KEEP: usize = 50;
 
 pub fn push_log(log: &mut VecDeque<LogEntry>, entry: LogEntry) {
-    todo!("{log:?} {entry:?}")
+    log.push_back(entry);
+    while log.len() > LOG_KEEP {
+        log.pop_front();
+    }
 }
 
 pub fn errors_today(log: &VecDeque<LogEntry>, now: DateTime<FixedOffset>) -> usize {
-    todo!("{log:?} {now}")
+    log.iter()
+        .filter(|e| e.is_error)
+        .filter_map(|e| DateTime::parse_from_rfc3339(&e.at).ok())
+        .filter(|at| at.with_timezone(now.offset()).date_naive() == now.date_naive())
+        .count()
 }
 
 /// The device's settings that are safe to paste into a support chat.
@@ -258,7 +451,49 @@ pub struct DiagnosticsInput {
 /// Plain text for "Copy diagnostics". Never includes message contents, so no
 /// patient names end up in an email or chat.
 pub fn diagnostics_text(input: &DiagnosticsInput) -> String {
-    todo!("{input:?}")
+    let d = &input.device;
+    let mut lines = vec![
+        "Arkivet diagnostics".to_string(),
+        format!("Generated: {}", input.generated_at.to_rfc3339()),
+        format!("App version: {}", input.app_version),
+        format!("OS: {}", input.os),
+        String::new(),
+        format!("Device: {} ({})", d.name, d.device_type),
+        format!("Connection: {}", d.connection_type),
+        format!("Enabled: {}", if d.enabled { "yes" } else { "no" }),
+    ];
+    if let Some(port) = &d.port {
+        lines.push(format!("Port: {port}"));
+    }
+    if let Some(baud) = d.baud_rate {
+        lines.push(format!("Baud rate: {baud}"));
+    }
+    if let Some(folder) = &d.folder {
+        lines.push(format!("Folder: {folder}"));
+    }
+    if let Some(pattern) = &d.file_pattern {
+        lines.push(format!("File pattern: {pattern}"));
+    }
+    let or_never = |v: &Option<String>| v.clone().unwrap_or_else(|| "never".to_string());
+    lines.extend([
+        String::new(),
+        format!("State: {}", input.state),
+        format!("Last error: {}", input.last_error.as_deref().unwrap_or("none")),
+        format!("Last result: {}", or_never(&input.last_result_at)),
+        format!("Last data: {}", or_never(&input.last_byte_at)),
+        format!("Bytes in the last minute: {}", input.bytes_last_minute),
+        format!("Errors today: {}", input.errors_today),
+        String::new(),
+        "Recent status changes and errors (newest first):".to_string(),
+    ]);
+    if input.log.is_empty() {
+        lines.push("  none".to_string());
+    }
+    for e in input.log.iter().rev() {
+        let kind = e.error_kind.as_deref().map(|k| format!(" ({k})")).unwrap_or_default();
+        lines.push(format!("  {}  {}{}", e.at, e.label, kind));
+    }
+    lines.join("\n") + "\n"
 }
 
 #[cfg(test)]
