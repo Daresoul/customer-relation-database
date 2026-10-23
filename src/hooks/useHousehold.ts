@@ -8,6 +8,9 @@ import {
   CreatePersonWithContactsDto,
   PersonContact
 } from '../types/household';
+import type { HouseholdWithPeople as HouseholdWithPeopleRow } from '../types/generated/HouseholdWithPeople';
+import type { Patient as HouseholdPet } from '../types/household';
+
 
 // Fetch household with all details
 export function useHouseholdDetail(householdId: number) {
@@ -15,7 +18,7 @@ export function useHouseholdDetail(householdId: number) {
     queryKey: ['household', householdId],
     queryFn: async () => {
       // Fetch household and people
-      const result = await invoke<any>('get_household_with_people', {
+      const result = await invoke<HouseholdWithPeopleRow | null>('get_household_with_people', {
         householdId
       });
       if (!result) return null;
@@ -24,30 +27,30 @@ export function useHouseholdDetail(householdId: number) {
       // Transform the response to match our expected format
       const transformed: HouseholdWithPeople = {
         household: {
-          id: result.household?.id || result.id,
-          householdName: result.household?.household_name || result.household?.householdName || '',
+          id: result.household?.id,
+          householdName: result.household?.household_name || '',
           address: result.household?.address || '',
           city: result.household?.city || '',
-          postalCode: result.household?.postal_code || result.household?.postalCode || '',
+          postalCode: result.household?.postal_code || '',
           notes: result.household?.notes || '',
-          createdAt: result.household?.created_at || result.household?.createdAt || '',
-          updatedAt: result.household?.updated_at || result.household?.updatedAt || ''
+          createdAt: result.household?.created_at || '',
+          updatedAt: result.household?.updated_at || ''
         },
-        people: result.people?.map((person: any) => ({
+        people: result.people?.map((person) => ({
           id: person.id,
-          firstName: person.first_name || person.firstName,
-          lastName: person.last_name || person.lastName,
-          isPrimary: person.is_primary || person.isPrimary || false,
-          contacts: person.contacts?.map((contact: any) => ({
+          firstName: person.first_name,
+          lastName: person.last_name,
+          isPrimary: person.is_primary || false,
+          contacts: person.contacts?.map((contact) => ({
             id: contact.id,
-            personId: contact.person_id || contact.personId,
-            contactType: contact.contact_type || contact.contactType,
-            contactValue: contact.contact_value || contact.contactValue,
-            isPrimary: contact.is_primary || contact.isPrimary || false,
-            createdAt: contact.created_at || contact.createdAt
+            personId: contact.person_id,
+            contactType: contact.contact_type as PersonContact['contactType'],
+            contactValue: contact.contact_value,
+            isPrimary: contact.is_primary || false,
+            createdAt: contact.created_at
           })) || []
         })) || [],
-        petCount: result.pet_count ?? result.petCount ?? 0
+        petCount: result.pet_count ?? 0
       };
 
       return transformed;
@@ -239,7 +242,7 @@ export function useHouseholdPatients(householdId: number) {
     queryFn: async () => {
 
       try {
-        const result = await invoke('get_household_patients', {
+        const result = await invoke<HouseholdPet[]>('get_household_patients', {
           householdId  // Back to camelCase - matches other working commands
         });
 
@@ -249,7 +252,7 @@ export function useHouseholdPatients(householdId: number) {
 
 
         // Transform the patient data
-        const transformed = patients.map((patient: any) => ({
+        const transformed = patients.map((patient) => ({
           id: patient.id,
           name: patient.name,
           species: patient.species,

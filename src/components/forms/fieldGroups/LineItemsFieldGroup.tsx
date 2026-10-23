@@ -46,6 +46,16 @@ import styles from '../Forms.module.css';
 const { Text, Title } = Typography;
 const { TextArea } = Input;
 
+/** The custom line item form. */
+interface CustomItemValues {
+  name: string;
+  description?: string;
+  unitPrice: number;
+  currencyId: number;
+  quantity?: number;
+  taxRateId?: number | null;
+}
+
 export interface LineItemsFieldGroupProps {
   /** Current line items */
   lineItems: MedicalRecordLineItem[];
@@ -186,7 +196,7 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
   /** Add (or update, in edit mode) a line item from validated form
    *  values. Does NOT touch the templates table — that's the
    *  "Save as template & add" path's job. */
-  const applyCustomFormValues = (values: any) => {
+  const applyCustomFormValues = (values: CustomItemValues) => {
     const existing = editingItemIndex !== null ? lineItems[editingItemIndex] : undefined;
     const base: MedicalRecordLineItem = {
       templateId: existing?.templateId,
@@ -232,7 +242,7 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
    *  If the template save fails (e.g. duplicate name), keep the modal
    *  open so the user can fix the name or fall back to "Add only". */
   const handleSaveAndAdd = async () => {
-    let values: any;
+    let values: CustomItemValues;
     try {
       values = await customForm.validateFields();
     } catch {

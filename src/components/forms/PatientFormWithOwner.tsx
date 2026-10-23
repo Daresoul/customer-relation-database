@@ -36,6 +36,7 @@ import { CreateBreedModal } from '../../components/CreateBreedModal';
 import { PatientFieldGroup } from './fieldGroups';
 import { CreateHouseholdModal } from './CreateHouseholdModal';
 import type { CreatedHousehold } from './CreateHouseholdInline';
+import type { HouseholdSearchResult } from '@/types/generated/HouseholdSearchResult';
 import styles from './Forms.module.css';
 
 const { Option } = Select;
@@ -147,13 +148,13 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
     setSearchingHouseholds(true);
     setHouseholdSearchFailed(false);
     try {
-      const result = await invoke<any>('search_households', { query: query || '', limit: 20 });
+      const result = await invoke<{ results?: HouseholdSearchResult[] } | Household[]>('search_households', { query: query || '', limit: 20 });
 
-      let householdList = [];
+      let householdList: Household[] = [];
 
-      if (result?.results && Array.isArray(result.results)) {
-        householdList = result.results.map((item: any) => {
-          const primaryPerson = item.people?.find((p: any) => p.is_primary) || item.people?.[0];
+      if (!Array.isArray(result) && result?.results && Array.isArray(result.results)) {
+        householdList = result.results.map((item) => {
+          const primaryPerson = item.people?.find((p) => p.is_primary) || item.people?.[0];
           const householdName = item.household_name ||
                                (primaryPerson ? primaryPerson.last_name : null) ||
                                t('households:unnamedHousehold');
@@ -162,8 +163,8 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
             id: item.id,
             lastName: householdName,
             primaryContact: primaryPerson ? `${primaryPerson.first_name} ${primaryPerson.last_name}` : null,
-            phone: primaryPerson?.contacts?.find((c: any) => c.contact_type === 'phone')?.contact_value || null,
-            email: primaryPerson?.contacts?.find((c: any) => c.contact_type === 'email')?.contact_value || null,
+            phone: primaryPerson?.contacts?.find((c) => c.contact_type === 'phone')?.contact_value || null,
+            email: primaryPerson?.contacts?.find((c) => c.contact_type === 'email')?.contact_value || null,
             address: item.address,
             household_name: householdName
           };

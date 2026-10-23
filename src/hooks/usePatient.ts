@@ -8,7 +8,7 @@ import { App } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { PatientService } from '../services/patientService';
 import { UpdatePatientInput } from '../types';
-import { PatientDetail, DeletePatientResponse } from '../types/patient';
+import { PatientDetail, DeletePatientResponse, type Contact, type PersonWithContacts } from '../types/patient';
 import dayjs from 'dayjs';
 import { createMutationErrorHandler, extractErrorMessage, type TFunction } from '../utils/errors';
 import { invalidatePatientData } from './invalidation';
@@ -17,6 +17,28 @@ import { formatPatientAge } from '../utils/patientChart';
 /**
  * Calculate age from date of birth
  */
+// Household rows arrive snake_case or camelCase depending on the invoke path.
+interface ContactRow {
+  id: number;
+  contactType?: string; contact_type?: string;
+  contactValue?: string; contact_value?: string;
+  isPrimary?: boolean; is_primary?: boolean;
+}
+interface PersonRow {
+  id: number;
+  firstName?: string; first_name?: string;
+  lastName?: string; last_name?: string;
+  isPrimary?: boolean; is_primary?: boolean;
+  contacts?: ContactRow[];
+}
+interface HouseholdRow {
+  id: number;
+  householdName?: string; household_name?: string;
+  address?: string;
+  city?: string;
+  postalCode?: string; postal_code?: string;
+}
+
 function calculateAge(dateOfBirth: string | undefined, t: TFunction) {
   if (!dateOfBirth) return undefined;
 
@@ -68,34 +90,29 @@ export function usePatientDetail(patientId: number) {
           // transform breaking the request side), no snake→camel conversion
           // happens on the response either. Read both shapes so we work
           // whichever invoke variant is used.
-          const h: any = householdData.household ?? {};
-          const peopleRaw: any[] = (householdData as any).people ?? [];
+          const h = (householdData.household ?? {}) as HouseholdRow;
+          const peopleRaw = ((householdData as { people?: PersonRow[] }).people ?? []);
 
-          // Find primary contact with all their contact methods.
-          const primaryPersonRaw: any = peopleRaw.find((p) => p?.isPrimary ?? p?.is_primary);
-
-          const primaryContact = primaryPersonRaw ? {
-            id: primaryPersonRaw.id,
-            firstName: primaryPersonRaw.firstName ?? primaryPersonRaw.first_name,
-            lastName: primaryPersonRaw.lastName ?? primaryPersonRaw.last_name,
-            isPrimary: primaryPersonRaw.isPrimary ?? primaryPersonRaw.is_primary ?? false,
-            contacts: (primaryPersonRaw.contacts ?? []).map((c: any) => ({
-              id: c.id,
-              type: (c.contactType ?? c.contact_type) as 'phone' | 'email' | 'mobile',
-              value: c.contactValue ?? c.contact_value ?? '',
-              isPrimary: c.isPrimary ?? c.is_primary ?? false,
-            })),
-          } : undefined;
-
-          // Normalize the rest of the people list (used by "Other Members"
-          // tag display) so consumers can rely on camelCase keys.
-          const people = peopleRaw.map((p: any) => ({
+          const toPerson = (p: PersonRow): PersonWithContacts => ({
             id: p.id,
             firstName: p.firstName ?? p.first_name,
             lastName: p.lastName ?? p.last_name,
             isPrimary: p.isPrimary ?? p.is_primary ?? false,
-            contacts: p.contacts ?? [],
-          }));
+            contacts: (p.contacts ?? []).map((c) => ({
+              id: c.id,
+              type: (c.contactType ?? c.contact_type) as Contact['type'],
+              value: c.contactValue ?? c.contact_value ?? '',
+              isPrimary: c.isPrimary ?? c.is_primary ?? false,
+            })),
+          });
+
+          // Find primary contact with all their contact methods.
+          const primaryPersonRaw = peopleRaw.find((p) => p?.isPrimary ?? p?.is_primary);
+          const primaryContact = primaryPersonRaw ? toPerson(primaryPersonRaw) : undefined;
+
+          // Normalize the rest of the people list (used by "Other Members"
+          // tag display) so consumers can rely on camelCase keys.
+          const people = peopleRaw.map(toPerson);
 
           patientDetail.household = {
             id: h.id,
@@ -104,7 +121,7 @@ export function usePatientDetail(patientId: number) {
             city: h.city,
             postalCode: h.postalCode ?? h.postal_code,
             primaryContact,
-            people: people as any,
+            people,
           };
         } catch (error) {
           console.error('Failed to fetch household details:', error);
