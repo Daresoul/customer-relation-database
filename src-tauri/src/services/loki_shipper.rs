@@ -82,15 +82,34 @@ pub fn config_from_env(
     environment: &str,
     version: String,
 ) -> Option<ShipperConfig> {
-    let LokiCredentials { url, user, password } =
-        resolve_credentials(|key| std::env::var(key).ok(), &baked_credentials())?;
-
     let app_data_dir = app_handle.path_resolver().app_data_dir()?;
     let log_dir = tauri::api::path::app_log_dir(&app_handle.config())?;
-    let raw_serial_dir = app_data_dir.join("raw_serial_logs");
-    let state_file = app_data_dir.join("loki_shipper_state.json");
+    config_from_env_and_dirs(clinic, environment, version, log_dir, &app_data_dir)
+}
 
-    Some(ShipperConfig {
+/// The same config without an `AppHandle`: for a start that failed before
+/// the app was built.
+pub fn config_from_env_and_dirs(
+    clinic: String,
+    environment: &str,
+    version: String,
+    log_dir: PathBuf,
+    app_data_dir: &Path,
+) -> Option<ShipperConfig> {
+    let credentials = resolve_credentials(|key| std::env::var(key).ok(), &baked_credentials())?;
+    Some(config_from_parts(credentials, clinic, environment, version, log_dir, app_data_dir))
+}
+
+fn config_from_parts(
+    credentials: LokiCredentials,
+    clinic: String,
+    environment: &str,
+    version: String,
+    log_dir: PathBuf,
+    app_data_dir: &Path,
+) -> ShipperConfig {
+    let LokiCredentials { url, user, password } = credentials;
+    ShipperConfig {
         url,
         user,
         password,
@@ -98,9 +117,9 @@ pub fn config_from_env(
         environment: environment.to_string(),
         version,
         log_dir,
-        raw_serial_dir,
-        state_file,
-    })
+        raw_serial_dir: app_data_dir.join("raw_serial_logs"),
+        state_file: app_data_dir.join("loki_shipper_state.json"),
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -159,6 +178,36 @@ struct ShipperState {
     /// is the full path as a string (PathBuf doesn't have a stable JSON
     /// representation across platforms).
     offsets: HashMap<String, u64>,
+    /// What the file looked like when its offset was saved (see
+    /// [`file_identity`]). A file rotated away and regrown under the same
+    /// name has another identity and is read from the start.
+    #[serde(default)]
+    identities: HashMap<String, String>,
+}
+
+/// A fingerprint of the file's first line (FNV-1a, stable across builds).
+/// `None` until the file has one complete line.
+fn file_identity(path: &Path) -> Option<String> {
+    use std::io::Read;
+    let mut head = [0u8; 512];
+    let n = std::fs::File::open(path).ok()?.read(&mut head).ok()?;
+    let end = head[..n].iter().position(|&b| b == b'\n')?;
+    let mut hash: u64 = 0xcbf29ce484222325;
+    for &b in &head[..end] {
+        hash ^= b as u64;
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    Some(format!("{hash:016x}"))
+}
+
+/// Where to read a file from this tick.
+fn resume_offset(saved: u64, saved_identity: Option<&str>, identity: Option<&str>, size: u64) -> u64 {
+    let replaced = matches!((saved_identity, identity), (Some(old), Some(new)) if old != new);
+    if replaced || size < saved {
+        0
+    } else {
+        saved
+    }
 }
 
 fn load_state(path: &Path) -> ShipperState {
@@ -209,6 +258,28 @@ pub fn start(config: Option<ShipperConfig>) {
     tauri::async_runtime::spawn(async move {
         run_loop(config).await;
     });
+}
+
+/// Ships what is waiting, right now, on the calling thread, for at most
+/// `budget`. For a start that failed: the background shipper's first send
+/// is 30 s after start, so a process that dies in a second never reaches
+/// Loki. Positions are saved as usual. Returns the number of lines shipped.
+pub fn push_pending_now(config: Option<ShipperConfig>, budget: Duration) -> usize {
+    let Some(config) = config else { return 0 };
+    let Ok(client) = reqwest::Client::builder().timeout(budget).build() else { return 0 };
+    let started = std::time::Instant::now();
+    let mut state = load_state(&config.state_file);
+    let mut shipped = 0;
+    tauri::async_runtime::block_on(async {
+        loop {
+            let Some(left) = budget.checked_sub(started.elapsed()) else { break };
+            match tokio::time::timeout(left, try_ship_batch(&client, &config, &mut state)).await {
+                Ok(Ok(0)) | Ok(Err(_)) | Err(_) => break,
+                Ok(Ok(n)) => shipped += n,
+            }
+        }
+    });
+    shipped
 }
 
 /// Redact the path of the URL so we don't print the auth-required
@@ -280,6 +351,7 @@ struct FileCursor {
     /// Date parsed from the `-YYYY-MM-DD` filename suffix, if present.
     /// Drives oldest-first ordering within a label.
     date: Option<chrono::NaiveDate>,
+    identity: Option<String>,
 }
 
 /// Keep, per stream label, only the OLDEST file that still has unread
@@ -328,10 +400,15 @@ async fn try_ship_batch(
             // File disappeared between glob and stat — ignore.
             let size = std::fs::metadata(file).ok()?.len();
 
-            // Detect truncation/replacement: file is smaller than where we
-            // last left off. Most likely cause is rotation creating a fresh
-            // empty file under the same path. Reset to 0 and read forward.
-            let offset = if size < saved_offset { 0 } else { saved_offset };
+            // A file smaller than the saved position, or with another first
+            // line, was replaced under the same name: read it from the start.
+            let identity = file_identity(file);
+            let offset = resume_offset(
+                saved_offset,
+                state.identities.get(&path_key).map(String::as_str),
+                identity.as_deref(),
+                size,
+            );
 
             let basename = file
                 .file_name()
@@ -345,6 +422,7 @@ async fn try_ship_batch(
                 size,
                 label: strip_date_suffix(stem),
                 date: date_suffix(stem),
+                identity,
             })
         })
         .collect();
@@ -353,7 +431,7 @@ async fn try_ship_batch(
 
     // streams: (file_label, level_label) -> Vec<(ts_ns_string, line)>
     let mut streams: HashMap<(String, String), Vec<(String, String)>> = HashMap::new();
-    let mut new_offsets: HashMap<String, u64> = HashMap::new();
+    let mut new_offsets: HashMap<String, (u64, Option<String>)> = HashMap::new();
     let mut total_lines = 0usize;
     let now_floor_ns = chrono::Utc::now().timestamp_nanos_opt().unwrap_or(i64::MAX);
 
@@ -397,7 +475,10 @@ async fn try_ship_batch(
             total_lines += 1;
         }
 
-        new_offsets.insert(cursor.path_key.clone(), cursor.offset + consumed as u64);
+        new_offsets.insert(
+            cursor.path_key.clone(),
+            (cursor.offset + consumed as u64, cursor.identity.clone()),
+        );
     }
 
     if total_lines == 0 {
@@ -431,8 +512,12 @@ async fn try_ship_batch(
     // Apply new offsets and persist — on Accepted AND on Rejected (a
     // rejected batch will never be accepted; freezing offsets here would
     // retry it forever and silence the machine).
-    for (k, v) in new_offsets {
-        state.offsets.insert(k, v);
+    for (k, (offset, identity)) in new_offsets {
+        match identity {
+            Some(id) => state.identities.insert(k.clone(), id),
+            None => state.identities.remove(&k),
+        };
+        state.offsets.insert(k, offset);
     }
     cleanup_state(state, &files);
     if let Err(e) = save_state(&config.state_file, state) {
@@ -451,6 +536,7 @@ fn cleanup_state(state: &mut ShipperState, present_files: &[PathBuf]) {
         .map(|p| p.to_string_lossy().to_string())
         .collect();
     state.offsets.retain(|k, _| present.contains(k));
+    state.identities.retain(|k, _| present.contains(k));
 }
 
 // =============================================================================
@@ -902,6 +988,7 @@ mod tests {
             size,
             label: label.to_string(),
             date: date.and_then(|(y, m, d)| chrono::NaiveDate::from_ymd_opt(y, m, d)),
+            identity: None,
         }
     }
 
