@@ -13,7 +13,7 @@ export const useAppSettings = () => {
   const { i18n, t } = useTranslation('errors');
   const { setThemeMode } = useTheme();
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch, isRefetching } = useQuery({
     queryKey: ['settings'],
     queryFn: SettingsService.getSettings,
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -74,6 +74,8 @@ export const useAppSettings = () => {
     currency: data?.currency,
     isLoading,
     error,
+    refetch,
+    isRefetching,
     updateSettings: updateSettings.mutateAsync,
     isUpdating: updateSettings.isPending,
   };

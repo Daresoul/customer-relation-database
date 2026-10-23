@@ -31,24 +31,9 @@ export interface UpdateSettingsRequest {
 }
 
 export class SettingsService {
+  /** Throws when the settings can't be read; callers show the error. */
   static async getSettings(): Promise<SettingsResponse> {
-    try {
-      return await ApiService.invoke<SettingsResponse>('get_app_settings');
-    } catch {
-      // Return default settings on error
-      return {
-        settings: {
-          id: 0,
-          userId: 'default',
-          language: 'en',
-          currencyId: null,
-          theme: 'light',
-          dateFormat: 'MM/DD/YYYY',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        }
-      };
-    }
+    return ApiService.invoke<SettingsResponse>('get_app_settings');
   }
 
   static async updateSettings(updates: UpdateSettingsRequest): Promise<SettingsResponse> {

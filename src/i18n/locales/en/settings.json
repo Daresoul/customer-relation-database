@@ -1,4 +1,5 @@
 {
+  "loadFailed": "Could not load the settings. Nothing was changed.",
   "sections": {
     "general": "General",
     "business": "Business",
