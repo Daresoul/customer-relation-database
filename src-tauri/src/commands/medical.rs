@@ -350,18 +350,11 @@ async fn render_medical_attachment_pdf_thumbnail_with_options(
     log::debug!("render_medical_attachment_pdf_thumbnail called - attachment_id={}, page={:?}, width={:?}, force={}",
         attachment_id, page, width, force_regenerate);
 
-    // First materialize the attachment to a temp file to get a local path
-    let pdf_path = FileStorageService::materialize_attachment(&app_handle, &pool, attachment_id).await?;
-    log::debug!("PDF materialized at: {}", pdf_path);
-
-    // Build preview output path in a stable temp dir
-    let mut tmp_dir = std::env::temp_dir();
-    tmp_dir.push("vet-clinic-attachments");
-    tmp_dir.push("previews");
+    // The preview is cached per stored file: a cached image needs no copy of the PDF.
+    let file_id = FileStorageService::attachment_file_id(&pool, attachment_id).await?;
     let page_index = page.unwrap_or(1).saturating_sub(1); // 1-based to 0-based
     let target_width = width.unwrap_or(900);
-    let file_name = format!("attachment_{}_p{}_w{}.png", attachment_id, page_index + 1, target_width);
-    let out_path = tmp_dir.join(file_name);
+    let out_path = FileStorageService::preview_png_path(&file_id, page_index + 1, target_width);
 
     // Check if preview exists and is valid (not 0 bytes) unless force regenerate
     if !force_regenerate && out_path.exists() {
@@ -380,7 +373,7 @@ async fn render_medical_attachment_pdf_thumbnail_with_options(
         let _ = std::fs::remove_file(&out_path);
     }
 
-    let pdf_path_clone = pdf_path.clone();
+    let pdf_path_clone = FileStorageService::materialize_attachment(&app_handle, &pool, attachment_id).await?;
 
     // Render in a blocking thread - use bytes method instead for better reliability
     let handle_clone = app_handle.clone();
@@ -778,43 +771,29 @@ pub async fn generate_configured_report(
     // 5. Generate combined PDF using Java service
     use crate::services::java_pdf_service::JavaPdfService;
 
-    // Build a user-friendly filename — same pattern as the
-    // per-record device report in medical_record.rs:
+    // Same names as the record's own lab report:
     //   "Device Report - <Patient> - <Device> - <YYYY-MM-DD HH-MM>.pdf"
     // (single device), or just patient+date for the combined case.
-    let sanitize = |s: &str| -> String {
-        let cleaned: String = s.chars().map(|c| match c {
-            '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
-            c if c.is_control() => '_',
-            c => c,
-        }).collect();
-        let trimmed = cleaned.trim_matches(|c: char| c == '.' || c.is_whitespace());
-        if trimmed.chars().count() > 60 {
-            trimmed.chars().take(60).collect::<String>().trim_end().to_string()
-        } else {
-            trimmed.to_string()
-        }
-    };
-    let timestamp = chrono::Utc::now().format("%Y-%m-%d %H-%M").to_string();
-    let patient_part = sanitize(&patient_data.name);
+    let timestamp = MedicalRecordService::pdf_timestamp();
+    let patient_part = MedicalRecordService::sanitize_filename_part(&patient_data.name);
     let pdf_filename = if all_device_data.len() == 1 {
-        let device = &all_device_data[0];
-        let device_part = sanitize(&device.device_name);
+        let device_part = MedicalRecordService::sanitize_filename_part(&all_device_data[0].device_name);
         format!("Device Report - {} - {} - {}.pdf", patient_part, device_part, timestamp)
     } else {
         format!("Device Report - {} - {}.pdf", patient_part, timestamp)
     };
 
-    let pdf_path = std::env::temp_dir().join(&pdf_filename);
+    let (_job_folder, pdf_path) = MedicalRecordService::job_output(&pdf_filename)?;
 
     // Generate PDF with all devices
     log::info!("Generating configured PDF report using Java...");
-    JavaPdfService::generate_pdf_multi(
-        &app_handle,
-        pdf_path.to_str().ok_or("Invalid PDF path")?,
-        &patient_data,
-        &all_device_data,
-    )?;
+    let (handle, out, patient, devices) =
+        (app_handle.clone(), pdf_path.clone(), patient_data.clone(), all_device_data.clone());
+    tauri::async_runtime::spawn_blocking(move || {
+        JavaPdfService::generate_pdf_multi(&handle, out.to_str().ok_or("Invalid PDF path")?, &patient, &devices)
+    })
+    .await
+    .map_err(|e| format!("The PDF job stopped: {}", e))??;
 
     log::debug!("PDF generated at {:?}", pdf_path);
 
@@ -854,9 +833,6 @@ pub async fn generate_configured_report(
 
     // Only now that the new PDF is stored: one generated PDF per record.
     retire_generated_pdfs(&pool, medical_record_id, pdf_attachment.id).await;
-
-    // Clean up temp file
-    let _ = std::fs::remove_file(&pdf_path);
 
     Ok(pdf_attachment)
 }
