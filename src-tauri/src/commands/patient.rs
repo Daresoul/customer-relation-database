@@ -1,7 +1,8 @@
 use tauri::State;
 use crate::database::SeaOrmPool;
 use crate::services::patient::PatientService;
-use crate::models::{Patient, CreatePatientDto, UpdatePatientDto};
+use crate::models::{Patient, PatientAlert, PatientWeight, CreatePatientDto, UpdatePatientDto};
+use chrono::NaiveDate;
 
 #[tauri::command]
 pub async fn get_patients(pool: State<'_, SeaOrmPool>) -> Result<Vec<Patient>, String> {
@@ -32,8 +33,82 @@ pub async fn delete_patient(pool: State<'_, SeaOrmPool>, id: i64) -> Result<bool
 }
 
 #[tauri::command]
-pub async fn search_patients(pool: State<'_, SeaOrmPool>, query: String) -> Result<Vec<Patient>, String> {
-    PatientService::search(&pool, &query).await
+pub async fn search_patients(
+    pool: State<'_, SeaOrmPool>,
+    query: String,
+    include_inactive: Option<bool>,
+) -> Result<Vec<Patient>, String> {
+    PatientService::search_including_inactive(&pool, &query, include_inactive.unwrap_or(false)).await
+}
+
+#[tauri::command]
+pub async fn mark_patient_deceased(
+    pool: State<'_, SeaOrmPool>,
+    id: i64,
+    deceased_on: NaiveDate,
+    note: Option<String>,
+) -> Result<Option<Patient>, String> {
+    PatientService::mark_deceased(&pool, id, deceased_on, note).await
+}
+
+#[tauri::command]
+pub async fn mark_patient_inactive(
+    pool: State<'_, SeaOrmPool>,
+    id: i64,
+    reason: Option<String>,
+) -> Result<Option<Patient>, String> {
+    PatientService::mark_inactive(&pool, id, reason).await
+}
+
+#[tauri::command]
+pub async fn reactivate_patient(pool: State<'_, SeaOrmPool>, id: i64) -> Result<Option<Patient>, String> {
+    PatientService::reactivate(&pool, id).await
+}
+
+#[tauri::command]
+pub async fn add_patient_alert(
+    pool: State<'_, SeaOrmPool>,
+    patient_id: i64,
+    alert_type: String,
+    note: Option<String>,
+) -> Result<PatientAlert, String> {
+    PatientService::add_alert(&pool, patient_id, &alert_type, note).await
+}
+
+#[tauri::command]
+pub async fn update_patient_alert(
+    pool: State<'_, SeaOrmPool>,
+    id: i64,
+    alert_type: String,
+    note: Option<String>,
+) -> Result<PatientAlert, String> {
+    PatientService::update_alert(&pool, id, &alert_type, note).await
+}
+
+#[tauri::command]
+pub async fn delete_patient_alert(pool: State<'_, SeaOrmPool>, id: i64) -> Result<bool, String> {
+    PatientService::delete_alert(&pool, id).await
+}
+
+#[tauri::command]
+pub async fn get_patient_weights(pool: State<'_, SeaOrmPool>, patient_id: i64) -> Result<Vec<PatientWeight>, String> {
+    PatientService::list_weights(&pool, patient_id).await
+}
+
+#[tauri::command]
+pub async fn add_patient_weight(
+    pool: State<'_, SeaOrmPool>,
+    patient_id: i64,
+    weight: f64,
+    measured_on: NaiveDate,
+    medical_record_id: Option<i64>,
+) -> Result<PatientWeight, String> {
+    PatientService::add_weight(&pool, patient_id, weight, measured_on, medical_record_id).await
+}
+
+#[tauri::command]
+pub async fn delete_patient_weight(pool: State<'_, SeaOrmPool>, id: i64) -> Result<bool, String> {
+    PatientService::delete_weight(&pool, id).await
 }
 
 #[tauri::command]

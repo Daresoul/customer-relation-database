@@ -185,6 +185,18 @@ impl AppointmentService {
         // Validate input
         input.validate()?;
 
+        let deceased = db
+            .query_one(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "SELECT deceased_at FROM patients WHERE id = ? AND deceased_at IS NOT NULL",
+                [input.patient_id.into()],
+            ))
+            .await
+            .map_err(|e| format!("Failed to check the patient: {}", e))?;
+        if deceased.is_some() {
+            return Err("PATIENT_DECEASED: a deceased patient can't be booked".to_string());
+        }
+
         let now = Utc::now();
 
         // Insert appointment using SeaORM

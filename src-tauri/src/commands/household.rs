@@ -270,7 +270,7 @@ pub async fn get_household_detail(
         DbBackend::Sqlite,
         r#"
         SELECT p.id, p.name, s.name as species, b.name as breed, p.date_of_birth,
-               CAST(p.weight AS REAL) as weight, p.gender
+               CAST(p.weight AS REAL) as weight, p.gender, p.is_active, p.deceased_at
         FROM patients p
         JOIN patient_households ph ON p.id = ph.patient_id
         LEFT JOIN species s ON p.species_id = s.id
@@ -293,6 +293,13 @@ pub async fn get_household_detail(
             let date_of_birth: Option<String> = row.try_get("", "date_of_birth").ok();
             let weight: Option<f64> = row.try_get("", "weight").ok();
             let gender: Option<String> = row.try_get("", "gender").ok();
+            let deceased_at: Option<String> = row
+                .try_get::<Option<chrono::NaiveDate>>("", "deceased_at")
+                .ok()
+                .flatten()
+                .map(|d| d.format("%Y-%m-%d").to_string());
+            let is_active = row.try_get::<i64>("", "is_active").map(|v| v == 1).unwrap_or(true);
+            let status = if deceased_at.is_some() { "deceased" } else if is_active { "active" } else { "inactive" };
 
             serde_json::json!({
                 "id": id,
@@ -302,7 +309,8 @@ pub async fn get_household_detail(
                 "dateOfBirth": date_of_birth,
                 "weight": weight,
                 "gender": gender,
-                "status": "active" // Default to active for now
+                "status": status,
+                "deceasedAt": deceased_at,
             })
         })
         .collect();
@@ -561,13 +569,17 @@ pub async fn update_person_contacts(
     contacts
 }
 
-pub(crate) async fn household_patients_json(_db: &sea_orm::DatabaseConnection, _household_id: i32) -> Result<Vec<serde_json::Value>, String> {
-    Err("not implemented".into())
-}
-
 #[tauri::command]
 pub async fn get_household_patients(
     pool: State<'_, SeaOrmPool>,
+    household_id: i32,
+) -> Result<Vec<serde_json::Value>, String> {
+    household_patients_json(&pool, household_id).await
+}
+
+/// `status` is `active`, `inactive` or `deceased` (with `deceasedAt`).
+pub(crate) async fn household_patients_json(
+    pool: &sea_orm::DatabaseConnection,
     household_id: i32,
 ) -> Result<Vec<serde_json::Value>, String> {
     // Debug: First check what's in patient_households table
@@ -593,7 +605,7 @@ pub async fn get_household_patients(
         DbBackend::Sqlite,
         r#"
         SELECT p.id, p.name, s.name as species, b.name as breed, p.date_of_birth,
-               CAST(p.weight AS REAL) as weight, p.gender
+               CAST(p.weight AS REAL) as weight, p.gender, p.is_active, p.deceased_at
         FROM patients p
         JOIN patient_households ph ON p.id = ph.patient_id
         LEFT JOIN species s ON p.species_id = s.id
@@ -620,6 +632,13 @@ pub async fn get_household_patients(
             let date_of_birth: Option<String> = row.try_get("", "date_of_birth").ok();
             let weight: Option<f64> = row.try_get("", "weight").ok();
             let gender: Option<String> = row.try_get("", "gender").ok();
+            let deceased_at: Option<String> = row
+                .try_get::<Option<chrono::NaiveDate>>("", "deceased_at")
+                .ok()
+                .flatten()
+                .map(|d| d.format("%Y-%m-%d").to_string());
+            let is_active = row.try_get::<i64>("", "is_active").map(|v| v == 1).unwrap_or(true);
+            let status = if deceased_at.is_some() { "deceased" } else if is_active { "active" } else { "inactive" };
 
             let json = serde_json::json!({
                 "id": patient_id,
@@ -629,7 +648,8 @@ pub async fn get_household_patients(
                 "dateOfBirth": date_of_birth,
                 "weight": weight,
                 "gender": gender,
-                "status": "active" // Default to active for now
+                "status": status,
+                "deceasedAt": deceased_at,
             });
 
             log::debug!("    Generated JSON: {}", serde_json::to_string(&json).unwrap_or_default());

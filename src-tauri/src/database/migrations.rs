@@ -67,6 +67,8 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, "049_fix_medical_records_fts_triggers", fix_medical_records_fts_triggers).await?;
     run_migration(pool, "050_add_invoice_date", add_invoice_date_column).await?;
     run_migration(pool, "051_add_attachment_purged_at", add_attachment_purged_at_column).await?;
+    run_migration(pool, "05x_patient_status_and_alerts", add_patient_status_and_alerts).await?;
+    run_migration(pool, WEIGHT_LOG_MIGRATION, create_patient_weight_log).await?;
 
     Ok(())
 }
@@ -3083,6 +3085,75 @@ fn add_attachment_purged_at_column(pool: &SqlitePool) -> std::pin::Pin<Box<dyn s
                 .execute(pool)
                 .await?;
         }
+        Ok(())
+    })
+}
+
+/// Neuter status (NULL = not recorded), deceased / inactive status, and typed
+/// clinical alerts. `is_active = 0` stays the "hidden from lists" flag; a
+/// deceased patient also has `deceased_at`.
+fn add_patient_status_and_alerts(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        let columns = [
+            ("neutered", "ALTER TABLE patients ADD COLUMN neutered INTEGER CHECK(neutered IS NULL OR neutered IN (0, 1))"),
+            ("deceased_at", "ALTER TABLE patients ADD COLUMN deceased_at DATE"),
+            ("deceased_note", "ALTER TABLE patients ADD COLUMN deceased_note TEXT"),
+            ("inactive_reason", "ALTER TABLE patients ADD COLUMN inactive_reason TEXT"),
+        ];
+        for (name, sql) in columns {
+            let exists: (i32,) = sqlx::query_as(
+                "SELECT COUNT(*) FROM pragma_table_info('patients') WHERE name = ?"
+            )
+            .bind(name)
+            .fetch_one(pool)
+            .await?;
+            if exists.0 == 0 {
+                sqlx::query(sql).execute(pool).await?;
+            }
+        }
+
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS patient_alerts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                patient_id INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+                alert_type TEXT NOT NULL CHECK(alert_type IN ('allergy', 'aggressive', 'chronic', 'other')),
+                note TEXT,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        "#).execute(pool).await?;
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_patient_alerts_patient ON patient_alerts(patient_id)")
+            .execute(pool)
+            .await?;
+        Ok(())
+    })
+}
+
+/// One row per weighing. `patients.weight` keeps the newest one for older
+/// readers. The single weight a patient had before is moved in, dated at the
+/// patient's last update (the best guess of when it was taken).
+fn create_patient_weight_log(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS patient_weights (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                patient_id INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+                weight REAL NOT NULL CHECK(weight > 0),
+                measured_on DATE NOT NULL,
+                medical_record_id INTEGER REFERENCES medical_records(id) ON DELETE SET NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        "#).execute(pool).await?;
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_patient_weights_patient ON patient_weights(patient_id, measured_on)")
+            .execute(pool)
+            .await?;
+        sqlx::query(r#"
+            INSERT INTO patient_weights (patient_id, weight, measured_on)
+            SELECT p.id, CAST(p.weight AS REAL), COALESCE(date(substr(p.updated_at, 1, 10)), date('now'))
+            FROM patients p
+            WHERE p.weight IS NOT NULL AND CAST(p.weight AS REAL) > 0
+              AND NOT EXISTS (SELECT 1 FROM patient_weights w WHERE w.patient_id = p.id)
+        "#).execute(pool).await?;
         Ok(())
     })
 }

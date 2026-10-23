@@ -1,5 +1,6 @@
 use crate::entities::patient::{self, Entity as PatientEntity};
 use crate::models::{Patient, PatientAlert, PatientWeight, CreatePatientDto, UpdatePatientDto};
+use crate::models::patient::ALERT_TYPES;
 use crate::models::dto::MaybeNull;
 use chrono::{NaiveDate, Utc};
 use sea_orm::*;
@@ -46,6 +47,25 @@ pub(crate) async fn ensure_chip_free(db: &DatabaseConnection, chip: &str, own_id
     }
 }
 
+const ALERT_NOTE_MAX: usize = 200;
+
+/// Every patient read goes through this, so all of them carry the same fields.
+const PATIENT_SELECT: &str = "SELECT p.id, p.name, p.species_id, p.breed_id, s.name AS species, b.name AS breed, \
+    p.gender, p.date_of_birth, p.color, CAST(p.weight AS REAL) AS weight, p.microchip_id, p.medical_notes, \
+    p.is_active, ph.household_id, p.created_at, p.updated_at, \
+    p.neutered, p.deceased_at, p.deceased_note, p.inactive_reason, \
+    (SELECT w.measured_on FROM patient_weights w WHERE w.patient_id = p.id \
+     ORDER BY w.measured_on DESC, w.id DESC LIMIT 1) AS last_weight_at \
+    FROM patients p \
+    LEFT JOIN species s ON p.species_id = s.id \
+    LEFT JOIN breeds b ON p.breed_id = b.id \
+    LEFT JOIN patient_households ph ON p.id = ph.patient_id AND ph.is_primary = 1";
+
+/// Trimmed; blank becomes `None`.
+fn clean_text(text: Option<String>) -> Option<String> {
+    text.map(|t| t.trim().to_string()).filter(|t| !t.is_empty())
+}
+
 impl PatientService {
     /// Helper to convert a raw query row to a Patient model
     fn row_to_patient(row: &QueryResult) -> Result<Patient, String> {
@@ -66,123 +86,297 @@ impl PatientService {
             household_id: row.try_get("", "household_id").ok(),
             created_at: row.try_get("", "created_at").map_err(|e| e.to_string())?,
             updated_at: row.try_get("", "updated_at").map_err(|e| e.to_string())?,
-            neutered: None,
-            deceased_at: None,
-            deceased_note: None,
-            inactive_reason: None,
-            last_weight_at: None,
+            neutered: row.try_get::<Option<i64>>("", "neutered").ok().flatten().map(|v| v == 1),
+            deceased_at: row.try_get("", "deceased_at").ok().flatten(),
+            deceased_note: row.try_get("", "deceased_note").ok().flatten(),
+            inactive_reason: row.try_get("", "inactive_reason").ok().flatten(),
+            last_weight_at: row.try_get("", "last_weight_at").ok().flatten(),
             alerts: Vec::new(),
         })
     }
 
-    pub async fn search_including_inactive(_db: &DatabaseConnection, _query: &str, _include_inactive: bool) -> Result<Vec<Patient>, String> {
-        Err("not implemented".into())
+    fn row_to_alert(row: &QueryResult) -> Result<PatientAlert, String> {
+        Ok(PatientAlert {
+            id: row.try_get("", "id").map_err(|e| e.to_string())?,
+            patient_id: row.try_get("", "patient_id").map_err(|e| e.to_string())?,
+            alert_type: row.try_get("", "alert_type").map_err(|e| e.to_string())?,
+            note: row.try_get("", "note").ok().flatten(),
+            created_at: row.try_get::<String>("", "created_at").unwrap_or_default(),
+        })
     }
 
-    pub async fn mark_deceased(_db: &DatabaseConnection, _id: i64, _on: NaiveDate, _note: Option<String>) -> Result<Option<Patient>, String> {
-        Err("not implemented".into())
+    fn row_to_weight(row: &QueryResult) -> Result<PatientWeight, String> {
+        Ok(PatientWeight {
+            id: row.try_get("", "id").map_err(|e| e.to_string())?,
+            patient_id: row.try_get("", "patient_id").map_err(|e| e.to_string())?,
+            weight: row.try_get("", "weight").map_err(|e| e.to_string())?,
+            measured_on: row.try_get("", "measured_on").map_err(|e| e.to_string())?,
+            medical_record_id: row.try_get("", "medical_record_id").ok().flatten(),
+        })
     }
 
-    pub async fn mark_inactive(_db: &DatabaseConnection, _id: i64, _reason: Option<String>) -> Result<Option<Patient>, String> {
-        Err("not implemented".into())
+    /// Fills `alerts` on each patient with one query.
+    async fn attach_alerts(db: &DatabaseConnection, patients: &mut [Patient]) -> Result<(), String> {
+        if patients.is_empty() {
+            return Ok(());
+        }
+        let rows = if patients.len() == 1 {
+            db.query_all(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "SELECT id, patient_id, alert_type, note, created_at FROM patient_alerts WHERE patient_id = ? ORDER BY id",
+                [patients[0].id.into()],
+            ))
+            .await
+        } else {
+            db.query_all(Statement::from_string(
+                DbBackend::Sqlite,
+                "SELECT id, patient_id, alert_type, note, created_at FROM patient_alerts ORDER BY id".to_string(),
+            ))
+            .await
+        }
+        .map_err(|e| format!("Failed to fetch patient alerts: {}", e))?;
+
+        let mut by_patient: std::collections::HashMap<i64, Vec<PatientAlert>> = std::collections::HashMap::new();
+        for row in &rows {
+            let alert = Self::row_to_alert(row)?;
+            by_patient.entry(alert.patient_id).or_default().push(alert);
+        }
+        for p in patients.iter_mut() {
+            p.alerts = by_patient.remove(&p.id).unwrap_or_default();
+        }
+        Ok(())
     }
 
-    pub async fn reactivate(_db: &DatabaseConnection, _id: i64) -> Result<Option<Patient>, String> {
-        Err("not implemented".into())
+    async fn patients_with_alerts(db: &DatabaseConnection, rows: &[QueryResult]) -> Result<Vec<Patient>, String> {
+        let mut patients = rows.iter().map(Self::row_to_patient).collect::<Result<Vec<_>, _>>()?;
+        Self::attach_alerts(db, &mut patients).await?;
+        Ok(patients)
     }
 
-    pub async fn add_alert(_db: &DatabaseConnection, _patient_id: i64, _alert_type: &str, _note: Option<String>) -> Result<PatientAlert, String> {
-        Err("not implemented".into())
+    async fn exec_on_patient(db: &DatabaseConnection, id: i64, sql: &str, mut values: Vec<Value>) -> Result<Option<Patient>, String> {
+        values.push(Utc::now().to_rfc3339().into());
+        values.push(id.into());
+        let result = db
+            .execute(Statement::from_sql_and_values(DbBackend::Sqlite, sql, values))
+            .await
+            .map_err(|e| format!("Failed to update patient: {}", e))?;
+        if result.rows_affected() == 0 {
+            return Ok(None);
+        }
+        Self::get_by_id(db, id).await
     }
 
-    pub async fn update_alert(_db: &DatabaseConnection, _id: i64, _alert_type: &str, _note: Option<String>) -> Result<PatientAlert, String> {
-        Err("not implemented".into())
+    /// Keeps the chart; hides the patient from lists, pickers and booking.
+    pub async fn mark_deceased(db: &DatabaseConnection, id: i64, on: NaiveDate, note: Option<String>) -> Result<Option<Patient>, String> {
+        if on > chrono::Local::now().date_naive() {
+            return Err("DECEASED_DATE_IN_FUTURE: the date of death can't be after today".to_string());
+        }
+        Self::exec_on_patient(
+            db,
+            id,
+            "UPDATE patients SET is_active = 0, deceased_at = ?, deceased_note = ?, inactive_reason = NULL, updated_at = ? WHERE id = ?",
+            vec![on.format("%Y-%m-%d").to_string().into(), clean_text(note).into()],
+        )
+        .await
     }
 
-    pub async fn delete_alert(_db: &DatabaseConnection, _id: i64) -> Result<bool, String> {
-        Err("not implemented".into())
+    pub async fn mark_inactive(db: &DatabaseConnection, id: i64, reason: Option<String>) -> Result<Option<Patient>, String> {
+        Self::exec_on_patient(
+            db,
+            id,
+            "UPDATE patients SET is_active = 0, inactive_reason = ?, deceased_at = NULL, deceased_note = NULL, updated_at = ? WHERE id = ?",
+            vec![clean_text(reason).into()],
+        )
+        .await
     }
 
-    pub async fn add_weight(_db: &DatabaseConnection, _patient_id: i64, _weight: f64, _on: NaiveDate, _record_id: Option<i64>) -> Result<PatientWeight, String> {
-        Err("not implemented".into())
+    pub async fn reactivate(db: &DatabaseConnection, id: i64) -> Result<Option<Patient>, String> {
+        let Some(existing) = Self::get_by_id(db, id).await? else {
+            return Ok(None);
+        };
+        if let Some(chip) = existing.microchip_id.as_deref().and_then(normalize_microchip) {
+            ensure_chip_free(db, &chip, Some(id)).await?;
+        }
+        Self::exec_on_patient(
+            db,
+            id,
+            "UPDATE patients SET is_active = 1, deceased_at = NULL, deceased_note = NULL, inactive_reason = NULL, updated_at = ? WHERE id = ?",
+            vec![],
+        )
+        .await
     }
 
-    pub async fn list_weights(_db: &DatabaseConnection, _patient_id: i64) -> Result<Vec<PatientWeight>, String> {
-        Err("not implemented".into())
+    fn checked_alert(alert_type: &str, note: Option<String>) -> Result<(String, Option<String>), String> {
+        if !ALERT_TYPES.contains(&alert_type) {
+            return Err(format!("INVALID_ALERT_TYPE: {}", alert_type));
+        }
+        let note = clean_text(note);
+        if note.as_ref().is_some_and(|n| n.chars().count() > ALERT_NOTE_MAX) {
+            return Err(format!("ALERT_NOTE_TOO_LONG: at most {} characters", ALERT_NOTE_MAX));
+        }
+        Ok((alert_type.to_string(), note))
     }
 
-    pub async fn delete_weight(_db: &DatabaseConnection, _id: i64) -> Result<bool, String> {
-        Err("not implemented".into())
+    async fn get_alert(db: &DatabaseConnection, id: i64) -> Result<PatientAlert, String> {
+        let row = db
+            .query_one(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "SELECT id, patient_id, alert_type, note, created_at FROM patient_alerts WHERE id = ?",
+                [id.into()],
+            ))
+            .await
+            .map_err(|e| format!("Failed to fetch alert: {}", e))?
+            .ok_or_else(|| "ALERT_NOT_FOUND".to_string())?;
+        Self::row_to_alert(&row)
+    }
+
+    pub async fn add_alert(db: &DatabaseConnection, patient_id: i64, alert_type: &str, note: Option<String>) -> Result<PatientAlert, String> {
+        let (alert_type, note) = Self::checked_alert(alert_type, note)?;
+        let result = db
+            .execute(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "INSERT INTO patient_alerts (patient_id, alert_type, note) VALUES (?, ?, ?)",
+                [patient_id.into(), alert_type.into(), note.into()],
+            ))
+            .await
+            .map_err(|e| format!("Failed to add alert: {}", e))?;
+        Self::get_alert(db, result.last_insert_id() as i64).await
+    }
+
+    pub async fn update_alert(db: &DatabaseConnection, id: i64, alert_type: &str, note: Option<String>) -> Result<PatientAlert, String> {
+        let (alert_type, note) = Self::checked_alert(alert_type, note)?;
+        db.execute(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "UPDATE patient_alerts SET alert_type = ?, note = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            [alert_type.into(), note.into(), id.into()],
+        ))
+        .await
+        .map_err(|e| format!("Failed to update alert: {}", e))?;
+        Self::get_alert(db, id).await
+    }
+
+    pub async fn delete_alert(db: &DatabaseConnection, id: i64) -> Result<bool, String> {
+        let result = db
+            .execute(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "DELETE FROM patient_alerts WHERE id = ?",
+                [id.into()],
+            ))
+            .await
+            .map_err(|e| format!("Failed to delete alert: {}", e))?;
+        Ok(result.rows_affected() > 0)
+    }
+
+    /// Points `patients.weight` at the newest log entry (NULL when the log is empty).
+    async fn sync_latest_weight<C: ConnectionTrait>(db: &C, patient_id: i64) -> Result<(), String> {
+        db.execute(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "UPDATE patients SET weight = (SELECT w.weight FROM patient_weights w WHERE w.patient_id = ? \
+             ORDER BY w.measured_on DESC, w.id DESC LIMIT 1) WHERE id = ?",
+            [patient_id.into(), patient_id.into()],
+        ))
+        .await
+        .map_err(|e| format!("Failed to update the latest weight: {}", e))?;
+        Ok(())
+    }
+
+    async fn insert_weight<C: ConnectionTrait>(db: &C, patient_id: i64, weight: f64, on: NaiveDate, record_id: Option<i64>) -> Result<i64, String> {
+        if !(weight > 0.0) {
+            return Err("INVALID_WEIGHT: the weight must be more than 0".to_string());
+        }
+        let result = db
+            .execute(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "INSERT INTO patient_weights (patient_id, weight, measured_on, medical_record_id) VALUES (?, ?, ?, ?)",
+                [patient_id.into(), weight.into(), on.format("%Y-%m-%d").to_string().into(), record_id.into()],
+            ))
+            .await
+            .map_err(|e| format!("Failed to add weight: {}", e))?;
+        Self::sync_latest_weight(db, patient_id).await?;
+        Ok(result.last_insert_id() as i64)
+    }
+
+    pub async fn add_weight(db: &DatabaseConnection, patient_id: i64, weight: f64, on: NaiveDate, record_id: Option<i64>) -> Result<PatientWeight, String> {
+        let txn = db.begin().await.map_err(|e| format!("Failed to begin transaction: {}", e))?;
+        let id = Self::insert_weight(&txn, patient_id, weight, on, record_id).await?;
+        txn.commit().await.map_err(|e| format!("Failed to save weight: {}", e))?;
+
+        let row = db
+            .query_one(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "SELECT id, patient_id, weight, measured_on, medical_record_id FROM patient_weights WHERE id = ?",
+                [id.into()],
+            ))
+            .await
+            .map_err(|e| format!("Failed to fetch weight: {}", e))?
+            .ok_or_else(|| "Failed to fetch the saved weight".to_string())?;
+        Self::row_to_weight(&row)
+    }
+
+    /// Newest first.
+    pub async fn list_weights(db: &DatabaseConnection, patient_id: i64) -> Result<Vec<PatientWeight>, String> {
+        let rows = db
+            .query_all(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "SELECT id, patient_id, weight, measured_on, medical_record_id FROM patient_weights \
+                 WHERE patient_id = ? ORDER BY measured_on DESC, id DESC",
+                [patient_id.into()],
+            ))
+            .await
+            .map_err(|e| format!("Failed to fetch weights: {}", e))?;
+        rows.iter().map(Self::row_to_weight).collect()
+    }
+
+    pub async fn delete_weight(db: &DatabaseConnection, id: i64) -> Result<bool, String> {
+        let txn = db.begin().await.map_err(|e| format!("Failed to begin transaction: {}", e))?;
+        let owner = txn
+            .query_one(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "SELECT patient_id FROM patient_weights WHERE id = ?",
+                [id.into()],
+            ))
+            .await
+            .map_err(|e| format!("Failed to fetch weight: {}", e))?;
+        let Some(owner) = owner else {
+            return Ok(false);
+        };
+        let patient_id: i64 = owner.try_get("", "patient_id").map_err(|e| e.to_string())?;
+        txn.execute(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "DELETE FROM patient_weights WHERE id = ?",
+            [id.into()],
+        ))
+        .await
+        .map_err(|e| format!("Failed to delete weight: {}", e))?;
+        Self::sync_latest_weight(&txn, patient_id).await?;
+        txn.commit().await.map_err(|e| format!("Failed to delete weight: {}", e))?;
+        Ok(true)
     }
 
     pub async fn get_all(db: &DatabaseConnection) -> Result<Vec<Patient>, String> {
         let rows = db
             .query_all(Statement::from_string(
                 DbBackend::Sqlite,
-                r#"SELECT
-                    p.id,
-                    p.name,
-                    p.species_id,
-                    p.breed_id,
-                    s.name as species,
-                    b.name as breed,
-                    p.gender,
-                    p.date_of_birth,
-                    p.color,
-                    CAST(p.weight AS REAL) as weight,
-                    p.microchip_id,
-                    p.medical_notes,
-                    p.is_active,
-                    ph.household_id,
-                    p.created_at,
-                    p.updated_at
-                 FROM patients p
-                 LEFT JOIN species s ON p.species_id = s.id
-                 LEFT JOIN breeds b ON p.breed_id = b.id
-                 LEFT JOIN patient_households ph ON p.id = ph.patient_id AND ph.is_primary = 1
-                 ORDER BY p.created_at DESC"#.to_string(),
+                format!("{} {}", PATIENT_SELECT, "ORDER BY p.created_at DESC"),
             ))
             .await
             .map_err(|e| format!("Failed to fetch patients: {}", e))?;
 
-        rows.iter()
-            .map(Self::row_to_patient)
-            .collect()
+        Self::patients_with_alerts(db, &rows).await
     }
 
     pub async fn get_by_id(db: &DatabaseConnection, id: i64) -> Result<Option<Patient>, String> {
         let row = db
             .query_one(Statement::from_sql_and_values(
                 DbBackend::Sqlite,
-                r#"SELECT
-                    p.id,
-                    p.name,
-                    p.species_id,
-                    p.breed_id,
-                    s.name as species,
-                    b.name as breed,
-                    p.gender,
-                    p.date_of_birth,
-                    p.color,
-                    CAST(p.weight AS REAL) as weight,
-                    p.microchip_id,
-                    p.medical_notes,
-                    p.is_active,
-                    ph.household_id,
-                    p.created_at,
-                    p.updated_at
-                 FROM patients p
-                 LEFT JOIN species s ON p.species_id = s.id
-                 LEFT JOIN breeds b ON p.breed_id = b.id
-                 LEFT JOIN patient_households ph ON p.id = ph.patient_id AND ph.is_primary = 1
-                 WHERE p.id = ?"#,
+                &format!("{} {}", PATIENT_SELECT, "WHERE p.id = ?"),
                 [id.into()],
             ))
             .await
             .map_err(|e| format!("Failed to fetch patient: {}", e))?;
 
         match row {
-            Some(r) => Ok(Some(Self::row_to_patient(&r)?)),
+            Some(r) => Ok(Self::patients_with_alerts(db, std::slice::from_ref(&r)).await?.pop()),
             None => Ok(None),
         }
     }
@@ -258,6 +452,10 @@ impl PatientService {
             ))
             .await
             .map_err(|e| format!("Failed to create household relationship: {}", e))?;
+        }
+
+        if let Some(weight) = dto.weight {
+            Self::insert_weight(&txn, patient_id, weight, chrono::Local::now().date_naive(), None).await?;
         }
 
         txn.commit()
@@ -344,6 +542,10 @@ impl PatientService {
             },
         }
 
+        let logged_weight = match dto.weight {
+            MaybeNull::Value(v) => Some(v),
+            _ => None,
+        };
         match dto.weight {
             MaybeNull::Undefined => {},
             MaybeNull::Null => {
@@ -400,6 +602,15 @@ impl PatientService {
             params.push((if is_active { 1i64 } else { 0i64 }).into());
         }
 
+        match dto.neutered {
+            MaybeNull::Undefined => {},
+            MaybeNull::Null => set_clauses.push("neutered = NULL".to_string()),
+            MaybeNull::Value(v) => {
+                set_clauses.push("neutered = ?".to_string());
+                params.push((if v { 1i64 } else { 0i64 }).into());
+            },
+        }
+
         if set_clauses.is_empty() {
             return Self::get_by_id(db, id).await;
         }
@@ -416,9 +627,14 @@ impl PatientService {
             set_clauses.join(", ")
         );
 
-        db.execute(Statement::from_sql_and_values(DbBackend::Sqlite, &sql, params))
+        let txn = db.begin().await.map_err(|e| format!("Failed to begin transaction: {}", e))?;
+        txn.execute(Statement::from_sql_and_values(DbBackend::Sqlite, &sql, params))
             .await
             .map_err(|e| format!("Failed to update patient: {}", e))?;
+        if let Some(weight) = logged_weight {
+            Self::insert_weight(&txn, id, weight, chrono::Local::now().date_naive(), None).await?;
+        }
+        txn.commit().await.map_err(|e| format!("Failed to update patient: {}", e))?;
 
         Self::get_by_id(db, id).await
     }
@@ -463,29 +679,7 @@ impl PatientService {
         let rows = db
             .query_all(Statement::from_sql_and_values(
                 DbBackend::Sqlite,
-                r#"SELECT
-                    p.id,
-                    p.name,
-                    p.species_id,
-                    p.breed_id,
-                    s.name as species,
-                    b.name as breed,
-                    p.gender,
-                    p.date_of_birth,
-                    p.color,
-                    CAST(p.weight AS REAL) as weight,
-                    p.microchip_id,
-                    p.medical_notes,
-                    p.is_active,
-                    ph.household_id,
-                    p.created_at,
-                    p.updated_at
-                 FROM patients p
-                 LEFT JOIN species s ON p.species_id = s.id
-                 LEFT JOIN breeds b ON p.breed_id = b.id
-                 LEFT JOIN patient_households ph ON p.id = ph.patient_id AND ph.is_primary = 1
-                 WHERE s.name = ?
-                 ORDER BY p.name"#,
+                &format!("{} {}", PATIENT_SELECT, "WHERE s.name = ? ORDER BY p.name"),
                 [species.into()],
             ))
             .await
@@ -496,7 +690,13 @@ impl PatientService {
             .collect()
     }
 
+    /// Active patients only; see `search_including_inactive`.
     pub async fn search(db: &DatabaseConnection, query: &str) -> Result<Vec<Patient>, String> {
+        Self::search_including_inactive(db, query, false).await
+    }
+
+    /// Inactive and deceased patients are left out unless `include_inactive`.
+    pub async fn search_including_inactive(db: &DatabaseConnection, query: &str, include_inactive: bool) -> Result<Vec<Patient>, String> {
         // SQLite's LIKE (and LOWER()) only case-fold ASCII a-z/A-Z, so a
         // search for "ана" would NOT match the stored "Ана" for Macedonian
         // Cyrillic names. Fetch the candidate set and filter in Rust with
@@ -512,28 +712,7 @@ impl PatientService {
         let rows = db
             .query_all(Statement::from_string(
                 DbBackend::Sqlite,
-                r#"SELECT
-                    p.id,
-                    p.name,
-                    p.species_id,
-                    p.breed_id,
-                    s.name as species,
-                    b.name as breed,
-                    p.gender,
-                    p.date_of_birth,
-                    p.color,
-                    CAST(p.weight AS REAL) as weight,
-                    p.microchip_id,
-                    p.medical_notes,
-                    p.is_active,
-                    ph.household_id,
-                    p.created_at,
-                    p.updated_at
-                 FROM patients p
-                 LEFT JOIN species s ON p.species_id = s.id
-                 LEFT JOIN breeds b ON p.breed_id = b.id
-                 LEFT JOIN patient_households ph ON p.id = ph.patient_id AND ph.is_primary = 1"#
-                    .to_string(),
+                PATIENT_SELECT.to_string(),
             ))
             .await
             .map_err(|e| format!("Failed to search patients: {}", e))?;
@@ -541,6 +720,7 @@ impl PatientService {
         let mut matched: Vec<Patient> = rows
             .iter()
             .filter_map(|r| Self::row_to_patient(r).ok())
+            .filter(|p| include_inactive || p.is_active)
             .filter(|p| {
                 if needle.is_empty() {
                     return true;
@@ -566,6 +746,7 @@ impl PatientService {
                 .cmp(&b.name.as_deref().unwrap_or("").to_lowercase())
         });
         matched.truncate(50);
+        Self::attach_alerts(db, &mut matched).await?;
         Ok(matched)
     }
 
@@ -587,28 +768,7 @@ impl PatientService {
         let rows = db
             .query_all(Statement::from_string(
                 DbBackend::Sqlite,
-                r#"SELECT
-                    p.id,
-                    p.name,
-                    p.species_id,
-                    p.breed_id,
-                    s.name as species,
-                    b.name as breed,
-                    p.gender,
-                    p.date_of_birth,
-                    p.color,
-                    CAST(p.weight AS REAL) as weight,
-                    p.microchip_id,
-                    p.medical_notes,
-                    p.is_active,
-                    ph.household_id,
-                    p.created_at,
-                    p.updated_at
-                 FROM patients p
-                 LEFT JOIN species s ON p.species_id = s.id
-                 LEFT JOIN breeds b ON p.breed_id = b.id
-                 LEFT JOIN patient_households ph ON p.id = ph.patient_id AND ph.is_primary = 1"#
-                    .to_string(),
+                PATIENT_SELECT.to_string(),
             ))
             .await
             .map_err(|e| format!("Failed to search patients: {}", e))?;
