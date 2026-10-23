@@ -206,6 +206,8 @@
 - When Google refuses the stored login (refresh rejected or a 401), the app
   sets `google_calendar_settings.needs_reauth` (migration 048). Settings then
   shows "Reconnect", and the background sync stops until the user reconnects.
+  The Appointments tab shows a banner with Reconnect, which opens
+  `/settings?section=appointments` (`hooks/useGoogleCalendarStatus.ts`).
 - `last_sync_error` keeps the last sync failure until a sync succeeds; Settings
   shows it with the last-synced time.
 - Events and the created calendar use this computer's time zone

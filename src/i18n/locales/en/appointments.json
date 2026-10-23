@@ -92,7 +92,9 @@
     "clearFilters": "Clear Filters",
     "filter": "Filter",
     "status": "Status",
-    "room": "Room"
+    "room": "Room",
+    "patient": "Patient",
+    "allPatients": "All patients"
   },
   "messages": {
     "deleteTitle": "Delete Appointment",
@@ -199,5 +201,9 @@
   "picker": {
     "chip": "chip …{{digits}}"
   },
-  "loadFailed": "Could not load the appointments"
+  "loadFailed": "Could not load the appointments",
+  "google": {
+    "reauthBanner": "Google Calendar needs reconnecting. New and changed appointments are not sent until you reconnect.",
+    "reconnect": "Reconnect"
+  }
 }
