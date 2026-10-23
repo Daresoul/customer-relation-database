@@ -202,6 +202,19 @@ fn healvet_ranges_follow_the_species_like_the_lab_pdf() {
     assert_eq!(dog.len(), 3, "{:?}", dog);
 }
 
+// Healvet has ranges for dogs and cats only; another animal's value was
+// flagged against the dog range. Same rule as the lab PDF.
+#[test]
+fn healvet_values_of_other_species_have_no_range_or_flag() {
+    let results = serde_json::json!({ "SAA": "6.0" });
+    let rabbit = lab_results::extract_values("healvet_hv_fia_3000", &results, Some("Rabbit"));
+    let saa = value(&rabbit, "SAA");
+    assert_eq!(saa.name, "SAA инфек. маркер");
+    assert_eq!(saa.unit.as_deref(), Some("mg/L"));
+    assert_eq!((saa.ref_low, saa.ref_high, saa.range_text.as_deref()), (None, None, None));
+    assert_eq!(saa.flag, "U");
+}
+
 // ---------------------------------------------------------------------------
 // Rows written on attach, re-pointed on move, hidden on delete
 // ---------------------------------------------------------------------------
