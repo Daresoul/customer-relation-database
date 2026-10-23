@@ -12,6 +12,8 @@ import { open as openDialog } from '@tauri-apps/api/dialog';
 import { useTranslation } from 'react-i18next';
 import { backupErrorText } from '@/utils/backupErrors';
 import { formatDateTime } from '../../../utils/dateFormatter';
+import { useQueryClient } from '@tanstack/react-query';
+import { BACKUP_CONFIG_KEY } from '../../../components/AppHeader/backupHealth';
 
 const { Text, Paragraph } = Typography;
 
@@ -27,7 +29,13 @@ const BackupSettings: React.FC = () => {
   // Async work reads the current t without re-running when the language changes.
   const tRef = useRef(t);
   tRef.current = t;
-  const [config, setConfig] = useState<BackupConfig>({});
+  const queryClient = useQueryClient();
+  const [config, setConfigState] = useState<BackupConfig>({});
+  // The header's backup light and warning read the same config.
+  const setConfig = useCallback((c: BackupConfig) => {
+    setConfigState(c);
+    queryClient.setQueryData(BACKUP_CONFIG_KEY, c);
+  }, [queryClient]);
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
 
