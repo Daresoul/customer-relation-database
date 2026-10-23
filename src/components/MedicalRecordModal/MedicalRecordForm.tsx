@@ -10,12 +10,10 @@ import { SaveOutlined, CloseOutlined, InboxOutlined, HistoryOutlined, TagsOutlin
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@/services/invoke';
 import RecentDeviceFiles from '../RecentDeviceFiles';
-import { useSearchRecordTemplates } from '@/hooks/useRecordTemplates';
-import { useAppSettings } from '@/hooks/useAppSettings';
-import { useDebounce } from '@/hooks/useDebounce';
 import { MedicalService } from '@/services/medicalService';
 import { TabbedMedicalRecordFields } from '@/components/forms/fieldGroups';
-import type { MedicalRecord, CreateMedicalRecordInput, UpdateMedicalRecordInput, RecordTemplate, DeviceDataInput } from '@/types/medical';
+import RecordStartBar, { type RecordPrefill } from './RecordStartBar';
+import type { MedicalRecord, CreateMedicalRecordInput, UpdateMedicalRecordInput, DeviceDataInput } from '@/types/medical';
 import type { MedicalRecordLineItem, CreateLineItemInput } from '@/types/lineItem';
 import type { RecordType } from '@/components/forms/fieldGroups';
 import type { UploadFile } from 'antd';
@@ -70,14 +68,13 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
   onDirtyChange,
 }) => {
   const { t } = useTranslation(['medical', 'common', 'forms']);
-  const { notification } = App.useApp();
+  const { notification, modal } = App.useApp();
   const [form] = Form.useForm();
   const [recordType, setRecordType] = useState<RecordType>(initialValues?.recordType || 'procedure');
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [fileSourceIds, setFileSourceIds] = useState<Map<string, string>>(new Map());
   const [fileDeviceData, setFileDeviceData] = useState<Map<string, DeviceDataInput>>(new Map());
   const [recentFilesDrawerOpen, setRecentFilesDrawerOpen] = useState(false);
-  const [titleSearchTerm, setTitleSearchTerm] = useState<string>('');
   // Line items state
   const [lineItems, setLineItems] = useState<MedicalRecordLineItem[]>(initialValues?.lineItems || []);
   const [discountPercent, setDiscountPercent] = useState<number | null>(initialValues?.discountPercent ?? null);
@@ -104,9 +101,6 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
   // Passed down to TabbedMedicalRecordFields so it can flag the tabs
   // that contain failing fields and auto-switch to the first one.
   const [errorFields, setErrorFields] = useState<string[]>([]);
-  const debouncedSearchTerm = useDebounce(titleSearchTerm, 300);
-  const { settings } = useAppSettings();
-  const { data: searchedTemplates, isLoading: isSearching } = useSearchRecordTemplates(debouncedSearchTerm, recordType);
 
   useEffect(() => {
     if (initialValues) {
@@ -216,12 +210,15 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
     }));
     // The manual total stands in for line items; with items it no longer applies.
     const manualTotalInput = lineItems.length > 0 ? null : manualTotal;
+    // The Prescriptions tab mounts only once opened, so `values` lacks a
+    // prescription a template filled in; the form store has it.
+    const prescriptionNotes = form.getFieldValue('prescriptionNotes');
 
     const formData = isEdit
       ? {
           name: values.name,
           description: values.description,
-          prescriptionNotes: values.prescriptionNotes,
+          prescriptionNotes,
           discountPercent: discountPercent,
           manualTotal: manualTotalInput,
           lineItems: lineItemsInput,
@@ -231,7 +228,7 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
           recordType: values.recordType,
           name: values.name,
           description: values.description,
-          prescriptionNotes: values.prescriptionNotes,
+          prescriptionNotes,
           discountPercent: discountPercent,
           manualTotal: manualTotalInput,
           lineItems: lineItemsInput.length > 0 ? lineItemsInput : undefined,
@@ -265,7 +262,6 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
 
   const handleRecordTypeChange = (value: RecordType) => {
     setRecordType(value);
-    setTitleSearchTerm('');
     if (value === 'note' || value === 'test_result') {
       form.setFieldValue('procedureName', undefined);
     }
@@ -323,9 +319,44 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
     }
   };
 
-  const handleTemplateSelect = (template: RecordTemplate) => {
-    // Template fields are already set by MedicalRecordFieldGroup
-    // This callback is for any additional logic if needed
+  /** Fill from a template or the last record: text fields are replaced,
+   *  lines are added, diagnoses are merged (active ones only). */
+  const applyPrefill = (p: RecordPrefill) => {
+    const values: Record<string, unknown> = {};
+    if (p.name?.trim()) values.name = p.name;
+    if (p.description?.trim()) values.description = p.description;
+    if (p.prescriptionNotes?.trim()) values.prescriptionNotes = p.prescriptionNotes;
+    if (!isEdit && p.recordType) {
+      values.recordType = p.recordType;
+      handleRecordTypeChange(p.recordType);
+    }
+    form.setFieldsValue(values);
+    if (p.lineItems?.length) setLineItems((prev) => [...prev, ...p.lineItems!]);
+    if (p.diagnosisIds?.length) {
+      const known = new Set(availableDiagnoses.map((d) => d.id));
+      setSelectedDiagnosisIds((prev) => Array.from(new Set([...prev, ...p.diagnosisIds!.filter((id) => known.has(id))])));
+    }
+    markDirty();
+  };
+
+  const PREFILL_TEXT_FIELDS = ['name', 'description', 'prescriptionNotes'] as const;
+  const offerPrefill = (p: RecordPrefill) => {
+    const replacesTyped = PREFILL_TEXT_FIELDS.some((field) => {
+      const typed = String(form.getFieldValue(field) ?? '').trim();
+      const incoming = String(p[field] ?? '').trim();
+      return typed !== '' && incoming !== '' && typed !== incoming;
+    });
+    if (!replacesTyped) {
+      applyPrefill(p);
+      return;
+    }
+    modal.confirm({
+      title: t('medical:templatePicker.replaceTitle'),
+      content: t('medical:templatePicker.replaceBody'),
+      okText: t('medical:templatePicker.replace'),
+      cancelText: t('medical:templatePicker.keepMine'),
+      onOk: () => applyPrefill(p),
+    });
   };
 
   return (
@@ -369,6 +400,8 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
         recordType: 'procedure',
       }}
     >
+      <RecordStartBar isEdit={isEdit} patientId={patientId} onPrefill={offerPrefill} />
+
       {/* Medical Record Fields using tabbed component.
           Diagnoses + File Attachments are rendered INSIDE the Standard
           tab via the standardTabExtras prop so they don't visually
@@ -378,10 +411,6 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
         form={form}
         recordType={recordType}
         onRecordTypeChange={handleRecordTypeChange}
-        templates={searchedTemplates}
-        isSearchingTemplates={isSearching}
-        onTemplateSearch={setTitleSearchTerm}
-        onTemplateSelect={handleTemplateSelect}
         hideRecordType={isEdit}
         // Line items props
         lineItems={lineItems}

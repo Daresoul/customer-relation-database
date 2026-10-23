@@ -420,5 +420,27 @@
     "failed": "Upload failed",
     "retry": "Retry",
     "remove": "Remove from the list"
+  },
+  "templatePicker": {
+    "placeholder": "Start from a template…",
+    "empty": "No templates. Add them in Settings › Record templates.",
+    "inactiveSkipped_one": "{{count}} price-list item in this template was removed from the price list and was left out.",
+    "inactiveSkipped_other": "{{count}} price-list items in this template were removed from the price list and were left out.",
+    "replaceTitle": "Replace what you typed?",
+    "replaceBody": "The title, description or prescription you typed will be replaced. Invoice lines are added to the ones you have, and diagnoses are added too.",
+    "replace": "Replace",
+    "keepMine": "Keep mine"
+  },
+  "copyLast": {
+    "button": "Copy from last record",
+    "title": "Copy from last record",
+    "copy": "Copy",
+    "none": "This patient has no earlier record to copy.",
+    "loadFailed": "Could not load the last record",
+    "from": "From \"{{name}}\" of {{date}}.",
+    "fills": "Fills the description, the prescription and the diagnoses.",
+    "withLines_one": "Also copy the invoice line ({{count}})",
+    "withLines_other": "Also copy the invoice lines ({{count}})",
+    "never": "The invoice number, the invoice date and files are never copied."
   }
 }
