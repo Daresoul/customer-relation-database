@@ -301,3 +301,56 @@ async fn device_health_migration_adds_status_columns_and_sample_table() {
         assert_eq!(c, 1, "{table}.{column} missing");
     }
 }
+
+async fn history_device_name(db: &DatabaseConnection, file_id: &str) -> String {
+    let row = db
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "SELECT device_name FROM file_access_history WHERE file_id = ?",
+            [file_id.into()],
+        ))
+        .await
+        .unwrap()
+        .expect("history row must exist");
+    row.try_get("", "device_name").unwrap()
+}
+
+#[tokio::test]
+async fn a_serial_result_is_named_by_its_machine_not_its_port() {
+    let db = create_test_db_with_migrations().await;
+    let dir = tempfile::tempdir().unwrap();
+    let id = chem_integration(&db).await;
+    let sink = RecordingSink::new(dir.path());
+
+    let delivery = deliver_result(&db, dir.path(), &sink, &serial_source(id), "chem.hl7", &chem_frame()).await;
+
+    let results = sink.results.lock().unwrap().clone();
+    assert_eq!(results[0]["deviceName"], "Chemistry");
+    assert_eq!(history_device_name(&db, &delivery.file_id.unwrap()).await, "Chemistry");
+}
+
+#[tokio::test]
+async fn a_cut_off_serial_frame_is_named_by_its_machine() {
+    let db = create_test_db_with_migrations().await;
+    let dir = tempfile::tempdir().unwrap();
+    let id = chem_integration(&db).await;
+    let sink = RecordingSink::new(dir.path());
+
+    let file_id = report_cut_off(&db, dir.path(), &sink, &serial_source(id), b"MSH|^~\\&|1|Pointc")
+        .await
+        .unwrap();
+
+    assert_eq!(history_device_name(&db, &file_id).await, "Chemistry");
+}
+
+#[tokio::test]
+async fn a_result_from_a_removed_integration_keeps_the_port_name() {
+    let db = create_test_db_with_migrations().await;
+    let dir = tempfile::tempdir().unwrap();
+    let sink = RecordingSink::new(dir.path());
+
+    deliver_result(&db, dir.path(), &sink, &serial_source(9999), "chem.hl7", &chem_frame()).await;
+
+    let results = sink.results.lock().unwrap().clone();
+    assert_eq!(results[0]["deviceName"], "COM3");
+}

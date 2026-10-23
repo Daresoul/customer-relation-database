@@ -1465,30 +1465,56 @@ mod frame_assembler_tests {
         // "ABEC" contains a single 'E' mid-payload; frame terminated by "EE".
         // Before the fix the lone 'E' was silently dropped -> "ABC".
         let p = healvet();
-        let frames = feed(&p, b"ABEC EE".iter().filter(|&&b| b != b' ').cloned().collect::<Vec<_>>().as_slice());
-        assert_eq!(frames, vec![b"ABEC".to_vec()]);
+        let frames = feed(&p, b"ABEC&EE");
+        assert_eq!(frames, vec![b"ABEC&".to_vec()]);
     }
 
     #[test]
     fn healvet_ee_terminates_and_is_stripped() {
         let p = healvet();
-        assert_eq!(feed(&p, b"XYEE"), vec![b"XY".to_vec()]);
+        assert_eq!(feed(&p, b"XY&EE"), vec![b"XY&".to_vec()]);
     }
 
     #[test]
-    fn healvet_value_ending_in_e_adjacent_to_terminator_is_a_known_ambiguity() {
-        // Protocol note: "EE" terminates a frame, and payloads can contain 'E'.
-        // A value whose LAST byte is 'E' with NO delimiter before the terminator
-        // ("...E" immediately followed by "EE") is genuinely ambiguous on the wire
-        // — "AEEE" is indistinguishable from "A" + "EE" + a stray "E" — and we
-        // terminate on the first "EE". Real Healvet frames always put a '&'
-        // delimiter before the terminator ("...&EE", verified in
-        // actual_data/Healvet.log), so this never occurs in practice. Pinned here
-        // so the limitation is understood, not a silent surprise.
+    fn healvet_frames_end_on_ampersand_ee_only() {
+        // Real Healvet frames always end "...&EE" (actual_data/Healvet.log), so
+        // an "EE" inside a value (LEELOO, COFFEE) is payload, not the end.
         let p = healvet();
-        assert_eq!(feed(&p, b"AEEE"), vec![b"A".to_vec()]);
-        // The real-world "<value>&EE" shape round-trips fully, E-containing values and all.
+        assert_eq!(feed(&p, b"AEEE&EE"), vec![b"AEEE&".to_vec()]);
         assert_eq!(feed(&p, b"Serum Plasma&EE"), vec![b"Serum Plasma&".to_vec()]);
+    }
+
+    #[test]
+    fn healvet_name_with_ee_stays_one_result() {
+        let p = healvet();
+        let frames = feed(&p, b"#AFS1000&S1&12.5&06-04-2026 11:49:53&&cCRP&LEELOO&&M&Serum&EE");
+        assert_eq!(frames, vec![b"#AFS1000&S1&12.5&06-04-2026 11:49:53&&cCRP&LEELOO&&M&Serum&".to_vec()]);
+    }
+
+    #[test]
+    fn healvet_value_ending_in_ee_before_the_end_marker_is_kept() {
+        let p = healvet();
+        assert_eq!(feed(&p, b"#AFS1000&COFFEE&EE"), vec![b"#AFS1000&COFFEE&".to_vec()]);
+    }
+
+    #[test]
+    fn pointcare_start_byte_inside_a_frame_starts_over_and_hands_back_the_cut_part() {
+        // MLLP: a new 0x0B means the previous message was cut; it must not merge
+        // into the next animal's message.
+        let p = pointcare();
+        let mut asm = FrameAssembler::new(&p);
+        let mut frames = Vec::new();
+        let mut input = vec![0x0B];
+        input.extend_from_slice(b"MSH|first|OBX|TBIL|0.2");
+        input.push(0x0B);
+        input.extend_from_slice(b"MSH|second");
+        input.push(0x1C);
+        for &b in &input {
+            if let Some(f) = asm.push_byte(b, &p) { frames.push(f); }
+        }
+        assert_eq!(frames, vec![b"MSH|second".to_vec()]);
+        assert_eq!(asm.take_dropped(), Some(b"MSH|first|OBX|TBIL|0.2".to_vec()));
+        assert_eq!(asm.take_dropped(), None);
     }
 
     #[test]
@@ -1529,9 +1555,9 @@ mod frame_assembler_tests {
         // The two terminator E's can arrive in separate reads; counter persists.
         let p = healvet();
         let mut asm = FrameAssembler::new(&p);
-        for &b in b"AB" { assert!(asm.push_byte(b, &p).is_none()); }
-        assert!(asm.push_byte(b'E', &p).is_none()); // first terminator E, held
-        assert_eq!(asm.push_byte(b'E', &p), Some(b"AB".to_vec())); // second E completes
+        for &b in b"AB&" { assert!(asm.push_byte(b, &p).is_none()); }
+        assert!(asm.push_byte(b'E', &p).is_none()); // first terminator E
+        assert_eq!(asm.push_byte(b'E', &p), Some(b"AB&".to_vec())); // second E completes
     }
 
     #[test]
