@@ -187,7 +187,8 @@ impl DeviceSink for AppSink {
 
 pub struct ResultSource {
     pub integration_id: i64,
-    /// Passed to the parser as the device name (the port for serial devices).
+    /// Fallback name when the integration is gone (the port for serial devices);
+    /// otherwise the integration's name is used.
     pub device_name: String,
     pub device_type: String,
     pub connection_method: String,
@@ -211,6 +212,7 @@ pub async fn deliver_result(
     raw_name: &str,
     raw: &[u8],
 ) -> Delivery {
+    let source = &named_by_machine(db, source).await;
     device_health::note_raw_message(source.integration_id, raw);
     let parsed = DeviceParserService::parse_device_data(
         &source.device_type,
@@ -272,6 +274,7 @@ pub async fn report_cut_off(
     source: &ResultSource,
     partial: &[u8],
 ) -> Option<String> {
+    let source = &named_by_machine(db, source).await;
     device_health::note_raw_message(source.integration_id, partial);
     let name = format!("{}_cut_off_{}.txt", source.device_type, Utc::now().format("%Y%m%d_%H%M%S"));
     let detail = format!("Result stopped after {} bytes", partial.len());
@@ -350,6 +353,19 @@ pub async fn raise(
         file_id,
         at: Utc::now().to_rfc3339(),
     });
+}
+
+/// Serial listeners only know their port; results, toasts and Recent files
+/// should say which machine sent them. A removed integration keeps the port.
+async fn named_by_machine(db: &DatabaseConnection, source: &ResultSource) -> ResultSource {
+    ResultSource {
+        integration_id: source.integration_id,
+        device_name: integration_name(db, source.integration_id)
+            .await
+            .unwrap_or_else(|| source.device_name.clone()),
+        device_type: source.device_type.clone(),
+        connection_method: source.connection_method.clone(),
+    }
 }
 
 async fn integration_name(db: &DatabaseConnection, integration_id: i64) -> Option<String> {

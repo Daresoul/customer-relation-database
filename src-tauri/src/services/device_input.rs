@@ -367,8 +367,10 @@ pub fn get_device_protocol(device_type: &str) -> DeviceProtocol {
 /// framing rules can be unit-tested without a real serial port. Feed bytes with
 /// [`FrameAssembler::push_byte`]; it returns `Some(frame)` when a complete
 /// message terminates, preserving the exact per-device terminator rules:
-///   - Healvet (`end_symbol == b'E'`, no start symbol): terminated by `EE`.
-///   - MNCHIP PointCare/PCR (`start 0x0B`, `end 0x1C`): single-byte terminator.
+///   - Healvet (`end_symbol == b'E'`, no start symbol): terminated by `&EE`, or
+///     by a bare `EE` once the line goes quiet (`flush_idle`).
+///   - MNCHIP PointCare/PCR (`start 0x0B`, `end 0x1C`): single-byte terminator;
+///     a start byte mid-frame drops the cut frame (`take_dropped`) and starts over.
 ///   - Devices whose end symbol is `0x0D`: terminated by `\r\r`, keeping a lone
 ///     `\r` as a line delimiter (legacy path; no current device uses it).
 ///   - Other devices: single end byte terminates.
@@ -376,6 +378,7 @@ struct FrameAssembler {
     data: Vec<u8>,
     started: bool,
     consecutive_end_symbols: u32,
+    dropped: Option<Vec<u8>>,
 }
 
 impl FrameAssembler {
@@ -385,6 +388,7 @@ impl FrameAssembler {
             // With no start symbol we're "started" immediately.
             started: protocol.start_symbol.is_none(),
             consecutive_end_symbols: 0,
+            dropped: None,
         }
     }
 
@@ -419,17 +423,50 @@ impl FrameAssembler {
         partial
     }
 
+    /// A frame that a new start byte cut short (MLLP), handed back once.
+    fn take_dropped(&mut self) -> Option<Vec<u8>> {
+        self.dropped.take()
+    }
+
+    /// After the line went quiet mid-frame: a Healvet frame that ends in a bare
+    /// `EE` is complete (Ok), anything else was cut off (Err).
+    fn flush_idle(&mut self, protocol: &DeviceProtocol) -> Result<Vec<u8>, Vec<u8>> {
+        let mut partial = self.take_partial(protocol);
+        if protocol.end_symbol == b'E' && partial.ends_with(b"EE") {
+            partial.truncate(partial.len() - 2);
+            return Ok(partial);
+        }
+        Err(partial)
+    }
+
     /// Feed one byte; returns the completed message when a frame terminates.
     fn push_byte(&mut self, byte: u8, protocol: &DeviceProtocol) -> Option<Vec<u8>> {
+        // Healvet: only "&EE" ends a frame; an "EE" inside a value (LEELOO) is data.
+        if protocol.end_symbol == b'E' && protocol.start_symbol.is_none() {
+            self.data.push(byte);
+            if self.data.ends_with(b"&EE") {
+                let mut frame = self.take_frame(protocol);
+                frame.truncate(frame.len() - 2);
+                return Some(frame);
+            }
+            return None;
+        }
+
+        // MLLP: a start byte inside an unfinished frame means it was cut.
+        if Some(byte) == protocol.start_symbol && self.started {
+            let cut = self.take_partial(protocol);
+            if !cut.is_empty() {
+                self.dropped = Some(cut);
+            }
+            self.started = true;
+            return None;
+        }
+
         if byte == protocol.end_symbol && self.started {
             self.consecutive_end_symbols += 1;
 
-            // Healvet uses "EE" (two E's) as the end marker.
-            if protocol.end_symbol == b'E' && self.consecutive_end_symbols == 2 {
-                return Some(self.take_frame(protocol));
-            }
             // Legacy "\r\r" framing (kept for compatibility; unused by current devices).
-            else if protocol.end_symbol == 0x0D && self.consecutive_end_symbols == 2 {
+            if protocol.end_symbol == 0x0D && self.consecutive_end_symbols == 2 {
                 if !self.data.is_empty() {
                     return Some(self.take_frame(protocol));
                 }
@@ -443,12 +480,9 @@ impl FrameAssembler {
                 return None;
             }
             // Single-byte terminator (e.g. HL7 MLLP 0x1C, or newline).
-            else if protocol.end_symbol != b'E' && protocol.end_symbol != 0x0D {
+            else if protocol.end_symbol != 0x0D {
                 return Some(self.take_frame(protocol));
             }
-            // Healvet with a single 'E' so far: we can't tell yet whether it
-            // begins the "EE" terminator or is a payload byte, so hold it (don't
-            // push). If the next byte isn't 'E', the branch below re-injects it.
             None
         } else if let Some(start_byte) = protocol.start_symbol {
             self.consecutive_end_symbols = 0;
@@ -459,13 +493,7 @@ impl FrameAssembler {
             }
             None
         } else if self.started {
-            // No start symbol (Healvet): accumulate everything. If we were
-            // holding a single 'E' that turned out NOT to begin the "EE"
-            // terminator, re-inject it first — otherwise every lone 'E' inside
-            // the payload is silently dropped, corrupting or blanking results.
-            if self.consecutive_end_symbols == 1 && protocol.end_symbol == b'E' {
-                self.data.push(protocol.end_symbol);
-            }
+            // No start symbol: accumulate everything.
             self.consecutive_end_symbols = 0;
             self.data.push(byte);
             None
@@ -1017,6 +1045,9 @@ pub(crate) fn run_read_loop<R: std::io::Read + ?Sized>(
                     if let Some(frame) = assembler.push_byte(byte, protocol) {
                         sink.on_frame(frame);
                     }
+                    if let Some(cut) = assembler.take_dropped() {
+                        sink.on_cut_off(cut);
+                    }
                 }
                 false
             }
@@ -1031,7 +1062,10 @@ pub(crate) fn run_read_loop<R: std::io::Read + ?Sized>(
 
         if no_data {
             if assembler.partial_len() > 0 && last_byte_at.elapsed() >= idle_flush {
-                sink.on_cut_off(assembler.take_partial(protocol));
+                match assembler.flush_idle(protocol) {
+                    Ok(frame) => sink.on_frame(frame),
+                    Err(partial) => sink.on_cut_off(partial),
+                }
             }
             if read_started.elapsed() < MIN_EMPTY_READ {
                 thread::sleep(EMPTY_READ_PAUSE);
