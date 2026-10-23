@@ -83,7 +83,7 @@ describe('MoveLabResultModal', () => {
     const select = await screen.findByTestId('record-select');
     await waitFor(() => expect(within(select).getByText(/Consult/)).toBeInTheDocument());
     await user.click(select.querySelector('input') as HTMLElement);
-    const options = screen.getAllByRole('option').map((o) => o.textContent);
+    const options = Array.from(document.querySelectorAll('.ant-select-item-option-content')).map((o) => o.textContent);
     expect(options.findIndex((o) => o?.includes('Consult'))).toBeLessThan(options.findIndex((o) => o?.includes('Vaccination')));
     expect(options.some((o) => o?.includes('Old'))).toBe(false);
   });
