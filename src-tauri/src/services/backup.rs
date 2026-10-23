@@ -261,8 +261,11 @@ impl BackupService {
     }
 }
 
-/// Recursive copy that only copies files when the source is newer or the
-/// destination doesn't exist. Never deletes from destination.
+/// Recursive copy that copies a file when the destination is missing, has
+/// another size (a copy cut off mid-way), or is older than the source. Each
+/// copy goes to `<name>.part` first and is renamed when complete, so an
+/// interrupted copy never sits under the real name. Never deletes from the
+/// destination, apart from its own leftover `.part` files.
 fn copy_dir_additive(src: &Path, dest: &Path) -> std::io::Result<()> {
     if !dest.exists() {
         std::fs::create_dir_all(dest)?;
@@ -275,23 +278,30 @@ fn copy_dir_additive(src: &Path, dest: &Path) -> std::io::Result<()> {
         if metadata.is_dir() {
             copy_dir_additive(&src_path, &dest_path)?;
         } else {
-            let should_copy = match std::fs::metadata(&dest_path) {
-                Ok(d) => {
-                    let s_mod = metadata.modified().ok();
-                    let d_mod = d.modified().ok();
-                    match (s_mod, d_mod) {
-                        (Some(s), Some(d)) => s > d,
-                        _ => true,
-                    }
-                }
-                Err(_) => true,
-            };
-            if should_copy {
-                std::fs::copy(&src_path, &dest_path)?;
+            let mut part_name = entry.file_name();
+            part_name.push(".part");
+            let part_path = dest.join(part_name);
+            if part_path.is_file() {
+                std::fs::remove_file(&part_path)?;
+            }
+            if needs_copy(&metadata, &dest_path) {
+                std::fs::copy(&src_path, &part_path)?;
+                std::fs::rename(&part_path, &dest_path)?;
             }
         }
     }
     Ok(())
+}
+
+fn needs_copy(src: &std::fs::Metadata, dest_path: &Path) -> bool {
+    let Ok(dest) = std::fs::metadata(dest_path) else { return true };
+    if dest.len() != src.len() {
+        return true;
+    }
+    match (src.modified(), dest.modified()) {
+        (Ok(s), Ok(d)) => s > d,
+        _ => true,
+    }
 }
 
 /// Backups go to USB sticks and cloud folders, so the Google login is
