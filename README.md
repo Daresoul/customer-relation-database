@@ -226,6 +226,33 @@
   repeated; long item names wrap.
 - An edit waits for the record's diagnoses to load before it can be saved, and
   the record modal and page ask before discarding typed text.
+- Record templates (Settings › Record templates, `services/record_template.rs`)
+  hold a record type, title, description, prescription, price-list lines
+  with a quantity (`record_template_line_items`) and diagnoses
+  (`record_template_diagnoses`). A line stores only the price-list item and
+  quantity; its name, price and VAT rate are the item's current ones, read
+  when the template loads. A line whose item was removed from the price list
+  is left out, with a warning. The record form's "Start from a template…"
+  picker lists every template on open (any record type) and searches title
+  and description. Picking one sets the record type (new records only),
+  replaces title, description and prescription, adds its lines to the
+  invoice and adds its diagnoses; it asks first when it would replace text
+  that was typed. Totals still come from `calculate_invoice_totals`.
+- Vaccination quick path: create a template "Vaccination" (type Procedure)
+  with the usual note, the vaccine and exam from the price list, the usual
+  advice as prescription and the "Healthy" diagnosis. In the record, pick
+  it, check the text, save: the report, the pharmacy note and the invoice
+  are made in one go.
+- "Copy from last record" (new records only, `get_last_record_for_copy`)
+  takes the patient's newest record that is not archived and not a lab
+  result. It fills the description, prescription and active diagnoses; the
+  invoice lines only when ticked, with their old price, quantity and VAT
+  rate. It never copies the title, invoice number, invoice date or files.
+- Files on a saved record: the record page's Documents card takes several
+  files at once (drop or choose), up to 100 MB each, the same limit as
+  `upload_medical_attachment`. They go up one at a time; each shows waiting,
+  sending, or its error with Retry. Tauri's IPC gives no byte progress. The
+  bytes go over IPC once, as `fileData`.
 - Invoice totals are worked out in one place, `services/money.rs`, in integer
   cents: each line is price × quantity; lines are grouped by VAT rate; the
   discount comes off each group, rounded half-up once; the group is then split
@@ -265,7 +292,9 @@
   replaces a regenerated document (`simple_report`, `pharmacy_note`,
   `invoice`, `generated_pdf`), and the user, with the record page's Delete
   button ("Delete this file? The file will be removed from this record.") on
-  a `file` or `test_result`.
+  a `file` or `test_result`. Generated documents have no Delete; they are
+  regenerated. `delete_medical_attachment` refuses them too
+  (`FileStorageService::delete_user_attachment`).
 - 30 days after `deleted_at`, `services/attachment_purge.rs` removes the file
   from `<app data>/files/medical` and sets `purged_at`. The row stays for the
   record's history. Until then a mistaken delete is undone by clearing
