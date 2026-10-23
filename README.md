@@ -3,6 +3,9 @@
 ## Database migrations (`src-tauri/src/database/migrations.rs`)
 - Append new migrations to the end of `MIGRATIONS`. Never change what an
   already-shipped migration does; clinic databases have run it.
+- `run_migrations` runs every migration on a one-connection pool of its own
+  (same options as the pool it is given). Over the app's five-connection
+  pool a new install failed in migration 035.
 - When migrations are pending on a database that has run any before, start
   first copies it (`VACUUM INTO`) to `vet_clinic_pre-migration-<local
   time>.db` next to it and keeps the newest three
