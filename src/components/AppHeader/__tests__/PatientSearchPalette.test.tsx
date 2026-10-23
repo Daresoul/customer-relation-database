@@ -10,7 +10,8 @@ vi.mock('react-i18next', () => ({
 const invokeMock = vi.fn();
 vi.mock('@/services/invoke', () => ({ invoke: (...a: unknown[]) => invokeMock(...a) }));
 
-import { GlobalSearchProvider, useGlobalSearch } from '../GlobalSearchContext';
+import { GlobalSearchProvider } from '../GlobalSearchContext';
+import { useGlobalSearch } from '../useGlobalSearch';
 import { loadRecentPatients, rememberPatient } from '../recentPatients';
 
 const hits = [

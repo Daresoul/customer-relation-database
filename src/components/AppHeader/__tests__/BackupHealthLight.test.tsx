@@ -10,7 +10,8 @@ vi.mock('react-i18next', () => ({
 const invokeMock = vi.fn();
 vi.mock('@/services/invoke', () => ({ invoke: (...a: unknown[]) => invokeMock(...a) }));
 
-import { backupHealth, BackupHealthLight } from '../BackupHealthLight';
+import { BackupHealthLight } from '../BackupHealthLight';
+import { backupHealth } from '../backupHealth';
 
 const now = new Date('2026-10-23T12:00:00Z');
 const hoursAgo = (h: number) => new Date(now.getTime() - h * 3600_000).toISOString();

@@ -3,7 +3,7 @@ import { Button, theme } from 'antd';
 import { SearchOutlined, SettingOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
-import { useGlobalSearch } from './GlobalSearchContext';
+import { useGlobalSearch } from './useGlobalSearch';
 import { BackupHealthLight } from './BackupHealthLight';
 import { useRememberOpenedPatient } from './useRememberOpenedPatient';
 import styles from './AppHeader.module.css';

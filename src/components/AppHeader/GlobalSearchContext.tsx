@@ -1,12 +1,6 @@
-import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { PatientSearchPalette } from './PatientSearchPalette';
-
-interface GlobalSearch {
-  /** Opens the patient search, optionally with text already typed (a scanned chip). */
-  openSearch: (query?: string) => void;
-}
-
-const GlobalSearchContext = createContext<GlobalSearch>({ openSearch: () => undefined });
+import { GlobalSearchContext } from './useGlobalSearch';
 
 export function GlobalSearchProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<{ key: number; query: string } | null>(null);
@@ -23,8 +17,4 @@ export function GlobalSearchProvider({ children }: { children: React.ReactNode }
       {session && <PatientSearchPalette key={session.key} initialQuery={session.query} onClose={close} />}
     </GlobalSearchContext.Provider>
   );
-}
-
-export function useGlobalSearch(): GlobalSearch {
-  return useContext(GlobalSearchContext);
 }
