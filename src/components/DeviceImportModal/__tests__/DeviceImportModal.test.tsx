@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   downloadDeviceFile: vi.fn(),
   generateReport: vi.fn(),
   openAttachment: vi.fn(),
+  previewValues: vi.fn(),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -47,7 +48,7 @@ vi.mock('@/hooks/useMedicalRecords', () => ({
   }),
 }));
 vi.mock('@/services/labInboxService', () => ({
-  labInboxService: { regenerateLabReport: mocks.regenerateLabReport },
+  labInboxService: { regenerateLabReport: mocks.regenerateLabReport, previewValues: mocks.previewValues },
 }));
 vi.mock('@/hooks/useRecordTemplates', () => ({
   useSearchRecordTemplates: () => ({ data: [], isLoading: false }),
@@ -153,6 +154,7 @@ beforeEach(() => {
   mocks.regenerateLabReport.mockReset().mockResolvedValue({ id: 700 });
   mocks.generateReport.mockReset().mockResolvedValue({ id: 600 });
   mocks.openAttachment.mockReset();
+  mocks.previewValues.mockReset().mockResolvedValue([]);
 });
 
 describe('DeviceImportModal — one result at a time', () => {
@@ -398,6 +400,31 @@ describe('DeviceImportModal — machine said / you picked', () => {
 
     expect(mocks.createRecord).not.toHaveBeenCalled();
     expect(dialog().getByText('exigo.xml')).toBeInTheDocument();
+  });
+});
+
+// device-import #7: the list showed only the file name and tags.
+describe('DeviceImportModal — values per result', () => {
+  it('shows the values of each result', async () => {
+    mocks.previewValues.mockResolvedValue([{ code: 'WBC', value: '12.1', unit: null, range: '6 - 17', flag: null }]);
+    renderModal();
+    receive(maxResult());
+
+    expect(await screen.findByTestId('lab-value-WBC')).toBeInTheDocument();
+    expect(mocks.previewValues).toHaveBeenCalledWith('exigo_eos_vet', { WBC: '12.1' });
+  });
+});
+
+// device-import #5: two dogs called Max looked the same in the picker.
+describe('DeviceImportModal — patient picker', () => {
+  it('tells patients apart by chip ending and age', async () => {
+    mocks.patients = [{ ...MAX, dateOfBirth: '2020-01-15' }, BELLA];
+    renderModal();
+    receive(maxResult());
+
+    expect(await screen.findByText('Max - Dog')).toBeInTheDocument();
+    expect(dialog().getByText(/medical:deviceImport.optionChip last4=0001/)).toBeInTheDocument();
+    expect(dialog().getByText(/medical:deviceImport.optionAgeYears years=\d+/)).toBeInTheDocument();
   });
 });
 

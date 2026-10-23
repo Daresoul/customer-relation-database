@@ -11,6 +11,11 @@ pub async fn list_lab_inbox(pool: State<'_, SeaOrmPool>, state: Option<String>) 
 }
 
 #[tauri::command]
+pub fn preview_lab_values(_device_type: String, _test_results: serde_json::Value) -> Vec<lab_inbox::LabValue> {
+    Vec::new()
+}
+
+#[tauri::command]
 pub async fn get_lab_inbox_count(pool: State<'_, SeaOrmPool>) -> Result<i64, String> {
     lab_inbox::waiting_count(&pool).await
 }
