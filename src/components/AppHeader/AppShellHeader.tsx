@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { useGlobalSearch } from './GlobalSearchContext';
 import { BackupHealthLight } from './BackupHealthLight';
+import { useRememberOpenedPatient } from './useRememberOpenedPatient';
 import styles from './AppHeader.module.css';
 
 export interface AppShellHeaderProps {
@@ -25,6 +26,7 @@ export function AppShellHeader({ labInboxSlot, deviceStatusSlot }: AppShellHeade
   const { token } = theme.useToken();
   const navigate = useNavigate();
   const { openSearch } = useGlobalSearch();
+  useRememberOpenedPatient();
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
