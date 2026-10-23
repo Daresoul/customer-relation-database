@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { App } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { PatientService } from '../services/patientService';
-import { Patient, UpdatePatientInput } from '../types';
+import { UpdatePatientInput } from '../types';
 import { PatientDetail, DeletePatientResponse } from '../types/patient';
 import dayjs from 'dayjs';
 import { createMutationErrorHandler, extractErrorMessage, type TFunction } from '../utils/errors';

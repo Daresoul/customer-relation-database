@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Card, Typography, Descriptions, Tag, Space, Button, Select, App } from 'antd';
-import { HomeOutlined, UserOutlined, PhoneOutlined, MailOutlined, PlusOutlined, SwapOutlined, DisconnectOutlined } from '@ant-design/icons';
+import { HomeOutlined, UserOutlined, PhoneOutlined, MailOutlined, PlusOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -114,32 +114,6 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({
     } catch (error) {
       notification.error({
         message: t('detail.householdInfo.assignFailed'),
-        description: errorText(error, t),
-        placement: 'bottomRight',
-        duration: 5,
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleUnlinkHousehold = async () => {
-    if (!patientId) return;
-
-    setIsLoading(true);
-    try {
-      await PatientService.updatePatientHousehold(patientId, null);
-      notification.success({
-        message: t('detail.householdInfo.unlinkSuccess'),
-        placement: 'bottomRight',
-        duration: 3,
-      });
-      invalidatePatientData(queryClient);
-      invalidateHouseholdData(queryClient);
-      onHouseholdChanged?.();
-    } catch (error) {
-      notification.error({
-        message: t('detail.householdInfo.unlinkFailed'),
         description: errorText(error, t),
         placement: 'bottomRight',
         duration: 5,

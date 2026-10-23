@@ -7,7 +7,7 @@
 // via the Rust-side log_event command (which feeds vet-clinic.log → Loki).
 // Reporting lives in one place (services/invoke.ts) to avoid double-capture.
 import { invoke } from './invoke';
-import { ApiError, TauriError } from '../types/api';
+import { ApiError } from '../types/api';
 import { camelToSnakeObject, snakeToCamelObject } from '../utils/caseTransform';
 
 export class ApiService {

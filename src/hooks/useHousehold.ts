@@ -142,7 +142,6 @@ export function useUpdatePerson() {
     mutationFn: async ({
       personId,
       updates,
-      householdId
     }: {
       personId: number;
       householdId: number;
@@ -191,7 +190,6 @@ export function useDeletePerson() {
   return useMutation({
     mutationFn: async ({
       personId,
-      householdId
     }: {
       personId: number;
       householdId: number;
@@ -211,7 +209,6 @@ export function useUpdatePersonContacts() {
   return useMutation({
     mutationFn: async ({
       personId,
-      householdId,
       contacts
     }: {
       personId: number;

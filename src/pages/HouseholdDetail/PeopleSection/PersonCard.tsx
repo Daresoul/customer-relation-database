@@ -27,7 +27,7 @@ import {
   StarOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { PersonWithContacts, PersonContact } from '../../../types/household';
+import { PersonWithContacts } from '../../../types/household';
 import { useUpdatePerson, useDeletePerson, useUpdatePersonContacts } from '../../../hooks/useHousehold';
 import { useSetPrimaryPerson } from '../../../hooks/useHouseholdActions';
 import { knownErrorMessage } from '@/utils/errors';

@@ -25,7 +25,6 @@ const DayViewSimple: React.FC<DayViewSimpleProps> = ({
   appointments,
   onSelectAppointment,
   onCreateAppointment,
-  onUpdateAppointment,
   onStatusChange,
 }) => {
   const { t } = useTranslation('appointments');
@@ -97,7 +96,7 @@ const DayViewSimple: React.FC<DayViewSimpleProps> = ({
   }, []);
 
   // Handle mouse down for drag start - EXACTLY like WeekView
-  const handleMouseDown = useCallback((e: React.MouseEvent, hourIndex: number) => {
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.target !== e.currentTarget) return;
     e.preventDefault();
 
@@ -121,7 +120,7 @@ const DayViewSimple: React.FC<DayViewSimpleProps> = ({
   }, [isDragging, dragStart, getSlotFromMouse]);
 
   // Handle mouse up for drag end - EXACTLY like WeekView
-  const handleMouseUp = useCallback((e: MouseEvent) => {
+  const handleMouseUp = useCallback(() => {
     if (!isMountedRef.current) return;
 
 
@@ -496,7 +495,7 @@ const DayViewSimple: React.FC<DayViewSimpleProps> = ({
             {/* Day column - EXACTLY like WeekView day column */}
             <div
               className={`day-content-column day-cell ${styles.relative}`}
-              onMouseDown={(e) => handleMouseDown(e, hour.hour)}
+              onMouseDown={handleMouseDown}
             >
               {/* Half-hour divider line */}
               <div className="day-half-hour-line" />

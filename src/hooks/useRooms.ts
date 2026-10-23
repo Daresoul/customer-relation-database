@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { App } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { RoomService } from '../services/roomService';
-import { Room, RoomFilter, CreateRoomInput, UpdateRoomInput } from '../types/rooms';
+import { RoomFilter, CreateRoomInput, UpdateRoomInput } from '../types/rooms';
 import { createMutationErrorHandler } from '../utils/errors';
 
 export const useRooms = (filter: RoomFilter = { activeOnly: true }) => {

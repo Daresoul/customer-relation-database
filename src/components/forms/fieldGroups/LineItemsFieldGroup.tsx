@@ -36,7 +36,7 @@ import { useLineItemTemplates, useCreateLineItemTemplate } from '../../../hooks/
 import { formatMoney } from '@/utils/money';
 import { useCurrencies } from '../../../hooks/useCurrencies';
 import { useAppSettings } from '../../../hooks/useAppSettings';
-import type { LineItemTemplate, MedicalRecordLineItem, CreateLineItemInput } from '../../../types/lineItem';
+import type { MedicalRecordLineItem } from '../../../types/lineItem';
 import type { Currency } from '../../../types/medical';
 import { localeMoneyParser, localeNumberParser } from '../../../utils/localeNumber';
 import { useTaxRates, useInvoiceTotals } from '../../../hooks/useClinic';

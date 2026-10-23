@@ -17,7 +17,7 @@ vi.mock('antd', () => ({
       </button>
     </div>
   ),
-  Form: ({ children, form, onFinish, initialValues }: any) => (
+  Form: ({ children, onFinish }: any) => (
     <form data-testid="appointment-form" onSubmit={onFinish}>
       {children}
     </form>
@@ -50,7 +50,7 @@ vi.mock('antd', () => ({
       rows={rows}
     />
   ),
-  Select: ({ children, placeholder, value, onChange, loading, onSearch }: any) => (
+  Select: ({ children, placeholder, value, onChange }: any) => (
     <select
       data-testid="select-field"
       value={value}

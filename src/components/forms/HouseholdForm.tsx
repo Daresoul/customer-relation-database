@@ -49,7 +49,7 @@ interface PatientLite {
   householdId?: number | null;
 }
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 interface HouseholdFormProps {
   initialValues?: HouseholdFormValues;

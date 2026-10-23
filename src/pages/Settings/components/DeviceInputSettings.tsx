@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Card, Table, Button, Typography, Space, Tag, Modal, Form, Input, Select, InputNumber, Switch, Popconfirm, AutoComplete } from 'antd';
 import { UsbOutlined, ReloadOutlined, ApiOutlined, PlusOutlined, EditOutlined, DeleteOutlined, PoweroffOutlined, FolderOpenOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
@@ -202,7 +202,7 @@ const DeviceInputSettings: React.FC = () => {
   };
 
   // Get friendly chip/device name based on VID:PID
-  const getChipName = (vid: number, pid: number): string | null => {
+  const getChipName = (vid: number): string | null => {
     const vidHex = vid.toString(16).toUpperCase().padStart(4, '0');
 
     // Common USB-Serial chip vendors
@@ -257,7 +257,7 @@ const DeviceInputSettings: React.FC = () => {
 
       // Prefer device_name from backend (usb-ids database + web fallback)
       // Falls back to local getChipName() for compatibility
-      const deviceName = usb.device_name || getChipName(usb.vid, usb.pid);
+      const deviceName = usb.device_name || getChipName(usb.vid);
       if (deviceName) {
         parts.push(`[${deviceName}]`);
       }
@@ -281,7 +281,7 @@ const DeviceInputSettings: React.FC = () => {
       const parts = [];
 
       // Prefer device_name from backend (usb-ids database + web fallback)
-      const deviceName = hid.device_name || getChipName(hid.vid, hid.pid);
+      const deviceName = hid.device_name || getChipName(hid.vid);
       if (deviceName) {
         parts.push(`[${deviceName}]`);
       }
@@ -313,8 +313,7 @@ const DeviceInputSettings: React.FC = () => {
       let vidMatch = devicePath.match(/VID_([0-9A-F]{4})\+PID_([0-9A-F]{4})/i);
       if (vidMatch) {
         const vid = parseInt(vidMatch[1], 16);
-        const pid = parseInt(vidMatch[2], 16);
-        const chipName = getChipName(vid, pid);
+        const chipName = getChipName(vid);
         return chipName
           ? t('portDetails.chipDisconnected', { chip: chipName, vid: vidMatch[1], pid: vidMatch[2] })
           : t('portDetails.usbDisconnected', { vid: vidMatch[1], pid: vidMatch[2] });
@@ -324,8 +323,7 @@ const DeviceInputSettings: React.FC = () => {
       vidMatch = devicePath.match(/VID_([0-9A-F]{4})&PID_([0-9A-F]{4})/i);
       if (vidMatch) {
         const vid = parseInt(vidMatch[1], 16);
-        const pid = parseInt(vidMatch[2], 16);
-        const chipName = getChipName(vid, pid);
+        const chipName = getChipName(vid);
         return chipName
           ? t('portDetails.chipDisconnected', { chip: chipName, vid: vidMatch[1], pid: vidMatch[2] })
           : t('portDetails.usbDisconnected', { vid: vidMatch[1], pid: vidMatch[2] });

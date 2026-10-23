@@ -13,7 +13,7 @@ interface SpeciesSettingsProps {
   isUpdating: boolean;
 }
 
-const SpeciesSettings: React.FC<SpeciesSettingsProps> = ({ isUpdating }) => {
+const SpeciesSettings: React.FC<SpeciesSettingsProps> = () => {
   const { t } = useTranslation(['common', 'forms', 'settings', 'entities']);
   const [speciesModalVisible, setSpeciesModalVisible] = useState(false);
   const [editingSpecies, setEditingSpecies] = useState<Species | null>(null);

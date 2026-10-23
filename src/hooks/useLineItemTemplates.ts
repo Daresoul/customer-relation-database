@@ -3,7 +3,6 @@ import { App } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { LineItemService } from '../services/lineItemService';
 import {
-  LineItemTemplate,
   CreateLineItemTemplateInput,
   UpdateLineItemTemplateInput
 } from '../types/lineItem';

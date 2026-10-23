@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { App } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { BreedService } from '../services/breedService';
-import { Breed, CreateBreedInput, UpdateBreedInput } from '../types/breed';
+import { CreateBreedInput, UpdateBreedInput } from '../types/breed';
 import { createMutationErrorHandler } from '../utils/errors';
 
 export const useBreeds = (speciesId?: number, activeOnly: boolean = true) => {

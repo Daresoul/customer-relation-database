@@ -11,9 +11,7 @@ import {
   FolderOpenOutlined,
   TeamOutlined,
   HeartOutlined,
-  SearchOutlined,
   PlusOutlined,
-  ReloadOutlined,
   FrownOutlined,
   SmileOutlined,
 } from '@ant-design/icons';

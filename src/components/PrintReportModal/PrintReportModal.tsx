@@ -8,19 +8,17 @@ import {
   Space,
   Typography,
   Divider,
-  Spin,
   App,
   Tag,
 } from 'antd';
-import { PrinterOutlined, FilePdfOutlined } from '@ant-design/icons';
+import { FilePdfOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import type { MedicalAttachment } from '@/types/medical';
 import type { PatientOverrides, PatientInfo, DeviceFileInfo } from '@/types/report';
-import { MedicalService } from '@/services/medicalService';
 import styles from './PrintReportModal.module.css';
 import { formatDateTime } from '../../utils/dateFormatter';
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
 
 interface PrintReportModalProps {
   open: boolean;
@@ -62,7 +60,6 @@ const getDeviceTypeColor = (deviceType?: string): string => {
 const PrintReportModal: React.FC<PrintReportModalProps> = ({
   open,
   onClose,
-  medicalRecordId,
   attachments,
   patientInfo,
   onGenerate,

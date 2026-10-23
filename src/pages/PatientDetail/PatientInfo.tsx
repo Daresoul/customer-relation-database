@@ -124,15 +124,6 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
     }
   });
 
-  const breedEdit = useInlineEdit({
-    value: localValues.breed || '',
-    onSave: (value) => handleFieldUpdate('breed', value),
-    validate: (value) => {
-      if (value && value.length > PATIENT_FIELD_RULES.breed.max) return t('detail.patientInfo.validation.breedTooLong', { max: PATIENT_FIELD_RULES.breed.max });
-      return true;
-    }
-  });
-
   const colorEdit = useInlineEdit({
     value: localValues.color || '',
     onSave: (value) => handleFieldUpdate('color', value),

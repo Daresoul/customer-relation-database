@@ -4,7 +4,7 @@
  */
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { ConfigProvider, theme as antTheme } from 'antd';
+import { ConfigProvider } from 'antd';
 import { createUnifiedTheme } from '../styles/theme/unifiedTheme';
 import { generateCSSVariables, injectCSSVariables } from '../styles/theme/cssVariables';
 

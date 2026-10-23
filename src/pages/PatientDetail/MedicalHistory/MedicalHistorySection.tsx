@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Button, Space, Input, Select, Badge, Empty, Spin } from 'antd';
+import { Card, Button, Space, Input, Select, Empty, Spin } from 'antd';
 import { PlusOutlined, SearchOutlined, FilterOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useMedicalRecords } from '@/hooks/useMedicalRecords';

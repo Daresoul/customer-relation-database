@@ -1,19 +1,19 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Layout, Card, Typography, Space, Button, Alert, Spin, Table, Tag, Descriptions, App, Switch, Breadcrumb, Drawer, Popconfirm } from 'antd';
-import { invoke, convertFileSrc } from '@/services/invoke';
+import { invoke } from '@/services/invoke';
 import { useTranslation } from 'react-i18next';
 import PdfInlineViewer from '@/components/PdfInlineViewer';
 import PdfMultiPagePreview from '@/components/PdfMultiPagePreview';
 import { getAttachmentPreviewKind, HtmlAttachmentNotice, TextAttachmentPreview } from '@/components/AttachmentPreview';
 import RecentDeviceFiles from '@/components/RecentDeviceFiles';
-import { HomeOutlined, ArrowLeftOutlined, EditOutlined, SaveOutlined, CloseOutlined, ReloadOutlined, HistoryOutlined, PrinterOutlined } from '@ant-design/icons';
+import { HomeOutlined, ArrowLeftOutlined, EditOutlined, ReloadOutlined, HistoryOutlined, PrinterOutlined } from '@ant-design/icons';
 import { useMedicalRecord, useUpdateMedicalRecord, useCurrencies } from '@/hooks/useMedicalRecords';
 import { usePatientDetail } from '@/hooks/usePatient';
 import { MedicalService } from '@/services/medicalService';
 import { isTauri as detectTauri } from '@/utils/isTauri';
 import PrintReportModal from '@/components/PrintReportModal';
-import type { PatientOverrides, PatientInfo } from '@/types/report';
+import type { PatientInfo } from '@/types/report';
 import type { MedicalAttachment } from '@/types/medical';
 import MedicalRecordForm from '@/components/MedicalRecordModal/MedicalRecordForm';
 import DiagnosisTagList from '@/components/DiagnosisTagList';
@@ -57,7 +57,6 @@ export const MedicalRecordDetailPage: React.FC = () => {
   }, [isEditing]);
   const confirmLeave = useUnsavedChangesGuard(isEditing && editDirty);
   const [selectedVersion, setSelectedVersion] = useState<number | null>(null);
-  const [selectedHistory, setSelectedHistory] = useState<MedicalRecordHistory | null>(null);
   const [showDiffs, setShowDiffs] = useState(false);
   const [displayRecord, setDisplayRecord] = useState<MedicalRecord | null>(null);
   const [regeneratingId, setRegeneratingId] = useState<number | null>(null);
@@ -173,14 +172,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
   };
 
   const currentTargetVersion = selectedVersion ?? record?.version ?? null;
-  const prevVersion = useMemo(() => {
-    if (!currentTargetVersion) return null;
-    const lower = sortedHistory.find(h => h.version < currentTargetVersion);
-    return lower ? lower.version : null;
-  }, [sortedHistory, currentTargetVersion]);
-
   const snapshot = useMemo(() => buildSnapshotForVersion(currentTargetVersion), [currentTargetVersion, sortedHistory]);
-  const prevSnapshot = useMemo(() => buildSnapshotForVersion(prevVersion), [prevVersion, sortedHistory]);
   // When the record's version increases (= an update just happened and
   // refetch brought back a new version), clear the manual version selection
   // so the auto-select effect below re-picks the new latest. Without this,
@@ -192,7 +184,6 @@ export const MedicalRecordDetailPage: React.FC = () => {
     if (!record) return;
     if (lastSeenVersion.current !== null && record.version > lastSeenVersion.current) {
       setSelectedVersion(null);
-      setSelectedHistory(null);
     }
     lastSeenVersion.current = record.version;
   }, [record?.version]);
@@ -201,7 +192,6 @@ export const MedicalRecordDetailPage: React.FC = () => {
   useEffect(() => {
     if (!selectedVersion && sortedHistory.length > 0) {
       setSelectedVersion(sortedHistory[0].version);
-      setSelectedHistory(sortedHistory[0] as any);
     }
   }, [sortedHistory, selectedVersion]);
   useEffect(() => {
@@ -243,8 +233,6 @@ export const MedicalRecordDetailPage: React.FC = () => {
     if (!selectedVersion) return null;
     return sortedHistory.find(h => h.version === selectedVersion) || null;
   }, [sortedHistory, selectedVersion]);
-  const selectedOld = useMemo(() => parseMaybeJson((selectedEntry as any)?.oldValues), [selectedEntry]);
-  const selectedNew = useMemo(() => parseMaybeJson((selectedEntry as any)?.newValues), [selectedEntry]);
 
   // useEffect removed - was only used for debug logging
 
@@ -263,7 +251,6 @@ export const MedicalRecordDetailPage: React.FC = () => {
 
   const backToCurrent = () => {
     setSelectedVersion(null);
-    setSelectedHistory(null);
   };
 
   const columns = [
@@ -273,7 +260,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
       key: 'version',
       width: 120,
       render: (_: any, row: any) => (
-        <Button type="link" size="small" onClick={() => { setSelectedVersion(row.version); setSelectedHistory(row as any); setShowDiffs(true); }}>
+        <Button type="link" size="small" onClick={() => { setSelectedVersion(row.version); setShowDiffs(true); }}>
           v{row.version}
         </Button>
       )
@@ -1159,7 +1146,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
           rowKey={(r) => String(r.id)}
           columns={columns as any}
           size="small"
-          onRow={(row) => ({ onClick: () => { setSelectedVersion(row.version); setSelectedHistory(row as any); } })}
+          onRow={(row) => ({ onClick: () => { setSelectedVersion(row.version); } })}
           pagination={false}
         />
         {sortedHistory.length === 0 && (

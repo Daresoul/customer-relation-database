@@ -106,7 +106,6 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
   const [loading, setLoading] = useState(false);
   const [conflicts, setConflicts] = useState<Appointment[]>([]);
   const [patientConflicts, setPatientConflicts] = useState<Appointment[]>([]);
-  const [checkingConflicts, setCheckingConflicts] = useState(false);
   const [checkFailed, setCheckFailed] = useState(false);
   const watchedDate = Form.useWatch('date', form) as Dayjs | undefined;
   const watchedStart = Form.useWatch('startTime', form) as Dayjs | undefined;
@@ -133,12 +132,6 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
         return { value: patient.id, label: extra ? `${who} — ${extra}` : who };
       }),
     [patients, householdNames, mode, appointment?.patientId, t],
-  );
-
-  // Time slot options (15-minute intervals)
-  const timeSlots = useMemo(
-    () => appointmentService.generateTimeSlots(7, 20, 15),
-    []
   );
 
   // Initialize form values
@@ -188,7 +181,6 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
       return;
     }
 
-    setCheckingConflicts(true);
     try {
       const startDateTime = dayjs(values.date)
         .hour(values.startTime.hour())
@@ -215,8 +207,6 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
       setConflicts([]);
       setPatientConflicts([]);
       setCheckFailed(true);
-    } finally {
-      setCheckingConflicts(false);
     }
   };
 

@@ -38,7 +38,6 @@ export const Loading: React.FC<LoadingProps> = ({
   iconType = 'loading',
 }) => {
   const icon = iconMap[iconType];
-  const customIcon = <Spin indicator={icon} />;
 
   const spinElement = (
     <>

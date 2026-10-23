@@ -10,7 +10,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { installTauriMock, makeBackupConfig, makeDefaultSettings } from './helpers/mockInvoke';
+import { installTauriMock } from './helpers/mockInvoke';
 
 test.describe('Main Dashboard — microchip scan', () => {
   test.beforeEach(async ({ page }) => {

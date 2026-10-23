@@ -12,24 +12,17 @@ import {
   Space,
   Input,
   Tooltip,
-  Badge,
   Typography,
-  Dropdown,
   Switch,
 } from 'antd';
-import type { ColumnsType, TableProps } from 'antd/es/table';
+import type { ColumnsType } from 'antd/es/table';
 import {
   SearchOutlined,
-  EditOutlined,
-  EyeOutlined,
-  DeleteOutlined,
-  MoreOutlined,
   HeartOutlined,
   CalendarOutlined,
-  UserOutlined,
   HomeOutlined,
 } from '@ant-design/icons';
-import { Patient, PatientWithHousehold } from '../../types';
+import { PatientWithHousehold } from '../../types';
 import type { BaseTableProps } from '../../types/ui.types';
 import dayjs from 'dayjs';
 import { formatPatientAge } from '../../utils/patientChart';
@@ -99,11 +92,6 @@ export const PatientTable: React.FC<PatientTableProps> = ({
       patient.microchipId?.toLowerCase().includes(searchLower)
     );
   }, [patients, searchText, showInactive]);
-
-  // Get status color
-  const getStatusColor = (isActive: boolean | undefined) => {
-    return isActive !== false ? 'success' : 'default';
-  };
 
   const calculateAge = (dateOfBirth: string | undefined) =>
     formatPatientAge(dateOfBirth, t) ?? t('patients:unknownAge');

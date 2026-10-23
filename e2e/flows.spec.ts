@@ -76,7 +76,6 @@ test.describe('Scan microchip — patient exists', () => {
 
 test.describe('Scan microchip — no patient match', () => {
   test('scan with unknown chip triggers search that returns empty', async ({ page }) => {
-    let searchedCode: string | null = null;
     await installTauriMock(page, {
       ...defaultMocks(),
       // Return empty for the unknown chip

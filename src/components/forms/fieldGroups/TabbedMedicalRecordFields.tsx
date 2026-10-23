@@ -11,7 +11,6 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Tabs, Form, Input, Typography, Badge } from 'antd';
-import type { FormInstance } from 'antd';
 import {
   FileTextOutlined,
   MedicineBoxOutlined,
@@ -122,7 +121,6 @@ export const TabbedMedicalRecordFields: React.FC<TabbedMedicalRecordFieldsProps>
   titlePlaceholder,
   defaultActiveTab = 'standard',
   onTabChange,
-  prescriptionNotesValue,
   showPrescriptionBadge = false,
   showLineItemsBadge = false,
   lineItemsCount = 0,

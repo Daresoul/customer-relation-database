@@ -20,7 +20,6 @@ import {
   PhoneOutlined,
   MailOutlined,
 } from '@ant-design/icons';
-import styles from '../Forms.module.css';
 
 const { Option } = Select;
 
@@ -44,13 +43,11 @@ export interface ContactFieldGroupProps {
 }
 
 export const ContactFieldGroup: React.FC<ContactFieldGroupProps> = ({
-  form,
   namePrefix = [],
   disabled = false,
   showPersonFields = true,
   showRelationship = false,
   showPrimaryCheckbox = true,
-  fullWidthClassName = styles.fullWidth,
   compact = false,
 }) => {
   const { t } = useTranslation(['forms', 'entities']);
@@ -58,7 +55,6 @@ export const ContactFieldGroup: React.FC<ContactFieldGroupProps> = ({
   // Helper to build field name with prefix
   const fieldName = (name: string) => [...namePrefix, name];
 
-  const colSpan = compact ? { xs: 24, sm: 12 } : { xs: 24, sm: 8 };
   const largeColSpan = compact ? { xs: 24 } : { xs: 24, sm: 12 };
 
   return (

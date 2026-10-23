@@ -4,7 +4,6 @@
 
 import { invoke } from '@/services/invoke';
 import { emit } from '@tauri-apps/api/event';
-import { App } from 'antd';
 import type { Patient } from '../types';
 import type { HouseholdTableRecord } from '../types/ui.types';
 import i18n from 'i18next';

@@ -1,22 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter } from 'react-router-dom';
 
 // These imports will fail - components don't exist yet
 // import { AppointmentList } from '../../components/AppointmentList/AppointmentList';
 
 describe('Appointment List Infinite Scroll Integration', () => {
-  let queryClient: QueryClient;
-  let mockIntersectionObserver: any;
+  let mockIntersectionObserver: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    queryClient = new QueryClient({
-      defaultOptions: {
-        queries: { retry: false },
-      },
-    });
-
     // Mock IntersectionObserver
     mockIntersectionObserver = vi.fn();
     mockIntersectionObserver.mockReturnValue({
@@ -31,16 +21,6 @@ describe('Appointment List Infinite Scroll Integration', () => {
       invoke: vi.fn(),
     }));
   });
-
-  const renderWithProviders = (component: React.ReactNode) => {
-    return render(
-      <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
-          {component}
-        </BrowserRouter>
-      </QueryClientProvider>
-    );
-  };
 
   it('should load initial batch of appointments', async () => {
     // This will fail - AppointmentList doesn't exist

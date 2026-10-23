@@ -14,7 +14,7 @@
  * accumulates rows over time — that's accepted (it's a test VM, not prod).
  */
 
-import { browser, $, expect } from '@wdio/globals';
+import { browser, $ } from '@wdio/globals';
 
 describe('Patient create round-trip (full stack)', () => {
   it('creates a patient via UI and shows it in the dashboard list', async () => {

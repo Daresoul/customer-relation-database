@@ -40,7 +40,6 @@ import { usePatients } from '@/hooks/usePatients';
 import { useCreateMedicalRecord, useUploadAttachment } from '@/hooks/useMedicalRecords';
 import type { SavedRecordDocuments } from '@/hooks/useDocumentStatusNotice';
 import { useSearchRecordTemplates } from '@/hooks/useRecordTemplates';
-import { useAppSettings } from '@/hooks/useAppSettings';
 import { useDebounce } from '@/hooks/useDebounce';
 import { CreateMedicalRecordInput } from '@/types/medical';
 import { Patient } from '@/types';
@@ -55,8 +54,7 @@ import dayjs from 'dayjs';
 import RecentDeviceFiles from '../RecentDeviceFiles';
 import CreatePatientSection from './CreatePatientSection';
 import { TabbedMedicalRecordFields } from '@/components/forms/fieldGroups';
-import type { RecordType, RecordTemplate } from '@/components/forms/fieldGroups';
-import styles from './DeviceImportModal.module.css';
+import type { RecordType } from '@/components/forms/fieldGroups';
 import { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
 import { listen } from '@tauri-apps/api/event';
 import { validatePatientSelection, getMatchStrength } from '@/utils/deviceDataValidation';
@@ -174,7 +172,6 @@ const DeviceImportDialog: React.FC = () => {
   const matchStrength = getMatchStrength(pendingFiles, pickedForCheck);
   const mismatches = pickedForCheck ? validatePatientSelection(pickedForCheck, pendingFiles).warnings : [];
 
-  const { settings } = useAppSettings();
   const createMutation = useCreateMedicalRecord();
   const uploadMutation = useUploadAttachment();
   const { data: searchedTemplates, isLoading: isSearchingTemplates } = useSearchRecordTemplates(debouncedSearchTerm, recordType);
@@ -306,11 +303,6 @@ const DeviceImportDialog: React.FC = () => {
   const handleRecordTypeChange = (value: RecordType) => {
     setRecordType(value);
     setTitleSearchTerm('');
-  };
-
-  const handleTemplateSelect = (template: RecordTemplate) => {
-    // Template fields are already set by MedicalRecordFieldGroup
-    // This callback is for any additional logic if needed
   };
 
   const handleRemoveFile = (fileId: string) => {
@@ -826,7 +818,6 @@ const DeviceImportDialog: React.FC = () => {
           templates={searchedTemplates}
           isSearchingTemplates={isSearchingTemplates}
           onTemplateSearch={setTitleSearchTerm}
-          onTemplateSelect={handleTemplateSelect}
           hideRecordType={false}
           lineItems={lineItems}
           onLineItemsChange={setLineItems}

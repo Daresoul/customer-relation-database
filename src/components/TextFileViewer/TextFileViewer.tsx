@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Spin, Typography, Button, Space, App } from 'antd';
+import { Modal, Spin, Button, Space, App } from 'antd';
 import { CopyOutlined, DownloadOutlined } from '@ant-design/icons';
 import { invoke } from '@/services/invoke';
 import styles from './TextFileViewer.module.css';
-
-const { Text } = Typography;
 
 interface TextFileViewerProps {
   open: boolean;
