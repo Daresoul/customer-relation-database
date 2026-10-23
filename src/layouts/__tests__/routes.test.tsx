@@ -6,6 +6,7 @@ import { App } from 'antd';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
+  initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 vi.mock('@tauri-apps/api/tauri', () => ({ invoke: vi.fn().mockResolvedValue(undefined) }));
 
@@ -41,6 +42,7 @@ vi.mock('../../components/AppHeader', () => ({
 vi.mock('../WakeFromTrayHandler', () => ({ WakeFromTrayHandler: () => null }));
 vi.mock('../ChipScanHandler', () => ({ ChipScanHandler: () => null }));
 
+import i18n from '../../i18n';
 import { appRoutes } from '../routes';
 
 function renderAt(path: string) {
@@ -78,7 +80,7 @@ describe('app routes (data router)', () => {
     dashboardThrows = true;
     renderAt('/');
 
-    expect(await screen.findByText('common:crash.title')).toBeInTheDocument();
+    expect(await screen.findByText(i18n.t('common:crash.title'))).toBeInTheDocument();
     expect(screen.getByText(/app header/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('header settings'));
