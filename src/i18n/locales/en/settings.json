@@ -169,10 +169,10 @@
     "lastSyncFailedHint": "Some appointments may be missing from Google Calendar. Try Sync Now; if it keeps failing, reconnect."
   },
   "rooms": {
-    "confirmDelete": "Are you sure you want to delete this room?",
+    "confirmDelete": "Deactivate this room? It stays on past appointments and can be switched back on under Edit.",
     "created": "Room created successfully",
     "updated": "Room updated successfully",
-    "deleted": "Room deleted successfully"
+    "deleted": "Room deactivated"
   },
   "general": {
     "launchAtLogin": "Launch at Login",
@@ -189,12 +189,12 @@
     "color": "Color",
     "created": "Species created successfully",
     "updated": "Species updated successfully",
-    "deleted": "Species deleted successfully",
+    "deleted": "Species deactivated",
     "title": "Species Management",
     "addButton": "Add Species",
     "nameColumn": "Species Name",
-    "confirmDeleteTitle": "Are you sure you want to delete this species?",
-    "confirmDeleteDescription": "This will only deactivate it if patients are using it.",
+    "confirmDeleteTitle": "Deactivate this species?",
+    "confirmDeleteDescription": "Once deactivated, it leaves the pick lists. Patients that have it keep it.",
     "createTitle": "Create New Species",
     "createdNamed": "Species \"{{name}}\" created successfully",
     "createFailed": "Failed to create species",
@@ -214,9 +214,9 @@
     "createFailed": "Failed to create breed",
     "createdGeneric": "Breed created successfully",
     "updated": "Breed updated successfully",
-    "deleted": "Breed deleted successfully",
-    "confirmDeleteTitle": "Are you sure you want to delete this breed?",
-    "confirmDeleteDescription": "This will only deactivate it if patients are using it.",
+    "deleted": "Breed deactivated",
+    "confirmDeleteTitle": "Deactivate this breed?",
+    "confirmDeleteDescription": "Once deactivated, it leaves the pick lists. Patients that have it keep it.",
     "nameColumn": "Breed Name"
   },
   "templates": {
