@@ -1,4 +1,5 @@
-use sea_orm::{Database, DatabaseConnection, ConnectOptions, ConnectionTrait};
+use sea_orm::{Database, DatabaseConnection, ConnectOptions};
+use sqlx::sqlite::SqliteJournalMode;
 use sqlx::SqlitePool;
 use std::sync::Arc;
 use std::time::Duration;
@@ -18,15 +19,19 @@ pub async fn create_pools(database_url: &str) -> Result<(SeaOrmPool, DatabasePoo
         .min_connections(1)
         .connect_timeout(Duration::from_secs(8))
         .acquire_timeout(Duration::from_secs(8))
-        .idle_timeout(Duration::from_secs(8))
-        .max_lifetime(Duration::from_secs(8))
-        .sqlx_logging(false);
+        .idle_timeout(Duration::from_secs(10 * 60))
+        .max_lifetime(Duration::from_secs(30 * 60))
+        .sqlx_logging(false)
+        // Applied to every connection the pool opens, not just the first.
+        // `rebuild_with_foreign_keys_off` turns foreign keys off on one
+        // connection and back on before handing it back.
+        .map_sqlx_sqlite_opts(|o| {
+            o.foreign_keys(true)
+                .busy_timeout(Duration::from_secs(10))
+                .journal_mode(SqliteJournalMode::Wal)
+        });
 
     let db = Database::connect(opt).await?;
-
-    // Enable foreign key constraints and WAL mode
-    db.execute_unprepared("PRAGMA foreign_keys = ON").await?;
-    db.execute_unprepared("PRAGMA journal_mode = WAL").await?;
 
     // Get the underlying sqlx pool for legacy services
     let sqlite_pool = db.get_sqlite_connection_pool().clone();

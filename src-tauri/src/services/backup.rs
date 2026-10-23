@@ -6,7 +6,7 @@
 //! readable before the DB pool is ready (e.g. at startup before migrations).
 
 use std::path::{Path, PathBuf};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Local, TimeZone, Utc};
 use sea_orm::{ConnectionTrait, DatabaseConnection, Statement, DbBackend};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -29,7 +29,7 @@ const PRE_UPDATE_MARKER: &str = "_pre-update-";
 /// Which snapshot a backup run writes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SnapshotKind {
-    /// One per UTC day; a rerun the same day replaces it.
+    /// One per local day; a rerun the same day replaces it.
     Daily,
     /// Taken right before installing an update. Never replaced by a daily
     /// run, and pruned on its own count, so the post-update startup backup
@@ -37,7 +37,11 @@ pub enum SnapshotKind {
     PreUpdate { app_version: String },
 }
 
-pub fn snapshot_file_name(kind: &SnapshotKind, now: DateTime<Utc>) -> String {
+/// Named by the wall-clock date and time of `now` (the app passes local time).
+pub fn snapshot_file_name<Tz: TimeZone>(kind: &SnapshotKind, now: DateTime<Tz>) -> String
+where
+    Tz::Offset: std::fmt::Display,
+{
     match kind {
         SnapshotKind::Daily => format!("vet_clinic_{}.db", now.format("%Y-%m-%d")),
         SnapshotKind::PreUpdate { app_version } => format!(
@@ -219,7 +223,7 @@ impl BackupService {
         // require quiescing other writers (unlike a raw file copy + WAL).
         // Written to a temporary name first, so an earlier snapshot of the
         // same name survives until the new one is complete.
-        let db_target = db_dir.join(snapshot_file_name(kind, Utc::now()));
+        let db_target = db_dir.join(snapshot_file_name(kind, Local::now()));
         let mut part_name = db_target.file_name().unwrap_or_default().to_os_string();
         part_name.push(".part");
         let db_part = db_dir.join(part_name);
@@ -233,6 +237,10 @@ impl BackupService {
         ))
         .await
         .map_err(|e| format!("VACUUM INTO failed: {}", e))?;
+        if let Err(e) = remove_google_login(&db_part).await {
+            let _ = std::fs::remove_file(&db_part);
+            return Err(format!("Remove Google login from snapshot: {}", e));
+        }
         std::fs::rename(&db_part, &db_target).map_err(|e| format!("Replace snapshot: {}", e))?;
 
         // Mirror files directory (additive; never deletes from destination)
@@ -253,8 +261,11 @@ impl BackupService {
     }
 }
 
-/// Recursive copy that only copies files when the source is newer or the
-/// destination doesn't exist. Never deletes from destination.
+/// Recursive copy that copies a file when the destination is missing, has
+/// another size (a copy cut off mid-way), or is older than the source. Each
+/// copy goes to `<name>.part` first and is renamed when complete, so an
+/// interrupted copy never sits under the real name. Never deletes from the
+/// destination, apart from its own leftover `.part` files.
 fn copy_dir_additive(src: &Path, dest: &Path) -> std::io::Result<()> {
     if !dest.exists() {
         std::fs::create_dir_all(dest)?;
@@ -267,23 +278,64 @@ fn copy_dir_additive(src: &Path, dest: &Path) -> std::io::Result<()> {
         if metadata.is_dir() {
             copy_dir_additive(&src_path, &dest_path)?;
         } else {
-            let should_copy = match std::fs::metadata(&dest_path) {
-                Ok(d) => {
-                    let s_mod = metadata.modified().ok();
-                    let d_mod = d.modified().ok();
-                    match (s_mod, d_mod) {
-                        (Some(s), Some(d)) => s > d,
-                        _ => true,
-                    }
-                }
-                Err(_) => true,
-            };
-            if should_copy {
-                std::fs::copy(&src_path, &dest_path)?;
+            let mut part_name = entry.file_name();
+            part_name.push(".part");
+            let part_path = dest.join(part_name);
+            if part_path.is_file() {
+                std::fs::remove_file(&part_path)?;
+            }
+            if needs_copy(&metadata, &dest_path) {
+                std::fs::copy(&src_path, &part_path)?;
+                std::fs::rename(&part_path, &dest_path)?;
             }
         }
     }
     Ok(())
+}
+
+fn needs_copy(src: &std::fs::Metadata, dest_path: &Path) -> bool {
+    let Ok(dest) = std::fs::metadata(dest_path) else { return true };
+    if dest.len() != src.len() {
+        return true;
+    }
+    match (src.modified(), dest.modified()) {
+        (Ok(s), Ok(d)) => s > d,
+        _ => true,
+    }
+}
+
+/// Backups go to USB sticks and cloud folders, so the Google login is
+/// removed from the copy. `needs_reauth` makes a restored copy show
+/// Reconnect in Settings. `secure_delete` overwrites the old bytes.
+async fn remove_google_login(snapshot: &Path) -> Result<(), String> {
+    use sqlx::{ConnectOptions, Connection};
+    let mut conn = sqlx::sqlite::SqliteConnectOptions::new()
+        .filename(snapshot)
+        .disable_statement_logging()
+        .connect()
+        .await
+        .map_err(|e| e.to_string())?;
+    let result = async {
+        sqlx::query("PRAGMA secure_delete = ON").execute(&mut conn).await?;
+        let has_table: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'google_calendar_settings'",
+        )
+        .fetch_one(&mut conn)
+        .await?;
+        if has_table > 0 {
+            sqlx::query(
+                "UPDATE google_calendar_settings SET access_token = NULL, refresh_token = NULL, \
+                 token_expires_at = NULL, needs_reauth = 1",
+            )
+            .execute(&mut conn)
+            .await?;
+        }
+        Ok::<_, sqlx::Error>(())
+    }
+    .await;
+    let closed = conn.close().await;
+    result.map_err(|e| e.to_string())?;
+    closed.map_err(|e| e.to_string())
 }
 
 /// Keeps the newest `keep` snapshots of one kind: pre-update snapshots when
@@ -311,4 +363,59 @@ fn prune_old_snapshots(db_dir: &Path, keep: usize, pre_update: bool) -> std::io:
         let _ = std::fs::remove_file(path);
     }
     Ok(())
+}
+
+/// How many pre-migration copies stay next to the database.
+pub const PRE_MIGRATION_COPIES_KEPT: usize = 3;
+const PRE_MIGRATION_MARKER: &str = "_pre-migration-";
+
+/// Copies the database next to itself before pending migrations run, as
+/// `<name>_pre-migration-<local time>.db`, and keeps the newest
+/// [`PRE_MIGRATION_COPIES_KEPT`]. A new install (no migration run yet) and an
+/// up-to-date database get no copy. Returns the copy's path when one was made.
+pub async fn backup_before_migrations<Tz: TimeZone>(
+    pool: &sqlx::SqlitePool,
+    db_path: &Path,
+    now: DateTime<Tz>,
+) -> Result<Option<PathBuf>, String>
+where
+    Tz::Offset: std::fmt::Display,
+{
+    let pending = crate::database::migrations::pending_migrations(pool)
+        .await
+        .map_err(|e| format!("Check pending migrations: {}", e))?;
+    if pending.is_empty() || pending.len() == crate::database::migrations::migration_count() {
+        return Ok(None);
+    }
+
+    let dir = db_path.parent().unwrap_or_else(|| Path::new("."));
+    let stem = db_path.file_stem().and_then(|s| s.to_str()).unwrap_or("vet_clinic");
+    let copy = dir.join(format!("{stem}{PRE_MIGRATION_MARKER}{}.db", now.format("%Y-%m-%d_%H-%M-%S")));
+    if copy.exists() {
+        std::fs::remove_file(&copy).map_err(|e| format!("Remove old copy: {}", e))?;
+    }
+    let target = copy.to_string_lossy().replace('\'', "''");
+    sqlx::query(&format!("VACUUM INTO '{}'", target))
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Copy database before migrations: {}", e))?;
+
+    prune_pre_migration_copies(dir, stem);
+    Ok(Some(copy))
+}
+
+fn prune_pre_migration_copies(dir: &Path, stem: &str) {
+    let prefix = format!("{stem}{PRE_MIGRATION_MARKER}");
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    let mut names: Vec<String> = entries
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .filter(|n| n.starts_with(&prefix) && n.ends_with(".db"))
+        .collect();
+    // The name carries the time, so name order is age order.
+    names.sort();
+    let excess = names.len().saturating_sub(PRE_MIGRATION_COPIES_KEPT);
+    for name in names.into_iter().take(excess) {
+        let _ = std::fs::remove_file(dir.join(name));
+    }
 }

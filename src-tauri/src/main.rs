@@ -139,7 +139,16 @@ fn main() {
         services::log_rotation::prune_old_logs(dir, 30);
     }
 
+    let log_dirs_to_prune: Vec<std::path::PathBuf> =
+        main_log_dir.iter().chain(raw_serial_log_dir.iter()).cloned().collect();
+
     let (log_rotation_strategy, log_max_file_size) = services::log_rotation::main_log_rotation();
+
+    // For the Loki push when the start fails; `setup` takes the originals.
+    let app_version_for_failure = context.package_info().version.to_string();
+    let machine_name_for_failure = machine_name.clone();
+    let session_dir = app_data_dir.clone();
+    let session_dir_for_exit = app_data_dir.clone();
 
     // Configure logging based on build type
     #[cfg(debug_assertions)]
@@ -178,11 +187,15 @@ fn main() {
         .add_item(quit_item);
     let tray = SystemTray::new().with_menu(tray_menu);
 
-    let run_result = tauri::Builder::default()
+    let build_result = tauri::Builder::default()
         // First plugin, so a second copy exits before the other plugins start.
         // Two copies would import every device file twice and fight over COM
         // ports; the second launch brings the running window forward instead.
-        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            if services::app_launch::starts_hidden(&argv) {
+                log::info!("Second launch at login: the running copy stays in the tray");
+                return;
+            }
             if let Some(window) = app.get_window("main") {
                 let _ = window.show();
                 let _ = window.unminimize();
@@ -198,7 +211,7 @@ fn main() {
             .build())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-            Some(vec![]),
+            Some(services::app_launch::autostart_args()),
         ))
         .system_tray(tray)
         .on_system_tray_event(|app, event| match event {
@@ -253,7 +266,11 @@ fn main() {
                     "quit" => {
                         let count = services::device_input::stop_all_listeners();
                         log::info!("Exiting from tray. Stopped {} listeners.", count);
-                        std::process::exit(0);
+                        if let Some(dir) = tauri::api::path::app_data_dir(&app.config()) {
+                            services::session_marker::end_session(&dir);
+                        }
+                        // Unlike std::process::exit, removes the tray icon first.
+                        app.exit(0);
                     }
                     _ => {}
                 }
@@ -295,6 +312,42 @@ fn main() {
                     "environment": environment,
                 }),
             );
+
+            if let Some(dir) = session_dir.as_deref() {
+                let previous = services::session_marker::begin_session(
+                    dir,
+                    &app.package_info().version.to_string(),
+                    chrono::Utc::now(),
+                );
+                services::session_marker::report_previous_session(&previous);
+            }
+
+            // Re-register launch at login while it is on, so entries made by
+            // older versions (no arguments) gain `--hidden`.
+            {
+                use tauri_plugin_autostart::ManagerExt;
+                let autolaunch = app.autolaunch();
+                if autolaunch.is_enabled().unwrap_or(false) {
+                    if let Err(e) = autolaunch.enable() {
+                        log::warn!("Launch at login not updated: {}", e);
+                    }
+                }
+            }
+
+            // Copies of reports and opened attachments older than a day.
+            std::thread::spawn(|| {
+                let removed = services::temp_cleanup::clean_our_temp_folders(
+                    &std::env::temp_dir(),
+                    services::temp_cleanup::TEMP_FILE_MAX_AGE,
+                );
+                log::info!("Temp cleanup: {} old file(s) removed", removed);
+            });
+
+            // The start prune ran before the logger; this repeats it daily.
+            tauri::async_runtime::spawn(services::log_rotation::run_log_prune_schedule(
+                log_dirs_to_prune.clone(),
+                30,
+            ));
 
             // Verify the bundled PDF-generator JAR matches this app version.
             // Runs off-thread because it spawns Java (~0.5s) and must not block
@@ -339,10 +392,11 @@ fn main() {
             } else {
                 start_device_capture(app.handle());
             }
-            // Start hidden on launch (will be shown from tray or on events).
-            // Skipped under E2E so WebDriver can attach to a visible WebView2 —
-            // hiding the window drops the DevTools connection and kills the session.
-            if std::env::var("TAURI_E2E").is_err() {
+            // Start in the tray only when launched at login (`--hidden`); a
+            // manual start and the relaunch after an update show the window.
+            // Never under E2E, so WebDriver can attach to a visible WebView2.
+            let argv: Vec<String> = std::env::args().collect();
+            if services::app_launch::starts_hidden(&argv) && std::env::var("TAURI_E2E").is_err() {
                 if let Some(window) = app.get_window("main") {
                     let _ = window.hide();
                 }
@@ -360,6 +414,14 @@ fn main() {
                 // Run migrations using the legacy pool
                 {
                     let pool_guard = legacy_pool.lock().await;
+                    // A copy to go back to if a migration fails or damages
+                    // data. A failed copy is logged; the clinic still starts.
+                    let db_path = database::get_database_path(&app.handle())?;
+                    match services::backup::backup_before_migrations(&*pool_guard, &db_path, chrono::Local::now()).await {
+                        Ok(Some(copy)) => log::info!("Database copied to {} before migrations", copy.display()),
+                        Ok(None) => {}
+                        Err(e) => log::error!("No database copy before migrations: {}", e),
+                    }
                     run_migrations(&*pool_guard).await
                         .map_err(|e| format!("Failed to run migrations: {}", e))?;
                 }
@@ -715,18 +777,38 @@ fn main() {
             // the same Arkivet.log → Loki pipeline.
             commands::log_event,
         ]))
-        .run(context);
+        .build(context);
 
     // A setup error (database won't open, migration fails) or a plugin that
-    // can't start lands here. The window is already hidden, so without this
-    // the app would just vanish.
-    if let Err(e) = run_result {
-        services::startup_failure::report(
-            &e.to_string(),
-            main_log_dir.as_deref(),
-            app_data_dir.as_deref(),
-        );
-        std::process::exit(1);
+    // can't start lands here. The window may be hidden, so without this the
+    // app would just vanish.
+    match build_result {
+        Ok(app) => app.run(move |_app, event| {
+            if let tauri::RunEvent::Exit = event {
+                if let Some(dir) = session_dir_for_exit.as_deref() {
+                    services::session_marker::end_session(dir);
+                }
+            }
+        }),
+        Err(e) => {
+            let shipper = match (main_log_dir.clone(), app_data_dir.as_deref()) {
+                (Some(log_dir), Some(data_dir)) => services::loki_shipper::config_from_env_and_dirs(
+                    machine_name_for_failure,
+                    environment,
+                    app_version_for_failure,
+                    log_dir,
+                    data_dir,
+                ),
+                _ => None,
+            };
+            services::startup_failure::report(
+                &e.to_string(),
+                main_log_dir.as_deref(),
+                app_data_dir.as_deref(),
+                shipper,
+            );
+            std::process::exit(1);
+        }
     }
 }
 

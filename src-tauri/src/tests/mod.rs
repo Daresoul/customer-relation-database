@@ -123,3 +123,27 @@ pub mod record_template_tests;
 
 #[cfg(test)]
 pub mod appointment_arrival_tests;
+
+#[cfg(test)]
+pub mod log_privacy_tests;
+
+#[cfg(test)]
+pub mod temp_cleanup_tests;
+
+#[cfg(test)]
+pub mod session_marker_tests;
+
+#[cfg(test)]
+pub mod app_launch_tests;
+
+#[cfg(test)]
+pub mod pre_migration_backup_tests;
+
+#[cfg(test)]
+pub mod connection_tests;
+
+#[cfg(test)]
+pub mod google_event_text_tests;
+
+#[cfg(test)]
+pub mod log_prune_tests;

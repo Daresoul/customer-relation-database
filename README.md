@@ -1,11 +1,18 @@
 # customer-relation-database
 
 ## Database migrations (`src-tauri/src/database/migrations.rs`)
-- Append new migrations to the list in `run_migrations`. Never change what an
+- Append new migrations to the end of `MIGRATIONS`. Never change what an
   already-shipped migration does; clinic databases have run it.
+- When migrations are pending on a database that has run any before, start
+  first copies it (`VACUUM INTO`) to `vet_clinic_pre-migration-<local
+  time>.db` next to it and keeps the newest three
+  (`backup::backup_before_migrations`). A failed copy is logged and start
+  goes on.
 - A migration that rebuilds a table (CREATE new, copy, DROP old, RENAME) goes
   through `rebuild_with_foreign_keys_off`. Every pooled connection has foreign
-  keys on, so a plain `DROP TABLE` cascade-deletes the child rows. The helper
+  keys on (set per connection in `database/connection.rs`, with a 10 s busy
+  wait and WAL; connections live 30 min), so a plain `DROP TABLE`
+  cascade-deletes the child rows. The helper
   checks `PRAGMA foreign_key_check` before committing. Recreate the table's
   triggers and indexes inside the rebuild.
 - Never `.ok()` a statement that fills or moves data; let the migration fail.
@@ -109,7 +116,12 @@
 - Launch at login is turned on once for a new install
   (`utils/autostart.ts`, localStorage `arkivet.autostartDefaultApplied`);
   after that the Settings switch decides, and a failed switch flips back with
-  a message.
+  a message. The login entry starts the app with `--hidden`
+  (`services/app_launch.rs`), and only that start stays in the tray; a manual
+  start or the relaunch after an update shows the window. While launch at
+  login is on, each start re-registers it, so entries from older versions
+  gain the flag. A second copy started at login leaves the running window
+  alone.
 
 ## App shell and navigation
 - The app uses a data router: `createBrowserRouter(appRoutes)` in `App.tsx`,
@@ -203,6 +215,8 @@
 - When Google refuses the stored login (refresh rejected or a 401), the app
   sets `google_calendar_settings.needs_reauth` (migration 048). Settings then
   shows "Reconnect", and the background sync stops until the user reconnects.
+- Event text (`google_calendar::event_description`): patient, room, status
+  and the appointment notes. The microchip number is not sent.
 - `last_sync_error` keeps the last sync failure until a sync succeeds; Settings
   shows it with the last-synced time.
 - Connect opens Google's sign-in page in the browser through ShellExecuteW
@@ -255,7 +269,7 @@
   folder is watched, what is already in it is recorded, not offered.
 
 ### Device health in the tray and the details drawer (`services/device_health.rs`)
-- The app starts hidden, so health also shows in the system tray. The tray
+- The app starts hidden at login, so health also shows in the system tray. The tray
   tooltip reads "Arkivet — All devices OK" or names each problem ("Blood
   analyzer: no connection since 10:42"), and the icon switches to
   `icons/tray-warning.png`. Text follows the app language (en/mk) and is cut
@@ -451,6 +465,14 @@
 ## Backups (`services/backup.rs`)
 - The database snapshot is written as `<name>.part` and renamed over the old
   one only when complete, so a failed rerun keeps today's earlier snapshot.
+- Snapshot names use the local date and time (`vet_clinic_<local day>.db`),
+  so a backup just after midnight doesn't replace the previous day's.
+- Snapshots carry no Google login: after `VACUUM INTO` the copy's tokens are
+  cleared (with `secure_delete`) and `needs_reauth` is set, so a restored
+  copy shows Reconnect in Settings.
+- The file mirror copies a file when the backup copy is missing, has another
+  size (a copy cut off mid-way) or is older; each copy is written as
+  `<name>.part` and renamed when complete.
 - `backup_config.json` is saved through a `.tmp` file. A config that exists
   but can't be read comes back with `last_error` set (the backup light turns
   red and says to choose the folder again), instead of silently reading as
@@ -470,6 +492,25 @@
   "Неуспешно креирање на термин").
 - The calendar follows the app language, and weeks start on Monday.
 
+## App lifecycle and logs
+- A failed start (database, migration, plugin) logs the error, ships the
+  waiting log lines to Loki for at most 5 s (`loki_shipper::push_pending_now`;
+  nothing when Loki is not set up) and shows a dialog.
+- `<app data>/session.lock` is written at start and removed on Quit or a
+  normal exit. Found at the next start it logs a warn event "Previous session
+  ended unexpectedly" (`failure: unclean_shutdown`); with another version in
+  it, an info event that the session ended for an update.
+- Tray Quit uses `app.exit(0)`, which removes the tray icon first.
+- Log archives older than 30 days are pruned at start and daily while the
+  app runs (`log_rotation::run_log_prune_schedule`).
+- The Loki shipper stores, with each file's position, a fingerprint of its
+  first line; a file replaced under the same name is read from the start.
+- At start, files older than a day are deleted from the app's own temp
+  folders (`services/temp_cleanup.rs`, `OUR_TEMP_FOLDERS`); loose files in
+  the temp folder itself are left alone.
+- Log lines carry ids, never a patient's or owner's name, phone, email or
+  chip number; `tests/log_privacy_tests.rs` scans every `log::` call.
+
 ## Release build secrets
 
 The release workflow (`.github/workflows/release.yml`) reads these GitHub
@@ -485,7 +526,11 @@ Actions secrets:
 
 Failed Tauri commands are reported to the log (and so to Loki) with the
 command name, error message and duration only, never their arguments
-(`src/services/invoke.ts`).
+(`src/services/invoke.ts`). A command that has not answered after 60 s
+is rejected with a translated "did not finish" message and logged as a
+timeout (a panic inside an async command leaves its promise pending
+forever). Backups, PDF commands, lab imports, uploads and Google sign-in
+are never timed out; they are listed in `NO_TIMEOUT_COMMANDS`.
 
 ## Webview security
 
