@@ -9,7 +9,9 @@ public enum PatientType {
 
     DOG("DOG", "куче"),
     CAT("CAT", "маче"),
-    RABBIT("RABBIT", "зајак");
+    RABBIT("RABBIT", "зајак"),
+    /** Any species without its own reference ranges. */
+    OTHER("OTHER", "друго");
 
     private String profileCode;
     private String profileTranslated;
