@@ -10,7 +10,7 @@
     "managedScanners": "Managed Scanners",
     "deviceFiles": "Device Files",
     "templates": "Record Templates",
-    "lineItems": "Factura",
+    "lineItems": "Services and prices",
     "diagnoses": "Diagnoses",
     "backups": "Backups",
     "updates": "Updates",
@@ -175,6 +175,8 @@
     "deleted": "Room deactivated"
   },
   "general": {
+    "startupAndLanguage": "Startup and language",
+    "appearanceAndDates": "Appearance and dates",
     "launchAtLogin": "Launch at Login",
     "launchAtLoginHint": "Start the app minimized to tray on system startup",
     "launchAtLoginFailed": "Couldn't change launch at login on this computer. Try again, or ask support to check the app's permissions."
@@ -241,8 +243,8 @@
     "removedItem": "removed from the price list"
   },
   "lineItems": {
-    "title": "Factura",
-    "description": "Manage reusable factura line item templates for medical records",
+    "title": "Services and prices",
+    "description": "The services and products you charge for, with their default prices, to add to medical records",
     "addButton": "Add Line Item",
     "editTitle": "Edit Line Item",
     "createTitle": "Create Line Item",

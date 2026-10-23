@@ -1,18 +1,21 @@
 import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
 
+/** The clinic writes dates day first, with dots (31.01.2024). */
+export const DEFAULT_DATE_FORMAT = 'DD.MM.YYYY';
+
 // Get date format from localStorage or use default
 export const getUserDateFormat = (): string => {
   const settings = localStorage.getItem('veterinary-clinic-settings');
   if (settings) {
     try {
       const parsed = JSON.parse(settings);
-      return parsed.dateFormat || 'DD/MM/YYYY';
+      return parsed.dateFormat || DEFAULT_DATE_FORMAT;
     } catch {
-      return 'DD/MM/YYYY';
+      return DEFAULT_DATE_FORMAT;
     }
   }
-  return 'DD/MM/YYYY';
+  return DEFAULT_DATE_FORMAT;
 };
 
 // Format a date string or Date object according to user preference
