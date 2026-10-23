@@ -224,7 +224,7 @@ fn update_connection_status(app_handle: &AppHandle, integration_id: i64, port_na
             device_health::serial_health(&connection_status),
         );
         match app_handle.emit_all("device-connection-status", &connection_status) {
-            Ok(_) => log::info!("📡 Emitted device-connection-status event to frontend for {} ({})", device_type, port_name),
+            Ok(_) => log::log!(info, "📡 Emitted device-connection-status event to frontend for {} ({})", device_type, port_name),
             Err(e) => log::error!("❌ Failed to emit device-connection-status event: {}", e),
         }
     }
@@ -1399,7 +1399,7 @@ fn handle_listening_serial(
     integration_id: i64,
     shutdown_rx: &mpsc::Receiver<()>,
 ) -> Result<(), ListenFailure> {
-    log::info!("🔌 Opening serial port - Port: {}, Device: {}, Integration ID: {}",
+    log::debug!("🔌 Opening serial port - Port: {}, Device: {}, Integration ID: {}",
         port_name, device_type, integration_id);
 
     // Detect if this is a PTY device (macOS virtual serial port workaround)
