@@ -162,6 +162,9 @@ jobs:
 
       # Tests gate the release: a failing test stops the workflow before
       # anything is built or published.
+      - name: Type check frontend
+        run: npx tsc --noEmit
+
       - name: Run frontend unit tests
         run: npx vitest run
 

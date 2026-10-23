@@ -94,8 +94,8 @@ export function UpdateSettings() {
 
       if (result.shouldUpdate && result.manifest) {
         // Update available
-        const description = result.manifest.notes
-          ? result.manifest.notes.split('\n')[0]
+        const description = result.manifest.body
+          ? result.manifest.body.split('\n')[0]
           : t('updates.newVersionAvailable');
 
         notification.info({

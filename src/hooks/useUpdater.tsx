@@ -33,8 +33,8 @@ export function useUpdater() {
         await updateService.recordCheck(result.manifest.version);
 
         // Show non-intrusive notification with install button
-        const description = result.manifest.notes
-          ? result.manifest.notes.split('\n')[0]
+        const description = result.manifest.body
+          ? result.manifest.body.split('\n')[0]
           : t('updates.newVersionAvailable');
 
         notification.info({

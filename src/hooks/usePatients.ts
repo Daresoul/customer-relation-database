@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { App } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { PatientWithOwners, CreatePatientInput, UpdatePatientInput } from '../types';
+import { Patient, CreatePatientInput, UpdatePatientInput } from '../types';
 import { PatientService } from '../services';
 import { createMutationErrorHandler } from '../utils/errors';
 
@@ -114,13 +114,13 @@ export function usePatients() {
   });
 
   // Get single patient (not cached, for one-off fetches)
-  const getPatient = useCallback(async (id: number): Promise<PatientWithOwners> => {
+  const getPatient = useCallback(async (id: number): Promise<Patient> => {
     return PatientService.getPatient(id);
   }, []);
 
   // Wrapper functions for backwards compatibility
   const createPatient = useCallback(
-    async (input: CreatePatientInput): Promise<PatientWithOwners> => {
+    async (input: CreatePatientInput): Promise<Patient> => {
       return createMutation.mutateAsync(input);
     },
     [createMutation]
