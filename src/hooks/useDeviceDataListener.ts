@@ -44,10 +44,11 @@ export const useDeviceDataListener = () => {
   }, [receiveDeviceResult, notification, t]);
 
   useEffect(() => {
+    let cancelled = false;
     let unlisten: (() => void) | undefined;
 
     const setupListener = async () => {
-      unlisten = await listen<DeviceDataPayload>('device-data-received', async (event) => {
+      const stop = await listen<DeviceDataPayload>('device-data-received', async (event) => {
         const data = event.payload;
         const t = tRef.current;
         const toast = notificationRef.current;
@@ -153,14 +154,16 @@ export const useDeviceDataListener = () => {
         // Opens an import, or waits behind the one that is open
         receiveRef.current(pendingFile);
       });
+      // Unmounted while `listen` was pending: drop the listener at once.
+      if (cancelled) stop();
+      else unlisten = stop;
     };
 
     setupListener();
 
     return () => {
-      if (unlisten) {
-        unlisten();
-      }
+      cancelled = true;
+      unlisten?.();
     };
   }, []); // IMPORTANT: Empty dependency array - only set up listener ONCE
 };

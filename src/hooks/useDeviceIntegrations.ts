@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { App } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useEffect, useState, useCallback } from 'react';
-import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import { useTauriEvent } from './useTauriEvent';
 import { invoke } from '@/services/invoke';
 import { DeviceIntegrationService } from '../services/deviceIntegrationService';
 import { CreateDeviceIntegrationInput, UpdateDeviceIntegrationInput, DeviceConnectionStatus, FileWatcherStatus } from '../types/deviceIntegration';
@@ -146,35 +146,19 @@ export const useDeviceConnectionStatus = () => {
     }
   }, []);
 
+  useTauriEvent<DeviceConnectionStatus>('device-connection-status', (status) => {
+    setStatuses((prev) => {
+      const newMap = new Map(prev);
+      newMap.set(status.integration_id, status);
+      return newMap;
+    });
+  });
+
   useEffect(() => {
-    // Fetch initial statuses
     fetchStatuses();
-
-    // Listen for status updates
-    let unlisten: UnlistenFn | undefined;
-
-    const setupListener = async () => {
-      unlisten = await listen<DeviceConnectionStatus>('device-connection-status', (event) => {
-        const status = event.payload;
-        setStatuses((prev) => {
-          const newMap = new Map(prev);
-          newMap.set(status.integration_id, status);
-          return newMap;
-        });
-      });
-    };
-
-    setupListener();
-
     // Refresh statuses periodically (every 10 seconds)
     const interval = setInterval(fetchStatuses, 10000);
-
-    return () => {
-      if (unlisten) {
-        unlisten();
-      }
-      clearInterval(interval);
-    };
+    return () => clearInterval(interval);
   }, [fetchStatuses]);
 
   // Get status for a specific integration
@@ -210,35 +194,19 @@ export const useFileWatcherStatus = () => {
     }
   }, []);
 
+  useTauriEvent<FileWatcherStatus>('file-watcher-status', (status) => {
+    setStatuses((prev) => {
+      const newMap = new Map(prev);
+      newMap.set(status.integration_id, status);
+      return newMap;
+    });
+  });
+
   useEffect(() => {
-    // Fetch initial statuses
     fetchStatuses();
-
-    // Listen for status updates
-    let unlisten: UnlistenFn | undefined;
-
-    const setupListener = async () => {
-      unlisten = await listen<FileWatcherStatus>('file-watcher-status', (event) => {
-        const status = event.payload;
-        setStatuses((prev) => {
-          const newMap = new Map(prev);
-          newMap.set(status.integration_id, status);
-          return newMap;
-        });
-      });
-    };
-
-    setupListener();
-
     // Refresh statuses periodically (every 30 seconds for file watchers)
     const interval = setInterval(fetchStatuses, 30000);
-
-    return () => {
-      if (unlisten) {
-        unlisten();
-      }
-      clearInterval(interval);
-    };
+    return () => clearInterval(interval);
   }, [fetchStatuses]);
 
   // Get status for a specific integration
