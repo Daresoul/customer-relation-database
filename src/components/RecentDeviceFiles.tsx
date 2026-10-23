@@ -6,6 +6,7 @@ import type { FileAccessHistoryWithRecord } from '../types/fileHistory';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
+import { errorText } from '@/utils/notifyError';
 
 dayjs.extend(relativeTime);
 
@@ -70,7 +71,7 @@ const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, da
     } catch (error) {
       hide();
       console.error('[RecentDeviceFiles] Failed to open device file:', error);
-      message.error(t('medical:recentFiles.openFailed', { error: String(error) }));
+      message.error(t('medical:recentFiles.openFailed', { error: errorText(error, t) }));
     }
   };
 

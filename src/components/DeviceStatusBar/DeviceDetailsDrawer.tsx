@@ -14,6 +14,7 @@ import { invoke } from '@/services/invoke';
 import { useDeviceConnectionStatus, useDeviceIntegrations, useFileWatcherStatus } from '../../hooks/useDeviceIntegrations';
 import { DeviceDetails, DeviceType, getDeviceTypeDisplayName } from '../../types/deviceIntegration';
 import { describeFolderStatus, describeSerialStatus, folderLevel, formatLastResult, HealthLevel, serialLevel } from './deviceHealth';
+import { errorText } from '@/utils/notifyError';
 
 const { Text, Title } = Typography;
 
@@ -101,7 +102,7 @@ export const DeviceDetailsDrawer: React.FC<DeviceDetailsDrawerProps> = ({ open, 
       try {
         await action();
       } catch (e) {
-        message.error(t('drawer.actionFailed', { error: String(e) }));
+        message.error(t('drawer.actionFailed', { error: errorText(e, t) }));
       } finally {
         setBusy(null);
       }

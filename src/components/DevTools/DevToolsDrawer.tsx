@@ -30,6 +30,10 @@ import {
 } from '@ant-design/icons';
 import { invoke } from '@/services/invoke';
 import styles from './DevTools.module.css';
+import i18n from 'i18next';
+import { errorText } from '@/utils/notifyError';
+
+const t = (key: string) => i18n.t(key);
 
 const { Panel } = Collapse;
 const { Text, Title } = Typography;
@@ -116,7 +120,7 @@ export const DevToolsDrawer: React.FC<DevToolsDrawerProps> = ({ open, onClose })
     } catch (error: any) {
       notification.error({
         message: 'Failed to Start Virtual Ports',
-        description: error?.message || String(error),
+        description: errorText(error, t),
         placement: 'bottomRight',
       });
     } finally {
@@ -136,7 +140,7 @@ export const DevToolsDrawer: React.FC<DevToolsDrawerProps> = ({ open, onClose })
     } catch (error: any) {
       notification.error({
         message: 'Failed to Stop Virtual Ports',
-        description: error?.message || String(error),
+        description: errorText(error, t),
         placement: 'bottomRight',
       });
     }
@@ -161,7 +165,7 @@ export const DevToolsDrawer: React.FC<DevToolsDrawerProps> = ({ open, onClose })
     } catch (error: any) {
       notification.error({
         message: 'Failed to Send Healvet Data',
-        description: error?.message || String(error),
+        description: errorText(error, t),
         placement: 'bottomRight',
       });
     } finally {
@@ -185,7 +189,7 @@ export const DevToolsDrawer: React.FC<DevToolsDrawerProps> = ({ open, onClose })
     } catch (error: any) {
       notification.error({
         message: 'Failed to Send PointCare Data',
-        description: error?.message || String(error),
+        description: errorText(error, t),
         placement: 'bottomRight',
       });
     } finally {
@@ -209,7 +213,7 @@ export const DevToolsDrawer: React.FC<DevToolsDrawerProps> = ({ open, onClose })
     } catch (error: any) {
       notification.error({
         message: 'Failed to Send PCR Data',
-        description: error?.message || String(error),
+        description: errorText(error, t),
         placement: 'bottomRight',
       });
     } finally {
@@ -228,7 +232,7 @@ export const DevToolsDrawer: React.FC<DevToolsDrawerProps> = ({ open, onClose })
     } catch (error: any) {
       notification.error({
         message: 'Failed to Create Exigo File',
-        description: error?.message || String(error),
+        description: errorText(error, t),
         placement: 'bottomRight',
       });
     }

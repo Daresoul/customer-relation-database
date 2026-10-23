@@ -90,7 +90,13 @@
     "runNow": "Backup now",
     "runSuccess": "Backup completed",
     "directorySaved": "Backup destination saved",
-    "lastErrorTitle": "Last backup error"
+    "lastErrorTitle": "Last backup error",
+    "errors": {
+      "folderMissing": "The backup folder can't be found. Plug in the backup drive, or choose the folder again.",
+      "permissionDenied": "The app may not write to the backup folder. Choose another folder, or ask support to check its permissions.",
+      "diskFull": "The backup drive is full. Free some space on it, or choose another folder.",
+      "databaseLocked": "The database was busy, so the backup could not finish. Try again in a minute."
+    }
   },
   "updates": {
     "currentVersion": "Current Version",

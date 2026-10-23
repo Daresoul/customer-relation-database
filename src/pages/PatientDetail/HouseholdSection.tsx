@@ -11,6 +11,7 @@ import { CreateHouseholdInline, type CreatedHousehold } from '../../components/f
 import { LoadError } from '../../components/common/LoadError';
 import { invalidatePatientData, invalidateHouseholdData } from '../../hooks/invalidation';
 import styles from './PatientDetail.module.css';
+import { errorText } from '@/utils/notifyError';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -85,7 +86,7 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({
     } catch (error) {
       notification.error({
         message: t('detail.householdInfo.assignFailed'),
-        description: String(error),
+        description: errorText(error, t),
         placement: 'bottomRight',
         duration: 5,
       });
@@ -111,7 +112,7 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({
     } catch (error) {
       notification.error({
         message: t('detail.householdInfo.assignFailed'),
-        description: String(error),
+        description: errorText(error, t),
         placement: 'bottomRight',
         duration: 5,
       });
@@ -137,7 +138,7 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({
     } catch (error) {
       notification.error({
         message: t('detail.householdInfo.unlinkFailed'),
-        description: String(error),
+        description: errorText(error, t),
         placement: 'bottomRight',
         duration: 5,
       });

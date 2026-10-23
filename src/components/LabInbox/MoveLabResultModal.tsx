@@ -6,6 +6,7 @@ import { useMoveLabResult } from '@/hooks/useLabInbox';
 import { MedicalService } from '@/services/medicalService';
 import type { LabMoveOutcome } from '@/types/labInbox';
 import PatientRecordSelect, { NEW_RECORD } from './PatientRecordSelect';
+import { errorText } from '@/utils/notifyError';
 
 interface MoveLabResultModalProps {
   open: boolean;
@@ -74,7 +75,7 @@ const MoveLabResultModal: React.FC<MoveLabResultModalProps> = ({
       onMoved?.(outcome);
       close();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e, t));
     } finally {
       setSaving(false);
     }

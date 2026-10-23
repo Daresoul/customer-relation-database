@@ -10,6 +10,7 @@ import type {
   CreateContactDto,
   CreateHouseholdWithPeopleDto,
 } from '../../types/household';
+import { errorText } from '@/utils/notifyError';
 
 const { Text } = Typography;
 
@@ -219,7 +220,7 @@ export const CreateHouseholdInline: React.FC<CreateHouseholdInlineProps> = ({
     } catch (error) {
       notification.error({
         message: t('patients:detail.householdInfo.createFailed', 'Failed to create household'),
-        description: String(error),
+        description: errorText(error, t),
         placement: 'bottomRight',
         duration: 5,
       });

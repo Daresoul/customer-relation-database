@@ -11,6 +11,7 @@ import { describeFolderStatus, describeSerialStatus, formatLastResult } from './
 import { HealthLines } from './HealthLines';
 import { useDeviceDrawer } from './useDeviceDrawer';
 import styles from './DeviceStatusBar.module.css';
+import { errorText } from '@/utils/notifyError';
 
 const { Text } = Typography;
 
@@ -63,7 +64,7 @@ export const DeviceStatusBar: React.FC = () => {
     } catch (e) {
       notification.warning({
         message: t('notifications.reconnectFailed'),
-        description: String(e),
+        description: errorText(e, t),
         placement: 'bottomRight',
       });
     } finally {

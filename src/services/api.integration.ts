@@ -8,6 +8,7 @@ import { App } from 'antd';
 import type { Patient } from '../types';
 import type { HouseholdTableRecord } from '../types/ui.types';
 import i18n from 'i18next';
+import { errorText } from '@/utils/notifyError';
 
 // Create a holder for the App instance
 let appInstance: any = null;
@@ -20,7 +21,7 @@ export const setAppInstance = (app: any) => {
 const handleApiError = (error: any, operation: string) => {
   console.error(`API Error in ${operation}:`, error);
 
-  const errorMessage = error?.message || error?.toString() || i18n.t('common:unexpectedError');
+  const errorMessage = errorText(error, (key: string) => i18n.t(key));
 
   // Use App instance if available, otherwise use console.error
   if (appInstance?.notification) {

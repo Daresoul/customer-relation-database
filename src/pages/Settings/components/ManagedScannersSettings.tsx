@@ -38,6 +38,7 @@ import {
 } from '@ant-design/icons';
 import { invoke } from '@/services/invoke';
 import { useTranslation } from 'react-i18next';
+import { errorText } from '@/utils/notifyError';
 
 const { Text, Paragraph } = Typography;
 
@@ -114,7 +115,7 @@ const ManagedScannersSettings: React.FC = () => {
     } catch (e: any) {
       notification.error({
         message: t('common:error'),
-        description: String(e),
+        description: errorText(e, t),
         placement: 'bottomRight',
       });
     } finally {
@@ -146,10 +147,10 @@ const ManagedScannersSettings: React.FC = () => {
       setDetected(data || []);
       setDetectAt(new Date());
     } catch (e: any) {
-      setDetectError(String(e));
+      setDetectError(errorText(e, t));
       notification.error({
         message: t('common:error'),
-        description: String(e),
+        description: errorText(e, t),
         placement: 'bottomRight',
       });
     } finally {
@@ -207,7 +208,7 @@ const ManagedScannersSettings: React.FC = () => {
     } catch (e: any) {
       notification.error({
         message: t('common:error'),
-        description: String(e),
+        description: errorText(e, t),
         placement: 'bottomRight',
       });
     } finally {
@@ -225,7 +226,7 @@ const ManagedScannersSettings: React.FC = () => {
     } catch (e: any) {
       notification.error({
         message: t('common:error'),
-        description: String(e),
+        description: errorText(e, t),
         placement: 'bottomRight',
       });
     }
@@ -238,7 +239,7 @@ const ManagedScannersSettings: React.FC = () => {
     } catch (e: any) {
       notification.error({
         message: t('common:error'),
-        description: String(e),
+        description: errorText(e, t),
         placement: 'bottomRight',
       });
     }

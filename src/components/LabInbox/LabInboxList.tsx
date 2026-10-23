@@ -10,6 +10,7 @@ import { LoadError } from '@/components/common/LoadError';
 import type { DiscardReason, LabInboxItem, LabInboxState } from '@/types/labInbox';
 import LabValues from './LabValues';
 import MoveLabResultModal from './MoveLabResultModal';
+import { errorText } from '@/utils/notifyError';
 
 const { Text } = Typography;
 
@@ -68,7 +69,7 @@ const LabInboxList: React.FC = () => {
     } catch (e) {
       notification.error({
         message: t('devices:inbox.openFailed'),
-        description: e instanceof Error ? e.message : String(e),
+        description: errorText(e, t),
       });
     } finally {
       setOpening(null);
@@ -80,7 +81,7 @@ const LabInboxList: React.FC = () => {
       await restoreMutation.mutateAsync(item.fileId);
       message.success(t('devices:inbox.restored'));
     } catch (e) {
-      notification.error({ message: t('devices:inbox.restoreFailed'), description: e instanceof Error ? e.message : String(e) });
+      notification.error({ message: t('devices:inbox.restoreFailed'), description: errorText(e, t) });
     }
   };
 
@@ -281,7 +282,7 @@ const DiscardDialog: React.FC<DiscardDialogProps> = ({ item, onClose, onDiscard 
       await onDiscard(reason, note.trim() || undefined);
       reset();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e, t));
     } finally {
       setSaving(false);
     }
