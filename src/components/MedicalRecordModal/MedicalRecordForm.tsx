@@ -6,7 +6,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Form, Button, Space, Divider, Typography, Upload, Drawer, App, Select, Tag, Alert, InputNumber } from 'antd';
-import { SaveOutlined, CloseOutlined, InboxOutlined, HistoryOutlined, TagsOutlined } from '@ant-design/icons';
+import { SaveOutlined, CloseOutlined, InboxOutlined, HistoryOutlined, TagsOutlined, PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@/services/invoke';
 import RecentDeviceFiles from '../RecentDeviceFiles';
@@ -189,6 +189,38 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
   }, [isEdit, recordId, diagnosesAttempt]);
 
   const saveBlocked = isEdit && diagnosesLoad !== 'loaded';
+
+  // Typing a diagnosis that isn't in the list offers to add it right here.
+  const [diagnosisSearch, setDiagnosisSearch] = useState('');
+  const [addingDiagnosis, setAddingDiagnosis] = useState(false);
+  const newDiagnosisName = diagnosisSearch.trim();
+  const canAddDiagnosis =
+    newDiagnosisName !== '' &&
+    !availableDiagnoses.some((d) => d.name.trim().toLowerCase() === newDiagnosisName.toLowerCase());
+
+  const addDiagnosis = async () => {
+    setAddingDiagnosis(true);
+    try {
+      const created = await invoke<Diagnosis>('create_diagnosis', {
+        input: { name: newDiagnosisName, description: null, color: null },
+      });
+      setAvailableDiagnoses((prev) =>
+        [...prev.filter((d) => d.id !== created.id), created].sort((a, b) => a.name.localeCompare(b.name)),
+      );
+      setSelectedDiagnosisIds((prev) => (prev.includes(created.id) ? prev : [...prev, created.id]));
+      setDiagnosisSearch('');
+      markDirty();
+    } catch (e) {
+      notification.error({
+        message: t('medical:diagnosisPicker.addFailed'),
+        description: String(e),
+        placement: 'bottomRight',
+        duration: 6,
+      });
+    } finally {
+      setAddingDiagnosis(false);
+    }
+  };
 
   const changeLineItems = (items: MedicalRecordLineItem[]) => {
     markDirty();
@@ -479,6 +511,25 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
                   setSelectedDiagnosisIds(ids);
                 }}
                 disabled={saveBlocked}
+                searchValue={diagnosisSearch}
+                onSearch={setDiagnosisSearch}
+                popupRender={(menu) => (
+                  <>
+                    {menu}
+                    {canAddDiagnosis && (
+                      <Button
+                        type="link"
+                        icon={<PlusOutlined />}
+                        loading={addingDiagnosis}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={addDiagnosis}
+                        style={{ width: '100%', textAlign: 'left' }}
+                      >
+                        {t('medical:diagnosisPicker.add', { name: newDiagnosisName })}
+                      </Button>
+                    )}
+                  </>
+                )}
                 placeholder={t(
                   'medical:placeholders.selectDiagnoses',
                   'Select one or more diagnoses…',
