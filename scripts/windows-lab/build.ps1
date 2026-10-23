@@ -1,8 +1,10 @@
 <#
   Builds the Windows installer on the lab machine from C:\ArkivetLab\src
   (the branch arrives as a git bundle; see `appctl build`). A normal release
-  build. Its update files are signed with a throwaway lab key, so they never
-  verify against the real public key; the real key never leaves CI.
+  build with three lab-only changes, all through TAURI_CONFIG:
+    - the window's WebView2 gets a DevTools port (localhost) for Playwright;
+    - version 0.99.0, so the real update check never offers v0.7.x;
+    - update files are signed with a throwaway lab key (the real one stays in CI).
   Output: the NSIS setup.exe path on the last line.
 #>
 $ErrorActionPreference = 'Stop'
@@ -33,6 +35,11 @@ $labKey = 'C:\ArkivetLab\state\lab-updater.key'
 if (-not (Test-Path $labKey)) { & npx.cmd tauri signer generate -w $labKey -p 'lab' --ci | Out-Null }
 $env:TAURI_PRIVATE_KEY = Get-Content $labKey -Raw
 $env:TAURI_KEY_PASSWORD = 'lab'
+# Tauri replaces wry's default WebView2 arguments when this is set, so the
+# defaults go first.
+$window = (Get-Content src-tauri\tauri.conf.json -Raw | ConvertFrom-Json).tauri.windows[0]
+$window | Add-Member -NotePropertyName additionalBrowserArgs -NotePropertyValue '--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --remote-debugging-port=9222' -Force
+$env:TAURI_CONFIG = @{ package = @{ version = '0.99.0' }; tauri = @{ windows = @($window) } } | ConvertTo-Json -Depth 6 -Compress
 & npm.cmd run tauri build -- --bundles nsis
 if ($LASTEXITCODE -ne 0) { throw 'tauri build failed' }
 
