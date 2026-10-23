@@ -21,6 +21,8 @@
     ui-type {name, text}         set a field's text (e.g. a file dialog's path)
     keys    {keys}               SendKeys to the focused window, e.g. "{ENTER}"
     click   {x, y}               left-click at a point of the desktop screenshot
+    com-pairs                    create the virtual COM pairs (com0com) in this desktop session,
+                                 so Windows can ask about the driver on screen
     tray    {item}               open the app's tray menu and press an item
 #>
 $ErrorActionPreference = 'Stop'
@@ -230,6 +232,16 @@ function Invoke-Action($action, $body) {
       @{ clicked = @($body.x, $body.y) }
     }
     'tray' { Open-TrayMenu $body.item }
+    'com-pairs' {
+      $setupc = "${env:ProgramFiles(x86)}\com0com\setupc.exe"
+      if (-not (Test-Path $setupc)) { throw 'com0com is not installed' }
+      # Started, not waited for: Windows may show its driver question first.
+      $log = Join-Path $Lab 'state\com-pairs.log'
+      $pairs = ('COM20 COM21', 'COM22 COM23', 'COM24 COM25' | ForEach-Object {
+        $a, $b = $_ -split ' '; "setupc.exe install PortName=$a PortName=$b" }) -join ' & '
+      Start-Process cmd.exe -WorkingDirectory (Split-Path $setupc) -WindowStyle Minimized -ArgumentList "/c ($pairs) > `"$log`" 2>&1"
+      @{ started = $true; log = $log }
+    }
     'tray-list' {
       $taskbar = $UIA::RootElement.FindFirst($Tree::Children,
         (New-Object System.Windows.Automation.PropertyCondition ($UIA::ClassNameProperty), 'Shell_TrayWnd'))

@@ -142,7 +142,7 @@ case "$cmd" in
     ;;
   ps) lab_ssh "$*" ;;
   psx)
-    encoded=$(python3 -c 'import base64,sys; print(base64.b64encode(sys.argv[1].encode("utf-16-le")).decode())' "$*")
+    encoded=$(python3 -c 'import base64,sys; print(base64.b64encode(("$ProgressPreference=\"SilentlyContinue\"; " + sys.argv[1]).encode("utf-16-le")).decode())' "$*")
     lab_ssh "powershell -NoProfile -EncodedCommand $encoded"
     ;;
   help | *) sed -n '2,22p' "$0" ;;
