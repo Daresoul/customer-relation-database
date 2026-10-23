@@ -106,6 +106,14 @@ impl Bridge {
         result
     }
 
+    /// Like `new`, but holds calls and subscriptions until `host_ready`.
+    pub fn new_waiting(eval: Evaluator) -> Arc<Self> {
+        Self::new(eval)
+    }
+
+    /// The host page (re)loaded: its listeners are fresh.
+    pub fn host_ready(&self) {}
+
     pub fn publish(&self, event: &str, payload: Value) {
         // No browser listening is fine.
         let _ = self.events.send(BridgeEvent { event: event.to_string(), payload });

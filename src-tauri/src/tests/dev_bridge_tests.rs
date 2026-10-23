@@ -160,3 +160,47 @@ async fn the_subscribe_route_subscribes_the_window() {
     assert_eq!(response.status(), 200);
     assert_eq!(scripts.lock().unwrap().len(), 1);
 }
+
+// ---- the hidden window loads the host page after the bridge starts ----
+
+#[tokio::test]
+async fn a_call_waits_until_the_host_page_is_ready() {
+    let scripts = Arc::new(Mutex::new(Vec::new()));
+    let seen = scripts.clone();
+    let bridge = Bridge::new_waiting(Box::new(move |script: String| {
+        seen.lock().unwrap().push(script);
+        Ok(())
+    }));
+    let caller = bridge.clone();
+    let call = tokio::spawn(async move { caller.call(json!({ "cmd": "get_households" }), Duration::from_secs(5)).await });
+
+    tokio::time::sleep(Duration::from_millis(30)).await;
+    assert!(scripts.lock().unwrap().is_empty(), "nothing is sent to a window still loading");
+
+    bridge.host_ready();
+    tokio::time::sleep(Duration::from_millis(30)).await;
+    let script = scripts.lock().unwrap()[0].clone();
+    bridge.reply(call_id(&script), Reply { ok: true, payload: json!([]) });
+    assert_eq!(call.await.unwrap(), Reply { ok: true, payload: json!([]) });
+}
+
+#[test]
+fn subscriptions_are_sent_when_the_host_page_is_ready_and_again_after_it_reloads() {
+    let scripts = Arc::new(Mutex::new(Vec::new()));
+    let seen = scripts.clone();
+    let bridge = Bridge::new_waiting(Box::new(move |script: String| {
+        seen.lock().unwrap().push(script);
+        Ok(())
+    }));
+
+    bridge.subscribe("device-data-received").unwrap();
+    assert!(scripts.lock().unwrap().is_empty());
+
+    bridge.host_ready();
+    assert_eq!(scripts.lock().unwrap().len(), 1);
+
+    // A reload of the host page drops its listeners.
+    bridge.host_ready();
+    assert_eq!(scripts.lock().unwrap().len(), 2);
+    assert!(scripts.lock().unwrap()[1].contains("device-data-received"));
+}
