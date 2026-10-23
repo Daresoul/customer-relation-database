@@ -57,3 +57,6 @@ src-tauri/resources/pdf-generator*.jar
 
 # Dev bridge sandbox (scripts/dev-bridge.sh)
 .dev-bridge-sandbox/
+
+# Playwright MCP snapshots and screenshots
+.playwright-mcp/
