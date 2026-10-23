@@ -1,0 +1,12 @@
+{
+  "name": "arkivet-clinic-sim",
+  "private": true,
+  "type": "module",
+  "description": "Replays real lab machine captures into virtual COM ports and the Exigo folder (Windows test lab only).",
+  "scripts": {
+    "sim": "node sim.mjs"
+  },
+  "dependencies": {
+    "serialport": "12.0.0"
+  }
+}
