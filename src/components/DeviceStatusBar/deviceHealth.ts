@@ -126,3 +126,11 @@ export function chipText(devices: Array<{ name: string; level: HealthLevel }>, t
   const kind = level === 'down' ? 'Down' : 'Waiting';
   return at.length === 1 ? t(`chip.one${kind}`, { name: at[0].name }) : t(`chip.many${kind}`, { count: at.length });
 }
+
+export function formatToday(_outages: number, _minutes: number, _t: T): string {
+  return '';
+}
+
+export function formatDownSince(_since: string | null | undefined, _attempts: number, _next: string | null | undefined, _t: T): string | null {
+  return '';
+}

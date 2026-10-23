@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatLastResult, describeSerialStatus, describeFolderStatus } from '../deviceHealth';
+import { formatLastResult, describeSerialStatus, describeFolderStatus, formatToday, formatDownSince } from '../deviceHealth';
 import type { DeviceConnectionStatus, FileWatcherStatus } from '../../../types/deviceIntegration';
 
 const t = (key: string, opts?: Record<string, unknown>) => (opts ? `${key} ${JSON.stringify(opts)}` : key);
@@ -97,5 +97,26 @@ describe('describeFolderStatus', () => {
 
   it('says watching when fine', () => {
     expect(describeFolderStatus(folder({}), t).text).toBe('status.watching');
+  });
+});
+
+// Machine status #5: "Проблеми: 0 денес" after a morning without connection.
+describe('outage wording', () => {
+  const tt = (key: string, o?: Record<string, unknown>) => (o ? `${key} ${JSON.stringify(o)}` : key);
+
+  it('sums up today in minutes and breaks', () => {
+    expect(formatToday(0, 0, tt)).toBe('drawer.today.clean');
+    expect(formatToday(3, 52, tt)).toBe('drawer.today.down {"time":"52 drawer.minutes","count":3}');
+    expect(formatToday(1, 80, tt)).toBe('drawer.today.down {"time":"1 drawer.hours 20 drawer.minutes","count":1}');
+  });
+
+  it('says since when it is down, how often it tried and when it tries next', () => {
+    const since = new Date(2026, 9, 23, 14, 3).toISOString();
+    const next = new Date(2026, 9, 23, 14, 57, 10).toISOString();
+    expect(formatDownSince(since, 182, next, tt)).toBe(
+      'drawer.downSince {"time":"14:03"} · drawer.attempts {"count":182} · drawer.nextTry {"time":"14:57:10"}',
+    );
+    expect(formatDownSince(since, 0, undefined, tt)).toBe('drawer.downSince {"time":"14:03"}');
+    expect(formatDownSince(undefined, 3, undefined, tt)).toBeNull();
   });
 });
