@@ -2,9 +2,10 @@
  * Example main dashboard using all Ant Design components
  */
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Card, Row, Col, Statistic, Space, Tabs, Avatar, TabsProps, App, InputNumber, Modal, Badge } from 'antd';
-import { TeamOutlined, HeartOutlined, CalendarOutlined, RiseOutlined, UserOutlined, HomeOutlined, FileTextOutlined } from '@ant-design/icons';
+import React, { useState, useEffect } from 'react';
+import { Card, Space, Tabs, App, InputNumber, Modal, Badge } from 'antd';
+import { TeamOutlined, HeartOutlined, CalendarOutlined, FileTextOutlined } from '@ant-design/icons';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 // Removed AppLayout - using simpler layout
 import { PatientTable } from '../components/tables/PatientTable';
@@ -30,14 +31,15 @@ import { PatientService } from '../services';
 import type { Patient, PatientWithHousehold } from '../types';
 import type { HouseholdTableRecord } from '../types/ui.types';
 import { useThemeColors } from '../utils/themeStyles';
-import { useBarcodeScanner, normalizeMicrochip } from '@/hooks/useBarcodeScanner';
+import { normalizeMicrochip } from '@/hooks/useBarcodeScanner';
 import { listen } from '@tauri-apps/api/event';
+import { TodayStrip } from '../components/TodayStrip';
+import type { NewPatientFromScan } from '../layouts/ChipScanHandler';
 import styles from './MainDashboard.module.css';
 
 // Removed TabPane - using items prop instead
 
 export const MainDashboard: React.FC = () => {
-  const { notification, modal } = App.useApp();
   const queryClient = useQueryClient();
   const { t } = useTranslation(['patients', 'common', 'navigation']);
   const { currentView, setCurrentView } = useViewContext();
@@ -84,16 +86,22 @@ export const MainDashboard: React.FC = () => {
   const [seedOpen, setSeedOpen] = useState(false);
   const [seedCount, setSeedCount] = useState<number>(1000);
   const [seeding, setSeeding] = useState(false);
-  // no drawer now; dedicated tab below
-  // Component-level dedup: prevent double-fire from keyboard wedge + HID event for same scan
-  const lastProcessedScanRef = useRef<{ code: string; time: number } | null>(null);
+  const location = useLocation();
+  const navigate = useNavigate();
 
-  // Statistics
-  const [stats, setStats] = useState({
-    totalPatients: 0,
-    activePatients: 0,
-    totalHouseholds: 0,
-  });
+  // A chip scan that matched nobody lands here (see ChipScanHandler) to
+  // create the patient with the chip filled in. Clear the state so Back or a
+  // reload does not reopen the form.
+  const scannedChip = (location.state as NewPatientFromScan | null)?.newPatientChip;
+  useEffect(() => {
+    if (!scannedChip) return;
+    setActiveTab('patients');
+    setCurrentView('animal');
+    setSelectedPatient(null);
+    setScannedChipForNewPatient(scannedChip);
+    setShowPatientForm(true);
+    navigate('.', { replace: true, state: null });
+  }, [scannedChip, navigate, setCurrentView]);
 
   // Load initial data from database and set app instance
   useEffect(() => {
@@ -104,19 +112,10 @@ export const MainDashboard: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      // Get stats efficiently from database counts
-      const statsPromise = invoke<{
-        total_patients: number;
-        active_patients: number;
-        total_households: number;
-        total_medical_records: number;
-      }>('get_dashboard_stats');
-
       // Every patient and household; the tables page on the client
-      const [patientsResults, householdsResults, statsData] = await Promise.all([
+      const [patientsResults, householdsResults] = await Promise.all([
         PatientService.getPatients(), // Fetch all patients without search limit
         api.household.search(''),
-        statsPromise
       ]);
 
       // Enhance patients with household names
@@ -137,12 +136,6 @@ export const MainDashboard: React.FC = () => {
       setFilteredPatients(enhancedPatients);
       setFilteredHouseholds(householdsResults);
 
-      // Use actual database counts for statistics
-      setStats({
-        totalPatients: statsData.total_patients,
-        activePatients: statsData.active_patients,
-        totalHouseholds: statsData.total_households,
-      });
       setLoadError(null);
     } catch (error) {
       console.error('Failed to load data:', error);
@@ -170,129 +163,6 @@ export const MainDashboard: React.FC = () => {
       setSeeding(false);
     }
   };
-
-  // Handle search - filter the already loaded data
-  const handlePatientSearch = async (query: string) => {
-    const q = (query || '').trim();
-    if (q.length === 0) {
-      setFilteredPatients(patients);
-      return patients;
-    }
-    // For very short queries, fall back to client-side filter for robustness
-    if (q.length < 2) {
-      const local = patients.filter(p =>
-        (p.name || '').toLowerCase().includes(q.toLowerCase()) ||
-        (p.species || '').toLowerCase().includes(q.toLowerCase()) ||
-        (p.breed || '').toLowerCase().includes(q.toLowerCase()) ||
-        (p.microchipId || '').toLowerCase().includes(q.toLowerCase())
-      );
-      setFilteredPatients(local);
-      return local;
-    }
-    try {
-      const results = await api.patient.search(q);
-      const enhancedResults = results.map(patient => {
-        const household = households.find(h => h.id === patient.householdId);
-        return {
-          ...patient,
-          household: household ? {
-            id: household.id,
-            householdName: household.lastName || t('households:unnamed'),
-            address: household.address
-          } : undefined
-        } as PatientWithHousehold;
-      });
-      setFilteredPatients(enhancedResults);
-      return enhancedResults;
-    } catch (e) {
-      // Fallback: client-side filter if backend search fails
-      console.warn('Patient search failed, falling back to local filter:', e);
-      const local = patients.filter(p =>
-        (p.name || '').toLowerCase().includes(q.toLowerCase()) ||
-        (p.species || '').toLowerCase().includes(q.toLowerCase()) ||
-        (p.breed || '').toLowerCase().includes(q.toLowerCase()) ||
-        (p.microchipId || '').toLowerCase().includes(q.toLowerCase())
-      );
-      setFilteredPatients(local);
-      return local;
-    }
-  };
-
-  // Shared handler for processing a scanned code from any source (keyboard wedge or HID)
-  const handleScanCode = async (code: string) => {
-    // Component-level dedup: prevent double-fire from keyboard wedge + HID event
-    const now = Date.now();
-    if (
-      lastProcessedScanRef.current &&
-      lastProcessedScanRef.current.code === code &&
-      now - lastProcessedScanRef.current.time < 500
-    ) {
-      return;
-    }
-    lastProcessedScanRef.current = { code, time: now };
-
-    setActiveTab('patients');
-    setCurrentView('animal');
-    setPatientSearchText(code);
-    const results = await handlePatientSearch(code);
-
-    // If the scanned chip didn't match any existing patient, jump
-    // straight into the "create new patient" flow with the chip ID
-    // pre-filled — saves the vet from retyping a 15-digit number.
-    //
-    // Skip if a form modal is already open: the user is likely in the
-    // middle of creating something else and an interruption would
-    // discard their in-progress input. They can still see the empty
-    // search-result list and react manually.
-    if (results.length === 0 && !showPatientForm && !showHouseholdForm) {
-      notification.info({
-        message: t('patients:scanNotFoundTitle', 'No patient found'),
-        description: t(
-          'patients:scanNotFoundDesc',
-          'No patient matches this microchip. Opening "Add new patient" with the chip pre-filled.',
-        ),
-        placement: 'bottomRight',
-        duration: 4,
-      });
-      setSelectedPatient(null);
-      setScannedChipForNewPatient(code);
-      setShowPatientForm(true);
-    }
-  };
-
-  // Keyboard-wedge scans on main screen: trigger search by identifier
-  useBarcodeScanner({
-    suffixKey: 'Enter',
-    minLength: 8,
-    interKeyDelay: 50,
-    finalizeTimeout: 100,
-    onScan: handleScanCode,
-  });
-
-  // HID scan events on main screen (both wake-from-tray and scanner:barcode)
-  useEffect(() => {
-    let unlistenWake: (() => void) | undefined;
-    let unlistenBarcode: (() => void) | undefined;
-    const setup = async () => {
-      unlistenWake = await listen<any>('wake-from-tray', (event) => {
-        const payload = event.payload || {};
-        if (payload.cause === 'scan' && payload.code) {
-          handleScanCode(String(payload.code));
-        }
-      });
-      unlistenBarcode = await listen<any>('scanner:barcode', (event) => {
-        const payload = event.payload || {};
-        if (payload.code) {
-          handleScanCode(String(payload.code));
-        }
-      });
-    };
-    setup();
-    return () => {
-      if (unlistenWake) unlistenWake();
-      if (unlistenBarcode) unlistenBarcode();
-    };
-  }, []);
 
   // Refresh dashboard list when a patient is created anywhere
   useEffect(() => {
@@ -396,39 +266,13 @@ export const MainDashboard: React.FC = () => {
     <div className={styles.dashboard}>
       <Space direction="vertical" size="large" className={styles.contentWrapper}>
         {loadErrorAlert}
-        {/* Statistics Cards */}
-        {hasLoaded && <Row gutter={16}>
-          <Col span={8}>
-            <Card>
-              <Statistic
-                title={t('patients:statistics.totalPatients')}
-                value={stats.totalPatients}
-                prefix={<HeartOutlined />}
-                valueStyle={{ color: '#ff69b4' }}
-              />
-            </Card>
-          </Col>
-          <Col span={8}>
-            <Card>
-              <Statistic
-                title={t('patients:statistics.activePatients')}
-                value={stats.activePatients}
-                prefix={<RiseOutlined />}
-                valueStyle={{ color: '#52c41a' }}
-              />
-            </Card>
-          </Col>
-          <Col span={8}>
-            <Card>
-              <Statistic
-                title={t('patients:statistics.totalHouseholds')}
-                value={stats.totalHouseholds}
-                prefix={<HomeOutlined />}
-                valueStyle={{ color: '#4A90E2' }}
-              />
-            </Card>
-          </Col>
-        </Row>}
+        <TodayStrip
+          waitingLabCount={pendingCount}
+          onOpenLabResults={() => {
+            setActiveTab('saved');
+            loadPendingCount();
+          }}
+        />
 
         {/* Data Tables with integrated search */}
         <Card>
