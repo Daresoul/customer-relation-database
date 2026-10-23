@@ -10,6 +10,7 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 vi.mock('@/hooks/useRecordTemplates', () => ({
+  useRecordTemplates: () => ({ data: [], isLoading: false }),
   useSearchRecordTemplates: () => ({ data: [], isLoading: false }),
 }));
 vi.mock('@/hooks/useAppSettings', () => ({ useAppSettings: () => ({ settings: { currencyId: 1 } }) }));
