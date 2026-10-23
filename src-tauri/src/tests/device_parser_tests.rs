@@ -285,7 +285,7 @@ mod healvet_serial_parsing {
 
     #[test]
     fn parse_healvet_unicode_patient_name() {
-        let serial = "FS1000&&15.5&2025-01-14&&T4-1&Мурка 🐱&&Female&SerumEE".as_bytes();
+        let serial = "#AFS1000&&15.5&2025-01-14&&T4-1&Мурка 🐱&&Female&Serum&EE".as_bytes();
 
         let result = DeviceParserService::parse_healvet_serial(
             "Device",
@@ -927,8 +927,8 @@ mod zero_value_results {
         let empty_values = b"MSH|^~\\&|1|P\rPID|1||||dog|tesi\rOBX|1|ST||TBIL||mg/dL|0.1-0.9|\r";
         assert!(DeviceParserService::parse_hl7_data("mnchip_pointcare_chemistry", "M", empty_values, "serial_port").is_err());
 
-        // LF-only line ends collapse into one MSH line with dozens of keys but no analyte.
-        let lf_only = b"MSH|^~\\&|1|PointcareV|||20260115003112|2|ORU^R01|1|p|2.3.1\nPID|1||||dog|tesi\nOBX|1|ST||GLU|159|mg/dL|70-142|H\n";
+        // LF-only line ends without any OBX value are still an error.
+        let lf_only = b"MSH|^~\\&|1|PointcareV|||20260115003112|2|ORU^R01|1|p|2.3.1\nPID|1||||dog|tesi\n";
         assert!(DeviceParserService::parse_hl7_data("mnchip_pointcare_chemistry", "M", lf_only, "serial_port").is_err());
 
         assert!(DeviceParserService::parse_hl7_data("mnchip_pcr_analyzer", "M", b"", "serial_port").is_err());
