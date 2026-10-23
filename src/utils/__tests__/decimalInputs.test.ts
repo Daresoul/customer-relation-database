@@ -9,7 +9,8 @@ const FILES = [
   'src/components/forms/fieldGroups/PatientFieldGroup.tsx',
   'src/components/forms/fields/index.tsx',
   'src/components/DeviceImportModal/CreatePatientSection.tsx',
-  'src/pages/PatientDetail/PatientInfo.tsx',
+  'src/pages/PatientDetail/chart/AddWeightModal.tsx',
+  'src/components/MedicalRecordModal/MedicalRecordForm.tsx',
   'src/pages/Settings/components/LineItemsSettings.tsx',
 ];
 
