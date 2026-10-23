@@ -6370,6 +6370,7 @@ dependencies = [
  "encoding_rs",
  "fake",
  "flate2",
+ "futures-util",
  "glob",
  "hidapi",
  "iana-time-zone",

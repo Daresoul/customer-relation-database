@@ -29,6 +29,8 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 oauth2 = "4.4"
 reqwest = { version = "0.11", features = ["json"] }
 warp = "0.3"
+# Server-sent events stream for the debug-only dev bridge.
+futures-util = "0.3"
 lazy_static = "1.4"
 once_cell = "1.19"
 dotenv = "0.15"

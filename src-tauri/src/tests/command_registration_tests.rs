@@ -16,6 +16,8 @@ const DEBUG_ONLY_COMMANDS: &[&str] = &[
     "send_test_pointcare",
     "send_test_pcr",
     "send_test_exigo",
+    "dev_bridge_reply",
+    "dev_bridge_event",
 ];
 
 struct HandlerBlock {

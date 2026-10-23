@@ -22,6 +22,8 @@ pub mod lab_inbox;
 pub mod lab_results;
 #[cfg(debug_assertions)]
 pub mod dev_tools;
+#[cfg(debug_assertions)]
+pub mod dev_bridge;
 pub mod line_item;
 pub mod backup;
 pub mod managed_hid_scanner;
@@ -53,6 +55,8 @@ pub use lab_inbox::*;
 pub use lab_results::*;
 #[cfg(debug_assertions)]
 pub use dev_tools::*;
+#[cfg(debug_assertions)]
+pub use dev_bridge::*;
 pub use line_item::*;
 pub use backup::*;
 pub use managed_hid_scanner::*;

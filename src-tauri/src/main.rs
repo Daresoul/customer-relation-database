@@ -187,7 +187,7 @@ fn main() {
         .add_item(quit_item);
     let tray = SystemTray::new().with_menu(tray_menu);
 
-    let build_result = tauri::Builder::default()
+    let builder = tauri::Builder::default()
         // First plugin, so a second copy exits before the other plugins start.
         // Two copies would import every device file twice and fight over COM
         // ports; the second launch brings the running window forward instead.
@@ -375,6 +375,10 @@ fn main() {
                 app_version,
             );
             services::loki_shipper::start(shipper_config);
+
+            // Lets a browser page drive this backend; ARKIVET_DEV_BRIDGE=1 only.
+            #[cfg(debug_assertions)]
+            services::dev_bridge::start(&app.handle());
 
             // Start device-level scanner capture (Windows/macOS dev environments).
             //
@@ -773,8 +777,12 @@ fn main() {
             // into Rust's structured logger so frontend events flow through
             // the same Arkivet.log → Loki pipeline.
             commands::log_event,
-        ]))
-        .build(context);
+        ]));
+
+    #[cfg(debug_assertions)]
+    let builder = builder.on_page_load(services::dev_bridge::on_page_load);
+
+    let build_result = builder.build(context);
 
     // A setup error (database won't open, migration fails) or a plugin that
     // can't start lands here. The window may be hidden, so without this the
@@ -824,6 +832,8 @@ const DEBUG_ONLY_COMMANDS: &[&str] = &[
     "send_test_pointcare",
     "send_test_pcr",
     "send_test_exigo",
+    "dev_bridge_reply",
+    "dev_bridge_event",
 ];
 
 #[cfg(debug_assertions)]
@@ -842,6 +852,8 @@ fn with_debug_commands(
         commands::send_test_pointcare,
         commands::send_test_pcr,
         commands::send_test_exigo,
+        commands::dev_bridge_reply,
+        commands::dev_bridge_event,
     ]);
     move |invoke: tauri::Invoke| {
         if DEBUG_ONLY_COMMANDS.contains(&invoke.message.command()) {
