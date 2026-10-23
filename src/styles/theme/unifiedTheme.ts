@@ -278,7 +278,6 @@ export const createUnifiedTheme = ({
       Tooltip: {
         colorBgDefault: isDark ? '#262626' : 'rgba(0, 0, 0, 0.75)',
         colorTextLightSolid: '#ffffff',
-        paddingSM: '6px 8px',
       },
 
       // Empty state - replaces antd.css lines 368-371
@@ -316,7 +315,7 @@ export const createUnifiedTheme = ({
         linkColor: primaryColor,
         linkHoverColor: isDark ? '#69A8E8' : '#40a9ff',
         separatorColor: isDark ? '#5A5A5A' : '#bfbfbf',
-        separatorMargin: '0 8px',
+        separatorMargin: 8,
       },
 
       // Progress - replaces antd.css lines 406-409
