@@ -8,6 +8,9 @@ use sea_orm::*;
 
 pub struct SettingsService;
 
+/// The clinic writes dates day first, with dots (31.01.2024).
+pub const DEFAULT_DATE_FORMAT: &str = "DD.MM.YYYY";
+
 impl SettingsService {
     /// Convert a SeaORM currency model to the API Currency model
     fn currency_to_api_model(model: currency::Model) -> Currency {
@@ -52,7 +55,7 @@ impl SettingsService {
                     language: Set("en".to_string()),
                     currency_id: Set(None),
                     theme: Set("light".to_string()),
-                    date_format: Set("MM/DD/YYYY".to_string()),
+                    date_format: Set(DEFAULT_DATE_FORMAT.to_string()),
                     created_at: Set(now),
                     updated_at: Set(now),
                     ..Default::default()
@@ -135,7 +138,7 @@ impl SettingsService {
                     language: Set("en".to_string()),
                     currency_id: Set(None),
                     theme: Set("light".to_string()),
-                    date_format: Set("MM/DD/YYYY".to_string()),
+                    date_format: Set(DEFAULT_DATE_FORMAT.to_string()),
                     created_at: Set(now),
                     updated_at: Set(now),
                     ..Default::default()
@@ -162,8 +165,10 @@ impl SettingsService {
             settings_model.language = Set(language);
         }
 
-        if let MaybeNull::Value(currency_id) = request.currency_id {
-            settings_model.currency_id = Set(Some(currency_id));
+        match request.currency_id {
+            MaybeNull::Value(currency_id) => settings_model.currency_id = Set(Some(currency_id)),
+            MaybeNull::Null => settings_model.currency_id = Set(None),
+            MaybeNull::Undefined => {}
         }
 
         if let Some(theme) = request.theme {
