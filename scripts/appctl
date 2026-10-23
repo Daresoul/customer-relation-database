@@ -12,6 +12,7 @@
 #   appctl shot [out.png]               screenshot of the Windows desktop
 #   appctl ui list [window] | ui press <name> [window] | ui type <name> <text>
 #   appctl keys <keys>                  e.g. "{ENTER}", "%{F4}"
+#   appctl click <x> <y>                left-click a point of the desktop (as in `appctl shot`)
 #   appctl tray <item>                  press an item in the app's tray menu
 #   appctl pw <command> …               Playwright in the real app (scripts/windows-lab/pw.mjs)
 #   appctl log [lines]                  tail the app log
@@ -132,6 +133,7 @@ case "$cmd" in
     esac
     ;;
   keys) agent keys "{\"keys\":$(json_str "$1")}" ;;
+  click) agent click "{\"x\":$1,\"y\":$2}" ;;
   tray) agent tray "{\"item\":$(json_str "$1")}" ;;
   pw) (cd "$ROOT" && node "$LAB_DIR/pw.mjs" "$@") ;;
   log)
@@ -143,5 +145,5 @@ case "$cmd" in
     encoded=$(python3 -c 'import base64,sys; print(base64.b64encode(sys.argv[1].encode("utf-16-le")).decode())' "$*")
     lab_ssh "powershell -NoProfile -EncodedCommand $encoded"
     ;;
-  help | *) sed -n '2,21p' "$0" ;;
+  help | *) sed -n '2,22p' "$0" ;;
 esac

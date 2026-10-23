@@ -20,6 +20,7 @@
     ui-press {name, window}      press a button / menu item by its name
     ui-type {name, text}         set a field's text (e.g. a file dialog's path)
     keys    {keys}               SendKeys to the focused window, e.g. "{ENTER}"
+    click   {x, y}               left-click at a point of the desktop screenshot
     tray    {item}               open the app's tray menu and press an item
 #>
 $ErrorActionPreference = 'Stop'
@@ -209,6 +210,11 @@ function Invoke-Action($action, $body) {
       @{ typed = $c.name }
     }
     'keys' { [System.Windows.Forms.SendKeys]::SendWait($body.keys); @{ sent = $body.keys } }
+    'click' {
+      [void][LabNative]::SetCursorPos([int]$body.x, [int]$body.y)
+      [LabNative]::mouse_event(0x02, 0, 0, 0, [UIntPtr]::Zero); [LabNative]::mouse_event(0x04, 0, 0, 0, [UIntPtr]::Zero)
+      @{ clicked = @($body.x, $body.y) }
+    }
     'tray' { Open-TrayMenu $body.item }
     default { throw "Unknown action '$action'" }
   }
