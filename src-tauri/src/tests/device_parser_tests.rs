@@ -141,9 +141,9 @@ mod exigo_xml_parsing {
 
         assert!(result.is_ok());
         let data = result.unwrap();
-        // Note: quick-xml's attr.value returns raw bytes, entities are NOT unescaped
-        // This documents current behavior - entities remain escaped in attribute values
-        assert_eq!(data.patient_identifier, Some("Test&amp;Patient".to_string()));
+        // Attribute entities are decoded (wave2/parsers.md L3).
+        assert_eq!(data.patient_identifier, Some("Test&Patient".to_string()));
+        assert_eq!(data.test_results.get("RBC").unwrap(), "<5.0");
     }
 
     #[test]
