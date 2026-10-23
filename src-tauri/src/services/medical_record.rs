@@ -886,6 +886,17 @@ impl MedicalRecordService {
         Ok(attachment_id)
     }
 
+    pub async fn invoice_totals_for_record(
+        _db: &DatabaseConnection,
+        _record_id: i64,
+    ) -> Result<crate::services::money::InvoiceTotals, String> {
+        Err("not implemented".to_string())
+    }
+
+    pub async fn invoice_job(_db: &DatabaseConnection, _record: &MedicalRecord) -> Result<serde_json::Value, String> {
+        Err("not implemented".to_string())
+    }
+
     /// Generate an invoice PDF from medical record line items
     async fn generate_invoice_pdf(
         env: &PdfEnv,

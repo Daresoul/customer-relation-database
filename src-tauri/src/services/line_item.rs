@@ -20,6 +20,7 @@ impl LineItemService {
             currency_id: model.currency_id,
             display_order: model.display_order,
             is_active: model.is_active,
+            default_tax_rate_id: None,
             created_at: model.created_at,
             updated_at: model.updated_at,
         }
@@ -36,6 +37,9 @@ impl LineItemService {
             unit_price: model.unit_price,
             currency_id: model.currency_id,
             quantity: model.quantity,
+            tax_rate_id: None,
+            vat_name: None,
+            vat_percent: None,
             created_at: model.created_at,
         }
     }

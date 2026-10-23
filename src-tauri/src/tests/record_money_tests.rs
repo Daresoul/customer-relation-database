@@ -103,6 +103,7 @@ fn item(name: &str, price: f64) -> CreateLineItemInput {
         unit_price: price,
         currency_id: 1,
         quantity: 1,
+        tax_rate_id: crate::models::dto::MaybeNull::Undefined,
     }
 }
 

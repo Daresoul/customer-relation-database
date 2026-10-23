@@ -56,6 +56,7 @@ async fn create_template_happy_path() {
             description: Some("Standard 30-min consult".to_string()),
             default_price: 50.0,
             currency_id: 1,
+            default_tax_rate_id: None,
         },
     )
     .await
@@ -76,6 +77,7 @@ async fn create_template_with_invalid_currency_fails_fk() {
             description: None,
             default_price: 10.0,
             currency_id: 99999,
+            default_tax_rate_id: None,
         },
     )
     .await;
@@ -93,6 +95,7 @@ async fn create_template_with_zero_price_succeeds() {
             description: None,
             default_price: 0.0,
             currency_id: 1,
+            default_tax_rate_id: None,
         },
     )
     .await;
@@ -112,6 +115,7 @@ async fn create_template_with_negative_price_rejected() {
             description: None,
             default_price: -10.0,
             currency_id: 1,
+            default_tax_rate_id: None,
         },
     )
     .await;
@@ -129,6 +133,7 @@ async fn get_templates_returns_inserted_rows() {
                 description: None,
                 default_price: 10.0,
                 currency_id: 1,
+                default_tax_rate_id: None,
             },
         )
         .await
@@ -145,12 +150,14 @@ async fn get_templates_active_only_filters_inactive() {
         &db,
         CreateLineItemTemplateInput {
             name: "Active".to_string(), description: None, default_price: 10.0, currency_id: 1,
+            default_tax_rate_id: None,
         },
     ).await.unwrap();
     let toggle_off = LineItemService::create_template(
         &db,
         CreateLineItemTemplateInput {
             name: "Inactive".to_string(), description: None, default_price: 10.0, currency_id: 1,
+            default_tax_rate_id: None,
         },
     ).await.unwrap();
 
@@ -160,6 +167,7 @@ async fn get_templates_active_only_filters_inactive() {
         UpdateLineItemTemplateInput {
             name: None, description: None, default_price: None, currency_id: None,
             is_active: Some(false), display_order: None,
+            default_tax_rate_id: crate::models::dto::MaybeNull::Undefined,
         },
     ).await.unwrap();
 
@@ -178,6 +186,7 @@ async fn update_template_partial_keeps_other_fields() {
             description: Some("Original desc".to_string()),
             default_price: 100.0,
             currency_id: 1,
+            default_tax_rate_id: None,
         },
     ).await.unwrap();
 
@@ -191,6 +200,7 @@ async fn update_template_partial_keeps_other_fields() {
             currency_id: None,
             is_active: None,
             display_order: None,
+            default_tax_rate_id: crate::models::dto::MaybeNull::Undefined,
         },
     ).await.unwrap();
 
@@ -206,6 +216,7 @@ async fn delete_template_removes_row() {
         &db,
         CreateLineItemTemplateInput {
             name: "Doomed".to_string(), description: None, default_price: 10.0, currency_id: 1,
+            default_tax_rate_id: None,
         },
     ).await.unwrap();
     LineItemService::delete_template(&db, t.id).await.unwrap();
@@ -238,6 +249,7 @@ async fn create_line_items_for_record_persists_them() {
             unit_price: 30.0,
             currency_id: 1,
             quantity: 2,
+            tax_rate_id: crate::models::dto::MaybeNull::Undefined,
         },
         CreateLineItemInput {
             template_id: None,
@@ -246,6 +258,7 @@ async fn create_line_items_for_record_persists_them() {
             unit_price: 75.0,
             currency_id: 1,
             quantity: 1,
+            tax_rate_id: crate::models::dto::MaybeNull::Undefined,
         },
     ];
 
@@ -267,6 +280,7 @@ async fn create_line_items_with_invalid_record_id_fails_fk() {
         unit_price: 10.0,
         currency_id: 1,
         quantity: 1,
+        tax_rate_id: crate::models::dto::MaybeNull::Undefined,
     }];
     let r = LineItemService::create_line_items_for_record(&db, 99999, items).await;
     assert!(r.is_err());
@@ -283,6 +297,7 @@ async fn create_line_items_with_invalid_template_id_fails_fk() {
         unit_price: 10.0,
         currency_id: 1,
         quantity: 1,
+        tax_rate_id: crate::models::dto::MaybeNull::Undefined,
     }];
     let r = LineItemService::create_line_items_for_record(&db, record_id, items).await;
     assert!(r.is_err());
@@ -302,6 +317,7 @@ async fn get_line_items_for_record_returns_in_insert_order() {
             unit_price: 10.0,
             currency_id: 1,
             quantity: 1,
+            tax_rate_id: crate::models::dto::MaybeNull::Undefined,
         })
         .collect();
 
@@ -328,6 +344,7 @@ async fn replace_line_items_drops_old_and_inserts_new() {
         vec![CreateLineItemInput {
             template_id: None, name: "Old".to_string(), description: None,
             unit_price: 10.0, currency_id: 1, quantity: 1,
+            tax_rate_id: crate::models::dto::MaybeNull::Undefined,
         }],
     )
     .await
@@ -338,10 +355,12 @@ async fn replace_line_items_drops_old_and_inserts_new() {
         CreateLineItemInput {
             template_id: None, name: "New1".to_string(), description: None,
             unit_price: 20.0, currency_id: 1, quantity: 1,
+            tax_rate_id: crate::models::dto::MaybeNull::Undefined,
         },
         CreateLineItemInput {
             template_id: None, name: "New2".to_string(), description: None,
             unit_price: 30.0, currency_id: 1, quantity: 1,
+            tax_rate_id: crate::models::dto::MaybeNull::Undefined,
         },
     ];
     LineItemService::replace_line_items_for_record(&db, record_id, new_items).await.unwrap();
@@ -362,6 +381,7 @@ async fn line_items_cascade_when_medical_record_deleted() {
         vec![CreateLineItemInput {
             template_id: None, name: "Will-be-orphaned".to_string(),
             description: None, unit_price: 10.0, currency_id: 1, quantity: 1,
+            tax_rate_id: crate::models::dto::MaybeNull::Undefined,
         }],
     )
     .await

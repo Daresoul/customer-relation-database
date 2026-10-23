@@ -184,6 +184,48 @@ impl SettingsService {
         Self::get_settings(db, user_id).await
     }
 
+    pub async fn get_clinic_profile(_db: &DatabaseConnection) -> Result<crate::models::settings::ClinicProfile, String> {
+        Err("not implemented".to_string())
+    }
+
+    pub async fn update_clinic_profile(
+        _db: &DatabaseConnection,
+        _input: crate::models::settings::UpdateClinicProfileInput,
+    ) -> Result<crate::models::settings::ClinicProfile, String> {
+        Err("not implemented".to_string())
+    }
+
+    pub async fn set_clinic_logo(
+        _db: &DatabaseConnection,
+        _logo_dir: &std::path::Path,
+        _source: &std::path::Path,
+    ) -> Result<crate::models::settings::ClinicProfile, String> {
+        Err("not implemented".to_string())
+    }
+
+    pub async fn remove_clinic_logo(_db: &DatabaseConnection) -> Result<crate::models::settings::ClinicProfile, String> {
+        Err("not implemented".to_string())
+    }
+
+    pub async fn list_tax_rates(_db: &DatabaseConnection, _active_only: bool) -> Result<Vec<crate::models::settings::TaxRate>, String> {
+        Err("not implemented".to_string())
+    }
+
+    pub async fn create_tax_rate(
+        _db: &DatabaseConnection,
+        _input: crate::models::settings::CreateTaxRateInput,
+    ) -> Result<crate::models::settings::TaxRate, String> {
+        Err("not implemented".to_string())
+    }
+
+    pub async fn update_tax_rate(
+        _db: &DatabaseConnection,
+        _id: i64,
+        _input: crate::models::settings::UpdateTaxRateInput,
+    ) -> Result<crate::models::settings::TaxRate, String> {
+        Err("not implemented".to_string())
+    }
+
     #[allow(dead_code)]
     pub async fn get_currencies(db: &DatabaseConnection) -> Result<Vec<Currency>, String> {
         let currencies = CurrencyEntity::find()

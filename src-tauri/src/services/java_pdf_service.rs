@@ -764,6 +764,16 @@ impl JavaPdfService {
     }
 }
 
+impl JavaPdfService {
+    pub fn clinic_json(_clinic: &crate::models::settings::ClinicProfile) -> Value {
+        serde_json::json!({})
+    }
+
+    pub fn attach_clinic(input: Value, _clinic: Option<&crate::models::settings::ClinicProfile>) -> Value {
+        input
+    }
+}
+
 /// Line item data for invoice generation
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
