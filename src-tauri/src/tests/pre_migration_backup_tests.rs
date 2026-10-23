@@ -14,7 +14,7 @@ async fn file_pool(path: &Path) -> SqlitePool {
         .filename(path)
         .create_if_missing(true)
         .foreign_keys(true);
-    SqlitePoolOptions::new().max_connections(2).connect_with(options).await.unwrap()
+    SqlitePoolOptions::new().max_connections(1).connect_with(options).await.unwrap()
 }
 
 fn now() -> chrono::DateTime<FixedOffset> {
