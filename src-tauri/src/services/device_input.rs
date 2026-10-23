@@ -403,6 +403,9 @@ pub fn get_device_protocol(device_type: &str) -> DeviceProtocol {
 ///   - Devices whose end symbol is `0x0D`: terminated by `\r\r`, keeping a lone
 ///     `\r` as a line delimiter (legacy path; no current device uses it).
 ///   - Other devices: single end byte terminates.
+/// Longer than any real result (they are about 2 kB); past it the line is noise.
+pub(crate) const MAX_FRAME_BYTES: usize = 64 * 1024;
+
 struct FrameAssembler {
     data: Vec<u8>,
     started: bool,
@@ -450,6 +453,11 @@ impl FrameAssembler {
         self.consecutive_end_symbols = 0;
         self.started = protocol.start_symbol.is_none();
         partial
+    }
+
+    /// Bytes since the last call that were outside any result.
+    fn take_ignored(&mut self) -> usize {
+        0
     }
 
     /// A frame that a new start byte cut short (MLLP), handed back once.
@@ -1046,6 +1054,8 @@ pub(crate) trait FrameSink {
     fn on_bytes(&mut self, data: &[u8]);
     fn on_frame(&mut self, frame: Vec<u8>);
     fn on_cut_off(&mut self, partial: Vec<u8>);
+    /// Bytes that were not part of any result (wrong speed or machine type).
+    fn on_unrecognized(&mut self, _bytes: usize) {}
 }
 
 /// Some drivers return a read timeout at once instead of after the port's
@@ -1535,7 +1545,7 @@ impl FrameSink for SerialSink<'_> {
 
 #[cfg(test)]
 mod frame_assembler_tests {
-    use super::{DeviceProtocol, FrameAssembler};
+    use super::{DeviceProtocol, FrameAssembler, MAX_FRAME_BYTES};
 
     fn feed(protocol: &DeviceProtocol, bytes: &[u8]) -> Vec<Vec<u8>> {
         let mut asm = FrameAssembler::new(protocol);
@@ -1610,6 +1620,32 @@ mod frame_assembler_tests {
         assert_eq!(frames, vec![b"MSH|second".to_vec()]);
         assert_eq!(asm.take_dropped(), Some(b"MSH|first|OBX|TBIL|0.2".to_vec()));
         assert_eq!(asm.take_dropped(), None);
+    }
+
+    // Serial test on the Mac: 20 kB of garbage with no end marker sat in the
+    // buffer until the line went quiet; a stream that never pauses would grow
+    // it without end.
+    #[test]
+    fn a_result_longer_than_any_real_one_is_cut_and_reading_starts_over() {
+        let p = healvet();
+        let mut asm = FrameAssembler::new(&p);
+        for _ in 0..(MAX_FRAME_BYTES + 10) {
+            assert!(asm.push_byte(b'x', &p).is_none());
+        }
+        assert_eq!(asm.take_dropped().map(|d| d.len()), Some(MAX_FRAME_BYTES));
+        assert!(asm.partial_len() < MAX_FRAME_BYTES);
+    }
+
+    // A machine on the wrong speed or type sends bytes that never start a result.
+    #[test]
+    fn bytes_outside_any_result_are_counted() {
+        let p = pointcare();
+        let mut asm = FrameAssembler::new(&p);
+        for b in std::iter::repeat(b'z').take(3000) {
+            assert!(asm.push_byte(b, &p).is_none());
+        }
+        assert_eq!(asm.take_ignored(), 3000);
+        assert_eq!(asm.take_ignored(), 0);
     }
 
     #[test]

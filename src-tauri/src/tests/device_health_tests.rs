@@ -17,6 +17,7 @@ struct RecordingSink {
     bytes: usize,
     frames: Vec<Vec<u8>>,
     cut_offs: Vec<Vec<u8>>,
+    unrecognized: Vec<usize>,
 }
 
 impl FrameSink for RecordingSink {
@@ -28,6 +29,9 @@ impl FrameSink for RecordingSink {
     }
     fn on_cut_off(&mut self, partial: Vec<u8>) {
         self.cut_offs.push(partial);
+    }
+    fn on_unrecognized(&mut self, bytes: usize) {
+        self.unrecognized.push(bytes);
     }
 }
 
@@ -124,6 +128,24 @@ fn a_result_cut_by_an_unplug_is_reported_not_dropped() {
     assert!(sink.frames.is_empty());
     assert_eq!(sink.cut_offs.len(), 1, "the half result must reach the lab inbox as cut off");
     assert!(sink.cut_offs[0].ends_with(b"TBIL|0.2"));
+}
+
+#[test]
+fn noise_on_the_line_is_reported_and_the_result_after_it_still_read() {
+    let mut frame = vec![0x0B];
+    frame.extend_from_slice(b"MSH|ok");
+    frame.push(0x1C);
+    let mut reader = ScriptedReader::new(vec![
+        Ok(vec![b'z'; 600]),
+        Ok(vec![b'z'; 600]),
+        Ok(frame),
+        Err(|| io::Error::from_raw_os_error(1167)),
+    ]);
+    let (_tx, rx) = mpsc::channel::<()>();
+    let mut sink = RecordingSink::default();
+    let _ = run_read_loop(&mut reader, &pointcare(), &rx, Duration::from_secs(5), &mut sink);
+    assert_eq!(sink.frames, vec![b"MSH|ok".to_vec()]);
+    assert_eq!(sink.unrecognized, vec![1200], "reported once it passes a kilobyte");
 }
 
 #[test]
