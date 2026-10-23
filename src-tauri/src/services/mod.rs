@@ -29,3 +29,5 @@ pub mod log_rotation;
 pub mod telemetry;
 pub mod loki_shipper;
 pub mod startup_failure;
+pub mod patient_search;
+pub mod dashboard;

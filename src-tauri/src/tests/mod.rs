@@ -93,3 +93,6 @@ pub mod record_money_tests;
 
 #[cfg(test)]
 pub mod attachment_purge_tests;
+
+#[cfg(test)]
+pub mod shell_search_tests;
