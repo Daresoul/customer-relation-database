@@ -51,6 +51,9 @@ vi.mock('../../../hooks/useDeviceIntegrations', () => ({
 const details = {
   bytesLastMinute: 150,
   errorsToday: 2,
+  downSince: at(8, 57),
+  outagesToday: 2,
+  downMinutesToday: 35,
   lastRaw: { at: at(8, 55), byteCount: 14, text: 'MSH|1\nPID|Max\n', hex: '4D 53 48 7C 31 0D', truncated: false },
   log: [
     { at: at(9, 12), label: 'Error', errorKind: 'port_missing', isError: true },
@@ -94,7 +97,9 @@ describe('device details drawer', () => {
 
   it('shows the error count, the live byte counter and the last raw message with a hex view', async () => {
     await renderDrawer();
-    expect(await screen.findByText('drawer.errorsToday {"count":2}')).toBeInTheDocument();
+    // Machine status #5: today in minutes and breaks; since when, and how often it tried.
+    expect(await screen.findByText('drawer.today.down {"time":"35 drawer.minutes","count":2}')).toBeInTheDocument();
+    expect(screen.getByText('drawer.downSince {"time":"08:57"} · drawer.attempts {"count":3}')).toBeInTheDocument();
     expect(screen.getByText('drawer.bytesLastMinute {"count":150}')).toBeInTheDocument();
     expect(screen.getByTestId('device-raw-message').textContent).toBe('MSH|1\nPID|Max\n');
     fireEvent.click(screen.getByRole('switch', { name: 'drawer.showHex' }));
