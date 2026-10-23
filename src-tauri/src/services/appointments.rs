@@ -474,13 +474,27 @@ impl AppointmentService {
         Self::create_appointment(db, create_input, created_by).await
     }
 
+    /// The copy's start: the original's wall-clock time on `target_date`'s day,
+    /// both read in `tz` (the clinic's local zone), so a copy neither lands a
+    /// day early east of UTC nor moves an hour across a DST change.
     pub(crate) fn duplicate_start<Tz: chrono::TimeZone>(
         original_start: DateTime<Utc>,
         target_date: DateTime<Utc>,
-        _tz: &Tz,
+        tz: &Tz,
     ) -> Result<DateTime<Utc>, String> {
-        let naive = target_date.date_naive().and_time(original_start.time());
-        Ok(DateTime::<Utc>::from_naive_utc_and_offset(naive, Utc))
+        let day = target_date.with_timezone(tz).date_naive();
+        let time = original_start.with_timezone(tz).time();
+        let local = day.and_time(time);
+        let start = match tz.from_local_datetime(&local) {
+            chrono::LocalResult::Single(t) => t,
+            chrono::LocalResult::Ambiguous(first, _) => first,
+            // The clock skipped this time (spring forward): take the hour after.
+            chrono::LocalResult::None => tz
+                .from_local_datetime(&(local + chrono::Duration::hours(1)))
+                .earliest()
+                .ok_or_else(|| "Could not place the copy on that day".to_string())?,
+        };
+        Ok(start.with_timezone(&Utc))
     }
 
     // Internal helper to check conflicts

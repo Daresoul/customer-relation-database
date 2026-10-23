@@ -189,6 +189,9 @@
   patient picker shows owner (household name) and the chip's last 4 digits.
 - The old `/appointments` page is gone; its delete and duplicate live in the
   panel.
+- Duplicate keeps the original's local clock time on the chosen local day
+  (`AppointmentService::duplicate_start`, this computer's time zone), also
+  across a DST change.
 
 ## Google Calendar
 - The sync is one-way plus cancellations: new and changed appointments are
