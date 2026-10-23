@@ -14,73 +14,114 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     .execute(pool)
     .await?;
 
-    // Run migrations in order
-    run_migration(pool, "001_initial_patients", create_patients_table).await?;
-    run_migration(pool, "002_households", create_households_table).await?;
-    run_migration(pool, "003_people", create_people_table).await?;
-    run_migration(pool, "004_person_contacts", create_person_contacts_table).await?;
-    run_migration(pool, "005_patient_households", create_patient_households_table).await?;
-    run_migration(pool, "006_household_search_fts5", create_household_search_fts5).await?;
-    run_migration(pool, "007_add_patient_gender", add_patient_gender).await?;
-    run_migration(pool, "008_add_household_location_fields", add_household_location_fields).await?;
-    run_migration(pool, "009_create_currencies_table", create_currencies_table).await?;
-    run_migration(pool, "010_create_medical_records_table", create_medical_records_table).await?;
-    run_migration(pool, "011_create_medical_attachments_table", create_medical_attachments_table).await?;
-    run_migration(pool, "012_create_medical_record_history_table", create_medical_record_history_table).await?;
-    run_migration(pool, "013_create_medical_records_fts", create_medical_records_fts).await?;
-    run_migration(pool, "014_fix_medical_triggers", fix_medical_triggers).await?;
-    // Dev task: drop and recreate ONLY the medical_record_history table to switch to snapshot strategy
-    run_migration(pool, "015_recreate_medical_record_history", recreate_medical_record_history).await?;
-    run_migration(pool, "016_add_missing_patient_columns", add_missing_patient_columns).await?;
-    run_migration(pool, "017_create_app_settings_table", create_app_settings_table).await?;
-    run_migration(pool, "018_create_appointments_tables", create_appointments_tables).await?;
-    run_migration(pool, "019_create_update_preferences_table", create_update_preferences_table).await?;
-    run_migration(pool, "020_create_calendar_event_mappings", create_calendar_event_mappings_table).await?;
-    run_migration(pool, "021_create_sync_logs", create_sync_logs_table).await?;
-    run_migration(pool, "022_add_token_expires_at", add_token_expires_at_column).await?;
-    run_migration(pool, "023_create_species_table", create_species_table).await?;
-    run_migration(pool, "024_add_room_color", add_room_color_column).await?;
-    run_migration(pool, "025_create_breeds_table", create_breeds_table).await?;
-    run_migration(pool, "026_add_species_color", add_species_color_column).await?;
-    run_migration(pool, "027_convert_patient_species_breed_to_fk", convert_patient_species_breed_to_fk).await?;
-    run_migration(pool, "028_create_device_integrations_table", create_device_integrations_table).await?;
-    run_migration(pool, "029_add_device_metadata_to_attachments", add_device_metadata_to_attachments).await?;
-    run_migration(pool, "030_add_attachment_type", add_attachment_type_column).await?;
-    run_migration(pool, "031_add_test_result_record_type", add_test_result_record_type).await?;
-    run_migration(pool, "032_create_file_access_history", create_file_access_history_table).await?;
-    run_migration(pool, "033_create_record_templates", create_record_templates_table).await?;
-    run_migration(pool, "034_verify_breed_id_nullable", verify_breed_id_nullable).await?;
-    run_migration(pool, "035_add_mnchip_pcr_analyzer_device", add_mnchip_pcr_analyzer_device).await?;
-    run_migration(pool, "036_rename_mnchip_chemistry_device", rename_mnchip_chemistry_device).await?;
-    run_migration(pool, "037_create_pending_device_entries", create_pending_device_entries_table).await?;
-    run_migration(pool, "038_add_prescription_notes", add_prescription_notes_column).await?;
-    run_migration(pool, "039_create_line_items", create_line_items_tables).await?;
-    run_migration(pool, "040_add_invoice_number", add_invoice_number_column).await?;
-    run_migration(pool, "041_relax_patient_required_fields", relax_patient_required_fields).await?;
-    run_migration(pool, "042_create_managed_hid_scanners", create_managed_hid_scanners_table).await?;
-    run_migration(pool, "043_create_diagnoses_tables", create_diagnoses_tables).await?;
-    run_migration(pool, "044_fts5_unicode61_tokenizer", upgrade_fts5_to_unicode61).await?;
-    run_migration(pool, "045_add_attachment_deleted_at", add_attachment_deleted_at_column).await?;
-    run_migration(pool, "046_rebuild_household_search", rebuild_household_search).await?;
-    run_migration(pool, "047_device_health", add_device_health_columns).await?;
-    run_migration(pool, "048_google_sync_status", add_google_sync_status_columns).await?;
-    run_migration(pool, "049_fix_medical_records_fts_triggers", fix_medical_records_fts_triggers).await?;
-    run_migration(pool, "050_add_invoice_date", add_invoice_date_column).await?;
-    run_migration(pool, "051_add_attachment_purged_at", add_attachment_purged_at_column).await?;
-    run_migration(pool, "052_household_merge", add_household_merge).await?;
-    run_migration(pool, "053_patient_status_and_alerts", add_patient_status_and_alerts).await?;
-    run_migration(pool, WEIGHT_LOG_MIGRATION, create_patient_weight_log).await?;
-    run_migration(pool, "055_lab_inbox", add_lab_inbox).await?;
-    run_migration(pool, "056_clinic_profile_and_vat", add_clinic_profile_and_vat).await?;
-    run_migration(pool, "057_lab_results", create_lab_results).await?;
-    run_migration(pool, "058_record_template_contents", add_record_template_contents).await?;
-    run_migration(pool, "059_appointment_arrival", add_appointment_arrival).await?;
-    run_migration(pool, "060_device_alerts", add_device_alerts).await?;
+    for (name, migration) in MIGRATIONS {
+        run_migration(pool, name, *migration).await?;
+    }
 
     Ok(())
 }
 
 pub const WEIGHT_LOG_MIGRATION: &str = "054_patient_weight_log";
+
+type MigrationFn = for<'a> fn(
+    &'a SqlitePool,
+) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + 'a>>;
+
+/// Every migration, in the order it runs. Append new ones at the end.
+const MIGRATIONS: &[(&str, MigrationFn)] = &[
+    ("001_initial_patients", create_patients_table),
+    ("002_households", create_households_table),
+    ("003_people", create_people_table),
+    ("004_person_contacts", create_person_contacts_table),
+    ("005_patient_households", create_patient_households_table),
+    ("006_household_search_fts5", create_household_search_fts5),
+    ("007_add_patient_gender", add_patient_gender),
+    ("008_add_household_location_fields", add_household_location_fields),
+    ("009_create_currencies_table", create_currencies_table),
+    ("010_create_medical_records_table", create_medical_records_table),
+    ("011_create_medical_attachments_table", create_medical_attachments_table),
+    ("012_create_medical_record_history_table", create_medical_record_history_table),
+    ("013_create_medical_records_fts", create_medical_records_fts),
+    ("014_fix_medical_triggers", fix_medical_triggers),
+    // Dev task: drop and recreate ONLY the medical_record_history table to switch to snapshot strategy
+    ("015_recreate_medical_record_history", recreate_medical_record_history),
+    ("016_add_missing_patient_columns", add_missing_patient_columns),
+    ("017_create_app_settings_table", create_app_settings_table),
+    ("018_create_appointments_tables", create_appointments_tables),
+    ("019_create_update_preferences_table", create_update_preferences_table),
+    ("020_create_calendar_event_mappings", create_calendar_event_mappings_table),
+    ("021_create_sync_logs", create_sync_logs_table),
+    ("022_add_token_expires_at", add_token_expires_at_column),
+    ("023_create_species_table", create_species_table),
+    ("024_add_room_color", add_room_color_column),
+    ("025_create_breeds_table", create_breeds_table),
+    ("026_add_species_color", add_species_color_column),
+    ("027_convert_patient_species_breed_to_fk", convert_patient_species_breed_to_fk),
+    ("028_create_device_integrations_table", create_device_integrations_table),
+    ("029_add_device_metadata_to_attachments", add_device_metadata_to_attachments),
+    ("030_add_attachment_type", add_attachment_type_column),
+    ("031_add_test_result_record_type", add_test_result_record_type),
+    ("032_create_file_access_history", create_file_access_history_table),
+    ("033_create_record_templates", create_record_templates_table),
+    ("034_verify_breed_id_nullable", verify_breed_id_nullable),
+    ("035_add_mnchip_pcr_analyzer_device", add_mnchip_pcr_analyzer_device),
+    ("036_rename_mnchip_chemistry_device", rename_mnchip_chemistry_device),
+    ("037_create_pending_device_entries", create_pending_device_entries_table),
+    ("038_add_prescription_notes", add_prescription_notes_column),
+    ("039_create_line_items", create_line_items_tables),
+    ("040_add_invoice_number", add_invoice_number_column),
+    ("041_relax_patient_required_fields", relax_patient_required_fields),
+    ("042_create_managed_hid_scanners", create_managed_hid_scanners_table),
+    ("043_create_diagnoses_tables", create_diagnoses_tables),
+    ("044_fts5_unicode61_tokenizer", upgrade_fts5_to_unicode61),
+    ("045_add_attachment_deleted_at", add_attachment_deleted_at_column),
+    ("046_rebuild_household_search", rebuild_household_search),
+    ("047_device_health", add_device_health_columns),
+    ("048_google_sync_status", add_google_sync_status_columns),
+    ("049_fix_medical_records_fts_triggers", fix_medical_records_fts_triggers),
+    ("050_add_invoice_date", add_invoice_date_column),
+    ("051_add_attachment_purged_at", add_attachment_purged_at_column),
+    ("052_household_merge", add_household_merge),
+    ("053_patient_status_and_alerts", add_patient_status_and_alerts),
+    (WEIGHT_LOG_MIGRATION, create_patient_weight_log),
+    ("055_lab_inbox", add_lab_inbox),
+    ("056_clinic_profile_and_vat", add_clinic_profile_and_vat),
+    ("057_lab_results", create_lab_results),
+    ("058_record_template_contents", add_record_template_contents),
+    ("059_appointment_arrival", add_appointment_arrival),
+    ("060_device_alerts", add_device_alerts),
+];
+
+/// How many migrations the app knows.
+pub fn migration_count() -> usize {
+    MIGRATIONS.len()
+}
+
+/// Migrations this database has not run yet, in order. All of them for a
+/// database without a `migrations` table.
+pub async fn pending_migrations(pool: &SqlitePool) -> Result<Vec<&'static str>, sqlx::Error> {
+    let has_table: i64 = sqlx::query(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'migrations'",
+    )
+    .fetch_one(pool)
+    .await?
+    .get(0);
+    let done: Vec<String> = if has_table == 0 {
+        Vec::new()
+    } else {
+        sqlx::query("SELECT filename FROM migrations")
+            .fetch_all(pool)
+            .await?
+            .iter()
+            .map(|r| r.get::<String, _>(0))
+            .collect()
+    };
+    Ok(MIGRATIONS
+        .iter()
+        .map(|(name, _)| *name)
+        .filter(|name| !done.iter().any(|d| d == name))
+        .collect())
+}
 
 async fn run_migration<F>(
     pool: &SqlitePool,

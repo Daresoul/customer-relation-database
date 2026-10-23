@@ -316,3 +316,58 @@ fn prune_old_snapshots(db_dir: &Path, keep: usize, pre_update: bool) -> std::io:
     }
     Ok(())
 }
+
+/// How many pre-migration copies stay next to the database.
+pub const PRE_MIGRATION_COPIES_KEPT: usize = 3;
+const PRE_MIGRATION_MARKER: &str = "_pre-migration-";
+
+/// Copies the database next to itself before pending migrations run, as
+/// `<name>_pre-migration-<local time>.db`, and keeps the newest
+/// [`PRE_MIGRATION_COPIES_KEPT`]. A new install (no migration run yet) and an
+/// up-to-date database get no copy. Returns the copy's path when one was made.
+pub async fn backup_before_migrations<Tz: TimeZone>(
+    pool: &sqlx::SqlitePool,
+    db_path: &Path,
+    now: DateTime<Tz>,
+) -> Result<Option<PathBuf>, String>
+where
+    Tz::Offset: std::fmt::Display,
+{
+    let pending = crate::database::migrations::pending_migrations(pool)
+        .await
+        .map_err(|e| format!("Check pending migrations: {}", e))?;
+    if pending.is_empty() || pending.len() == crate::database::migrations::migration_count() {
+        return Ok(None);
+    }
+
+    let dir = db_path.parent().unwrap_or_else(|| Path::new("."));
+    let stem = db_path.file_stem().and_then(|s| s.to_str()).unwrap_or("vet_clinic");
+    let copy = dir.join(format!("{stem}{PRE_MIGRATION_MARKER}{}.db", now.format("%Y-%m-%d_%H-%M-%S")));
+    if copy.exists() {
+        std::fs::remove_file(&copy).map_err(|e| format!("Remove old copy: {}", e))?;
+    }
+    let target = copy.to_string_lossy().replace('\'', "''");
+    sqlx::query(&format!("VACUUM INTO '{}'", target))
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Copy database before migrations: {}", e))?;
+
+    prune_pre_migration_copies(dir, stem);
+    Ok(Some(copy))
+}
+
+fn prune_pre_migration_copies(dir: &Path, stem: &str) {
+    let prefix = format!("{stem}{PRE_MIGRATION_MARKER}");
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    let mut names: Vec<String> = entries
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .filter(|n| n.starts_with(&prefix) && n.ends_with(".db"))
+        .collect();
+    // The name carries the time, so name order is age order.
+    names.sort();
+    let excess = names.len().saturating_sub(PRE_MIGRATION_COPIES_KEPT);
+    for name in names.into_iter().take(excess) {
+        let _ = std::fs::remove_file(dir.join(name));
+    }
+}
