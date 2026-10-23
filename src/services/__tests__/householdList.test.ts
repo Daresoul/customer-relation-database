@@ -24,4 +24,39 @@ describe('household list', () => {
 
     await expect(householdApi.search('')).rejects.toThrow('database is locked');
   });
+
+  it('lists search hits with their id, name and address (search rows are flat)', async () => {
+    invokeMock.mockResolvedValue({
+      results: [
+        {
+          id: 7,
+          household_name: 'Petrovski',
+          address: 'Partizanska 1',
+          people: [
+            {
+              id: 1,
+              first_name: 'Ana',
+              last_name: 'Petrovska',
+              is_primary: true,
+              contacts: [{ id: 1, person_id: 1, contact_type: 'phone', contact_value: '070 123 456', is_primary: true, created_at: '' }],
+            },
+          ],
+          pet_count: 2,
+          relevance_score: 1,
+          snippet: null,
+        },
+      ],
+    });
+
+    const [row] = await householdApi.search('petro');
+
+    expect(row).toMatchObject({
+      id: 7,
+      lastName: 'Petrovski',
+      address: 'Partizanska 1',
+      primaryContact: 'Ana Petrovska',
+      phone: '070 123 456',
+      petCount: 2,
+    });
+  });
 });
