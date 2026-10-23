@@ -36,9 +36,9 @@ public class AmplificationCurveRenderer {
     private static final int RENDER_LABEL_HEIGHT = LABEL_AREA_HEIGHT * SCALE_FACTOR;
     private static final int RENDER_HEIGHT = RENDER_PLOT_HEIGHT + RENDER_LABEL_HEIGHT;
 
-    // X-axis range (PCR cycles)
-    private static final int X_MIN = 8;
-    private static final int X_MAX = 40;
+    // PCR cycles
+    private static final int FIRST_CYCLE = 1;
+    private static final int DEFAULT_LAST_CYCLE = 41;
 
     // Colors
     private static final Color CURVE_COLOR = new Color(0, 100, 180); // Blue line for the curve data
@@ -69,18 +69,17 @@ public class AmplificationCurveRenderer {
         XYSeries resultSeries = new XYSeries("Result");
         XYSeries thresholdSeries = new XYSeries("Threshold");
 
+        double[] xRange = xAxisRange(hasCurve ? curveData.size() : 0);
         if (hasCurve) {
-            int numPoints = curveData.size();
-            double cycleStep = (double) (X_MAX - X_MIN) / (numPoints - 1);
-            for (int i = 0; i < numPoints; i++) {
-                curveSeries.add(X_MIN + (i * cycleStep), curveData.get(i));
+            for (int i = 0; i < curveData.size(); i++) {
+                curveSeries.add(cycleFor(i), curveData.get(i));
             }
-            resultSeries.add(X_MIN, finalValue);
-            resultSeries.add(X_MAX, finalValue);
+            resultSeries.add(xRange[0], finalValue);
+            resultSeries.add(xRange[1], finalValue);
         }
         if (thresholdValue != null) {
-            thresholdSeries.add(X_MIN, thresholdValue);
-            thresholdSeries.add(X_MAX, thresholdValue);
+            thresholdSeries.add(xRange[0], thresholdValue);
+            thresholdSeries.add(xRange[1], thresholdValue);
         }
 
         XYSeriesCollection dataset = new XYSeriesCollection();
@@ -101,7 +100,7 @@ public class AmplificationCurveRenderer {
         );
 
         // Customize the chart
-        customizeChart(chart, hasCurve ? curveData : null, finalValue, thresholdValue);
+        customizeChart(chart, hasCurve ? curveData : null, finalValue, thresholdValue, xRange);
 
         // Enable anti-aliasing for smooth lines
         chart.setAntiAlias(true);
@@ -152,7 +151,8 @@ public class AmplificationCurveRenderer {
     /**
      * Customize the chart appearance to match the reference form.
      */
-    private static void customizeChart(JFreeChart chart, List<Double> curveData, Double finalValue, Double thresholdValue) {
+    private static void customizeChart(JFreeChart chart, List<Double> curveData, Double finalValue,
+                                       Double thresholdValue, double[] xRange) {
         chart.setBackgroundPaint(BACKGROUND_COLOR);
         chart.setBorderVisible(false);
 
@@ -165,8 +165,8 @@ public class AmplificationCurveRenderer {
 
         // Configure X axis (cycles)
         NumberAxis xAxis = (NumberAxis) plot.getDomainAxis();
-        xAxis.setRange(X_MIN, X_MAX);
-        xAxis.setTickUnit(new org.jfree.chart.axis.NumberTickUnit(8));
+        xAxis.setRange(xRange[0], xRange[1]);
+        xAxis.setTickUnit(new org.jfree.chart.axis.NumberTickUnit(10));
         xAxis.setTickLabelFont(new Font("SansSerif", Font.PLAIN, 8 * SCALE_FACTOR));
         xAxis.setTickMarksVisible(true);
 
@@ -230,6 +230,22 @@ public class AmplificationCurveRenderer {
         marker.setLabelTextAnchor(above ? org.jfree.chart.ui.TextAnchor.BOTTOM_LEFT
                 : org.jfree.chart.ui.TextAnchor.TOP_LEFT);
         plot.addRangeMarker(marker);
+    }
+
+    /**
+     * The device sends one reading per cycle and no cycle numbers; cycles
+     * count from 1, so reading i is cycle i + 1.
+     */
+    static double cycleFor(int index) {
+        return FIRST_CYCLE + index;
+    }
+
+    /** X axis {first, last} cycle of the data; the default run length without data. */
+    static double[] xAxisRange(int points) {
+        if (points < 2) {
+            return new double[]{FIRST_CYCLE, DEFAULT_LAST_CYCLE};
+        }
+        return new double[]{cycleFor(0), cycleFor(points - 1)};
     }
 
     /** Smallest y span drawn, in RFU, so baseline noise stays flat instead of filling the plot. */
