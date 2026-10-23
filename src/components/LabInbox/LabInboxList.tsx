@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, App, Button, Form, Input, Modal, Radio, Segmented, Space, Table, Tag, Typography } from 'antd';
+import { Alert, App, Button, Form, Input, Modal, Radio, Segmented, Space, Table, Tag, Tooltip, Typography } from 'antd';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
@@ -12,6 +12,7 @@ import LabValues from './LabValues';
 import MoveLabResultModal from './MoveLabResultModal';
 import { errorText } from '@/utils/notifyError';
 import { formatDateTime } from '@/utils/dateFormatter';
+import { labFailureText } from '@/utils/labFailure';
 
 const { Text } = Typography;
 
@@ -175,7 +176,7 @@ const LabInboxList: React.FC = () => {
         item.status === 'failed' ? (
           <Space direction="vertical" size={0}>
             <Tag color="red">{t('devices:recentFiles.couldNotRead')}</Tag>
-            {item.error && <Text type="secondary" style={{ fontSize: 12 }}>{item.error}</Text>}
+            <LabFailure error={item.error} />
           </Space>
         ) : item.machinePatientId ? (
           <Text code>{item.machinePatientId}</Text>
@@ -334,4 +335,16 @@ const DiscardDialog: React.FC<DiscardDialogProps> = ({ item, onClose, onDiscard 
   );
 };
 
+
+/** Why a result could not be read; the raw cause is on hover for support. */
+const LabFailure: React.FC<{ error?: string | null }> = ({ error }) => {
+  const { t } = useTranslation(['devices']);
+  const failure = labFailureText(error, t);
+  if (!failure) return null;
+  return (
+    <Tooltip title={`${t('devices:inbox.failure.detail')}: ${failure.detail}`}>
+      <Text type="secondary" style={{ fontSize: 12 }}>{failure.text}</Text>
+    </Tooltip>
+  );
+};
 export default LabInboxList;

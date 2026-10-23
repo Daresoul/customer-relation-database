@@ -274,7 +274,12 @@
     "pickRecord": "Choose a record",
     "noRecords": "This patient has no records",
     "newLabRecord": "New lab record",
-    "today": "today"
+    "today": "today",
+    "failure": {
+      "cutOff": "The result stopped after {{bytes}} bytes (cable or machine interrupted). Send it again from the machine.",
+      "unreadable": "The machine sent something Arkivet could not read. Send it again; if it keeps failing, copy the diagnostics for support.",
+      "detail": "Technical details"
+    }
   },
   "portTypeTooltips": {
     "serialUsb": "Connected USB Serial Device",
