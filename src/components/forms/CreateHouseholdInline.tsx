@@ -278,7 +278,7 @@ export const CreateHouseholdInline: React.FC<CreateHouseholdInlineProps> = ({
             label={t('forms:labels.lastName', 'Last Name')}
           >
             <Input
-              placeholder={t('forms:placeholders.enterName', 'Enter name')}
+              placeholder={t('forms:placeholders.enterLastName', 'Enter surname')}
               onChange={(e) => {
                 // The household name follows the last name until someone types in it.
                 if (!form.isFieldTouched('householdName')) form.setFieldValue('householdName', e.target.value);

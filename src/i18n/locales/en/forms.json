@@ -50,6 +50,7 @@
   },
   "placeholders": {
     "enterName": "Enter name",
+    "enterLastName": "Enter surname",
     "enterEmail": "Enter email address",
     "enterPhone": "Enter phone number",
     "enterAddress": "Enter address",

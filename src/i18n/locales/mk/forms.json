@@ -50,6 +50,7 @@
   },
   "placeholders": {
     "enterName": "Внесете име",
+    "enterLastName": "Внесете презиме",
     "enterEmail": "Внесете адреса за е-пошта",
     "enterPhone": "Внесете телефонски број",
     "enterAddress": "Внесете адреса",
