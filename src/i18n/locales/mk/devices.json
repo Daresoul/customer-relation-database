@@ -349,7 +349,12 @@
       "working": "Во ред",
       "waiting": "Се чека",
       "down": "Не работи"
-    }
+    },
+    "allWorking": "Апаратите работат",
+    "oneDown": "{{name}} не работи",
+    "manyDown": "{{count}} апарати не работат",
+    "oneWaiting": "{{name}}: се чека",
+    "manyWaiting": "{{count}} апарати чекаат"
   },
   "drawer": {
     "title": "Детали за лабораторискиот уред",

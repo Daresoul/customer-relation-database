@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Button, Tooltip } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useDeviceConnectionStatus, useDeviceIntegrations, useFileWatcherStatus } from '../../hooks/useDeviceIntegrations';
-import { folderLevel, rollupHealth, serialDownSince, serialLevel } from './deviceHealth';
+import { chipText, folderLevel, rollupHealth, serialDownSince, serialLevel } from './deviceHealth';
 import { DeviceDetailsDrawer, HealthIcon } from './DeviceDetailsDrawer';
 
 /** Header chip on every page: the worst lab machine state; a click opens the details drawer. */
@@ -17,6 +17,7 @@ export const DeviceHealthChip: React.FC = () => {
     .filter((i) => i.enabled && (i.connectionType === 'serial_port' || i.connectionType === 'file_watch'))
     .map((i) => ({
       id: i.id,
+      name: i.name,
       level:
         i.connectionType === 'serial_port'
           ? serialLevel(getSerialStatus(i.id), serialDownSince(getSerialStatus(i.id)))
@@ -29,9 +30,13 @@ export const DeviceHealthChip: React.FC = () => {
   return (
     <>
       <Tooltip title={t(`chip.tooltip.${level}`, { count })}>
-        <Button data-level={level} icon={<HealthIcon level={level} />} onClick={() => setOpenId(focusId)}>
-          {t('chip.label')}: {t(`chip.state.${level}`)}
-          {count > 0 && ` · ${count}`}
+        <Button
+          data-level={level}
+          icon={<HealthIcon level={level} />}
+          aria-label={`${t('chip.label')}: ${t(`chip.state.${level}`)} — ${chipText(devices, t)}`}
+          onClick={() => setOpenId(focusId)}
+        >
+          {chipText(devices, t)}
         </Button>
       </Tooltip>
       <DeviceDetailsDrawer open={openId !== null} integrationId={openId} onClose={() => setOpenId(null)} />

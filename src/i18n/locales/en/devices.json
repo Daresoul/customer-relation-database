@@ -349,7 +349,12 @@
       "working": "OK",
       "waiting": "Waiting",
       "down": "Not working"
-    }
+    },
+    "allWorking": "Lab machines OK",
+    "oneDown": "{{name}} not working",
+    "manyDown": "{{count}} machines not working",
+    "oneWaiting": "{{name}}: waiting",
+    "manyWaiting": "{{count}} machines waiting"
   },
   "drawer": {
     "title": "Lab machine details",

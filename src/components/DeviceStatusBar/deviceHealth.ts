@@ -118,6 +118,11 @@ export function describeFolderStatus(status: FileWatcherStatus | undefined, t: T
   }
 }
 
-export function chipText(_devices: Array<{ name: string; level: HealthLevel }>, _t: T): string {
-  return '';
+/** The header's words: the machine by name when one needs attention, else how many. */
+export function chipText(devices: Array<{ name: string; level: HealthLevel }>, t: T): string {
+  const { level } = rollupHealth(devices.map((d) => d.level));
+  if (level === 'none' || level === 'working') return t('chip.allWorking');
+  const at = devices.filter((d) => d.level === level);
+  const kind = level === 'down' ? 'Down' : 'Waiting';
+  return at.length === 1 ? t(`chip.one${kind}`, { name: at[0].name }) : t(`chip.many${kind}`, { count: at.length });
 }
