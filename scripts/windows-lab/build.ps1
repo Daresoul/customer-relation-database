@@ -27,8 +27,11 @@ Push-Location pdf-generator-cli
 & .\gradlew.bat build -x test -q
 if ($LASTEXITCODE -ne 0) { throw 'gradle build failed' }
 Pop-Location
+# Like the release workflow: the app looks for pdf-generator-<app version>.jar.
+$labVersion = '0.99.0'
 New-Item -ItemType Directory -Force src-tauri\resources | Out-Null
-Copy-Item pdf-generator-cli\build\libs\pdf-generator-cli-*.jar src-tauri\resources\ -Force
+Remove-Item src-tauri\resources\pdf-generator*.jar -ErrorAction SilentlyContinue
+Copy-Item pdf-generator-cli\build\libs\pdf-generator-cli-1.0.0.jar "src-tauri\resources\pdf-generator-$labVersion.jar" -Force
 
 Write-Host '==> Tauri build (NSIS)'
 $labKey = 'C:\ArkivetLab\state\lab-updater.key'
@@ -40,7 +43,7 @@ $env:TAURI_KEY_PASSWORD = 'lab'
 $window = (Get-Content src-tauri\tauri.conf.json -Raw | ConvertFrom-Json).tauri.windows[0]
 $window | Add-Member -NotePropertyName additionalBrowserArgs -NotePropertyValue '--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --remote-debugging-port=9222' -Force
 $labConfig = 'C:\ArkivetLab\state\lab-tauri.json'
-@{ package = @{ version = '0.99.0' }; tauri = @{ windows = @($window) } } | ConvertTo-Json -Depth 6 |
+@{ package = @{ version = $labVersion }; tauri = @{ windows = @($window) } } | ConvertTo-Json -Depth 6 |
   Set-Content $labConfig -Encoding ascii
 & npm.cmd run tauri build -- --bundles nsis --config $labConfig
 if ($LASTEXITCODE -ne 0) { throw 'tauri build failed' }
