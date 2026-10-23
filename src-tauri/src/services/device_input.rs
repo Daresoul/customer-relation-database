@@ -1090,6 +1090,13 @@ pub(crate) fn run_read_loop<R: std::io::Read + ?Sized>(
             Err(e) => match classify_read_error(&e) {
                 ReadErrorAction::NoData => true,
                 ReadErrorAction::Fatal => {
+                    // Half a result when the cable goes is still news for the lab inbox.
+                    if assembler.partial_len() > 0 {
+                        match assembler.flush_idle(protocol) {
+                            Ok(frame) => sink.on_frame(frame),
+                            Err(partial) => sink.on_cut_off(partial),
+                        }
+                    }
                     return Err(format!("Connection lost: {} ({:?})", e, e.kind()));
                 }
             },
