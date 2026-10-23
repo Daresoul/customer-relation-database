@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { useTheme } from '../contexts/ThemeContext';
+import { useTheme } from '../contexts/useTheme';
 import { useUpdater } from '../hooks/useUpdater';
 import { updateService } from '../services/updateService';
 import { scheduleUpdateChecks } from '../services/updateCheckSchedule';

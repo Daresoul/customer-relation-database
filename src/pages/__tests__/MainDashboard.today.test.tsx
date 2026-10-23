@@ -29,7 +29,7 @@ vi.mock('../../services/api.integration', () => ({
 vi.mock('../../services/fileHistoryService', () => ({
   fileHistoryService: { listPendingDeviceEntries: vi.fn().mockResolvedValue([{ id: 1 }, { id: 2 }]) },
 }));
-vi.mock('../../contexts/ViewContext', () => ({
+vi.mock('../../contexts/useViewContext', () => ({
   useViewContext: () => ({ currentView: 'animal', setCurrentView: vi.fn() }),
 }));
 vi.mock('../../utils/themeStyles', () => ({ useThemeColors: () => ({}) }));

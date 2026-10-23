@@ -34,7 +34,7 @@ import {
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { useDeviceImport } from '@/contexts/DeviceImportContext';
+import { useDeviceImport } from '@/contexts/useDeviceImport';
 import { usePatients } from '@/hooks/usePatients';
 import { useCreateMedicalRecord, useUploadAttachment } from '@/hooks/useMedicalRecords';
 import type { SavedRecordDocuments } from '@/hooks/useDocumentStatusNotice';

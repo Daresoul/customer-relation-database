@@ -2,31 +2,11 @@
  * ViewContext - Manages the global view state (animal vs household)
  */
 
-import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import React, { useEffect, useState, useCallback, ReactNode } from 'react';
 import { ViewType, ViewPreference, SearchState, Patient, HouseholdSearchResult } from '../types';
+import { ViewContext, type ViewContextType } from './useViewContext';
 import { invoke } from '@/services/invoke';
 
-interface ViewContextType {
-  // View state
-  currentView: ViewType;
-  setCurrentView: (view: ViewType) => Promise<void>;
-  isLoading: boolean;
-
-  // Search states (separate for each view)
-  animalSearchState: SearchState<Patient>;
-  householdSearchState: SearchState<HouseholdSearchResult>;
-
-  // Actions
-  switchToAnimalView: () => Promise<void>;
-  switchToHouseholdView: () => Promise<void>;
-  switchToAppointmentsView: () => Promise<void>;
-  updateAnimalSearch: (query: string, results: Patient[], loading: boolean) => void;
-  updateHouseholdSearch: (query: string, results: HouseholdSearchResult[], loading: boolean) => void;
-  clearAnimalSearch: () => void;
-  clearHouseholdSearch: () => void;
-}
-
-const ViewContext = createContext<ViewContextType | undefined>(undefined);
 
 interface ViewProviderProps {
   children: ReactNode;
@@ -174,12 +154,4 @@ export const ViewProvider: React.FC<ViewProviderProps> = ({ children }) => {
       {children}
     </ViewContext.Provider>
   );
-};
-
-export const useViewContext = (): ViewContextType => {
-  const context = useContext(ViewContext);
-  if (context === undefined) {
-    throw new Error('useViewContext must be used within a ViewProvider');
-  }
-  return context;
 };

@@ -79,7 +79,8 @@ vi.mock('../../RecentDeviceFiles', () => ({
   ),
 }));
 
-import { DeviceImportProvider, useDeviceImport, PendingDeviceFile } from '../../../contexts/DeviceImportContext';
+import { DeviceImportProvider } from '../../../contexts/DeviceImportContext';
+import { useDeviceImport, type PendingDeviceFile } from '../../../contexts/useDeviceImport';
 import DeviceImportModal from '../DeviceImportModal';
 
 let ctx: ReturnType<typeof useDeviceImport>;

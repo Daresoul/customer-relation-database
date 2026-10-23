@@ -18,7 +18,7 @@ vi.mock('../../../hooks/useAppSettings', () => ({
     isUpdating: false,
   }),
 }));
-vi.mock('../../../contexts/ThemeContext', () => ({
+vi.mock('../../../contexts/useTheme', () => ({
   useTheme: () => ({ themeMode: 'light', setThemeMode: vi.fn() }),
 }));
 vi.mock('../../../components/DeviceStatusBar', () => ({ DeviceStatusInline: () => null }));

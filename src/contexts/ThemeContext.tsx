@@ -3,24 +3,13 @@
  * Enhanced to work with new unified theme system
  */
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { useState, useEffect, ReactNode } from 'react';
+import { ThemeContext, type ThemeMode } from './useTheme';
 import { ConfigProvider } from 'antd';
 import { createUnifiedTheme } from '../styles/theme/unifiedTheme';
 import { generateCSSVariables, injectCSSVariables } from '../styles/theme/cssVariables';
 
-export type ThemeMode = 'dark' | 'light';
-
-interface ThemeContextType {
-  themeMode: ThemeMode;
-  setThemeMode: (mode: ThemeMode) => void;
-  primaryColor: string;
-  setPrimaryColor: (color: string) => void;
-  fontSize: number;
-  setFontSize: (size: number) => void;
-  cssVariables: Record<string, string>;
-}
-
-const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+export type { ThemeMode } from './useTheme';
 
 export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // The saved setting (AppSettingsSync) decides; localStorage only paints the first frame.
@@ -108,12 +97,4 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       </ConfigProvider>
     </ThemeContext.Provider>
   );
-};
-
-export const useTheme = () => {
-  const context = useContext(ThemeContext);
-  if (!context) {
-    throw new Error('useTheme must be used within a ThemeProvider');
-  }
-  return context;
 };

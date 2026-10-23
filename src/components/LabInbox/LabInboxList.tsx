@@ -3,7 +3,7 @@ import { Alert, App, Button, Form, Input, Modal, Radio, Segmented, Space, Table,
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
-import { useDeviceImport } from '@/contexts/DeviceImportContext';
+import { useDeviceImport } from '@/contexts/useDeviceImport';
 import { useDiscardLabResult, useLabInbox, useRestoreLabResult } from '@/hooks/useLabInbox';
 import { labInboxService } from '@/services/labInboxService';
 import { LoadError } from '@/components/common/LoadError';

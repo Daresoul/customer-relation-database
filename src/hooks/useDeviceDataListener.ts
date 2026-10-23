@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@/services/invoke';
 import { useTranslation } from 'react-i18next';
-import { useDeviceImport, PendingDeviceFile } from '../contexts/DeviceImportContext';
+import { useDeviceImport, type PendingDeviceFile } from '../contexts/useDeviceImport';
 import { App } from 'antd';
 
 interface DeviceDataPayload {

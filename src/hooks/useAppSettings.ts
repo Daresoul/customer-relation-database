@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useEffect } from 'react';
 import { App } from 'antd';
 import { updateDateFormatInStorage } from '../utils/dateFormatter';
-import { useTheme } from '../contexts/ThemeContext';
+import { useTheme } from '../contexts/useTheme';
 import { createMutationErrorHandler } from '../utils/errors';
 
 export const useAppSettings = () => {

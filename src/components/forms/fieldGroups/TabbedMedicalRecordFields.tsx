@@ -44,12 +44,8 @@ const FIELD_TO_TAB: Readonly<Record<string, TabKey>> = {
 /** Order tabs are visited for "switch to the first one with errors". */
 const TAB_ORDER: TabKey[] = ['standard', 'prescriptions', 'lineItems'];
 
-/**
- * Compute which tabs currently have validation errors.
- * Exported so the parent can pre-check before deciding to call
- * onFinishFailed (rarely needed, but useful for tests).
- */
-export function tabsWithErrors(errorFields: readonly string[]): Set<TabKey> {
+/** Compute which tabs currently have validation errors. */
+function tabsWithErrors(errorFields: readonly string[]): Set<TabKey> {
   const result = new Set<TabKey>();
   for (const f of errorFields) {
     const tab = FIELD_TO_TAB[f];

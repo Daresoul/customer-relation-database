@@ -21,7 +21,7 @@ import { PageLoader } from '../components/common/Loading';
 import { NoPatientsFound, NoHouseholdsFound } from '../components/common/EmptyState';
 import { LoadError } from '../components/common/LoadError';
 import AppointmentsTab from './Appointments/AppointmentsTab';
-import { useViewContext } from '../contexts/ViewContext';
+import { useViewContext } from '../contexts/useViewContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { invalidatePatientData, invalidateHouseholdData } from '../hooks/invalidation';
 import api, { setAppInstance } from '../services/api.integration';

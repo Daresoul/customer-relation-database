@@ -20,7 +20,7 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('../../contexts/ThemeContext', () => ({
+vi.mock('../../contexts/useTheme', () => ({
   useTheme: () => ({ setThemeMode: vi.fn() }),
 }));
 

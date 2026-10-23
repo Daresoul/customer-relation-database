@@ -17,7 +17,8 @@ vi.mock('../../services/settingsService', () => ({
   SettingsService: { getSettings, updateSettings: vi.fn() },
 }));
 
-import { ThemeProvider, useTheme } from '../../contexts/ThemeContext';
+import { ThemeProvider } from '../../contexts/ThemeContext';
+import { useTheme } from '../../contexts/useTheme';
 import { AppSettingsSync } from '../AppSettingsSync';
 
 function ThemeProbe() {

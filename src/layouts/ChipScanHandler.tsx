@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { listen } from '@tauri-apps/api/event';
 import { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
-import { useDeviceImport } from '../contexts/DeviceImportContext';
+import { useDeviceImport } from '../contexts/useDeviceImport';
 import { useGlobalSearch } from '../components/AppHeader';
 import { searchPatientsEverywhere } from '../components/AppHeader/usePatientSearch';
 

@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { listen } from '@tauri-apps/api/event';
-import { useDeviceImport } from '../contexts/DeviceImportContext';
+import { useDeviceImport } from '../contexts/useDeviceImport';
 import { useViewContext } from '../contexts';
 
 /**

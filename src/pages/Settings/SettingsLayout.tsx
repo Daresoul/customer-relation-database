@@ -20,7 +20,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAppSettings } from '../../hooks/useAppSettings';
 import type { UpdateSettingsRequest } from '../../services/settingsService';
-import { useTheme } from '../../contexts/ThemeContext';
+import { useTheme } from '../../contexts/useTheme';
 import styles from './Settings.module.css';
 
 // Import category components
