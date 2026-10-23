@@ -51,21 +51,54 @@ vi.mock('@/components/PrintReportModal', () => ({ default: () => null }));
 vi.mock('@/components/DiagnosisTagList', () => ({ default: () => null }));
 vi.mock('@/components/DeviceStatusBar', () => ({ DeviceStatusInline: () => null }));
 
+// The backend works out the totals; the page shows them as they come.
+const totalsQuery = {
+  data: {
+    subtotal: 1500,
+    discountAmount: 0,
+    total: 1500,
+    netTotal: 1271.19,
+    vatTotal: 228.81,
+    pricesIncludeVat: true,
+    vatGroups: [{ label: 'ДДВ 18%', percent: 18, net: 1271.19, vat: 228.81, gross: 1500 }],
+    lineAmounts: [1500],
+  },
+};
+const useInvoiceTotals = vi.fn((..._args: unknown[]) => totalsQuery);
+vi.mock('@/hooks/useClinic', () => ({
+  useInvoiceTotals: (...args: unknown[]) => useInvoiceTotals(...args),
+}));
+
+function renderPage() {
+  render(
+    <App>
+      <MemoryRouter initialEntries={['/medical-records/7']}>
+        <Routes>
+          <Route path="/medical-records/:id" element={<MedicalRecordDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    </App>,
+  );
+}
+
 describe('record page total', () => {
   it('is the sum of the line items, not a leftover manual total', () => {
-    render(
-      <App>
-        <MemoryRouter initialEntries={['/medical-records/7']}>
-          <Routes>
-            <Route path="/medical-records/:id" element={<MedicalRecordDetailPage />} />
-          </Routes>
-        </MemoryRouter>
-      </App>,
-    );
+    renderPage();
 
     const totalLabel = screen.getByText('medical:lineItems.total:');
     const totalRow = totalLabel.closest('tr') as HTMLElement;
     expect(totalRow.textContent).toContain('1500.00');
     expect(totalRow.textContent).not.toContain('2000');
+  });
+
+  it('comes from the backend, with the VAT per rate', () => {
+    renderPage();
+
+    expect(useInvoiceTotals).toHaveBeenLastCalledWith(
+      [{ unitPrice: 1500, quantity: 1, vatPercent: null, vatLabel: null }],
+      undefined,
+    );
+    const vatRow = screen.getByText('ДДВ 18%').closest('tr') as HTMLElement;
+    expect(vatRow.textContent).toContain('228.81');
   });
 });

@@ -16,6 +16,10 @@ vi.mock('../../../../hooks/useCurrencies', () => ({
 vi.mock('../../../../hooks/useAppSettings', () => ({
   useAppSettings: () => ({ settings: { currencyId: 1 } }),
 }));
+vi.mock('../../../../hooks/useClinic', () => ({
+  useTaxRates: () => ({ data: [] }),
+  useInvoiceTotals: () => ({ data: undefined }),
+}));
 
 afterEach(cleanup);
 
