@@ -607,7 +607,7 @@ pub async fn save_alert_settings(
 
 // ---- What each machine did this session --------------------------------------
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeviceDetails {
     pub bytes_last_minute: usize,
@@ -615,6 +615,10 @@ pub struct DeviceDetails {
     pub last_raw: Option<RawMessage>,
     /// Oldest first.
     pub log: Vec<LogEntry>,
+    /// When the current outage began; none while it works.
+    pub down_since: Option<String>,
+    pub outages_today: u32,
+    pub down_minutes_today: i64,
 }
 
 #[derive(Default)]
@@ -651,6 +655,16 @@ pub fn note_raw_message(integration_id: i64, raw: &[u8]) {
 /// A connection state change. Only the step into "down" counts as an error, so
 /// a port retrying every minute is one error, not sixty.
 pub fn record_status(integration_id: i64, label: &str, error_kind: Option<DeviceErrorKind>, health: Health) {
+    record_status_at(integration_id, label, error_kind, health, Utc::now());
+}
+
+pub(crate) fn record_status_at(
+    integration_id: i64,
+    label: &str,
+    error_kind: Option<DeviceErrorKind>,
+    health: Health,
+    _at: DateTime<Utc>,
+) {
     with_runtime(integration_id, |rt| {
         let is_error = health == Health::Down && rt.last_health != Some(Health::Down);
         if health != Health::Starting {
@@ -682,6 +696,9 @@ pub fn device_details(integration_id: i64, now: DateTime<FixedOffset>) -> Device
         errors_today: errors_today(&rt.log, now),
         last_raw: rt.last_raw.clone(),
         log: rt.log.iter().cloned().collect(),
+        down_since: None,
+        outages_today: 0,
+        down_minutes_today: 0,
     })
 }
 
@@ -1301,6 +1318,44 @@ mod tests {
         assert!(load_alert_settings(db).await.unwrap().quiet_alerts.is_empty());
     }
 
+    // Machine status #5: "Проблеми: 0 денес" after 180 failed retries, and the
+    // recent list repeating "Connecting / Error" pairs.
+    #[test]
+    fn a_port_retrying_for_half_an_hour_is_one_outage_of_thirty_minutes() {
+        let id = 9_100_010;
+        let at = |h: u32, m: u32, sec: u32| Utc.with_ymd_and_hms(2026, 10, 19, h, m, sec).unwrap();
+        record_status_at(id, "Connected", None, Health::Working, at(9, 0, 0));
+        record_status_at(id, "Error", Some(DeviceErrorKind::PortMissing), Health::Down, at(9, 10, 0));
+        for n in 0..120 {
+            let s = 15 * n;
+            record_status_at(id, "Connecting", None, Health::Down, at(9, 10 + s / 60, s % 60));
+            record_status_at(id, "Error", Some(DeviceErrorKind::PortMissing), Health::Down, at(9, 10 + s / 60, s % 60));
+        }
+        record_status_at(id, "Connected", None, Health::Working, at(9, 40, 0));
+
+        let d = device_details(id, at(10, 0, 0).fixed_offset());
+        assert_eq!(d.outages_today, 1);
+        assert_eq!(d.down_minutes_today, 30);
+        assert_eq!(d.down_since, None);
+        assert_eq!(d.log.iter().map(|e| e.label.as_str()).collect::<Vec<_>>(), ["Connected", "Error", "Connected"]);
+
+        record_status_at(id, "Error", Some(DeviceErrorKind::PortMissing), Health::Down, at(10, 0, 0));
+        let d = device_details(id, at(10, 15, 0).fixed_offset());
+        assert_eq!(d.outages_today, 2);
+        assert_eq!(d.down_minutes_today, 45, "the outage still going on counts too");
+        assert_eq!(d.down_since.as_deref(), Some(at(10, 0, 0).to_rfc3339().as_str()));
+    }
+
+    #[test]
+    fn todays_outage_figures_start_again_each_day() {
+        let id = 9_100_011;
+        let at = |d: u32, h: u32, m: u32| Utc.with_ymd_and_hms(2026, 10, d, h, m, 0).unwrap();
+        record_status_at(id, "Error", Some(DeviceErrorKind::PortMissing), Health::Down, at(19, 9, 0));
+        record_status_at(id, "Connected", None, Health::Working, at(19, 9, 20));
+        let d = device_details(id, at(20, 8, 0).fixed_offset());
+        assert_eq!((d.outages_today, d.down_minutes_today), (0, 0));
+    }
+
     #[test]
     fn details_count_bytes_keep_the_last_message_and_count_each_outage_once() {
         let id = 9_100_001;
@@ -1320,12 +1375,13 @@ mod tests {
         assert_eq!(d.bytes_last_minute, 150);
         assert_eq!(d.last_raw.as_ref().map(|m| m.text.as_str()), Some("MSH|1\nPID|Max\n"));
         assert_eq!(d.errors_today, 3, "two outages and one cut-off result");
-        assert_eq!(d.log.len(), 7);
+        // The retry in between (Connecting, Error again) is not repeated.
+        assert_eq!(d.log.len(), 5);
         assert_eq!(d.log[1].error_kind.as_deref(), Some("port_missing"));
-        assert_eq!(d.log[6].label, "cut_off");
+        assert_eq!(d.log[4].label, "cut_off");
 
         let empty = device_details(9_100_002, now);
-        assert_eq!(empty, DeviceDetails { bytes_last_minute: 0, errors_today: 0, last_raw: None, log: vec![] });
+        assert_eq!(empty, DeviceDetails::default());
     }
 
     #[test]
