@@ -1,7 +1,7 @@
 <#
   Builds the Windows installer on the lab machine from C:\ArkivetLab\src
   (the branch arrives as a git bundle; see `appctl build`). A normal release
-  build with three lab-only changes, all through TAURI_CONFIG:
+  build with three lab-only changes, all from a merged config file (--config):
     - the window's WebView2 gets a DevTools port (localhost) for Playwright;
     - version 0.99.0, so the real update check never offers v0.7.x;
     - update files are signed with a throwaway lab key (the real one stays in CI).
@@ -39,8 +39,10 @@ $env:TAURI_KEY_PASSWORD = 'lab'
 # defaults go first.
 $window = (Get-Content src-tauri\tauri.conf.json -Raw | ConvertFrom-Json).tauri.windows[0]
 $window | Add-Member -NotePropertyName additionalBrowserArgs -NotePropertyValue '--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --remote-debugging-port=9222' -Force
-$env:TAURI_CONFIG = @{ package = @{ version = '0.99.0' }; tauri = @{ windows = @($window) } } | ConvertTo-Json -Depth 6 -Compress
-& npm.cmd run tauri build -- --bundles nsis
+$labConfig = 'C:\ArkivetLab\state\lab-tauri.json'
+@{ package = @{ version = '0.99.0' }; tauri = @{ windows = @($window) } } | ConvertTo-Json -Depth 6 |
+  Set-Content $labConfig -Encoding ascii
+& npm.cmd run tauri build -- --bundles nsis --config $labConfig
 if ($LASTEXITCODE -ne 0) { throw 'tauri build failed' }
 
 $setup = Get-ChildItem src-tauri\target\release\bundle\nsis\*-setup.exe | Sort-Object LastWriteTime -Descending | Select-Object -First 1
