@@ -795,6 +795,11 @@ async fn check_once(
     }
 }
 
+/// The tray menu's items (id, title) in the app language.
+pub fn tray_menu_titles(_lang: Lang) -> [(&'static str, &'static str); 3] {
+    [("show", "Show"), ("hide", "Hide"), ("quit", "Quit")]
+}
+
 fn show_in_tray(app: &tauri::AppHandle, summary: &TraySummary) {
     let tray = app.tray_handle();
     if let Err(e) = tray.set_tooltip(&summary.tooltip) {
@@ -1052,6 +1057,12 @@ mod tests {
         let now = local(2026, 10, 19, 11, 0);
         let quiet = DeviceProblem { integration_id: 1, name: "Exigo".into(), kind: ProblemKind::Quiet { last_result: Some(local(2026, 10, 17, 18, 5)) } };
         assert_eq!(problem_line(&quiet, now, Lang::En, day_month_pattern("DD/MM/YYYY")), "Exigo: no results since 17/10 18:05");
+    }
+
+    #[test]
+    fn the_tray_menu_speaks_the_app_language() {
+        assert_eq!(tray_menu_titles(Lang::Mk), [("show", "Прикажи"), ("hide", "Сокриј"), ("quit", "Излез")]);
+        assert_eq!(tray_menu_titles(Lang::En), [("show", "Show"), ("hide", "Hide"), ("quit", "Quit")]);
     }
 
     #[test]
