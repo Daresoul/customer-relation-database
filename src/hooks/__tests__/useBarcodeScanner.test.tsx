@@ -393,7 +393,7 @@ describe('useBarcodeScanner — typing is not scanning', () => {
 
   it('Enter after fast typing that is no chip still submits the form', async () => {
     const onScan = vi.fn();
-    const onSubmit = vi.fn((e: any) => e.preventDefault());
+    const onSubmit = vi.fn((e: { preventDefault: () => void }) => e.preventDefault());
     renderHook(() => useBarcodeScanner({ onScan, suffixKey: 'Enter' }));
     render(
       <form onSubmit={onSubmit}>
