@@ -661,8 +661,15 @@ impl JavaPdfService {
     }
 
     /// The sample number printed on a lab report.
-    pub(crate) fn sample_number(_device_type: &str, test_results: &serde_json::Value) -> String {
-        test_results.get("SNO")
+    /// Exigo's SNO is the analyzer's serial, the same on every sample of the
+    /// day; its run number is SEQ.
+    pub(crate) fn sample_number(device_type: &str, test_results: &serde_json::Value) -> String {
+        let run_number = (device_type == "exigo_eos_vet")
+            .then(|| test_results.get("SEQ"))
+            .flatten()
+            .filter(|v| v.as_str().is_some_and(|s| !s.is_empty()));
+        run_number
+            .or_else(|| test_results.get("SNO"))
             .or_else(|| test_results.get("ID1"))
             .or_else(|| test_results.get("sample_id"))
             .and_then(|v| v.as_str())
