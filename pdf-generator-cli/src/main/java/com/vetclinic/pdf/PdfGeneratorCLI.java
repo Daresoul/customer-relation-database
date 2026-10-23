@@ -254,7 +254,8 @@ public class PdfGeneratorCLI {
         } else if (species.contains("cat") || species.contains("мачка")) {
             patient.setPatientType(PatientType.CAT);
         } else {
-            patient.setPatientType(PatientType.DOG); // Default to DOG
+            // No ranges of its own: values print without a range or H/L flag.
+            patient.setPatientType(PatientType.OTHER);
         }
 
         if (json.has("microchip_id") && !json.get("microchip_id").isJsonNull()) {
@@ -766,6 +767,18 @@ public class PdfGeneratorCLI {
 
             // Try to look up the parameter in HealvetParameterEnum for proper name, unit, and ranges
             // Note: forCortisolIsBeforeACTHTest is null since we don't have that info from CLI
+            if (patientType == PatientType.OTHER) {
+                // The dog entry only lends the name and unit; its range is not this animal's.
+                HealvetParameterEnum named = HealvetParameterEnum.getParameterByProperties(paramCode, PatientType.DOG, null);
+                Parameter parameter = new Parameter();
+                parameter.setName(named != null ? named.getTranslated() : paramCode);
+                parameter.setUnit(named != null ? named.getUnit() : null);
+                parameter.setResult(resultValue);
+                parameter.setIndicator(Indicator.UNKNOWN);
+                parameters.add(parameter);
+                continue;
+            }
+
             HealvetParameterEnum healvetEnum = HealvetParameterEnum.getParameterByProperties(
                 paramCode, patientType, null);
 
