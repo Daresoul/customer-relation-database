@@ -155,7 +155,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
   const buildSnapshotForVersion = (targetVersion: number | null) => {
     if (!record) return null;
     if (!targetVersion) return record;
-    let snap: any = { ...record };
+    const snap: any = { ...record };
     const withDiffs = sortedHistory.filter(h => (h as any).oldValues || (h as any).newValues);
     if (withDiffs.length === 0) return snap;
     for (const h of withDiffs) {
