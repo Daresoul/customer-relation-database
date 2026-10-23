@@ -5,7 +5,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/react';
-import { Breadcrumb, ConfigProvider, Tooltip } from 'antd';
+import { Breadcrumb, Button, ConfigProvider, Tooltip } from 'antd';
 import { StyleProvider, createCache, extractStyle } from '@ant-design/cssinjs';
 import { createUnifiedTheme } from '../unifiedTheme';
 
@@ -36,4 +36,11 @@ describe.each(['light', 'dark'] as const)('%s theme', (mode) => {
     const css = cssFor(mode, <Breadcrumb items={[{ title: 'Home' }, { title: 'Rex' }]} />);
     expect(css).toMatch(/\.ant-breadcrumb-separator\{margin-inline:8px;/);
   });
+
+  it('a solid red button has white text, not red on red', () => {
+    const css = cssFor(mode, <Button type="primary" danger>Merge</Button>);
+    const rule = css.match(/\.ant-btn-color-dangerous\.ant-btn-variant-solid\{[^}]*\}/)?.[0] ?? '';
+    expect(rule).toMatch(/color:#fff(fff)?;/);
+  });
 });
+
