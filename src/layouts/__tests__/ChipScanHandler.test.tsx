@@ -77,7 +77,10 @@ function searchReturns(hits: unknown[]) {
   invokeMock.mockImplementation((cmd: string) => Promise.resolve(cmd === 'global_patient_search' ? hits : null));
 }
 
-const scanWithKeyboard = (code = CHIP) => act(() => keyboardScan?.(code));
+const scanWithKeyboard = (code = CHIP) =>
+  act(() => {
+    keyboardScan?.(code);
+  });
 
 beforeEach(() => {
   invokeMock.mockReset();
@@ -143,7 +146,9 @@ describe('chip scan anywhere in the app', () => {
     const router = renderShell();
     await waitFor(() => expect(tauriListeners.has('scanner:barcode')).toBe(true));
 
-    act(() => tauriListeners.get('scanner:barcode')?.({ payload: { code: CHIP } }));
+    act(() => {
+      tauriListeners.get('scanner:barcode')?.({ payload: { code: CHIP } });
+    });
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/patients/11'));
   });
@@ -153,7 +158,9 @@ describe('chip scan anywhere in the app', () => {
     const router = renderShell();
     await waitFor(() => expect(tauriListeners.has('wake-from-tray')).toBe(true));
 
-    act(() => tauriListeners.get('wake-from-tray')?.({ payload: { cause: 'scan', code: CHIP } }));
+    act(() => {
+      tauriListeners.get('wake-from-tray')?.({ payload: { cause: 'scan', code: CHIP } });
+    });
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/patients/11'));
   });
@@ -164,7 +171,9 @@ describe('chip scan anywhere in the app', () => {
     await waitFor(() => expect(tauriListeners.has('scanner:barcode')).toBe(true));
 
     scanWithKeyboard();
-    act(() => tauriListeners.get('scanner:barcode')?.({ payload: { code: CHIP } }));
+    act(() => {
+      tauriListeners.get('scanner:barcode')?.({ payload: { code: CHIP } });
+    });
 
     await waitFor(() => expect(invokeMock).toHaveBeenCalled());
     await new Promise((r) => setTimeout(r, 20));
