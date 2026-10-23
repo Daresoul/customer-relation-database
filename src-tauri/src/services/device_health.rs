@@ -620,6 +620,7 @@ struct DeviceRuntime {
     log: VecDeque<LogEntry>,
     last_health: Option<Health>,
     day: OutageDay,
+    last_noise_note: Option<DateTime<Utc>>,
 }
 
 /// Today's outages of one machine, by the clinic's local day.
@@ -746,7 +747,21 @@ pub(crate) fn record_status_at(
     kick_monitor();
 }
 
-pub(crate) fn note_unrecognized_at(_integration_id: i64, _bytes: usize, _at: DateTime<Utc>) {}
+/// Data that is not a result (wrong speed or machine type), at most once per ten minutes.
+pub fn note_unrecognized(integration_id: i64, bytes: usize) {
+    note_unrecognized_at(integration_id, bytes, Utc::now());
+}
+
+pub(crate) fn note_unrecognized_at(integration_id: i64, bytes: usize, at: DateTime<Utc>) {
+    with_runtime(integration_id, |rt| {
+        if rt.last_noise_note.is_some_and(|last| at - last < Duration::minutes(10)) {
+            return;
+        }
+        rt.last_noise_note = Some(at);
+        log::warn!("Integration {integration_id}: {bytes} bytes that are not a result (wrong speed or machine type?)");
+        push_log(&mut rt.log, LogEntry { at: at.to_rfc3339(), label: "unrecognized_data".into(), error_kind: None, is_error: false });
+    });
+}
 
 pub fn record_event(integration_id: i64, kind: DeviceEventKind) {
     let label = snake_case(&kind).unwrap_or_else(|| format!("{kind:?}"));

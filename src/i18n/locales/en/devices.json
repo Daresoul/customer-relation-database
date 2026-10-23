@@ -387,7 +387,8 @@
       "empty_result": "Result had no values",
       "cut_off": "Result was cut off",
       "save_failed": "Result couldn't be saved",
-      "folder_lost": "Lost the folder"
+      "folder_lost": "Lost the folder",
+      "unrecognized_data": "Data arrived that is not a result — check the speed (baud rate) and machine type in Settings"
     },
     "lastRawTitle": "Last message",
     "lastRaw": "Last message ({{time}}, {{count}} bytes)",

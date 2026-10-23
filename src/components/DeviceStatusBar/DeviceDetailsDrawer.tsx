@@ -26,6 +26,7 @@ const REFRESH_MS = 2000;
 const RESULTS_REFRESH_MS = 30_000;
 
 const LOG_LABELS = [
+  'unrecognized_data',
   'Connected',
   'Connecting',
   'Disconnected',

@@ -1556,6 +1556,10 @@ impl FrameSink for SerialSink<'_> {
         tauri::async_runtime::block_on(deliver_result(&db, &dir, &sink, &self.source(), &raw_name, &frame));
     }
 
+    fn on_unrecognized(&mut self, bytes: usize) {
+        device_health::note_unrecognized(self.integration_id, bytes);
+    }
+
     fn on_cut_off(&mut self, partial: Vec<u8>) {
         log::warn!("🧹 Stalled partial frame ({} bytes) from {} ({}), integration {}",
             partial.len(), self.device_type, self.port_name, self.integration_id);
