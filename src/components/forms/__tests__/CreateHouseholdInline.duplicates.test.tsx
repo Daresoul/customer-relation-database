@@ -51,7 +51,7 @@ function type(placeholderOrLabel: string, value: string, index = 0) {
 function fillMarko() {
   type('forms:placeholders.enterName', 'Petrovski', 0);
   type('forms:placeholders.enterName', 'Marko', 1);
-  type('forms:placeholders.enterName', 'Petrovski', 2);
+  type('forms:placeholders.enterLastName', 'Petrovski');
   type('forms:placeholders.enterPhone', '070 123 456');
 }
 
