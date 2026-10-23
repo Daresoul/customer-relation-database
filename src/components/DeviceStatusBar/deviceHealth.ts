@@ -117,3 +117,7 @@ export function describeFolderStatus(status: FileWatcherStatus | undefined, t: T
       return { text: t('status.unknown') };
   }
 }
+
+export function chipText(_devices: Array<{ name: string; level: HealthLevel }>, _t: T): string {
+  return '';
+}

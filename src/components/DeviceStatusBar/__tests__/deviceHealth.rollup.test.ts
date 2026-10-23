@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { folderLevel, rollupHealth, serialDownSince, serialLevel } from '../deviceHealth';
+import { chipText, folderLevel, rollupHealth, serialDownSince, serialLevel } from '../deviceHealth';
 import type { DeviceConnectionStatus, FileWatcherStatus } from '../../../types/deviceIntegration';
 
 const serial = (over: Partial<DeviceConnectionStatus>): DeviceConnectionStatus => ({
@@ -60,4 +60,20 @@ describe('device health level', () => {
     expect(rollupHealth(['working', 'waiting'])).toEqual({ level: 'waiting', count: 1 });
     expect(rollupHealth(['down', 'waiting', 'down', 'working'])).toEqual({ level: 'down', count: 2 });
   });
+
+  // Machine status #3: "Не работи · 1" made the vet open the panel to learn which one.
+  it('the header names the machine when only one needs attention', () => {
+    const t = (key: string, o?: Record<string, unknown>) => (o ? `${key} ${JSON.stringify(o)}` : key);
+    expect(chipText([{ name: 'PointCare', level: 'down' }, { name: 'Exigo', level: 'working' }], t)).toBe(
+      'chip.oneDown {"name":"PointCare"}',
+    );
+    expect(chipText([{ name: 'PointCare', level: 'down' }, { name: 'Healvet', level: 'down' }], t)).toBe(
+      'chip.manyDown {"count":2}',
+    );
+    expect(chipText([{ name: 'PCR', level: 'waiting' }, { name: 'Exigo', level: 'working' }], t)).toBe(
+      'chip.oneWaiting {"name":"PCR"}',
+    );
+    expect(chipText([{ name: 'Exigo', level: 'working' }], t)).toBe('chip.allWorking');
+  });
 });
+
