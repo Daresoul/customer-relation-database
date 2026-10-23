@@ -201,7 +201,6 @@
     "addSpecies": "Add New Species",
     "editSpecies": "Edit Species",
     "speciesPlaceholder": "e.g., Dog, Cat, Bird",
-    "color": "Color",
     "created": "Species created successfully",
     "updated": "Species updated successfully",
     "deleted": "Species deactivated",

@@ -33,7 +33,6 @@ import { Patient, PatientWithHousehold } from '../../types';
 import type { BaseTableProps } from '../../types/ui.types';
 import dayjs from 'dayjs';
 import { formatDate } from '../../utils/dateFormatter';
-import { useSpecies } from '../../hooks/useSpecies';
 import styles from './Tables.module.css';
 import { AlertChips } from '../patient/AlertChips';
 import { patientStatus, visiblePatients } from '../../utils/patientChart';
@@ -64,17 +63,6 @@ export const PatientTable: React.FC<PatientTableProps> = ({
     onSearchTextChange?.(text);
   };
 
-  // Fetch species to get colors
-  const { data: speciesList = [] } = useSpecies(true);
-
-  // Create species color lookup map
-  const speciesColorMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    speciesList.forEach(species => {
-      map[species.name] = species.color || '#1890ff';
-    });
-    return map;
-  }, [speciesList]);
 
   // A species' name in the app language; species the app has no word for
   // keep their own name.
@@ -170,25 +158,7 @@ export const PatientTable: React.FC<PatientTableProps> = ({
       render: (species) => {
         if (!species) return null;
 
-        const translatedSpecies = speciesLabel(species);
-
-        // Get color from database or use default
-        const speciesColor = speciesColorMap[species] || '#1890ff';
-
-        return (
-          <Space>
-            <div
-              style={{
-                width: '12px',
-                height: '12px',
-                borderRadius: '50%',
-                backgroundColor: speciesColor,
-                display: 'inline-block',
-              }}
-            />
-            <Text>{translatedSpecies}</Text>
-          </Space>
-        );
+        return <Text>{speciesLabel(species)}</Text>;
       },
       filters: speciesFilters,
       onFilter: (value, record) => record.species === value,
