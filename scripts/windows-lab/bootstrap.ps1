@@ -60,8 +60,21 @@ if ($isAdmin) {
 }
 
 Step 'Java 17 and Node LTS'
-foreach ($id in 'EclipseAdoptium.Temurin.17.JRE', 'OpenJS.NodeJS.LTS') {
-  winget install --id $id -e --silent --accept-package-agreements --accept-source-agreements | Out-Null
+$hasWinget = [bool](Get-Command winget -ErrorAction SilentlyContinue)
+function Test-Java { [bool](Get-ChildItem "$env:ProgramFiles\Eclipse Adoptium" -Filter java.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1) }
+if (-not (Test-Java)) {
+  if ($hasWinget) {
+    winget install --id EclipseAdoptium.Temurin.17.JRE -e --silent --accept-package-agreements --accept-source-agreements | Out-Null
+  } else {
+    # Windows Server has no winget: the official Adoptium installer.
+    $msi = Join-Path $env:TEMP 'temurin17-jre.msi'
+    Invoke-WebRequest 'https://api.adoptium.net/v3/installer/latest/17/ga/windows/x64/jre/hotspot/normal/eclipse' -OutFile $msi -UseBasicParsing
+    Start-Process msiexec.exe -ArgumentList '/i', "`"$msi`"", '/qn', 'ADDLOCAL=FeatureMain,FeatureEnvironment,FeatureJavaHome' -Wait
+  }
+}
+if (-not (Test-Path "$env:ProgramFiles\nodejs\node.exe")) {
+  if ($hasWinget) { winget install --id OpenJS.NodeJS.LTS -e --silent --accept-package-agreements --accept-source-agreements | Out-Null }
+  else { Write-Warning 'Node.js is missing and winget is not available: install Node LTS for the clinic simulator.' }
 }
 
 Step 'Virtual COM ports (com0com)'
