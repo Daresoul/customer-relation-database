@@ -50,9 +50,11 @@ export interface MedicalRecordHistory {
   id: number;
   medicalRecordId: number;
   version: number;
-  changedFields?: string[];
-  oldValues?: Record<string, any>;
-  newValues?: Record<string, any>;
+  /** Comma-separated field names. */
+  changedFields?: string | null;
+  /** JSON object text. */
+  oldValues?: string | null;
+  newValues?: string | null;
   changedBy?: string;
   changedAt: string;
 }
@@ -65,7 +67,7 @@ export interface Currency {
 }
 
 export interface DeviceDataInput {
-  deviceTestData: any;
+  deviceTestData: Record<string, unknown>;
   deviceType: string;
   deviceName: string;
 }
@@ -84,7 +86,7 @@ export interface CreateMedicalRecordInput {
   manualTotal?: number | null;
   lineItems?: CreateLineItemInput[];
   // Optional device test data for PDF generation (legacy single device)
-  deviceTestData?: any;
+  deviceTestData?: Record<string, unknown>;
   deviceType?: string;
   deviceName?: string;
   // New: support for multiple devices
@@ -145,7 +147,7 @@ export interface DownloadAttachmentResponse {
   deviceType?: string;
   deviceName?: string;
   connectionMethod?: string;
-  testResults?: any;
+  testResults?: Record<string, unknown>;
 }
 
 export interface SearchMedicalRecordsResponse {

@@ -21,7 +21,7 @@ import { DIAGNOSES_KEYS } from '@/hooks/useDiagnoses';
 import { useQueryClient } from '@tanstack/react-query';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 // Inline PDF viewer handled by PdfInlineViewer with reliable fallbacks
-import type { MedicalRecord, UpdateMedicalRecordInput } from '@/types/medical';
+import type { MedicalRecord, MedicalRecordHistory, UpdateMedicalRecordInput } from '@/types/medical';
 import type { MedicalRecordLineItem } from '@/types/lineItem';
 import MoveLabResultModal from '@/components/LabInbox/MoveLabResultModal';
 import RecordLabValues from '@/components/LabResults/RecordLabValues';
@@ -29,6 +29,7 @@ import { labInboxService } from '@/services/labInboxService';
 import { invalidateLabInboxData } from '@/hooks/invalidation';
 import { InvoiceSummaryRows } from '@/components/InvoiceSummaryRows';
 import { formatMoney } from '@/utils/money';
+import { messageOf } from '@/utils/errors';
 import styles from './MedicalRecordDetailPage.module.css';
 import DocumentUpload from './DocumentUpload';
 import { invalidateRecordFiles } from '@/hooks/invalidation';
@@ -83,11 +84,11 @@ export const MedicalRecordDetailPage: React.FC = () => {
   // Both groups render in the same kind of table so behaviour is
   // consistent; they just sit in two separate cards.
   const documentAttachments = useMemo(
-    () => attachments.filter((a: any) => a.attachmentType !== 'test_result'),
+    () => attachments.filter((a) => a.attachmentType !== 'test_result'),
     [attachments],
   );
   const deviceDataAttachments = useMemo(
-    () => attachments.filter((a: any) => a.attachmentType === 'test_result'),
+    () => attachments.filter((a) => a.attachmentType === 'test_result'),
     [attachments],
   );
 
@@ -143,12 +144,12 @@ export const MedicalRecordDetailPage: React.FC = () => {
       });
   }, [history]);
 
-  function parseMaybeJson(v: any): any | null {
+  function parseMaybeJson(v: unknown): Record<string, unknown> | null {
     if (!v) return null;
     if (typeof v === 'string') {
       try { return JSON.parse(v); } catch { return null; }
     }
-    if (typeof v === 'object') return v;
+    if (typeof v === 'object') return v as Record<string, unknown>;
     return null;
   }
 
@@ -156,20 +157,20 @@ export const MedicalRecordDetailPage: React.FC = () => {
   const snapshot = useMemo(() => {
     if (!record) return null;
     if (!currentTargetVersion) return record;
-    const snap: any = { ...record };
-    const withDiffs = sortedHistory.filter(h => (h as any).oldValues || (h as any).newValues);
-    if (withDiffs.length === 0) return snap;
+    const snap: Record<string, unknown> = { ...record };
+    const withDiffs = sortedHistory.filter(h => h.oldValues || h.newValues);
+    if (withDiffs.length === 0) return record;
     for (const h of withDiffs) {
       if (h.version > currentTargetVersion) {
-        const oldVals = parseMaybeJson((h as any).oldValues);
+        const oldVals = parseMaybeJson(h.oldValues);
         if (oldVals) {
           Object.keys(oldVals).forEach(k => {
-            (snap as any)[camelize(k)] = oldVals[k];
+            snap[camelize(k)] = oldVals[k];
           });
         }
       }
     }
-    return snap as MedicalRecord;
+    return snap as unknown as MedicalRecord;
   }, [record, currentTargetVersion, sortedHistory]);
   // When the record's version increases (= an update just happened and
   // refetch brought back a new version), clear the manual version selection
@@ -258,7 +259,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
       dataIndex: 'version',
       key: 'version',
       width: 120,
-      render: (_: any, row: any) => (
+      render: (_: unknown, row: MedicalRecordHistory) => (
         <Button type="link" size="small" onClick={() => { setSelectedVersion(row.version); setShowDiffs(true); }}>
           v{row.version}
         </Button>
@@ -267,8 +268,8 @@ export const MedicalRecordDetailPage: React.FC = () => {
     { title: t('medical:detail.changedAt'), dataIndex: 'changedAt', key: 'changedAt', render: (v: string) => new Date(v).toLocaleString() },
     { title: t('medical:detail.changedBy'), dataIndex: 'changedBy', key: 'changedBy', render: (v: string) => v || '-' },
     {
-      title: t('medical:detail.fields'), key: 'fields', render: (_: any, row: any) => {
-        const cf = (row as any).changedFields;
+      title: t('medical:detail.fields'), key: 'fields', render: (_: unknown, row: MedicalRecordHistory) => {
+        const cf: unknown = row.changedFields;
         let fields: string[] = [];
         if (Array.isArray(cf)) fields = cf;
         else if (typeof cf === 'string' && cf.trim().length > 0) fields = cf.split(',').map((s: string) => s.trim());
@@ -321,7 +322,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
 
       // Refresh the medical record to show the new attachment
       await refetch();
-    } catch (error: any) {
+    } catch (error) {
       console.error('❌ Failed to regenerate PDF:', error);
       notification.error({
         message: t('medical:detail.pdfRegenerationFailed'),
@@ -377,7 +378,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
     }
   };
 
-  const onExpand = useCallback(async (expanded: boolean, row: any) => {
+  const onExpand = useCallback(async (expanded: boolean, row: MedicalAttachment) => {
     const key = String(row.id);
     if (expanded) {
       if (!isPreviewable(row.mimeType, row.originalName)) {
@@ -397,7 +398,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
               const pngPath = await MedicalService.renderPdfAttachmentThumbnail(row.id, 1, 900);
               const { readBinaryFile } = await import('@tauri-apps/api/fs');
               const bytes = await readBinaryFile(pngPath);
-              const blob = new Blob([new Uint8Array(bytes as any)], { type: 'image/png' });
+              const blob = new Blob([new Uint8Array(bytes)], { type: 'image/png' });
               const dataUrl: string = await new Promise((resolve, reject) => {
                 const fr = new FileReader();
                 fr.onerror = () => reject(fr.error);
@@ -407,7 +408,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
               setPreviewUrls(prev => ({ ...prev, [key]: dataUrl }));
               setPreviewKinds(prev => ({ ...prev, [key]: 'pdfium' }));
               return;
-            } catch (pdfiumErr: any) {
+            } catch {
               // Fall through to pdf.js path
             }
           }
@@ -416,8 +417,8 @@ export const MedicalRecordDetailPage: React.FC = () => {
           setPreviewUrls(prev => ({ ...prev, [key]: url }));
           setPreviewBlobs(prev => ({ ...prev, [key]: blob }));
           setPreviewKinds(prev => ({ ...prev, [key]: 'blob' }));
-        } catch (e: any) {
-          notification.error({ message: t('common:error'), description: e?.message || t('medical:detail.previewLoadFailed'), placement: "bottomRight", duration: 5 });
+        } catch (e) {
+          notification.error({ message: t('common:error'), description: messageOf(e) || t('medical:detail.previewLoadFailed'), placement: "bottomRight", duration: 5 });
         }
       }
     } else {
@@ -452,12 +453,12 @@ export const MedicalRecordDetailPage: React.FC = () => {
   // Auto-expand attachment if specified in URL
   useEffect(() => {
     if (attachmentIdToExpand && attachments.length > 0 && shouldAutoExpand) {
-      const attachmentExists = attachments.some((att: any) => String(att.id) === attachmentIdToExpand);
+      const attachmentExists = attachments.some((att) => String(att.id) === attachmentIdToExpand);
       if (attachmentExists) {
         // Set expanded keys to include this attachment
         setExpandedRowKeys([attachmentIdToExpand]);
         // Find the attachment and trigger the expand
-        const attachment = attachments.find((att: any) => String(att.id) === attachmentIdToExpand);
+        const attachment = attachments.find((att) => String(att.id) === attachmentIdToExpand);
         if (attachment) {
           onExpand(true, attachment);
         }
@@ -506,7 +507,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
    * lives here in one place. Both calls share the expanded-row /
    * preview state by attachment id.
    */
-  const handleDeleteAttachment = async (row: any) => {
+  const handleDeleteAttachment = async (row: MedicalAttachment) => {
     setDeletingAttachmentId(row.id);
     try {
       const labReport = await MedicalService.deleteAttachment(row.id);
@@ -531,10 +532,10 @@ export const MedicalRecordDetailPage: React.FC = () => {
         duration: 3,
       });
       await refetch();
-    } catch (e: any) {
+    } catch (e) {
       notification.error({
         message: t('common:error'),
-        description: e?.message || t('medical:detail.attachmentDeleteFailed', 'Failed to delete the file.'),
+        description: messageOf(e) || t('medical:detail.attachmentDeleteFailed', 'Failed to delete the file.'),
         placement: 'bottomRight',
         duration: 5,
       });
@@ -588,14 +589,14 @@ export const MedicalRecordDetailPage: React.FC = () => {
   const isPdf = (row: MedicalAttachment) =>
     (row.mimeType || '').toLowerCase() === 'application/pdf' || String(row.originalName).toLowerCase().endsWith('.pdf');
 
-  const renderAttachmentsTable = (dataSource: any[], emptyText: string) => (
+  const renderAttachmentsTable = (dataSource: MedicalAttachment[], emptyText: string) => (
     <Table
       size="small"
-      rowKey={(r: any) => String(r.id)}
+      rowKey={(r) => String(r.id)}
       dataSource={dataSource}
       pagination={false}
       locale={{ emptyText }}
-      onRow={(record: any) => ({
+      onRow={(record) => ({
         onClick: () => {
           if (isPreviewable(record.mimeType, record.originalName)) {
             const open = expandedRowKeys.includes(String(record.id));
@@ -608,7 +609,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
         expandedRowKeys,
         onExpand,
         showExpandColumn: false,
-        expandedRowRender: (row: any) => {
+        expandedRowRender: (row) => {
           const key = String(row.id);
           const url = previewUrls[key];
           const pblob = previewBlobs[key];
@@ -649,7 +650,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
           title: t('medical:detail.file'),
           dataIndex: 'originalName',
           key: 'originalName',
-          render: (v: string, row: any) => (
+          render: (v: string, row: MedicalAttachment) => (
             <span className={styles.attachmentLink} style={{
               textDecoration: isPreviewable(row.mimeType, row.originalName) ? 'underline' : 'none'
             }}>
@@ -675,7 +676,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
           title: t('common:actions.actions', { defaultValue: t('common:actionsLabel') }),
           key: 'actions',
           width: 250,
-          render: (_: any, row: any) => (
+          render: (_: unknown, row: MedicalAttachment) => (
             <Space>
               <Button
                 size="small"
@@ -741,7 +742,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
             </Space>
           )
         }
-      ] as any}
+      ]}
     />
   );
 
@@ -885,13 +886,13 @@ export const MedicalRecordDetailPage: React.FC = () => {
                       <Descriptions.Item label={t('medical:fields.procedureName')}>{procVal}</Descriptions.Item>
                     )}
                     <Descriptions.Item label={t('medical:fields.createdAt')}>{new Date(record.createdAt).toLocaleString()}</Descriptions.Item>
-                    <Descriptions.Item label={t('medical:fields.updatedAt')}>{new Date(((selectedEntry as any)?.changedAt) || record.updatedAt).toLocaleString()}</Descriptions.Item>
+                    <Descriptions.Item label={t('medical:fields.updatedAt')}>{new Date(selectedEntry?.changedAt || record.updatedAt).toLocaleString()}</Descriptions.Item>
                     <Descriptions.Item label={t('medical:fields.version')}>{isOldVersion ? selectedVersion : latestVersion ?? record.version}</Descriptions.Item>
                   </Descriptions>
 
                   <div className={styles.marginTop16}>
                     <Text type="secondary" className={styles.descriptionLabel}>{t('medical:fields.description')}</Text>
-                    <Paragraph className={styles.descriptionText}>{descVal as any}</Paragraph>
+                    <Paragraph className={styles.descriptionText}>{descVal}</Paragraph>
                   </div>
 
                   {/* Prescription Notes - only show if there's content */}
@@ -965,7 +966,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
                               key: 'subtotal',
                               width: 120,
                               align: 'right' as const,
-                              render: (_: any, item: MedicalRecordLineItem) => (
+                              render: (_: unknown, item: MedicalRecordLineItem) => (
                                 <Text strong>{formatMoney(item.unitPrice * item.quantity, currency)}</Text>
                               ),
                             },
@@ -1143,7 +1144,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
         <Table
           dataSource={sortedHistory}
           rowKey={(r) => String(r.id)}
-          columns={columns as any}
+          columns={columns}
           size="small"
           onRow={(row) => ({ onClick: () => { setSelectedVersion(row.version); } })}
           pagination={false}
@@ -1205,7 +1206,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
             if (newAttachment?.id) {
               MedicalService.openAttachmentExternally(newAttachment.id);
             }
-          } catch (error: any) {
+          } catch (error) {
             console.error('Failed to generate report:', error);
             throw error;
           }
