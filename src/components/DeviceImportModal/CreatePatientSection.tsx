@@ -22,6 +22,7 @@ import type { Patient, CreatePatientInput } from '../../types';
 import { findSpeciesIdByName, hasExtractedData } from '../../utils/deviceDataExtraction';
 import { localeNumberParser } from '@/utils/localeNumber';
 import { speciesLabel } from '../../utils/species';
+import { getDatePickerFormat } from '@/utils/dateFormatter';
 
 interface CreatePatientSectionProps {
   extractedData: ExtractedPatientData;
@@ -349,6 +350,7 @@ export const CreatePatientSection: React.FC<CreatePatientSectionProps> = ({
               label={t('patients:detail.patientInfo.labels.dateOfBirth', 'Date of Birth')}
             >
               <DatePicker
+                format={getDatePickerFormat()}
                 style={{ width: '100%' }}
                 placeholder={t('forms:placeholders.selectField', { field: t('patients:detail.patientInfo.labels.dateOfBirth', 'Date of Birth') })}
                 disabledDate={(current) => current && current > dayjs().endOf('day')}

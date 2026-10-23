@@ -41,6 +41,7 @@ import type { AppointmentStatus } from '../../types/appointments';
 import { useTranslation } from 'react-i18next';
 import styles from './AppointmentModal.module.css';
 import { speciesLabel } from '../../utils/species';
+import { formatDayMonth, getDatePickerFormat } from '@/utils/dateFormatter';
 
 const { TextArea } = Input;
 const { Text } = Typography;
@@ -427,7 +428,7 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
               <DatePicker
                 className={styles.fullWidth}
                 disabledDate={disabledDate}
-                format="MMMM DD, YYYY"
+                format={getDatePickerFormat()}
                 onChange={checkConflicts}
               />
             </Form.Item>
@@ -505,7 +506,7 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
               <ul>
                 {patientConflicts.map((conflict) => (
                   <li key={conflict.id}>
-                    {conflict.title} ({dayjs(conflict.startTime).format('D MMM HH:mm')}–{dayjs(conflict.endTime).format('HH:mm')})
+                    {conflict.title} ({formatDayMonth(conflict.startTime, true)}–{dayjs(conflict.endTime).format('HH:mm')})
                   </li>
                 ))}
               </ul>

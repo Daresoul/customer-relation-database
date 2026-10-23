@@ -15,6 +15,7 @@ import { useDeviceConnectionStatus, useDeviceIntegrations, useFileWatcherStatus 
 import { DeviceDetails, DeviceType, getDeviceTypeDisplayName } from '../../types/deviceIntegration';
 import { describeFolderStatus, describeSerialStatus, folderLevel, formatLastResult, HealthLevel, serialDownSince, serialLevel } from './deviceHealth';
 import { errorText } from '@/utils/notifyError';
+import { formatDayMonth } from '@/utils/dateFormatter';
 
 const { Text, Title } = Typography;
 
@@ -47,7 +48,7 @@ function clock(iso: string | null | undefined): string | null {
   if (!iso) return null;
   const at = dayjs(iso);
   if (!at.isValid()) return null;
-  return at.isSame(dayjs(), 'day') ? at.format('HH:mm') : at.format('DD.MM. HH:mm');
+  return at.isSame(dayjs(), 'day') ? at.format('HH:mm') : formatDayMonth(iso, true);
 }
 
 export interface DeviceDetailsDrawerProps {

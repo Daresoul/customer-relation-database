@@ -1,5 +1,6 @@
 import dayjs from 'dayjs';
 import type { DeviceConnectionStatus, FileWatcherStatus } from '../../types/deviceIntegration';
+import { formatDayMonth } from '@/utils/dateFormatter';
 
 type T = (key: string, options?: Record<string, unknown>) => string;
 
@@ -18,7 +19,7 @@ export function formatLastResult(iso: string | undefined | null, now: Date, t: T
   if (at.isSame(dayjs(now), 'day')) {
     return t('health.lastResult', { time });
   }
-  return t('health.lastResultOn', { date: at.format('DD.MM.'), time });
+  return t('health.lastResultOn', { date: formatDayMonth(iso), time });
 }
 
 function problem(kind: string, params: Record<string, unknown>, details: string | undefined, t: T): HealthText {

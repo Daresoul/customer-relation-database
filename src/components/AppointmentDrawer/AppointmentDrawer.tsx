@@ -32,6 +32,7 @@ import {
 } from '@/utils/appointmentStatus';
 import styles from './AppointmentDrawer.module.css';
 import { speciesLabel } from '../../utils/species';
+import { formatDayMonth, getDatePickerFormat } from '@/utils/dateFormatter';
 
 const { Text } = Typography;
 
@@ -237,7 +238,7 @@ export const AppointmentDrawer: React.FC<AppointmentDrawerProps> = ({ appointmen
               </Text>
               {apt.googleSyncedAt && googleKey === 'synced' && (
                 <Text type="secondary">
-                  {t('appointments:drawer.googleSyncedAt', { time: dayjs(apt.googleSyncedAt).format('D MMM, HH:mm') })}
+                  {t('appointments:drawer.googleSyncedAt', { time: formatDayMonth(apt.googleSyncedAt, true) })}
                 </Text>
               )}
             </Space>
@@ -378,7 +379,7 @@ const RescheduleDialog: React.FC<{
     >
       <Form layout="vertical">
         <Form.Item label={t('appointments:reschedule.date')}>
-          <DatePicker value={date} onChange={setDate} format="YYYY-MM-DD" className={styles.fullWidth} />
+          <DatePicker value={date} onChange={setDate} format={getDatePickerFormat()} className={styles.fullWidth} />
         </Form.Item>
         <Form.Item label={t('appointments:reschedule.time')} extra={t('appointments:reschedule.keepsLength', { minutes })}>
           <TimePicker value={time} onChange={setTime} format="HH:mm" minuteStep={15} className={styles.fullWidth} />
@@ -405,7 +406,7 @@ const DuplicateDialog: React.FC<{ onCancel: () => void; onSave: (date: Dayjs) =>
       <DatePicker
         value={date}
         onChange={setDate}
-        format="YYYY-MM-DD"
+        format={getDatePickerFormat()}
         disabledDate={(d) => d < dayjs().startOf('day')}
         className={styles.fullWidth}
       />

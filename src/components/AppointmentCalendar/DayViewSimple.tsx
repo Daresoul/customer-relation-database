@@ -11,6 +11,7 @@ import { useNow } from '../../hooks/useNow';
 
 import styles from './DayViewSimple.module.css';
 import cardStyles from './AppointmentCard.module.css';
+import { formatDate } from '@/utils/dateFormatter';
 interface DayViewSimpleProps {
   selectedDate: Dayjs;
   appointments: Appointment[];
@@ -197,7 +198,7 @@ const DayViewSimple: React.FC<DayViewSimpleProps> = ({
           <strong>{t('details.time')}:</strong> {dayjs(apt.startTime).format('HH:mm')} - {dayjs(apt.endTime).format('HH:mm')}
         </div>
         <div className={styles.tooltipInfo}>
-          <strong>{t('fields.date')}:</strong> {dayjs(apt.startTime).format('MMM DD, YYYY')}
+          <strong>{t('fields.date')}:</strong> {formatDate(apt.startTime)}
         </div>
         {room && (
           <div className={styles.tooltipInfo}>

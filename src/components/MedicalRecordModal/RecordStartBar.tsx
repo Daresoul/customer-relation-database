@@ -7,6 +7,7 @@ import { invoke } from '@/services/invoke';
 import { useRecordTemplates } from '@/hooks/useRecordTemplates';
 import type { LastRecordCopy, RecordTemplate, RecordType } from '@/types/medical';
 import type { MedicalRecordLineItem } from '@/types/lineItem';
+import { formatDate } from '@/utils/dateFormatter';
 
 const { Text, Paragraph } = Typography;
 
@@ -183,7 +184,7 @@ const RecordStartBar: React.FC<RecordStartBarProps> = ({ isEdit, patientId, onPr
             <Paragraph>
               {t('medical:copyLast.from', {
                 name: copySource.name,
-                date: dayjs(copySource.createdAt).isValid() ? dayjs(copySource.createdAt).format('DD.MM.YYYY') : '',
+                date: dayjs(copySource.createdAt).isValid() ? formatDate(copySource.createdAt) : '',
               })}
             </Paragraph>
             <Paragraph>{t('medical:copyLast.fills')}</Paragraph>

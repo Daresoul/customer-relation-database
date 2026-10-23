@@ -11,6 +11,7 @@ import type { DiscardReason, LabInboxItem, LabInboxState } from '@/types/labInbo
 import LabValues from './LabValues';
 import MoveLabResultModal from './MoveLabResultModal';
 import { errorText } from '@/utils/notifyError';
+import { formatDateTime } from '@/utils/dateFormatter';
 
 const { Text } = Typography;
 
@@ -150,7 +151,7 @@ const LabInboxList: React.FC = () => {
       width: 150,
       render: (_: unknown, item: LabInboxItem) => (
         <Space direction="vertical" size={0}>
-          <Text>{dayjs(item.receivedAt).format('DD.MM.YYYY HH:mm')}</Text>
+          <Text>{formatDateTime(item.receivedAt)}</Text>
           {isOverdue(item) && <Tag color="red">{t('devices:inbox.overdue')}</Tag>}
         </Space>
       ),

@@ -32,6 +32,13 @@ export const formatDateTime = (date: string | Date | null | undefined): string =
   return dayjs(date).format(`${format} HH:mm`);
 };
 
+/** Day and month in the chosen order, no year ("31/01"); optionally the time. */
+export const formatDayMonth = (date: string | Date | Dayjs | null | undefined, withTime = false): string => {
+  if (!date) return '';
+  const pattern = getUserDateFormat().replace(/^YYYY[./ -]|[./ -]YYYY$/, '');
+  return dayjs(date).format(withTime ? `${pattern} HH:mm` : pattern);
+};
+
 // Format a dayjs object
 export const formatDayjs = (date: Dayjs | null | undefined): string => {
   if (!date) return '';

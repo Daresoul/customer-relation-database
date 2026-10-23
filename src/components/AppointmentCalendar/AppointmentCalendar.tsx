@@ -13,6 +13,7 @@ import WeekView from './WeekView';
 import DayViewSimple from './DayViewSimple';
 import { useTranslation } from 'react-i18next';
 import styles from './AppointmentCalendar.module.css';
+import { formatDate } from '@/utils/dateFormatter';
 
 // Configure dayjs to start week on Monday
 dayjs.extend(updateLocale);
@@ -78,7 +79,7 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
           <strong>{t('details.time')}:</strong> {dayjs(apt.startTime).format('HH:mm')} - {dayjs(apt.endTime).format('HH:mm')}
         </div>
         <div className={styles.tooltipLine}>
-          <strong>{t('fields.date')}:</strong> {dayjs(apt.startTime).format('MMM DD, YYYY')}
+          <strong>{t('fields.date')}:</strong> {formatDate(apt.startTime)}
         </div>
         {room && (
           <div className={styles.tooltipLine}>
@@ -291,8 +292,8 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
     const title = view === 'month'
       ? selectedDate.format('MMMM YYYY')
       : view === 'week'
-      ? t('calendar.weekOf', { date: selectedDate.startOf('week').format('MMM DD, YYYY') })
-      : selectedDate.format('dddd, MMMM DD, YYYY');
+      ? t('calendar.weekOf', { date: formatDate(selectedDate.startOf('week').toDate()) })
+      : `${selectedDate.format('dddd')}, ${formatDate(selectedDate.toDate())}`;
 
     return (
       <div className={styles.calendarHeader}>

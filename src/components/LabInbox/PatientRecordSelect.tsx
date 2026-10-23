@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import { useMedicalRecords } from '@/hooks/useMedicalRecords';
 import type { MedicalRecord } from '@/types/medical';
+import { formatDate } from '@/utils/dateFormatter';
 
 /** Picked when the result should go on a new record instead. */
 export const NEW_RECORD = -1;
@@ -67,7 +68,7 @@ const PatientRecordSelect: React.FC<PatientRecordSelectProps> = ({
         ...(allowNew ? [{ value: NEW_RECORD, label: t('devices:inbox.newLabRecord') }] : []),
         ...records.map((r) => ({
           value: r.id,
-          label: `${r.name} · ${dayjs(r.createdAt).format('DD.MM.YYYY')}${isToday(r.createdAt) ? ` (${t('devices:inbox.today')})` : ''}`,
+          label: `${r.name} · ${formatDate(r.createdAt)}${isToday(r.createdAt) ? ` (${t('devices:inbox.today')})` : ''}`,
         })),
       ]}
     />
