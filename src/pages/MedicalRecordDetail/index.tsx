@@ -33,6 +33,7 @@ import { messageOf } from '@/utils/errors';
 import styles from './MedicalRecordDetailPage.module.css';
 import DocumentUpload from './DocumentUpload';
 import { invalidateRecordFiles } from '@/hooks/invalidation';
+import { formatDateTime } from '@/utils/dateFormatter';
 
 const { Content } = Layout;
 const { Title, Text, Paragraph } = Typography;
@@ -265,7 +266,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
         </Button>
       )
     },
-    { title: t('medical:detail.changedAt'), dataIndex: 'changedAt', key: 'changedAt', render: (v: string) => new Date(v).toLocaleString() },
+    { title: t('medical:detail.changedAt'), dataIndex: 'changedAt', key: 'changedAt', render: (v: string) => formatDateTime(v) },
     { title: t('medical:detail.changedBy'), dataIndex: 'changedBy', key: 'changedBy', render: (v: string) => v || '-' },
     {
       title: t('medical:detail.fields'), key: 'fields', render: (_: unknown, row: MedicalRecordHistory) => {
@@ -670,7 +671,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
           dataIndex: 'uploadedAt',
           key: 'uploadedAt',
           width: 200,
-          render: (v: string) => new Date(v).toLocaleString()
+          render: (v: string) => formatDateTime(v)
         },
         {
           title: t('common:actions.actions', { defaultValue: t('common:actionsLabel') }),
@@ -885,8 +886,8 @@ export const MedicalRecordDetailPage: React.FC = () => {
                     {typeVal === 'procedure' && (
                       <Descriptions.Item label={t('medical:fields.procedureName')}>{procVal}</Descriptions.Item>
                     )}
-                    <Descriptions.Item label={t('medical:fields.createdAt')}>{new Date(record.createdAt).toLocaleString()}</Descriptions.Item>
-                    <Descriptions.Item label={t('medical:fields.updatedAt')}>{new Date(selectedEntry?.changedAt || record.updatedAt).toLocaleString()}</Descriptions.Item>
+                    <Descriptions.Item label={t('medical:fields.createdAt')}>{formatDateTime(record.createdAt)}</Descriptions.Item>
+                    <Descriptions.Item label={t('medical:fields.updatedAt')}>{formatDateTime(selectedEntry?.changedAt || record.updatedAt)}</Descriptions.Item>
                     <Descriptions.Item label={t('medical:fields.version')}>{isOldVersion ? selectedVersion : latestVersion ?? record.version}</Descriptions.Item>
                   </Descriptions>
 

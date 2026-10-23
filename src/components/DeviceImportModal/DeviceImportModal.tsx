@@ -61,6 +61,7 @@ import { validatePatientSelection, getMatchStrength } from '@/utils/deviceDataVa
 import type { MatchStrength } from '@/utils/deviceDataValidation';
 import type { ValidationWarning } from '@/types/deviceImport';
 import { speciesLabel } from '../../utils/species';
+import { formatDateTime } from '@/utils/dateFormatter';
 
 const { Option } = Select;
 const { Text } = Typography;
@@ -258,7 +259,7 @@ const DeviceImportDialog: React.FC = () => {
       const fileList = pendingFiles.map(f => `${f.fileName} (${f.deviceName})`).join('\n  - ');
       defaults.description = t('medical:deviceImport.defaultDescription', {
         files: fileList,
-        detectedAt: new Date(pendingFiles[0].detectedAt).toLocaleString(),
+        detectedAt: formatDateTime(pendingFiles[0].detectedAt),
       });
     }
 
@@ -690,7 +691,7 @@ const DeviceImportDialog: React.FC = () => {
                 description={
                   <Space direction="vertical" size={0}>
                     <Text type="secondary">
-                      {new Date(file.detectedAt).toLocaleString()}
+                      {formatDateTime(file.detectedAt)}
                     </Text>
                     {file.patientIdentifier && (
                       <Text type="secondary">
