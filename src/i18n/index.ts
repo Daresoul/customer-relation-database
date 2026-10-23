@@ -15,6 +15,7 @@ import enAppointments from './locales/en/appointments.json';
 import enDevices from './locales/en/devices.json';
 import enDevicesPending from './locales/en/devices.pending.json';
 import enErrors from './locales/en/errors.json';
+import enShell from './locales/en/shell.json';
 
 import mkCommon from './locales/mk/common.json';
 import mkNavigation from './locales/mk/navigation.json';
@@ -28,6 +29,7 @@ import mkAppointments from './locales/mk/appointments.json';
 import mkDevices from './locales/mk/devices.json';
 import mkDevicesPending from './locales/mk/devices.pending.json';
 import mkErrors from './locales/mk/errors.json';
+import mkShell from './locales/mk/shell.json';
 
 const resources = {
   en: {
@@ -42,6 +44,7 @@ const resources = {
     appointments: enAppointments,
     devices: { ...enDevices, pending: enDevicesPending },
     errors: enErrors,
+    shell: enShell,
   },
   mk: {
     common: mkCommon,
@@ -55,6 +58,7 @@ const resources = {
     appointments: mkAppointments,
     devices: { ...mkDevices, pending: mkDevicesPending },
     errors: mkErrors,
+    shell: mkShell,
   },
 };
 
@@ -72,7 +76,7 @@ i18n
       lookupLocalStorage: 'veterinary-clinic-language',
     },
 
-    ns: ['common', 'navigation', 'patients', 'medical', 'entities', 'forms', 'households', 'settings', 'appointments', 'devices', 'errors'],
+    ns: ['common', 'navigation', 'patients', 'medical', 'entities', 'forms', 'households', 'settings', 'appointments', 'devices', 'errors', 'shell'],
     defaultNS: 'common',
 
     interpolation: {
