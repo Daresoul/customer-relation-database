@@ -8,7 +8,7 @@ use crate::services::backup::{
     is_backup_due, is_pre_update_snapshot, snapshot_file_name, BackupConfig, BackupService, SnapshotKind,
 };
 use crate::test_utils::create_test_db_with_migrations;
-use chrono::{TimeZone, Utc};
+use chrono::{FixedOffset, Local, TimeZone, Utc};
 use std::fs;
 use std::path::Path;
 use std::time::Duration;
@@ -131,7 +131,7 @@ async fn run_backup_writes_dated_snapshot() {
         .await
         .expect("backup");
 
-    let today = Utc::now().format("%Y-%m-%d").to_string();
+    let today = Local::now().format("%Y-%m-%d").to_string();
     let expected = fx.dest_dir.path().join("db").join(format!("vet_clinic_{}.db", today));
     assert!(expected.is_file(), "snapshot at {} not found", expected.display());
     let size = fs::metadata(&expected).unwrap().len();
@@ -201,7 +201,7 @@ async fn run_backup_overwrites_today_snapshot_on_rerun() {
     BackupService::set_directory(fx.app_dir.path(), fx.dest_dir.path().to_str().unwrap()).unwrap();
 
     BackupService::run_backup(fx.app_dir.path(), &fx.test_db).await.unwrap();
-    let today = Utc::now().format("%Y-%m-%d").to_string();
+    let today = Local::now().format("%Y-%m-%d").to_string();
     let snapshot = fx.dest_dir.path().join("db").join(format!("vet_clinic_{}.db", today));
     let size1 = fs::metadata(&snapshot).unwrap().len();
 
@@ -332,9 +332,21 @@ fn set_mtime_days_ago(path: &Path, days: u64) {
 }
 
 #[test]
-fn daily_snapshot_name_is_the_utc_date() {
+fn daily_snapshot_name_is_the_date_of_the_given_time() {
     let now = Utc.with_ymd_and_hms(2026, 10, 22, 9, 5, 7).unwrap();
     assert_eq!(snapshot_file_name(&SnapshotKind::Daily, now), "vet_clinic_2026-10-22.db");
+}
+
+// dates-time.md #13: a backup at 00:30 in Skopje (22:30 UTC the day before)
+// was named for yesterday and overwrote that morning's snapshot.
+#[test]
+fn daily_snapshot_name_is_the_clinic_wall_date_not_the_utc_date() {
+    let skopje = FixedOffset::east_opt(2 * 3600).unwrap();
+    let just_after_midnight = skopje.with_ymd_and_hms(2026, 10, 23, 0, 30, 0).unwrap();
+    assert_eq!(
+        snapshot_file_name(&SnapshotKind::Daily, just_after_midnight),
+        "vet_clinic_2026-10-23.db"
+    );
 }
 
 #[test]
@@ -369,7 +381,7 @@ async fn daily_backup_on_the_same_day_keeps_the_pre_update_snapshot() {
         .unwrap()
         .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
         .collect();
-    let today = Utc::now().format("%Y-%m-%d").to_string();
+    let today = Local::now().format("%Y-%m-%d").to_string();
     assert!(names.contains(&format!("vet_clinic_{}.db", today)), "daily missing: {:?}", names);
     let pre: Vec<_> = names.iter().filter(|n| is_pre_update_snapshot(n)).collect();
     assert_eq!(pre.len(), 1, "pre-update snapshot should survive: {:?}", names);
@@ -475,7 +487,7 @@ fn backup_is_due_when_the_last_time_is_unreadable() {
 async fn a_rerun_that_cannot_write_keeps_todays_earlier_snapshot() {
     let fx = setup().await;
     BackupService::set_directory(fx.app_dir.path(), fx.dest_dir.path().to_str().unwrap()).unwrap();
-    let name = snapshot_file_name(&SnapshotKind::Daily, Utc::now());
+    let name = snapshot_file_name(&SnapshotKind::Daily, Local::now());
     let snapshot = fx.dest_dir.path().join("db").join(&name);
     write(&snapshot, "EARLIER SNAPSHOT");
     // Something in the way of the new copy: a folder where the temporary
@@ -492,7 +504,7 @@ async fn a_rerun_that_cannot_write_keeps_todays_earlier_snapshot() {
 async fn a_rerun_replaces_todays_snapshot_and_leaves_no_temporary_file() {
     let fx = setup().await;
     BackupService::set_directory(fx.app_dir.path(), fx.dest_dir.path().to_str().unwrap()).unwrap();
-    let name = snapshot_file_name(&SnapshotKind::Daily, Utc::now());
+    let name = snapshot_file_name(&SnapshotKind::Daily, Local::now());
     let snapshot = fx.dest_dir.path().join("db").join(&name);
     write(&snapshot, "EARLIER SNAPSHOT");
 
