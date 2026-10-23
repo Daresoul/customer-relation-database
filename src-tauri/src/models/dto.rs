@@ -92,4 +92,7 @@ pub struct UpdatePatientDto {
     #[ts(type = "string | null")]
     pub medical_notes: MaybeNull<String>,
     pub is_active: Option<bool>,
+    #[serde(default)]
+    #[ts(type = "boolean | null")]
+    pub neutered: MaybeNull<bool>,
 }

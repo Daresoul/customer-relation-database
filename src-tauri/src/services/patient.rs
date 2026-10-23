@@ -1,7 +1,7 @@
 use crate::entities::patient::{self, Entity as PatientEntity};
-use crate::models::{Patient, CreatePatientDto, UpdatePatientDto};
+use crate::models::{Patient, PatientAlert, PatientWeight, CreatePatientDto, UpdatePatientDto};
 use crate::models::dto::MaybeNull;
-use chrono::Utc;
+use chrono::{NaiveDate, Utc};
 use sea_orm::*;
 
 pub struct PatientService;
@@ -66,7 +66,53 @@ impl PatientService {
             household_id: row.try_get("", "household_id").ok(),
             created_at: row.try_get("", "created_at").map_err(|e| e.to_string())?,
             updated_at: row.try_get("", "updated_at").map_err(|e| e.to_string())?,
+            neutered: None,
+            deceased_at: None,
+            deceased_note: None,
+            inactive_reason: None,
+            last_weight_at: None,
+            alerts: Vec::new(),
         })
+    }
+
+    pub async fn search_including_inactive(_db: &DatabaseConnection, _query: &str, _include_inactive: bool) -> Result<Vec<Patient>, String> {
+        Err("not implemented".into())
+    }
+
+    pub async fn mark_deceased(_db: &DatabaseConnection, _id: i64, _on: NaiveDate, _note: Option<String>) -> Result<Option<Patient>, String> {
+        Err("not implemented".into())
+    }
+
+    pub async fn mark_inactive(_db: &DatabaseConnection, _id: i64, _reason: Option<String>) -> Result<Option<Patient>, String> {
+        Err("not implemented".into())
+    }
+
+    pub async fn reactivate(_db: &DatabaseConnection, _id: i64) -> Result<Option<Patient>, String> {
+        Err("not implemented".into())
+    }
+
+    pub async fn add_alert(_db: &DatabaseConnection, _patient_id: i64, _alert_type: &str, _note: Option<String>) -> Result<PatientAlert, String> {
+        Err("not implemented".into())
+    }
+
+    pub async fn update_alert(_db: &DatabaseConnection, _id: i64, _alert_type: &str, _note: Option<String>) -> Result<PatientAlert, String> {
+        Err("not implemented".into())
+    }
+
+    pub async fn delete_alert(_db: &DatabaseConnection, _id: i64) -> Result<bool, String> {
+        Err("not implemented".into())
+    }
+
+    pub async fn add_weight(_db: &DatabaseConnection, _patient_id: i64, _weight: f64, _on: NaiveDate, _record_id: Option<i64>) -> Result<PatientWeight, String> {
+        Err("not implemented".into())
+    }
+
+    pub async fn list_weights(_db: &DatabaseConnection, _patient_id: i64) -> Result<Vec<PatientWeight>, String> {
+        Err("not implemented".into())
+    }
+
+    pub async fn delete_weight(_db: &DatabaseConnection, _id: i64) -> Result<bool, String> {
+        Err("not implemented".into())
     }
 
     pub async fn get_all(db: &DatabaseConnection) -> Result<Vec<Patient>, String> {

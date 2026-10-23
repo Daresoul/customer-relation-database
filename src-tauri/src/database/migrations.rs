@@ -71,6 +71,8 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     Ok(())
 }
 
+pub const WEIGHT_LOG_MIGRATION: &str = "05x_patient_weight_log";
+
 async fn run_migration<F>(
     pool: &SqlitePool,
     name: &str,

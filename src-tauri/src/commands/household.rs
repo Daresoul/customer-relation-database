@@ -561,6 +561,10 @@ pub async fn update_person_contacts(
     contacts
 }
 
+pub(crate) async fn household_patients_json(_db: &sea_orm::DatabaseConnection, _household_id: i32) -> Result<Vec<serde_json::Value>, String> {
+    Err("not implemented".into())
+}
+
 #[tauri::command]
 pub async fn get_household_patients(
     pool: State<'_, SeaOrmPool>,

@@ -18,7 +18,7 @@ pub mod diagnosis;
 
 // Re-exports for public API - some may be unused internally but available for external use
 #[allow(unused_imports)]
-pub use patient::Patient;
+pub use patient::{Patient, PatientAlert, PatientWeight};
 #[allow(unused_imports)]
 pub use dto::{CreatePatientDto, UpdatePatientDto};
 #[allow(unused_imports)]

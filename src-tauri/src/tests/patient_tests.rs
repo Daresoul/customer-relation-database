@@ -368,6 +368,7 @@ async fn update_name_persists() {
             microchip_id: MaybeNull::Undefined,
             medical_notes: MaybeNull::Undefined,
             is_active: None,
+            neutered: MaybeNull::Undefined,
         },
     )
     .await
@@ -407,6 +408,7 @@ async fn update_clear_species_with_maybenull_null() {
             microchip_id: MaybeNull::Undefined,
             medical_notes: MaybeNull::Undefined,
             is_active: None,
+            neutered: MaybeNull::Undefined,
         },
     )
     .await
@@ -435,6 +437,7 @@ async fn update_nonexistent_patient_returns_none() {
             microchip_id: MaybeNull::Undefined,
             medical_notes: MaybeNull::Undefined,
             is_active: None,
+            neutered: MaybeNull::Undefined,
         },
     )
     .await
@@ -855,6 +858,7 @@ async fn update_with_all_undefined_is_no_op_but_succeeds() {
             microchip_id: MaybeNull::Undefined,
             medical_notes: MaybeNull::Undefined,
             is_active: None,
+            neutered: MaybeNull::Undefined,
         },
     )
     .await
@@ -883,6 +887,7 @@ fn chip_update(chip: MaybeNull<String>) -> UpdatePatientDto {
         microchip_id: chip,
         medical_notes: MaybeNull::Undefined,
         is_active: None,
+        neutered: MaybeNull::Undefined,
     }
 }
 
