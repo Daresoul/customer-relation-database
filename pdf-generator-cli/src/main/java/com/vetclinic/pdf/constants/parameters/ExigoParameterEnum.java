@@ -1,6 +1,5 @@
 package com.vetclinic.pdf.constants.parameters;
 
-import org.apache.commons.lang3.StringUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -59,22 +58,6 @@ public enum ExigoParameterEnum {
         types.add(RDWR);
         types.add(RDWA);
         return types;
-    }
-
-    public static ExigoParameterEnum getParameterForCode(String code) {
-        if (code == null || code.isEmpty()) {
-            return null;
-        }
-        List<ExigoParameterEnum> profiles = getAllParameters();
-        for(ExigoParameterEnum parameter : profiles) {
-            if (StringUtils.containsIgnoreCase(code, parameter.getCode())) {
-
-                return parameter;
-            }
-        }
-
-        logger.severe("No PointcareParameterType for code: " + code);
-        return null;
     }
 
 

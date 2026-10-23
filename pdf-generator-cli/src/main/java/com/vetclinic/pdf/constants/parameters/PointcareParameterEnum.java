@@ -1,6 +1,5 @@
 package com.vetclinic.pdf.constants.parameters;
 
-import org.apache.commons.lang3.StringUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -86,22 +85,6 @@ public enum PointcareParameterEnum {
         types.add(AST_ALT);
         types.add(CA_P);
         return types;
-    }
-
-    public static PointcareParameterEnum getParameterForCode(String code) {
-        if (code == null || code.isEmpty()) {
-            return null;
-        }
-        List<PointcareParameterEnum> profiles = getAllParameters();
-        for(PointcareParameterEnum parameter : profiles) {
-            if (StringUtils.equalsIgnoreCase(code, parameter.getCode())) {
-
-                return parameter;
-            }
-        }
-
-        logger.severe("No PointcareParameterType for code: " + code);
-        return null;
     }
 
     public String getCode() {
