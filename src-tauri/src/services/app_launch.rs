@@ -14,7 +14,11 @@ pub fn starts_hidden(argv: &[String]) -> bool {
     argv.iter().skip(1).any(|a| a == HIDDEN_ARG)
 }
 
-/// Whether the window, at its configured size, runs off the screen.
-pub fn overflows_screen(_window: (u32, u32), _screen: (u32, u32)) -> bool {
-    false
+/// Room the Windows taskbar takes at the bottom of the screen.
+const TASKBAR: u32 = 48;
+
+/// Whether the window, at its configured size, runs off the screen
+/// (both in logical pixels).
+pub fn overflows_screen(window: (u32, u32), screen: (u32, u32)) -> bool {
+    window.0 > screen.0 || window.1 + TASKBAR > screen.1
 }

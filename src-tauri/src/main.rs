@@ -399,6 +399,9 @@ fn main() {
             // Start in the tray only when launched at login (`--hidden`); a
             // manual start and the relaunch after an update show the window.
             // Never under E2E, so WebDriver can attach to a visible WebView2.
+            if let Some(window) = app.get_window("main") {
+                fit_to_screen(&window);
+            }
             let argv: Vec<String> = std::env::args().collect();
             if services::app_launch::starts_hidden(&argv) && std::env::var("TAURI_E2E").is_err() {
                 if let Some(window) = app.get_window("main") {
@@ -869,4 +872,19 @@ fn with_debug_commands(
     app_handler: impl Fn(tauri::Invoke) + Send + Sync + 'static,
 ) -> impl Fn(tauri::Invoke) + Send + Sync + 'static {
     app_handler
+}
+
+/// A small screen (1366×768 laptop) can't hold the window; maximize it so
+/// nothing sits off the screen or under the taskbar.
+fn fit_to_screen(window: &tauri::Window) {
+    let (Ok(Some(monitor)), Ok(size), Ok(scale)) = (window.current_monitor(), window.outer_size(), window.scale_factor()) else {
+        return;
+    };
+    let logical = |w: u32, h: u32| ((w as f64 / scale) as u32, (h as f64 / scale) as u32);
+    let screen = logical(monitor.size().width, monitor.size().height);
+    let own = logical(size.width, size.height);
+    if services::app_launch::overflows_screen(own, screen) {
+        log::info!("Window {}x{} does not fit the {}x{} screen; maximizing", own.0, own.1, screen.0, screen.1);
+        let _ = window.maximize();
+    }
 }
