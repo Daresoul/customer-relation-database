@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { App, Button, Typography, Spin } from 'antd';
 import { ReloadOutlined, PrinterOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { messageOf } from '@/utils/errors';
 import { MedicalService } from '@/services/medicalService';
 import styles from './PdfMultiPagePreview.module.css';
 
@@ -37,7 +38,7 @@ const PdfMultiPagePreview: React.FC<Props> = ({ attachmentId, initialPageUrl }) 
   const toImageUrl = useCallback(async (path: string): Promise<string> => {
     const { readBinaryFile } = await import('@tauri-apps/api/fs');
     const bytes = await readBinaryFile(path);
-    const blob = new Blob([new Uint8Array(bytes as any)], { type: 'image/png' });
+    const blob = new Blob([new Uint8Array(bytes)], { type: 'image/png' });
     const url: string = await new Promise((resolve, reject) => {
       const fr = new FileReader();
       fr.onerror = () => reject(fr.error);
@@ -62,11 +63,11 @@ const PdfMultiPagePreview: React.FC<Props> = ({ attachmentId, initialPageUrl }) 
           const url = await toImageUrl(path);
           setPages([{ page: 1, url }]);
         }
-      } catch (e: any) {
+      } catch (e) {
         if (!active) return;
         console.warn('[PdfMultiPagePreview] Failed to init page count / first page:', e);
         const t = tRef.current;
-        setError(e?.message || t('medical:pdfPreview.loadFailed'));
+        setError(messageOf(e) || t('medical:pdfPreview.loadFailed'));
       }
     })();
     return () => {
@@ -109,9 +110,9 @@ const PdfMultiPagePreview: React.FC<Props> = ({ attachmentId, initialPageUrl }) 
         merged.sort((a, b) => a.page - b.page);
         return merged;
       });
-    } catch (e: any) {
+    } catch (e) {
       console.warn('[PdfMultiPagePreview] Load more failed:', e);
-      notification.error({ message: t('common:error'), description: e?.message || t('medical:pdfPreview.loadMoreFailed'), placement: "bottomRight", duration: 5 });
+      notification.error({ message: t('common:error'), description: messageOf(e) || t('medical:pdfPreview.loadMoreFailed'), placement: "bottomRight", duration: 5 });
     } finally {
       setLoadingMore(false);
       loadingRef.current = false;
@@ -136,9 +137,9 @@ const PdfMultiPagePreview: React.FC<Props> = ({ attachmentId, initialPageUrl }) 
         placement: 'bottomRight',
         duration: 3,
       });
-    } catch (e: any) {
+    } catch (e) {
       console.error('[PdfMultiPagePreview] Regenerate failed:', e);
-      notification.error({ message: t('common:error'), description: e?.message || t('medical:pdfPreview.regenerateFailed'), placement: "bottomRight", duration: 5 });
+      notification.error({ message: t('common:error'), description: messageOf(e) || t('medical:pdfPreview.regenerateFailed'), placement: "bottomRight", duration: 5 });
     } finally {
       setRegenerating(false);
     }
@@ -171,11 +172,11 @@ const PdfMultiPagePreview: React.FC<Props> = ({ attachmentId, initialPageUrl }) 
     try {
       await MedicalService.printAttachment(attachmentId);
       // No success notification needed - the print dialog will open
-    } catch (e: any) {
+    } catch (e) {
       console.error('[PdfMultiPagePreview] Print failed:', e);
       notification.error({
         message: t('medical:pdfPreview.printFailed'),
-        description: e?.message || t('medical:pdfPreview.printDialogFailed'),
+        description: messageOf(e) || t('medical:pdfPreview.printDialogFailed'),
         placement: 'bottomRight',
         duration: 5,
       });
