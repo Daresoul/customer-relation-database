@@ -63,7 +63,7 @@ export function useSearchMedicalRecords(
 export const CREATE_RECORD_MUTATION_KEY = ['medical-records', 'create'] as const;
 
 // Mutation hooks
-export function useCreateMedicalRecord() {
+export function useCreateMedicalRecord(options: { onOpenRecord?: (recordId: number) => void } = {}) {
   const queryClient = useQueryClient();
   const { notification } = App.useApp();
   const { t } = useTranslation('errors');
@@ -74,7 +74,7 @@ export function useCreateMedicalRecord() {
     mutationFn: (input: CreateMedicalRecordInput) =>
       MedicalService.createMedicalRecord(input),
     onSuccess: (data, variables) => {
-      reportDocuments(data as SavedRecordDocuments, t('medical:messages.createSuccess'));
+      reportDocuments(data as SavedRecordDocuments, t('medical:messages.createSuccess'), options.onOpenRecord);
       // Invalidate ALL medical records queries for this patient (regardless of filters)
       queryClient.invalidateQueries({
         queryKey: ['medical-records', variables.patientId],

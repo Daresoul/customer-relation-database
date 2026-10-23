@@ -471,3 +471,206 @@ async fn one_document_can_be_retried_on_its_own() {
     assert_eq!(active_documents(&db, record.id, "invoice").await, 1);
     assert_eq!(active_documents(&db, record.id, "simple_report").await, 0);
 }
+
+// ---------------------------------------------------------------------------
+// A record whose line items or files can't be read is an error, not an empty
+// list (a save would then drop the invoice)
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn a_record_whose_line_items_cant_be_read_is_an_error() {
+    let db = create_test_db_with_migrations().await;
+    let patient_id = seed_patient(&db).await;
+    let record = MedicalRecordService::save_new_record(&db, new_record(patient_id, vec![item("Exam", 1500.0)])).await.unwrap();
+    db.execute_unprepared("DROP TABLE medical_record_line_items").await.unwrap();
+
+    assert!(MedicalRecordService::get_medical_record(&db, record.id, false).await.is_err());
+
+    let mut changes = no_changes();
+    changes.name = Some("Renamed".to_string());
+    assert!(MedicalRecordService::save_record_changes(&db, record.id, changes).await.is_err());
+}
+
+#[tokio::test]
+async fn a_record_whose_files_cant_be_read_is_an_error() {
+    let db = create_test_db_with_migrations().await;
+    let patient_id = seed_patient(&db).await;
+    let record = MedicalRecordService::save_new_record(&db, new_record(patient_id, vec![])).await.unwrap();
+    db.execute_unprepared("PRAGMA foreign_keys = OFF").await.unwrap();
+    db.execute_unprepared("DROP TABLE medical_attachments").await.unwrap();
+
+    assert!(MedicalRecordService::get_medical_record(&db, record.id, false).await.is_err());
+    assert!(MedicalRecordService::get_medical_records(&db, patient_id, None, None).await.is_err());
+}
+
+// ---------------------------------------------------------------------------
+// Versions: an invoice-only edit is a new version; an edit that changes
+// nothing writes no history
+// ---------------------------------------------------------------------------
+
+async fn history_versions(db: &DatabaseConnection, record_id: i64) -> Vec<(i64, String)> {
+    db.query_all(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "SELECT version, changed_fields FROM medical_record_history WHERE medical_record_id = ? ORDER BY id",
+        [record_id.into()],
+    ))
+    .await
+    .unwrap()
+    .iter()
+    .map(|r| (r.try_get::<i64>("", "version").unwrap(), r.try_get::<String>("", "changed_fields").unwrap()))
+    .collect()
+}
+
+#[tokio::test]
+async fn an_edit_of_only_the_invoice_lines_is_a_new_version() {
+    let db = create_test_db_with_migrations().await;
+    let patient_id = seed_patient(&db).await;
+    let record = MedicalRecordService::save_new_record(&db, new_record(patient_id, vec![item("Exam", 1500.0)])).await.unwrap();
+
+    let mut changes = no_changes();
+    changes.line_items = Some(vec![item("Exam", 1500.0), item("Vaccine", 800.0)]);
+    let updated = MedicalRecordService::save_record_changes(&db, record.id, changes).await.unwrap();
+
+    assert_eq!(updated.version, 2);
+    let history = history_versions(&db, record.id).await;
+    assert_eq!(history.len(), 2);
+    assert_eq!(history[1].0, 2);
+    assert!(history[1].1.contains("line_items"), "{:?}", history);
+}
+
+#[tokio::test]
+async fn an_edit_that_changes_nothing_keeps_the_version_and_writes_no_history() {
+    let db = create_test_db_with_migrations().await;
+    let patient_id = seed_patient(&db).await;
+    let record = MedicalRecordService::save_new_record(&db, new_record(patient_id, vec![item("Exam", 1500.0)])).await.unwrap();
+
+    let mut changes = no_changes();
+    changes.name = Some("Visit".to_string());
+    changes.line_items = Some(vec![item("Exam", 1500.0)]);
+    let updated = MedicalRecordService::save_record_changes(&db, record.id, changes).await.unwrap();
+
+    assert_eq!(updated.version, 1);
+    assert_eq!(history_versions(&db, record.id).await.len(), 1);
+}
+
+// ---------------------------------------------------------------------------
+// An old version shows that version's values, empty ones included
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn an_old_version_shows_its_own_values_including_empty_ones() {
+    let db = create_test_db_with_migrations().await;
+    let patient_id = seed_patient(&db).await;
+    let mut input = new_record(patient_id, vec![item("Exam", 1500.0)]);
+    input.prescription_notes = None;
+    let record = MedicalRecordService::save_new_record(&db, input).await.unwrap();
+
+    let mut changes = no_changes();
+    changes.prescription_notes = Some("Amoxicillin".to_string());
+    changes.discount_percent = MaybeNull::Null;
+    changes.manual_total = MaybeNull::Value(2000.0);
+    MedicalRecordService::save_record_changes(&db, record.id, changes).await.unwrap();
+
+    let v1 = MedicalRecordService::get_record_at_version(&db, record.id, 1).await.unwrap();
+
+    assert_eq!(v1.version, 1);
+    assert_eq!(v1.prescription_notes, None);
+    assert_eq!(v1.discount_percent, Some(10.0));
+    assert_eq!(v1.manual_total, None);
+    assert!(v1.line_items.is_none(), "a snapshot has no invoice lines");
+}
+
+// ---------------------------------------------------------------------------
+// PDF jobs: the report's date is the visit's, invoice lines carry their
+// description, each job writes to its own folder
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn the_report_job_carries_the_visits_local_date() {
+    let db = create_test_db_with_migrations().await;
+    let patient_id = seed_patient(&db).await;
+    let id = insert_record_with_invoice(&db, patient_id, "014/2026").await;
+    let record = MedicalRecordService::get_medical_record(&db, id, false).await.unwrap().record;
+
+    let job = MedicalRecordService::report_job(&db, &record).await.unwrap();
+
+    assert_eq!(job["report_type"], "simple");
+    let local = chrono::DateTime::parse_from_rfc3339("2026-10-20T10:00:00+00:00")
+        .unwrap()
+        .with_timezone(&chrono::Local)
+        .format("%d/%m/%Y")
+        .to_string();
+    assert_eq!(job["date"], local.as_str());
+}
+
+#[tokio::test]
+async fn the_invoice_job_carries_each_lines_description() {
+    let db = create_test_db_with_migrations().await;
+    let patient_id = seed_patient(&db).await;
+    let mut line = item("Vaccine", 800.0);
+    line.description = Some("Rabies, batch 42".to_string());
+    let record = MedicalRecordService::save_new_record(&db, new_record(patient_id, vec![line])).await.unwrap();
+
+    let job = MedicalRecordService::invoice_job(&db, &record).await.unwrap();
+
+    assert_eq!(job["line_items"][0]["description"], "Rabies, batch 42");
+}
+
+#[test]
+fn two_pdf_jobs_with_the_same_file_name_write_to_different_places() {
+    let (a_dir, a) = MedicalRecordService::job_output("Medical Report - Rex - Visit - 2026-10-20 10-00.pdf").unwrap();
+    let (_b_dir, b) = MedicalRecordService::job_output("Medical Report - Rex - Visit - 2026-10-20 10-00.pdf").unwrap();
+
+    assert_ne!(a, b);
+    assert_eq!(a.file_name(), b.file_name());
+    let folder = a.parent().unwrap().to_path_buf();
+    assert!(folder.is_dir());
+    drop(a_dir);
+    assert!(!folder.exists(), "the job folder is removed afterwards");
+}
+
+// ---------------------------------------------------------------------------
+// Files newest first; the history search also looks at prescriptions
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn a_records_files_are_listed_newest_first() {
+    let db = create_test_db_with_migrations().await;
+    let patient_id = seed_patient(&db).await;
+    let record = MedicalRecordService::save_new_record(&db, new_record(patient_id, vec![])).await.unwrap();
+    for (file_id, at) in [("older", "2026-10-20T09:00:00+00:00"), ("newest", "2026-10-22T09:00:00+00:00"), ("middle", "2026-10-21T09:00:00+00:00")] {
+        db.execute(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "INSERT INTO medical_attachments (medical_record_id, file_id, original_name, mime_type, uploaded_at, attachment_type) \
+             VALUES (?, ?, ?, 'application/pdf', ?, 'file')",
+            [record.id.into(), file_id.into(), format!("{}.pdf", file_id).into(), at.into()],
+        ))
+        .await
+        .unwrap();
+    }
+
+    let detail = MedicalRecordService::get_medical_record(&db, record.id, false).await.unwrap();
+
+    let order: Vec<&str> = detail.attachments.iter().map(|a| a.file_id.as_str()).collect();
+    assert_eq!(order, ["newest", "middle", "older"]);
+}
+
+#[tokio::test]
+async fn the_history_search_finds_words_in_the_prescription() {
+    let db = create_test_db_with_migrations().await;
+    let patient_id = seed_patient(&db).await;
+    let mut input = new_record(patient_id, vec![]);
+    input.prescription_notes = Some("Амоксицилин 2x дневно".to_string());
+    MedicalRecordService::save_new_record(&db, input).await.unwrap();
+
+    let found = MedicalRecordService::search_medical_records(&db, patient_id, "амоксицилин", false).await.unwrap();
+    assert_eq!(found.len(), 1);
+
+    let filter = crate::models::medical::MedicalRecordFilter {
+        record_type: None,
+        is_archived: Some(false),
+        search_term: Some("АМОКСИЦИЛИН".to_string()),
+    };
+    let listed = MedicalRecordService::get_medical_records(&db, patient_id, Some(filter), None).await.unwrap();
+    assert_eq!(listed.total, 1);
+}

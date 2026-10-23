@@ -386,19 +386,25 @@ impl JavaPdfService {
         )?;
 
         if !output.success {
-            return Err(format!(
-                "Java JAR failed:\nSTDOUT: {}\nSTDERR: {}",
-                output.stdout, output.stderr
-            ));
+            return Err(Self::jar_failure_message(&output.stdout, &output.stderr));
         }
         log::info!("   ✅ Java output: {}", output.stdout);
-        for line in output.stderr.lines().filter(|l| !l.trim().is_empty()) {
+        for warning in Self::pdf_warnings(&output.stderr) {
+            crate::services::telemetry::event(
+                log::Level::Warn,
+                "pdf",
+                "The PDF generator could not print a value as sent",
+                serde_json::json!({ "warning": warning }),
+            );
+        }
+        for line in output.stderr.lines().filter(|l| !l.trim().is_empty() && !l.trim().starts_with("PDF_WARN")) {
             log::warn!("   ☕ Java stderr: {}", line);
         }
 
-        match fs::metadata(&job_pdf) {
-            Ok(m) if m.len() > 0 => {}
-            _ => return Err(format!("PDF was not created at: {}", output_path)),
+        match fs::read(&job_pdf) {
+            Ok(bytes) if Self::pdf_is_complete(&bytes) => {}
+            Ok(_) => return Err("The PDF generator wrote an incomplete PDF".to_string()),
+            Err(_) => return Err(format!("PDF was not created at: {}", output_path)),
         }
         let dest = Path::new(output_path);
         if let Some(parent) = dest.parent() {
@@ -406,10 +412,48 @@ impl JavaPdfService {
                 .map_err(|e| format!("Failed to create folder for {}: {}", output_path, e))?;
         }
         if fs::rename(&job_pdf, dest).is_err() {
-            fs::copy(&job_pdf, dest)
-                .map_err(|e| format!("Failed to move PDF to {}: {}", output_path, e))?;
+            Self::copy_into_place(&job_pdf, dest)?;
         }
         Ok(())
+    }
+
+    /// A failed run's error. Its first line is the cause (the CLI's "Error
+    /// generating PDF" line, else Java's first message), so the record page's
+    /// warning shows why; the full output follows.
+    pub(crate) fn jar_failure_message(stdout: &str, stderr: &str) -> String {
+        let lines = || stderr.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with("PDF_WARN"));
+        let cause = lines()
+            .find(|l| l.starts_with("Error generating PDF:"))
+            .or_else(|| lines().next())
+            .or_else(|| stdout.lines().map(str::trim).find(|l| !l.is_empty()))
+            .unwrap_or("The PDF generator stopped without saying why");
+        format!("{}\nJava JAR failed.\nSTDOUT: {}\nSTDERR: {}", cause, stdout, stderr)
+    }
+
+    /// The JAR's `PDF_WARN ...` lines (a value it could not print as sent).
+    pub(crate) fn pdf_warnings(stderr: &str) -> Vec<&str> {
+        stderr.lines().map(str::trim).filter(|l| l.starts_with("PDF_WARN")).collect()
+    }
+
+    /// A PDF the JAR finished: it ends with the `%%EOF` marker.
+    pub(crate) fn pdf_is_complete(bytes: &[u8]) -> bool {
+        let tail = &bytes[bytes.len().saturating_sub(1024)..];
+        tail.windows(5).any(|w| w == b"%%EOF")
+    }
+
+    /// Copy `src` next to `dest` as `<dest>.part`, then rename it over
+    /// `dest`, so `dest` is never a half-written file.
+    pub(crate) fn copy_into_place(src: &Path, dest: &Path) -> Result<(), String> {
+        let mut part = dest.as_os_str().to_owned();
+        part.push(".part");
+        let part = PathBuf::from(part);
+        let result = fs::copy(src, &part)
+            .map_err(|e| format!("Failed to copy the PDF into place: {}", e))
+            .and_then(|_| fs::rename(&part, dest).map_err(|e| format!("Failed to move the PDF into place: {}", e)));
+        if result.is_err() {
+            let _ = fs::remove_file(&part);
+        }
+        result
     }
 
     /// Ask the bundled JAR which app version it was built for (`java -jar … --version`,
@@ -653,17 +697,6 @@ impl JavaPdfService {
         }
     }
 
-    /// Generate a PDF using the Java JAR (iText 5) with a single device sample
-    /// Convenience wrapper for generate_pdf_multi
-    pub fn generate_pdf(
-        app_handle: &tauri::AppHandle,
-        output_path: &str,
-        patient: &crate::services::device_pdf_service::PatientData,
-        device_data: &crate::services::device_pdf_service::DeviceTestData,
-    ) -> Result<(), String> {
-        Self::generate_pdf_multi(app_handle, output_path, patient, &[device_data.clone()])
-    }
-
     /// The sample number printed on a lab report.
     /// Exigo's SNO is the analyzer's serial, the same on every sample of the
     /// day; its run number is SEQ.
@@ -696,26 +729,21 @@ impl JavaPdfService {
 
     /// Generate a simple PDF report using the template (Rapport.pdf)
     /// This creates a report with title and description overlaid on the clinic letterhead
-    pub fn generate_simple_report(
-        jar_path: &Path,
-        output_path: &str,
+    /// The JSON job for a record's report; `date` (dd/MM/yyyy) is the visit's.
+    pub fn simple_report_json(
         title: &str,
         description: &str,
         patient_data: Option<&crate::services::device_pdf_service::PatientData>,
+        date: Option<&str>,
         clinic: &ClinicProfile,
-    ) -> Result<(), String> {
-        log::info!("☕ Generating simple PDF report using Java JAR...");
-
-        // Build JSON input for simple report mode
+    ) -> Value {
         let mut json_obj = serde_json::json!({
             "report_type": "simple",
             "title": title,
             "description": description,
-            "output_path": output_path,
+            "date": date,
             "clinic": Self::clinic_json(clinic),
         });
-
-        // Add patient info if provided
         if let Some(patient) = patient_data {
             json_obj["patient"] = serde_json::json!({
                 "name": patient.name,
@@ -726,44 +754,22 @@ impl JavaPdfService {
                 "date_of_birth": patient.date_of_birth
             });
         }
-
-        Self::run_jar_job(jar_path, json_obj, output_path, JAVA_TIMEOUT)?;
-
-        log::info!("✅ Simple report PDF generated successfully");
-        Ok(())
+        json_obj
     }
 
-    /// Generate an invoice PDF using the invoice.pdf template, from a job
-    /// built by `invoice_json`.
-    pub fn generate_invoice(jar_path: &Path, output_path: &str, job: Value) -> Result<(), String> {
-        log::info!("☕ Generating invoice PDF using Java JAR...");
-        Self::run_jar_job(jar_path, job, output_path, JAVA_TIMEOUT)?;
-        log::info!("✅ Invoice PDF generated successfully");
-        Ok(())
-    }
-
-    /// Generate a pharmacy note PDF using the pharmacy_note.pdf template
-    /// Overlays prescription text onto the pre-designed template
-    pub fn generate_pharmacy_note(
-        jar_path: &Path,
-        output_path: &str,
-        prescription_text: &str,
-        clinic: &ClinicProfile,
-    ) -> Result<(), String> {
-        log::info!("☕ Generating pharmacy note PDF using Java JAR...");
-
-        let json_obj = serde_json::json!({
+    pub fn pharmacy_note_json(prescription_text: &str, clinic: &ClinicProfile) -> Value {
+        serde_json::json!({
             "report_type": "pharmacy_note",
             "prescription_text": prescription_text,
-            "output_path": output_path,
             "clinic": Self::clinic_json(clinic),
-        });
-
-        Self::run_jar_job(jar_path, json_obj, output_path, JAVA_TIMEOUT)?;
-
-        log::info!("✅ Pharmacy note PDF generated successfully");
-        Ok(())
+        })
     }
+
+    /// Render a prepared JSON job (report, pharmacy note, invoice) to `output_path`.
+    pub fn generate_from_job(jar_path: &Path, output_path: &str, job: Value) -> Result<(), String> {
+        Self::run_jar_job(jar_path, job, output_path, JAVA_TIMEOUT)
+    }
+
 }
 
 /// The clinic profile for jobs whose caller has no database at hand (lab
@@ -825,6 +831,7 @@ impl JavaPdfService {
             .map(|item| {
                 serde_json::json!({
                     "name": item.name,
+                    "description": item.description,
                     "quantity": item.quantity,
                     "unit_price": item.unit_price,
                     "vat_label": item.vat_name,
@@ -1160,5 +1167,53 @@ mod tests {
             JavaPdfService::classify_jar_version("0.7.2", "dev"),
             JarVersionVerdict::SkipDev { .. }
         ));
+    }
+
+    #[test]
+    fn a_jar_failure_names_its_cause_on_the_first_line() {
+        let stderr = "PDF_WARN code=bad_detected_at value='x'\n\
+                      Error generating PDF: Template not found: invoice.pdf\n\
+                      java.io.IOException: Template not found: invoice.pdf\n\tat Foo.bar(Foo.java:1)\n";
+        let msg = JavaPdfService::jar_failure_message("starting", stderr);
+        assert_eq!(msg.lines().next(), Some("Error generating PDF: Template not found: invoice.pdf"));
+        assert!(msg.contains("Java JAR failed"), "{}", msg);
+
+        let bare = JavaPdfService::jar_failure_message("", "PDF_WARN code=x\nException in thread main: boom\n");
+        assert_eq!(bare.lines().next(), Some("Exception in thread main: boom"));
+
+        let silent = JavaPdfService::jar_failure_message("", "");
+        assert!(!silent.lines().next().unwrap_or("").trim().is_empty(), "{:?}", silent);
+    }
+
+    #[test]
+    fn pdf_warnings_are_picked_out_of_stderr() {
+        let warnings = JavaPdfService::pdf_warnings("noise\nPDF_WARN code=a\n  PDF_WARN code=b value='1'\nmore");
+        assert_eq!(warnings, ["PDF_WARN code=a", "PDF_WARN code=b value='1'"]);
+    }
+
+    #[test]
+    fn a_pdf_counts_only_with_its_end_of_file_marker() {
+        assert!(JavaPdfService::pdf_is_complete(b"%PDF-1.4\n1 0 obj\n%%EOF\n"));
+        assert!(JavaPdfService::pdf_is_complete(b"%PDF-1.4\n%%EOF"));
+        assert!(!JavaPdfService::pdf_is_complete(b"%PDF-1.4\n1 0 obj\n<< /Type"));
+        assert!(!JavaPdfService::pdf_is_complete(b""));
+    }
+
+    #[test]
+    fn a_copied_pdf_lands_whole_and_leaves_no_part_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("out.pdf");
+        let dest = dir.path().join("Invoice.pdf");
+        fs::write(&src, b"%PDF-new\n%%EOF").unwrap();
+        fs::write(&dest, b"%PDF-old\n%%EOF").unwrap();
+
+        JavaPdfService::copy_into_place(&src, &dest).unwrap();
+
+        assert_eq!(fs::read(&dest).unwrap(), b"%PDF-new\n%%EOF");
+        let names: Vec<String> = fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
+            .collect();
+        assert!(!names.iter().any(|n| n.ends_with(".part")), "{:?}", names);
     }
 }

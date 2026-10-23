@@ -342,7 +342,12 @@
   `moved_by` = the computer's login name). A failed rebuild keeps the move
   and says so.
 - Deleting a lab attachment on the record page puts its result back in
-  `waiting`.
+  `waiting`, and the record's lab report is rebuilt from the lab results
+  left, or retired when none are left (`delete_medical_attachment` returns
+  the rebuild's status; the page warns when it failed).
+- A Recent files entry added in the new-record form is attached the same way
+  (`attach_lab_result`) once the record is saved; a result that can't be
+  (one that could not be read) is uploaded as a plain file.
 
 ### Lab results history (`services/lab_results.rs`, patient page Labs tab)
 - Every lab attachment's values are stored one per row in `lab_results`
@@ -391,6 +396,40 @@
   error}]`; the frontend warns about a failed one, and Retry calls
   `regenerate_record_document` (`report`, `pharmacy_note`, `invoice`) or, for a
   lab report, `regenerate_pdf_from_medical_record`.
+- A record whose line items or files can't be read is a load error, never an
+  empty list (a save would otherwise drop the invoice). An attachment row
+  that can't be read is logged and counted. Files are listed newest first.
+- Versions: an edit that changes anything, the invoice lines included, is a
+  new version with one history row (`changed_fields` names `line_items` for
+  the lines); an edit that changes nothing writes neither. Mind the
+  `medical_records_version` trigger: an UPDATE that leaves `version` alone
+  bumps it, so a save sets `version = version + 1` itself.
+- An old version (`get_medical_record_at_version`) shows that version's
+  snapshot, empty values included. Snapshots hold no invoice lines, so the
+  record page shows "Viewing version N" with Back to current, no Edit, and a
+  note instead of the invoice. `?edit=1` (the record card's Edit) opens the
+  page in edit mode. The history search also looks at the prescription.
+- Record PDFs (report, pharmacy note, invoice, lab and configured reports)
+  are written in a temp folder of their own per job
+  (`MedicalRecordService::job_output`), and Java runs in `spawn_blocking`. A
+  failed JAR run's error starts with its cause (shown in the save warning);
+  only a PDF ending in `%%EOF` counts; a copied PDF lands via a `.part` file.
+  `PDF_WARN` lines and every generated document (kind, ok, duration) are
+  telemetry events. A PDF fails, offering Retry, when the owner lookup
+  fails; a missing species or sex prints "Непознат Вид" / "Непознат".
+- The report prints the visit's date (the job's `date`, dd/MM/yyyy, the
+  record's local creation date); invoice lines print their `description`
+  under the name. The JAR writes amounts as in Macedonia ("1.500",
+  "1.500,50"), whatever the computer's locale; the screen uses the same
+  format (`src/utils/money.ts`: whole denars without decimals, the sign
+  after: "1.500 ден").
+- Opening, printing or previewing a file copies it to
+  `<temp>/vet-clinic-attachments/<file_id>/<name>`; preview images are cached
+  per stored file. Logs name the attachment id and extension, not the path.
+- The new-record modal tries every file (named in one message when some
+  fail) and its saved message has Open record. The price-list picker is
+  searchable; picking an item already on the invoice adds one to its
+  quantity. A diagnosis not in the list can be added from the picker.
 - The invoice number and date are assigned once, on the first invoice, in
   local time (`assign_invoice`; columns `invoice_number`, `invoice_date`). Later
   edits reprint the same number and date. The number's year is the local year.
@@ -449,7 +488,8 @@
   `address`, `city`, `phone`, `email`, `tax_number`, `registration_number`,
   `bank_account`, `bank_name`, `logo_path`}, null where blank; a job without
   it gets the profile last loaded by the app (`JavaPdfService::set_letterhead`).
-  An invoice line may carry `vat_label` and `vat_percent`, and an invoice
+  A report may carry `date` (dd/MM/yyyy; without it Java prints today). An
+  invoice line may carry `vat_label`, `vat_percent` and `description`, and an invoice
   `totals` {`subtotal`, `discount_amount`, `total`, `vat_total`,
   `prices_include_vat`, `vat_groups`: [{`label`, `percent`, `net`, `vat`,
   `gross`}]}; Java prints these instead of computing its own.

@@ -33,6 +33,7 @@ import {
   SaveOutlined,
 } from '@ant-design/icons';
 import { useLineItemTemplates, useCreateLineItemTemplate } from '../../../hooks/useLineItemTemplates';
+import { formatMoney } from '@/utils/money';
 import { useCurrencies } from '../../../hooks/useCurrencies';
 import { useAppSettings } from '../../../hooks/useAppSettings';
 import type { LineItemTemplate, MedicalRecordLineItem, CreateLineItemInput } from '../../../types/lineItem';
@@ -100,14 +101,8 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
     return currencies.find(c => c.id === currencyId);
   };
 
-  // Format price with currency symbol
-  const formatPrice = (price: number, currencyId: number): string => {
-    const currency = getCurrency(currencyId);
-    if (currency?.symbol) {
-      return `${currency.symbol}${price.toFixed(2)}`;
-    }
-    return price.toFixed(2);
-  };
+  const formatPrice = (price: number, currencyId: number): string =>
+    formatMoney(price, getCurrency(currencyId));
 
   // VAT rates offered for lines, and the totals as the invoice PDF will print them.
   const { data: taxRates = [] } = useTaxRates(true);
@@ -131,6 +126,16 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
 
     if (!template) {
       setSelectKey(k => k + 1); // Reset select
+      return;
+    }
+
+    // Picking an item already on the invoice counts it once more.
+    const existing = lineItems.findIndex(item => item.templateId === template.id);
+    if (existing >= 0) {
+      onLineItemsChange(lineItems.map((item, i) =>
+        i === existing ? { ...item, quantity: (item.quantity || 0) + 1 } : item,
+      ));
+      setSelectKey(k => k + 1);
       return;
     }
 
@@ -422,6 +427,11 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
             style={{ width: 300 }}
             loading={templatesLoading}
             disabled={disabled || templates.length === 0}
+            showSearch
+            optionFilterProp="label"
+            filterOption={(input, option) =>
+              String(option?.label ?? '').toLowerCase().includes(input.trim().toLowerCase())
+            }
             onChange={(value) => {
               if (value !== undefined && value !== null) {
                 handleTemplateSelect(value);

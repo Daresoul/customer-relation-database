@@ -111,6 +111,7 @@ public class PdfGeneratorCLI {
 
         PDFReportService service = PDFReportService.getInstance();
         service.setClinic(com.vetclinic.pdf.models.ClinicProfile.fromJson(json));
+        service.setDocumentDate(getStr(json, "date", null));
         String outputPath = json.get("output_path").getAsString();
 
         if ("invoice".equals(reportType)) {
@@ -131,7 +132,8 @@ public class PdfGeneratorCLI {
                     int quantity = itemObj.has("quantity") ? itemObj.get("quantity").getAsInt() : 1;
                     double unitPrice = itemObj.has("unit_price") ? itemObj.get("unit_price").getAsDouble() : 0;
                     String vatLabel = getStr(itemObj, "vat_label", null);
-                    lineItems.add(new PDFReportService.InvoiceLineItem(name, quantity, unitPrice, vatLabel));
+                    String description = getStr(itemObj, "description", null);
+                    lineItems.add(new PDFReportService.InvoiceLineItem(name, quantity, unitPrice, vatLabel, description));
                 }
             }
 

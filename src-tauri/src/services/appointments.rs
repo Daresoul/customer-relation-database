@@ -123,10 +123,7 @@ impl AppointmentService {
             .await
             .map_err(|e| format!("Failed to fetch appointments: {}", e))?;
 
-        let appointments: Vec<Appointment> = rows
-            .into_iter()
-            .filter_map(|row| Self::row_to_appointment(&row).ok())
-            .collect();
+        let appointments = Self::readable_appointments(rows);
 
         let has_more = (offset + limit) < total;
 
@@ -558,10 +555,25 @@ impl AppointmentService {
             .await
             .map_err(|e| format!("Failed to check conflicts: {}", e))?;
 
-        Ok(rows
+        Ok(Self::readable_appointments(rows))
+    }
+
+    /// The rows that can be read; one that can't is logged and counted, not
+    /// silently dropped.
+    fn readable_appointments(rows: Vec<sea_orm::QueryResult>) -> Vec<Appointment> {
+        let total = rows.len();
+        let appointments: Vec<Appointment> = rows
             .into_iter()
-            .filter_map(|row| Self::row_to_appointment(&row).ok())
-            .collect())
+            .filter_map(|row| {
+                Self::row_to_appointment(&row)
+                    .map_err(|e| log::warn!("An appointment row can't be read and is left out: {}", e))
+                    .ok()
+            })
+            .collect();
+        if appointments.len() < total {
+            log::warn!("{} of {} appointment rows left out", total - appointments.len(), total);
+        }
+        appointments
     }
 
     // Helper to fetch appointment by ID with patient info

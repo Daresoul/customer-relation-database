@@ -89,7 +89,7 @@ describe('record page total', () => {
 
     const totalLabel = screen.getByText('medical:lineItems.total:');
     const totalRow = totalLabel.closest('tr') as HTMLElement;
-    expect(totalRow.textContent).toContain('1500.00');
+    expect(totalRow.textContent).toContain('1.500,00');
     expect(totalRow.textContent).not.toContain('2000');
   });
 
@@ -101,6 +101,6 @@ describe('record page total', () => {
       undefined,
     );
     const vatRow = screen.getByText('ДДВ 18%').closest('tr') as HTMLElement;
-    expect(vatRow.textContent).toContain('228.81');
+    expect(vatRow.textContent).toContain('228,81');
   });
 });

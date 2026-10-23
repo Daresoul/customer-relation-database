@@ -71,3 +71,28 @@ async fn owner_is_empty_without_a_household() {
 
     assert_eq!(lookup_owner_name(&db, p).await.unwrap(), "");
 }
+
+#[tokio::test]
+async fn record_pdfs_use_the_same_owner_and_macedonian_placeholders() {
+    use crate::services::medical_record::MedicalRecordService;
+    let db = create_test_db_with_migrations().await;
+    let (patient, household) = patient_in_household(&db, Some("Петровски")).await;
+    add_person(&db, household, "Ана", "Петровска", false).await;
+
+    let data = MedicalRecordService::get_patient_for_pdf(&db, patient).await.unwrap();
+
+    assert_eq!(data.owner, "Петровски");
+    assert_eq!(data.species, "Непознат Вид");
+    assert_eq!(data.gender, "Непознат");
+}
+
+#[tokio::test]
+async fn a_failed_owner_lookup_fails_the_record_pdf() {
+    use crate::services::medical_record::MedicalRecordService;
+    let db = create_test_db_with_migrations().await;
+    let (patient, _) = patient_in_household(&db, Some("Петровски")).await;
+    db.execute_unprepared("PRAGMA foreign_keys = OFF").await.unwrap();
+    db.execute_unprepared("DROP TABLE patient_households").await.unwrap();
+
+    assert!(MedicalRecordService::get_patient_for_pdf(&db, patient).await.is_err());
+}

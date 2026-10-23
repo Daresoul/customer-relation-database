@@ -54,6 +54,37 @@ fn row_to_record(row: &QueryResult) -> MedicalRecord {
     }
 }
 
+/// Printed on PDFs when the patient's name, species or sex is missing.
+pub(crate) const UNKNOWN_PATIENT: &str = "Непознат Пациент";
+pub(crate) const UNKNOWN_SPECIES: &str = "Непознат Вид";
+pub(crate) const UNKNOWN_GENDER: &str = "Непознат";
+
+/// A record PDF job's own folder in the temp folder, removed with its
+/// contents when dropped, so two jobs never write the same file.
+pub struct PdfJobFolder {
+    pub path: std::path::PathBuf,
+}
+
+impl Drop for PdfJobFolder {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.path);
+    }
+}
+
+/// Run a Java PDF job off the async runtime's worker threads.
+async fn run_java_job(
+    jar_path: std::path::PathBuf,
+    output_path: std::path::PathBuf,
+    job: serde_json::Value,
+) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || {
+        let output = output_path.to_str().ok_or("Invalid PDF path")?;
+        crate::services::java_pdf_service::JavaPdfService::generate_from_job(&jar_path, output, job)
+    })
+    .await
+    .map_err(|e| format!("The PDF job stopped: {}", e))?
+}
+
 /// An invoice's number and the date printed on it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Invoice {
@@ -187,12 +218,23 @@ impl MedicalRecordService {
     }
 
     async fn generate_document(env: &PdfEnv, db: &DatabaseConnection, record: &MedicalRecord, kind: &str) -> PdfStatus {
+        let started = std::time::Instant::now();
         let result = match kind {
             "report" => Self::generate_simple_report_pdf(env, db, record.id, record).await,
             "pharmacy_note" => Self::generate_pharmacy_note_pdf(env, db, record.id, record).await,
             "invoice" => Self::generate_invoice_pdf(env, db, record.id, record).await,
             other => Err(format!("Unknown document kind: {}", other)),
         };
+        crate::services::telemetry::event(
+            if result.is_ok() { log::Level::Info } else { log::Level::Warn },
+            "pdf",
+            "Record document generated",
+            json!({
+                "kind": kind,
+                "ok": result.is_ok(),
+                "duration_ms": started.elapsed().as_millis() as u64,
+            }),
+        );
         match result {
             Ok(new_id) => {
                 Self::retire_documents(db, record.id, attachment_type_of(kind), Some(new_id)).await;
@@ -356,17 +398,11 @@ impl MedicalRecordService {
 
         log::debug!("Fetched {} records before search filter", records.len());
 
-        // Cyrillic-safe search filter (SQLite LIKE is ASCII-only). Matches
-        // the same two fields the old SQL LIKE covered (name, description).
+        // Cyrillic-safe search filter (SQLite LIKE is ASCII-only).
         if let Some(ref f) = filter {
             if let Some(ref search_term) = f.search_term {
                 let needle = search_term.trim().to_lowercase();
-                if !needle.is_empty() {
-                    records.retain(|r| {
-                        r.name.to_lowercase().contains(&needle)
-                            || r.description.to_lowercase().contains(&needle)
-                    });
-                }
+                records.retain(|r| Self::record_matches(r, &needle));
             }
         }
 
@@ -381,7 +417,7 @@ impl MedicalRecordService {
 
         // Fetch attachments only for the records on this page.
         for record in page_records.iter_mut() {
-            let attachments = Self::fetch_attachments(db, record.id).await.unwrap_or_default();
+            let attachments = Self::fetch_attachments(db, record.id).await?;
             record.attachments = if attachments.is_empty() { None } else { Some(attachments) };
         }
 
@@ -402,26 +438,35 @@ impl MedicalRecordService {
                 DbBackend::Sqlite,
                 "SELECT id, medical_record_id, file_id, original_name, mime_type, \
                  file_size, uploaded_at, device_type, device_name, connection_method, attachment_type \
-                 FROM medical_attachments WHERE medical_record_id = ? AND deleted_at IS NULL",
+                 FROM medical_attachments WHERE medical_record_id = ? AND deleted_at IS NULL \
+                 ORDER BY uploaded_at DESC, id DESC",
                 [record_id.into()],
             ))
             .await
             .map_err(|e| format!("Failed to fetch attachments: {}", e))?;
 
-        let attachments: Vec<MedicalAttachment> = rows
-            .iter()
-            .filter_map(|row| {
-                let uploaded_at_str: Option<String> = row.try_get("", "uploaded_at").ok();
-                let uploaded_at = uploaded_at_str
-                    .as_deref()
-                    .map(Self::parse_datetime)
-                    .unwrap_or_else(Utc::now);
-
-                Some(MedicalAttachment {
-                    id: row.try_get("", "id").ok()?,
-                    medical_record_id: row.try_get("", "medical_record_id").ok()?,
-                    file_id: row.try_get("", "file_id").ok()?,
-                    original_name: row.try_get("", "original_name").ok()?,
+        let mut attachments = Vec::with_capacity(rows.len());
+        for row in &rows {
+            let uploaded_at = row
+                .try_get::<String>("", "uploaded_at")
+                .ok()
+                .as_deref()
+                .map(Self::parse_datetime)
+                .unwrap_or_else(Utc::now);
+            let required = (|| -> Result<_, sea_orm::DbErr> {
+                Ok((
+                    row.try_get::<i64>("", "id")?,
+                    row.try_get::<i64>("", "medical_record_id")?,
+                    row.try_get::<String>("", "file_id")?,
+                    row.try_get::<String>("", "original_name")?,
+                ))
+            })();
+            match required {
+                Ok((id, medical_record_id, file_id, original_name)) => attachments.push(MedicalAttachment {
+                    id,
+                    medical_record_id,
+                    file_id,
+                    original_name,
                     file_size: row.try_get("", "file_size").ok(),
                     mime_type: row.try_get("", "mime_type").ok(),
                     uploaded_at,
@@ -429,9 +474,13 @@ impl MedicalRecordService {
                     device_name: row.try_get("", "device_name").ok(),
                     connection_method: row.try_get("", "connection_method").ok(),
                     attachment_type: row.try_get("", "attachment_type").ok(),
-                })
-            })
-            .collect();
+                }),
+                Err(e) => log::warn!("Record {}: an attachment row can't be read and is not shown: {}", record_id, e),
+            }
+        }
+        if attachments.len() < rows.len() {
+            log::warn!("Record {}: {} of {} attachments skipped", record_id, rows.len() - attachments.len(), rows.len());
+        }
 
         Ok(attachments)
     }
@@ -467,15 +516,13 @@ impl MedicalRecordService {
             .ok_or("Medical record not found".to_string())?;
 
         // Get line items using the LineItemService
-        let line_items = crate::services::line_item::LineItemService::get_line_items_for_record(db, record_id)
-            .await
-            .unwrap_or_default();
+        let line_items = crate::services::line_item::LineItemService::get_line_items_for_record(db, record_id).await?;
 
         let mut record = row_to_record(&row);
         record.line_items = if line_items.is_empty() { None } else { Some(line_items) };
 
         // Get attachments using helper
-        let attachments = Self::fetch_attachments(db, record_id).await.unwrap_or_default();
+        let attachments = Self::fetch_attachments(db, record_id).await?;
 
         // Get history if requested
         let history = if include_history {
@@ -739,7 +786,7 @@ impl MedicalRecordService {
     /// - truncates to 60 chars so very long titles / patient names
     ///   don't blow past common filesystem path-length limits when
     ///   combined with the rest of the filename
-    fn sanitize_filename_part(s: &str) -> String {
+    pub(crate) fn sanitize_filename_part(s: &str) -> String {
         let cleaned: String = s
             .chars()
             .map(|c| match c {
@@ -761,8 +808,41 @@ impl MedicalRecordService {
     /// only between date and time (most file browsers handle those
     /// fine), and skip seconds — minute resolution is more than
     /// enough for human filenames.
-    fn pdf_timestamp() -> String {
+    pub(crate) fn pdf_timestamp() -> String {
         chrono::Local::now().format("%Y-%m-%d %H-%M").to_string()
+    }
+
+    /// Where one PDF job writes `file_name`: a fresh folder of its own.
+    pub fn job_output(file_name: &str) -> Result<(PdfJobFolder, std::path::PathBuf), String> {
+        let path = std::env::temp_dir()
+            .join("arkivet-record-pdfs")
+            .join(uuid::Uuid::new_v4().to_string());
+        std::fs::create_dir_all(&path).map_err(|e| format!("Failed to create the PDF folder: {}", e))?;
+        let file = path.join(file_name);
+        Ok((PdfJobFolder { path }, file))
+    }
+
+    /// The JSON job the JAR renders the record's report from.
+    #[cfg(test)]
+    pub async fn report_job(db: &DatabaseConnection, record: &MedicalRecord) -> Result<serde_json::Value, String> {
+        Ok(Self::report_job_parts(db, record).await?.0)
+    }
+
+    async fn report_job_parts(
+        db: &DatabaseConnection,
+        record: &MedicalRecord,
+    ) -> Result<(serde_json::Value, crate::services::device_pdf_service::PatientData), String> {
+        let patient_data = Self::get_patient_for_pdf(db, record.patient_id).await?;
+        let clinic = crate::services::settings::SettingsService::get_clinic_profile(db).await?;
+        let date = record.created_at.with_timezone(&chrono::Local).format("%d/%m/%Y").to_string();
+        let job = crate::services::java_pdf_service::JavaPdfService::simple_report_json(
+            &record.name,
+            &record.description,
+            Some(&patient_data),
+            Some(&date),
+            &clinic,
+        );
+        Ok((job, patient_data))
     }
 
     /// Generate a simple report PDF using the template with medical record title and description
@@ -772,21 +852,9 @@ impl MedicalRecordService {
         medical_record_id: i64,
         record: &MedicalRecord,
     ) -> Result<i64, String> {
-        use crate::services::java_pdf_service::JavaPdfService;
+        let (job, patient_data) = Self::report_job_parts(db, record).await?;
 
-        // Get patient and owner info for the report
-        let patient_data = Self::get_patient_for_pdf(db, record.patient_id).await?;
-
-        // Create reports directory
-        let reports_dir = std::env::temp_dir().join("simple_reports");
-        std::fs::create_dir_all(&reports_dir)
-            .map_err(|e| format!("Failed to create reports directory: {}", e))?;
-
-        // Build a user-friendly filename:
-        //   "Medical Report - <Patient> - <Record Title> - <YYYY-MM-DD HH-MM>.pdf"
-        // so the user can identify what they're looking at from the
-        // file name alone, both inside the app and when the file is
-        // downloaded / printed externally.
+        // "Medical Report - <Patient> - <Record Title> - <YYYY-MM-DD HH-MM>.pdf"
         let patient_part = Self::sanitize_filename_part(&patient_data.name);
         let title_part = Self::sanitize_filename_part(&record.name);
         let pdf_filename = format!(
@@ -795,19 +863,10 @@ impl MedicalRecordService {
             title_part,
             Self::pdf_timestamp(),
         );
-        let pdf_path = reports_dir.join(&pdf_filename);
+        let (_job_folder, pdf_path) = Self::job_output(&pdf_filename)?;
 
-        // Generate simple report PDF
         log::info!("📄 Calling Java to generate simple report PDF for record {}...", medical_record_id);
-        let clinic = crate::services::settings::SettingsService::get_clinic_profile(db).await?;
-        JavaPdfService::generate_simple_report(
-            &env.jar_path,
-            pdf_path.to_str().ok_or("Invalid PDF path")?,
-            &record.name,
-            &record.description,
-            Some(&patient_data),
-            &clinic,
-        )?;
+        run_java_job(env.jar_path.clone(), pdf_path.clone(), job).await?;
 
         // Save PDF as attachment
         let attachment_id = Self::save_pdf_attachment(
@@ -822,7 +881,6 @@ impl MedicalRecordService {
             "simple_report",  // Use different type so generate_configured_report won't delete it
         ).await?;
 
-        let _ = std::fs::remove_file(&pdf_path);
         log::debug!("Simple report PDF generated and saved as attachment");
         Ok(attachment_id)
     }
@@ -847,11 +905,6 @@ impl MedicalRecordService {
         // data across the three PDF generators.
         let patient_data = Self::get_patient_for_pdf(db, record.patient_id).await?;
 
-        // Create pharmacy notes directory
-        let reports_dir = std::env::temp_dir().join("pharmacy_notes");
-        std::fs::create_dir_all(&reports_dir)
-            .map_err(|e| format!("Failed to create pharmacy notes directory: {}", e))?;
-
         // "Pharmacy Note - <Patient> - <Record Title> - <YYYY-MM-DD HH-MM>.pdf"
         let patient_part = Self::sanitize_filename_part(&patient_data.name);
         let title_part = Self::sanitize_filename_part(&record.name);
@@ -861,16 +914,12 @@ impl MedicalRecordService {
             title_part,
             Self::pdf_timestamp(),
         );
-        let pdf_path = reports_dir.join(&pdf_filename);
+        let (_job_folder, pdf_path) = Self::job_output(&pdf_filename)?;
 
         log::info!("📄 Calling Java to generate pharmacy note PDF for record {}...", medical_record_id);
         let clinic = crate::services::settings::SettingsService::get_clinic_profile(db).await?;
-        JavaPdfService::generate_pharmacy_note(
-            &env.jar_path,
-            pdf_path.to_str().ok_or("Invalid PDF path")?,
-            &prescription_text,
-            &clinic,
-        )?;
+        let job = JavaPdfService::pharmacy_note_json(&prescription_text, &clinic);
+        run_java_job(env.jar_path.clone(), pdf_path.clone(), job).await?;
 
         // Save PDF as attachment
         let attachment_id = Self::save_pdf_attachment(
@@ -885,7 +934,6 @@ impl MedicalRecordService {
             "pharmacy_note",
         ).await?;
 
-        let _ = std::fs::remove_file(&pdf_path);
         log::debug!("Pharmacy note PDF generated and saved as attachment");
         Ok(attachment_id)
     }
@@ -977,21 +1025,10 @@ impl MedicalRecordService {
         medical_record_id: i64,
         record: &MedicalRecord,
     ) -> Result<i64, String> {
-        use crate::services::java_pdf_service::JavaPdfService;
-
         let (job, invoice, recipient) = Self::invoice_job_parts(db, record).await?;
 
-        // Create invoice directory
-        let reports_dir = std::env::temp_dir().join("invoices");
-        std::fs::create_dir_all(&reports_dir)
-            .map_err(|e| format!("Failed to create invoices directory: {}", e))?;
-
-        // "Invoice <Number> - <Recipient> - <YYYY-MM-DD>.pdf"
-        // Invoice numbers like "042/2025" contain a slash, which we
-        // sanitize to "_" via sanitize_filename_part — so the on-disk
-        // form becomes "Invoice 042_2025 - John Petrov - 2026-05-24.pdf".
-        // The original "042/2025" string is still what's stored in
-        // medical_records.invoice_number and printed on the PDF body.
+        // "Invoice <Number> - <Recipient> - <YYYY-MM-DD>.pdf"; the number's
+        // "/" becomes "_" in the file name only.
         let invoice_part = Self::sanitize_filename_part(&invoice.number);
         let recipient_part = Self::sanitize_filename_part(&recipient);
         let pdf_filename = format!(
@@ -1000,14 +1037,10 @@ impl MedicalRecordService {
             recipient_part,
             invoice.date.format("%Y-%m-%d"),
         );
-        let pdf_path = reports_dir.join(&pdf_filename);
+        let (_job_folder, pdf_path) = Self::job_output(&pdf_filename)?;
 
         log::info!("📄 Generating invoice PDF for record {}...", medical_record_id);
-        JavaPdfService::generate_invoice(
-            &env.jar_path,
-            pdf_path.to_str().ok_or("Invalid PDF path")?,
-            job,
-        )?;
+        run_java_job(env.jar_path.clone(), pdf_path.clone(), job).await?;
 
         // Save PDF as attachment
         let attachment_id = Self::save_pdf_attachment(
@@ -1022,7 +1055,6 @@ impl MedicalRecordService {
             "invoice",
         ).await?;
 
-        let _ = std::fs::remove_file(&pdf_path);
         log::info!("✅ Invoice PDF generated and saved for record {}", medical_record_id);
         Ok(attachment_id)
     }
@@ -1049,49 +1081,16 @@ impl MedicalRecordService {
 
         let birthdate: Option<String> = row.try_get("", "date_of_birth").ok();
 
-        // Try to get owner information - prefer primary contact's full name, fall back to household name
-        log::debug!("Looking up owner for patient_id: {}", patient_id);
-
-        let owner_result = db
-            .query_one(Statement::from_sql_and_values(
-                DbBackend::Sqlite,
-                "SELECT COALESCE( \
-                    (SELECT p.first_name || ' ' || p.last_name \
-                     FROM people p \
-                     WHERE p.household_id = h.id AND p.is_primary = 1 \
-                     LIMIT 1), \
-                    h.household_name \
-                 ) as owner_name \
-                 FROM households h \
-                 JOIN patient_households ph ON h.id = ph.household_id \
-                 WHERE ph.patient_id = ? \
-                 LIMIT 1",
-                [patient_id.into()],
-            ))
-            .await;
-
-        let owner = match owner_result {
-            Ok(Some(r)) => {
-                let name: String = r.try_get("", "owner_name").unwrap_or_default();
-                log::debug!("Found owner: {}", name);
-                name
-            }
-            Ok(None) => {
-                log::debug!("No household link found for patient");
-                String::new() // Empty string - PDF will skip owner row
-            }
-            Err(e) => {
-                log::warn!("Owner query failed: {}", e);
-                String::new() // Empty string - PDF will skip owner row
-            }
-        };
+        // A failed lookup fails the document (the save offers Retry) rather
+        // than printing it without an owner.
+        let owner = crate::commands::medical::lookup_owner_name(db, patient_id).await?;
 
         Ok(crate::services::device_pdf_service::PatientData {
             name: row.try_get("", "name").unwrap_or_default(),
             owner,
-            species: row.try_get::<String>("", "species_name").ok().unwrap_or_else(|| "Unknown Species".to_string()),
+            species: row.try_get::<String>("", "species_name").ok().unwrap_or_else(|| UNKNOWN_SPECIES.to_string()),
             microchip_id: row.try_get("", "microchip_id").ok(),
-            gender: row.try_get::<String>("", "gender").ok().unwrap_or_else(|| "Unknown".to_string()),
+            gender: row.try_get::<String>("", "gender").ok().unwrap_or_else(|| UNKNOWN_GENDER.to_string()),
             date_of_birth: birthdate,
         })
     }
@@ -1109,11 +1108,6 @@ impl MedicalRecordService {
         if device_data_list.is_empty() {
             return Ok(());
         }
-
-        // Create reports directory
-        let reports_dir = std::env::temp_dir().join("device_reports");
-        std::fs::create_dir_all(&reports_dir)
-            .map_err(|e| format!("Failed to create reports directory: {}", e))?;
 
         // Build the device-report filename. Single device: include the
         // device name explicitly so the user can tell which analyzer
@@ -1138,18 +1132,24 @@ impl MedicalRecordService {
                 Self::pdf_timestamp(),
             )
         };
-        let pdf_path = reports_dir.join(&pdf_filename);
+        let (_job_folder, pdf_path) = Self::job_output(&pdf_filename)?;
 
         // Generate Java PDF with all devices
         log::debug!("Generating combined PDF report using Java...");
         let clinic = crate::services::settings::SettingsService::get_clinic_profile(db).await?;
-        JavaPdfService::generate_pdf_multi_with_clinic(
-            &env.jar_path,
-            pdf_path.to_str().ok_or("Invalid PDF path")?,
-            patient_data,
-            device_data_list,
-            Some(&clinic),
-        )?;
+        let (jar, out, patient, devices) =
+            (env.jar_path.clone(), pdf_path.clone(), patient_data.clone(), device_data_list.to_vec());
+        tokio::task::spawn_blocking(move || {
+            JavaPdfService::generate_pdf_multi_with_clinic(
+                &jar,
+                out.to_str().ok_or("Invalid PDF path")?,
+                &patient,
+                &devices,
+                Some(&clinic),
+            )
+        })
+        .await
+        .map_err(|e| format!("The PDF job stopped: {}", e))??;
 
         // Determine device metadata for attachment (use first device for now)
         let first_device = &device_data_list[0];
@@ -1177,7 +1177,6 @@ impl MedicalRecordService {
             "generated_pdf",  // This can be replaced by generate_configured_report
         ).await?;
 
-        let _ = std::fs::remove_file(&pdf_path);
         log::debug!("PDF report generated and saved as attachment {}", attachment_id);
         Ok(())
     }
@@ -1341,7 +1340,10 @@ impl MedicalRecordService {
             return Err("No fields to update".to_string());
         }
 
-        // Only run SQL update if there are record fields to update
+        let record_fields_updated = !update_parts.is_empty();
+        // Only run SQL update if there are record fields to update. The
+        // version moves in the same UPDATE: the medical_records_version
+        // trigger bumps it on any UPDATE that leaves it unchanged.
         if !update_parts.is_empty() {
             update_parts.push("updated_at = ?");
             params.push(now.to_rfc3339().into());
@@ -1362,16 +1364,17 @@ impl MedicalRecordService {
         }
 
         // Handle line items replacement if provided
+        let mut line_items_changed = false;
         let line_items = if let Some(items) = updates.line_items {
+            let before = crate::services::line_item::LineItemService::get_line_items_for_record_in(&txn, record_id).await?;
             let replaced_items = crate::services::line_item::LineItemService::replace_line_items_for_record_in(&txn, record_id, items)
                 .await
                 .map_err(|e| format!("Failed to update line items: {}", e))?;
+            line_items_changed = Self::line_items_differ(&before, &replaced_items);
             if replaced_items.is_empty() { None } else { Some(replaced_items) }
         } else {
             // Fetch existing line items
-            let existing = crate::services::line_item::LineItemService::get_line_items_for_record_in(&txn, record_id)
-                .await
-                .unwrap_or_default();
+            let existing = crate::services::line_item::LineItemService::get_line_items_for_record_in(&txn, record_id).await?;
             if existing.is_empty() { None } else { Some(existing) }
         };
 
@@ -1446,6 +1449,27 @@ impl MedicalRecordService {
         if old_snapshot.get("discount_percent") != new_snapshot.get("discount_percent") { changed_fields.push("discount_percent"); }
         if old_snapshot.get("manual_total") != new_snapshot.get("manual_total") { changed_fields.push("manual_total"); }
         if old_snapshot.get("is_archived") != new_snapshot.get("is_archived") { changed_fields.push("is_archived"); }
+        if line_items_changed { changed_fields.push("line_items"); }
+
+        // Nothing changed: no new version and no history row.
+        if changed_fields.is_empty() {
+            txn.rollback().await.map_err(|e| format!("Failed to save the record: {}", e))?;
+            let mut unchanged = row_to_record(&old_row);
+            unchanged.line_items = updated_record.line_items;
+            return Ok(unchanged);
+        }
+
+        if !record_fields_updated {
+            txn.execute(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "UPDATE medical_records SET version = version + 1, updated_at = ? WHERE id = ?",
+                [now.to_rfc3339().into(), record_id.into()],
+            ))
+            .await
+            .map_err(|e| format!("Failed to update medical record: {}", e))?;
+            updated_record.version += 1;
+            updated_record.updated_at = now;
+        }
 
         log::debug!("History snapshot insert (update): rec_id={}, version={}, fields={}", record_id, updated_record.version, changed_fields.join(","));
         txn
@@ -1467,6 +1491,28 @@ impl MedicalRecordService {
         txn.commit().await.map_err(|e| format!("Failed to save the record: {}", e))?;
 
         Ok(updated_record)
+    }
+
+    /// Whether an edit changed what the invoice lines say (ids and times
+    /// are new on every save, so they are left out).
+    fn line_items_differ(
+        before: &[crate::models::MedicalRecordLineItem],
+        after: &[crate::models::MedicalRecordLineItem],
+    ) -> bool {
+        let key = |i: &crate::models::MedicalRecordLineItem| {
+            (
+                i.template_id,
+                i.name.clone(),
+                i.description.clone(),
+                i.unit_price.to_bits(),
+                i.currency_id,
+                i.quantity,
+                i.tax_rate_id,
+                i.vat_name.clone(),
+                i.vat_percent.map(f64::to_bits),
+            )
+        };
+        before.len() != after.len() || before.iter().zip(after).any(|(a, b)| key(a) != key(b))
     }
 
     pub async fn update_medical_record(
@@ -1501,6 +1547,18 @@ impl MedicalRecordService {
         .map_err(|e| format!("Failed to archive medical record: {}", e))?;
 
         Ok(())
+    }
+
+    /// Unicode-aware match of a lower-cased needle against the record's
+    /// title, description, procedure name and prescription. An empty needle
+    /// matches everything.
+    fn record_matches(r: &MedicalRecord, needle: &str) -> bool {
+        let has = |text: &str| text.to_lowercase().contains(needle);
+        needle.is_empty()
+            || has(&r.name)
+            || has(&r.description)
+            || r.procedure_name.as_deref().is_some_and(has)
+            || r.prescription_notes.as_deref().is_some_and(has)
     }
 
     pub async fn search_medical_records(
@@ -1538,16 +1596,7 @@ impl MedicalRecordService {
         let records = rows
             .iter()
             .map(row_to_record)
-            .filter(|r| {
-                // Unicode-aware substring match across name, description and
-                // procedure_name. An empty needle matches everything.
-                needle.is_empty()
-                    || r.name.to_lowercase().contains(&needle)
-                    || r.description.to_lowercase().contains(&needle)
-                    || r.procedure_name
-                        .as_deref()
-                        .is_some_and(|p| p.to_lowercase().contains(&needle))
-            })
+            .filter(|r| Self::record_matches(r, &needle))
             .collect();
         Ok(records)
     }
@@ -1575,6 +1624,24 @@ impl MedicalRecordService {
 
         log::debug!("Fetched currencies from DB: {:?}", currencies);
         Ok(currencies)
+    }
+
+    /// Every key the snapshot has, empty values included: the old version's
+    /// values, never today's. A snapshot has no invoice lines, so none are shown.
+    fn overlay_snapshot(base: &mut MedicalRecord, v: &serde_json::Value) {
+        let text = |k: &str| v.get(k).map(|x| x.as_str().map(str::to_string));
+        let number = |k: &str| v.get(k).map(|x| x.as_f64());
+        if let Some(Some(rt)) = text("record_type") { base.record_type = rt; }
+        if let Some(nm) = text("name") { base.name = nm.unwrap_or_default(); }
+        if let Some(pn) = text("procedure_name") { base.procedure_name = pn; }
+        if let Some(desc) = text("description") { base.description = desc.unwrap_or_default(); }
+        if let Some(prn) = text("prescription_notes") { base.prescription_notes = prn; }
+        if let Some(pr) = number("price") { base.price = pr; }
+        if let Some(cid) = v.get("currency_id") { base.currency_id = cid.as_i64(); }
+        if let Some(d) = number("discount_percent") { base.discount_percent = d; }
+        if let Some(m) = number("manual_total") { base.manual_total = m; }
+        if let Some(ia) = v.get("is_archived").and_then(|x| x.as_bool()) { base.is_archived = ia; }
+        base.line_items = None;
     }
 
     // Get a record snapshot at a specific version using history new_values
@@ -1609,106 +1676,11 @@ impl MedicalRecordService {
         if let Some(hr) = hrow {
             let json_str: String = hr.try_get("", "new_values").unwrap_or_default();
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(&json_str) {
-                if let Some(rt) = v.get("record_type").and_then(|x| x.as_str()) { base.record_type = rt.to_string(); }
-                if let Some(nm) = v.get("name").and_then(|x| x.as_str()) { base.name = nm.to_string(); }
-                if let Some(pn) = v.get("procedure_name").and_then(|x| x.as_str()) { base.procedure_name = Some(pn.to_string()); }
-                if let Some(desc) = v.get("description").and_then(|x| x.as_str()) { base.description = desc.to_string(); }
-                if let Some(prn) = v.get("prescription_notes").and_then(|x| x.as_str()) { base.prescription_notes = Some(prn.to_string()); }
-                if let Some(pr) = v.get("price").and_then(|x| x.as_f64()) { base.price = Some(pr); }
-                if let Some(cid) = v.get("currency_id").and_then(|x| x.as_i64()) { base.currency_id = Some(cid); }
-                if let Some(ia) = v.get("is_archived").and_then(|x| x.as_bool()) { base.is_archived = ia; }
+                Self::overlay_snapshot(&mut base, &v);
                 base.version = version;
             }
         }
 
         Ok(base)
-    }
-
-    // Revert a record one step to its previous version using latest history old_values
-    pub async fn revert_one_step(
-        app_handle: &tauri::AppHandle,
-        db: &DatabaseConnection,
-        record_id: i64,
-    ) -> Result<SavedMedicalRecord, String> {
-        // Fetch latest history entry
-        let row = db
-            .query_one(Statement::from_sql_and_values(
-                DbBackend::Sqlite,
-                "SELECT version, old_values FROM medical_record_history \
-                 WHERE medical_record_id = ? ORDER BY version DESC LIMIT 1",
-                [record_id.into()],
-            ))
-            .await
-            .map_err(|e| format!("Failed to fetch history: {}", e))?
-            .ok_or("No history available to revert".to_string())?;
-
-        let old_values_str: Option<String> = row.try_get("", "old_values").ok();
-        if old_values_str.is_none() {
-            return Err("No previous values recorded to revert".to_string());
-        }
-
-        let old_vals: serde_json::Value = serde_json::from_str(&old_values_str.unwrap())
-            .map_err(|e| format!("Failed to parse history values: {}", e))?;
-
-        // Build updates from old values (only known fields)
-        let mut updates = UpdateMedicalRecordInput {
-            name: None,
-            procedure_name: None,
-            description: None,
-            prescription_notes: None,
-            price: MaybeNull::Undefined,
-            currency_id: MaybeNull::Undefined,
-            discount_percent: MaybeNull::Undefined,
-            manual_total: MaybeNull::Undefined,
-            is_archived: None,
-            line_items: None,
-        };
-
-        if let Some(v) = old_vals.get("name") { updates.name = v.as_str().map(|s| s.to_string()); }
-        if let Some(v) = old_vals.get("procedure_name") { updates.procedure_name = v.as_str().map(|s| s.to_string()); }
-        if let Some(v) = old_vals.get("description") { updates.description = v.as_str().map(|s| s.to_string()); }
-        if let Some(v) = old_vals.get("prescription_notes") { updates.prescription_notes = v.as_str().map(|s| s.to_string()); }
-        if let Some(v) = old_vals.get("price") {
-            updates.price = match v.as_f64().or_else(|| v.as_i64().map(|i| i as f64)) {
-                Some(p) => MaybeNull::Value(p),
-                None if v.is_null() => MaybeNull::Null,
-                None => MaybeNull::Undefined,
-            };
-        }
-        if let Some(v) = old_vals.get("currency_id") {
-            updates.currency_id = match v.as_i64() {
-                Some(id) => MaybeNull::Value(id),
-                None if v.is_null() => MaybeNull::Null,
-                None => MaybeNull::Undefined,
-            };
-        }
-        if let Some(v) = old_vals.get("discount_percent") {
-            updates.discount_percent = match v.as_f64().or_else(|| v.as_i64().map(|i| i as f64)) {
-                Some(p) => MaybeNull::Value(p),
-                None if v.is_null() => MaybeNull::Null,
-                None => MaybeNull::Undefined,
-            };
-        }
-        if let Some(v) = old_vals.get("manual_total") {
-            updates.manual_total = match v.as_f64().or_else(|| v.as_i64().map(|i| i as f64)) {
-                Some(p) => MaybeNull::Value(p),
-                None if v.is_null() => MaybeNull::Null,
-                None => MaybeNull::Undefined,
-            };
-        }
-        if let Some(v) = old_vals.get("is_archived") { updates.is_archived = v.as_bool(); }
-
-        // If no fields present, abort
-        if updates.name.is_none()
-            && updates.procedure_name.is_none()
-            && updates.description.is_none()
-            && updates.prescription_notes.is_none()
-            && matches!(updates.price, MaybeNull::Undefined)
-            && matches!(updates.currency_id, MaybeNull::Undefined)
-            && updates.is_archived.is_none() {
-            return Err("No revertable fields in previous version".to_string());
-        }
-
-        Self::update_medical_record(app_handle, db, record_id, updates).await
     }
 }

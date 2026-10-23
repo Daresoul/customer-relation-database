@@ -136,7 +136,7 @@ impl FileStorageService {
         let storage_dir = Self::get_storage_dir(app_handle)?;
         let file_path = storage_dir.join(&file_id);
 
-        log::debug!("file_storage download id={} path={}", attachment_id, file_path.display());
+        log::debug!("file_storage download id={} file={} ext={}", attachment_id, file_id, Self::extension_of(&original_name));
 
         let file_data = fs::read(&file_path)
             .map_err(|e| format!("Failed to read file: {}", e))?;
@@ -200,15 +200,6 @@ impl FileStorageService {
         }
     }
 
-    /// Clean up orphaned files (files in storage but not in database)
-    pub async fn cleanup_orphaned_files(
-        _app_handle: &AppHandle,
-        _db: &DatabaseConnection,
-    ) -> Result<usize, String> {
-        // Temporary stub - return 0 files cleaned
-        Ok(0)
-    }
-
     /// Validate file before upload
     pub fn validate_file(
         file_data: &[u8],
@@ -228,22 +219,62 @@ impl FileStorageService {
         Ok(())
     }
 
+    /// Where a stored file is copied to be opened or printed: a folder per
+    /// stored file, so two files with the same name never overwrite each
+    /// other. Only the name's last part is used.
+    pub fn temp_copy_path(file_id: &str, file_name: &str) -> std::path::PathBuf {
+        let name = std::path::Path::new(file_name)
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .filter(|n| !n.is_empty())
+            .unwrap_or_else(|| "attachment".to_string());
+        std::env::temp_dir().join("vet-clinic-attachments").join(file_id).join(name)
+    }
+
+    /// The cached preview image of one page of a stored PDF.
+    pub fn preview_png_path(file_id: &str, page: u32, width: u32) -> std::path::PathBuf {
+        std::env::temp_dir()
+            .join("vet-clinic-attachments")
+            .join("previews")
+            .join(format!("{}_p{}_w{}.png", file_id, page, width))
+    }
+
+    /// The stored file id of a live attachment.
+    pub async fn attachment_file_id(db: &DatabaseConnection, attachment_id: i64) -> Result<String, String> {
+        db.query_one(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "SELECT file_id FROM medical_attachments WHERE id = ? AND deleted_at IS NULL",
+            [attachment_id.into()],
+        ))
+        .await
+        .map_err(|e| format!("Failed to fetch attachment record: {}", e))?
+        .ok_or("Attachment not found".to_string())?
+        .try_get::<String>("", "file_id")
+        .map_err(|e| format!("Failed to get file_id: {}", e))
+    }
+
+    /// A file name's extension, for logs that must not carry names or paths.
+    fn extension_of(name: &str) -> String {
+        std::path::Path::new(name)
+            .extension()
+            .map(|e| e.to_string_lossy().to_lowercase())
+            .unwrap_or_default()
+    }
+
     /// Materialize an attachment to a temporary path and return that path
     pub async fn materialize_attachment(
         app_handle: &AppHandle,
         db: &DatabaseConnection,
         attachment_id: i64,
     ) -> Result<String, String> {
+        let file_id = Self::attachment_file_id(db, attachment_id).await?;
         let data = Self::download_attachment(app_handle, db, attachment_id).await?;
 
-        // Create temp path
-        let mut tmp_dir = std::env::temp_dir();
-        tmp_dir.push("vet-clinic-attachments");
-        if !tmp_dir.exists() {
-            fs::create_dir_all(&tmp_dir)
+        let target_path = Self::temp_copy_path(&file_id, &data.file_name);
+        if let Some(dir) = target_path.parent() {
+            fs::create_dir_all(dir)
                 .map_err(|e| format!("Failed to create temp dir: {}", e))?;
         }
-        let target_path = tmp_dir.join(&data.file_name);
 
         // Write file
         fs::write(&target_path, &data.file_data)
@@ -259,7 +290,7 @@ impl FileStorageService {
         attachment_id: i64,
         target_path: String,
     ) -> Result<(), String> {
-        log::info!("💾 Saving attachment {} to: {}", attachment_id, target_path);
+        log::info!("💾 Saving attachment {} (.{})", attachment_id, Self::extension_of(&target_path));
 
         let data = Self::download_attachment(app_handle, db, attachment_id).await?;
         log::info!("   Downloaded {} bytes", data.file_data.len());
@@ -267,7 +298,7 @@ impl FileStorageService {
         let path = std::path::Path::new(&target_path);
         if let Some(parent) = path.parent() {
             if !parent.exists() {
-                log::info!("   Creating parent directory: {}", parent.display());
+                log::info!("   Creating the target folder");
                 fs::create_dir_all(parent)
                     .map_err(|e| format!("Failed to create directory '{}': {}", parent.display(), e))?;
             }
@@ -279,7 +310,7 @@ impl FileStorageService {
         f.write_all(&data.file_data)
             .map_err(|e| format!("Failed to write file '{}': {}", target_path, e))?;
 
-        log::info!("   ✅ File saved successfully to: {}", target_path);
+        log::info!("   ✅ Attachment {} saved", attachment_id);
         Ok(())
     }
 
@@ -312,7 +343,7 @@ impl FileStorageService {
             // cmd.exe spawned, so association problems were invisible in the
             // clinic logs. It also removes cmd.exe's quote-parsing quirks
             // from the path handling entirely.
-            log::info!("📂 Opening file with default app: {}", path);
+            log::info!("📂 Opening a .{} file with its default app", Self::extension_of(path));
             log_windows_launch_context(path);
 
             let code = windows_shell_execute(path, "open");
@@ -329,7 +360,7 @@ impl FileStorageService {
                 "os_launch",
                 "Opening a file with its default app failed",
                 serde_json::json!({
-                    "path": path,
+                    "extension": Self::extension_of(path),
                     "code": code,
                     "code_meaning": describe_shellexecute_code(code),
                     "open_handler": windows_resolve_association(path, Some("open")),
@@ -398,7 +429,7 @@ impl FileStorageService {
 
         #[cfg(target_os = "windows")]
         {
-            log::info!("🖨️  Printing file: {}", path);
+            log::info!("🖨️  Printing a .{} file", Self::extension_of(path));
             log_windows_launch_context(path);
 
             // Try "print" verb first, fallback to "open" if not supported
@@ -415,7 +446,7 @@ impl FileStorageService {
                             "os_launch",
                             "Print verb unavailable — opened file in viewer instead of printing",
                             serde_json::json!({
-                                "path": path,
+                                "extension": Self::extension_of(path),
                                 "print_verb_code": codes.first().map(|(_, c)| *c),
                                 "open_handler": windows_resolve_association(path, Some("open")),
                             }),
@@ -438,7 +469,7 @@ impl FileStorageService {
                 "os_launch",
                 "Print failed — no verb could launch a handler for the file",
                 serde_json::json!({
-                    "path": path,
+                    "extension": Self::extension_of(path),
                     "verb_codes": codes.iter().map(|(v, c)| format!("{}={}", v, c)).collect::<Vec<_>>(),
                     "open_handler": windows_resolve_association(path, Some("open")),
                     "print_handler": windows_resolve_association(path, Some("print")),

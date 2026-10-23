@@ -12,7 +12,6 @@ vi.mock('@/hooks/useMedicalRecords', () => ({
   useDownloadAttachment: () => ({ mutateAsync: vi.fn() }),
   useCurrencies: () => ({ data: [] }),
 }));
-vi.mock('@/components/MedicalRecordDetail/MedicalRecordDetailDrawer', () => ({ default: () => null }));
 vi.mock('@/components/DiagnosisTagList', () => ({ default: () => null }));
 
 import MedicalRecordCards from '../MedicalHistory/MedicalRecordCards';

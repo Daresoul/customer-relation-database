@@ -49,6 +49,17 @@ public class PDFReportService {
 
     private com.vetclinic.pdf.models.ClinicProfile clinic = com.vetclinic.pdf.models.ClinicProfile.empty();
 
+    /** The visit's date (dd/MM/yyyy) printed on the next report; null prints today. */
+    private String documentDate;
+
+    public void setDocumentDate(String date) {
+        this.documentDate = date;
+    }
+
+    private String documentDateOrToday() {
+        return documentDate != null && !documentDate.trim().isEmpty() ? documentDate : Util.getCurrentFormattedDate();
+    }
+
     /** The clinic details drawn on the next documents' letterhead. */
     public void setClinic(com.vetclinic.pdf.models.ClinicProfile clinic) {
         this.clinic = clinic == null ? com.vetclinic.pdf.models.ClinicProfile.empty() : clinic;
@@ -1742,7 +1753,7 @@ public class PDFReportService {
         Font dateFont = FontUtil.getMacedonianFont(10, FontUtil.DEFAULT_FONT_COLOR);
         ColumnText dateColumn = new ColumnText(canvas);
         dateColumn.setSimpleColumn(dateX, dateY - 15, dateX + 100, dateY + 5);
-        Paragraph dateParagraph = new Paragraph(Util.getCurrentFormattedDate(), dateFont);
+        Paragraph dateParagraph = new Paragraph(documentDateOrToday(), dateFont);
         dateColumn.addElement(dateParagraph);
         dateColumn.go();
 
@@ -1973,7 +1984,7 @@ public class PDFReportService {
         Font dateFont = FontUtil.getMacedonianFont(11, FontUtil.DEFAULT_FONT_COLOR);
         ColumnText dateColumn = new ColumnText(canvas);
         dateColumn.setSimpleColumn(dateX, dateY - 12, dateX + 100, dateY + 8);
-        Paragraph dateParagraph = new Paragraph(Util.getCurrentFormattedDate(), dateFont);
+        Paragraph dateParagraph = new Paragraph(documentDateOrToday(), dateFont);
         dateColumn.addElement(dateParagraph);
         dateColumn.go();
 
@@ -1996,16 +2007,23 @@ public class PDFReportService {
         public double unitPrice;
         /** The line's VAT rate label (e.g. "ДДВ 18%"); null for a line without a rate. */
         public String vatLabel;
+        /** Printed under the name; null or blank for none. */
+        public String description;
 
         public InvoiceLineItem(String name, int quantity, double unitPrice) {
             this(name, quantity, unitPrice, null);
         }
 
         public InvoiceLineItem(String name, int quantity, double unitPrice, String vatLabel) {
+            this(name, quantity, unitPrice, vatLabel, null);
+        }
+
+        public InvoiceLineItem(String name, int quantity, double unitPrice, String vatLabel, String description) {
             this.name = name;
             this.quantity = quantity;
             this.unitPrice = unitPrice;
             this.vatLabel = vatLabel;
+            this.description = description;
         }
 
         public double getTotal() {
@@ -2121,6 +2139,7 @@ public class PDFReportService {
         Font fieldFont = FontUtil.getMacedonianFont(10, FontUtil.DEFAULT_FONT_COLOR);
         Font headerFont = FontUtil.getMacedonianFont(9, FontUtil.CYAN_DARK_FONT_COLOR);
         Font cellFont = FontUtil.getMacedonianFont(10, FontUtil.DEFAULT_FONT_COLOR);
+        Font descriptionFont = FontUtil.getMacedonianFont(8, BaseColor.DARK_GRAY);
         Font totalLabelFont = FontUtil.getMacedonianFont(11, FontUtil.CYAN_DARK_FONT_COLOR);
         totalLabelFont.setStyle(Font.BOLD);
         Font totalValueFont = FontUtil.getMacedonianFont(11, FontUtil.DEFAULT_FONT_COLOR);
@@ -2167,6 +2186,10 @@ public class PDFReportService {
             double rowTotal = item.getTotal();
 
             Paragraph nameP = new Paragraph(item.name, cellFont);
+            if (item.description != null && !item.description.trim().isEmpty()) {
+                nameP.add(Chunk.NEWLINE);
+                nameP.add(new Chunk(item.description.trim(), descriptionFont));
+            }
             float rowHeight = Math.max(minRowHeight, measureHeight(nameP, colDesc - 8) + 8);
 
             if (currentY - rowHeight < bottomLimit) {
@@ -2412,13 +2435,19 @@ public class PDFReportService {
     }
 
     /**
-     * Format a numeric amount for display (no trailing zeros for whole numbers).
+     * An amount as written in Macedonia, whatever the computer's locale:
+     * dot grouping, decimal comma, no decimals for whole amounts
+     * ("1.500", "1.500,50").
      */
-    private String formatAmount(double amount) {
-        if (amount == Math.floor(amount) && !Double.isInfinite(amount)) {
-            return String.format("%.0f", amount);
-        }
-        return String.format("%.2f", amount);
+    static String formatAmount(double amount) {
+        java.text.DecimalFormatSymbols mk = new java.text.DecimalFormatSymbols(java.util.Locale.forLanguageTag("mk-MK"));
+        mk.setGroupingSeparator('.');
+        mk.setDecimalSeparator(',');
+        mk.setMinusSign('-');
+        boolean whole = amount == Math.floor(amount) && !Double.isInfinite(amount);
+        java.text.DecimalFormat format = new java.text.DecimalFormat(whole ? "#,##0" : "#,##0.00", mk);
+        format.setRoundingMode(java.math.RoundingMode.HALF_UP);
+        return format.format(amount);
     }
 
     // ==================== END INVOICE FROM TEMPLATE ====================
