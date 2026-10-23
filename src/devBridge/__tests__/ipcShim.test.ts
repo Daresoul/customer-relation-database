@@ -172,3 +172,16 @@ describe('bridgeRequested', () => {
     expect(bridgeRequested('?bridge=1', undefined)).toBe(true);
   });
 });
+
+describe('shouldInstallBridge', () => {
+  it('only in a dev build, only when asked, and never inside the real app', async () => {
+    const { shouldInstallBridge } = await import('../ipcShim');
+    const tauriWindow = { __TAURI_IPC__: () => {} } as unknown as Window;
+    const browserWindow = {} as Window;
+
+    expect(shouldInstallBridge(true, '?bridge=1', undefined, browserWindow)).toBe(true);
+    expect(shouldInstallBridge(false, '?bridge=1', undefined, browserWindow)).toBe(false);
+    expect(shouldInstallBridge(true, '', undefined, browserWindow)).toBe(false);
+    expect(shouldInstallBridge(true, '?bridge=1', undefined, tauriWindow)).toBe(false);
+  });
+});
