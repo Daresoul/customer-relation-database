@@ -12,12 +12,12 @@ export const appRoutes: RouteObject[] = [
   {
     element: <RootLayout />,
     children: [
-      { path: '/', element: <MainDashboard /> },
-      { path: '/households/:id', element: <HouseholdDetail /> },
-      { path: '/patients/:id', element: <PatientDetail /> },
-      { path: '/medical-records/:id', element: <MedicalRecordDetailPage /> },
-      { path: '/settings', element: <Settings /> },
-      { path: '/lab-inbox', element: <LabInboxPage /> },
+      { path: '/', element: <MainDashboard />, handle: { titleKey: 'shell:pageTitle.dashboard' } },
+      { path: '/households/:id', element: <HouseholdDetail />, handle: { titleKey: 'shell:pageTitle.household' } },
+      { path: '/patients/:id', element: <PatientDetail />, handle: { titleKey: 'shell:pageTitle.patient' } },
+      { path: '/medical-records/:id', element: <MedicalRecordDetailPage />, handle: { titleKey: 'shell:pageTitle.record' } },
+      { path: '/settings', element: <Settings />, handle: { titleKey: 'shell:pageTitle.settings' } },
+      { path: '/lab-inbox', element: <LabInboxPage />, handle: { titleKey: 'shell:pageTitle.labInbox' } },
     ],
   },
 ];

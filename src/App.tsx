@@ -21,6 +21,7 @@ import { appRoutes } from './layouts/routes';
 import { useLabInboxLiveUpdates } from './hooks/useLabInbox';
 import { invoke, logEvent } from '@/services/invoke';
 import { createQueryClient } from './utils/queryClient';
+import { AppSettingsSync } from './components/AppSettingsSync';
 import { applyAutostartDefault } from './utils/autostart';
 
 // Import global styles
@@ -64,6 +65,7 @@ function AppContent() {
           <DeviceImportProvider>
             <AntApp notification={{ maxCount: 3, placement: 'bottomRight' }}>
               <DeviceDataHandler />
+              <AppSettingsSync />
               <RouterProvider router={router} />
             </AntApp>
           </DeviceImportProvider>

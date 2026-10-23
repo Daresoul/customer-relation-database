@@ -1,4 +1,13 @@
 {
+  "pageTitle": {
+    "format": "Arkivet — {{page}}",
+    "dashboard": "Dashboard",
+    "household": "Household",
+    "patient": "Patient",
+    "record": "Medical record",
+    "settings": "Settings",
+    "labInbox": "Lab results"
+  },
   "header": {
     "appName": "Arkivet",
     "home": "Go to the dashboard",

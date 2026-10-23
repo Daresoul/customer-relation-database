@@ -23,20 +23,24 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [themeMode, setThemeModeState] = useState<ThemeMode>('dark');
+  // The saved setting (AppSettingsSync) decides; localStorage only paints the first frame.
+  const [themeMode, setThemeModeState] = useState<ThemeMode>(() => {
+    try {
+      const cached = localStorage.getItem('themeMode');
+      return cached === 'light' || cached === 'dark' ? cached : 'dark';
+    } catch {
+      return 'dark';
+    }
+  });
   const [primaryColor, setPrimaryColorState] = useState('#4A90E2');
   const [fontSize, setFontSizeState] = useState(14);
   const [cssVariables, setCssVariables] = useState<Record<string, string>>({});
 
   // Load theme preference on mount
   useEffect(() => {
-    const savedTheme = localStorage.getItem('themeMode') as ThemeMode;
     const savedColor = localStorage.getItem('primaryColor');
     const savedFontSize = localStorage.getItem('fontSize');
 
-    if (savedTheme && ['dark', 'light'].includes(savedTheme)) {
-      setThemeModeState(savedTheme);
-    }
     if (savedColor) {
       setPrimaryColorState(savedColor);
     }

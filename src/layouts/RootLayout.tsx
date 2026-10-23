@@ -6,11 +6,13 @@ import { AppShellHeader, GlobalSearchProvider } from '../components/AppHeader';
 import { DeviceHealthChip } from '../components/DeviceStatusBar';
 import { WakeFromTrayHandler } from './WakeFromTrayHandler';
 import { ChipScanHandler } from './ChipScanHandler';
+import { DocumentTitle } from './DocumentTitle';
 
 /** Every page renders inside this: header, device bar, lab import, crash boundary. */
 export function RootLayout() {
   return (
     <GlobalSearchProvider>
+      <DocumentTitle />
       <WakeFromTrayHandler />
       <ChipScanHandler />
       <DeviceImportModal />

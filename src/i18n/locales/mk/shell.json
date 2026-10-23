@@ -1,4 +1,13 @@
 {
+  "pageTitle": {
+    "format": "Arkivet — {{page}}",
+    "dashboard": "Контролна табла",
+    "household": "Домаќинство",
+    "patient": "Пациент",
+    "record": "Медицински запис",
+    "settings": "Поставки",
+    "labInbox": "Лабораториски резултати"
+  },
   "header": {
     "appName": "Arkivet",
     "home": "Оди на почетната страница",
