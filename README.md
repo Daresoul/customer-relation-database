@@ -21,6 +21,14 @@
   plain text. A phone typed with dashes matches one stored with spaces or none.
 - Search, quick search and the household list skip merged-away households
   (`households.merged_into_id IS NOT NULL`).
+- A query that is only a phone number also matches its local (0…) and
+  international (389…) digits, so "+389 70 123 456" finds "070 123 456"
+  (`household_search::household_fts_query`, using `normalize_phone`).
+- The household list is sorted in Rust in Macedonian alphabet order, case
+  folded, Latin first (`alphabet_key`); SQLite orders by code point, which
+  put Ѓ, Ј, Љ, Њ, Ќ, Џ before А. Paging happens after the sort.
+- The dashboard household table matches typed phone digits (+389 read as 0)
+  against every person's phones (`utils/phone.ts`).
 
 ## Microchips
 - Create and update store the chip without spaces or dashes, and a 12-hex
@@ -90,6 +98,12 @@
   clears the others in a transaction; `update_person` with `isPrimary: true`
   does the same and ignores `false`. Deleting the primary person makes the
   longest-standing other person primary; the last person can't be deleted.
+- The household page shows the household's notes at the top. A person's
+  preferred contact is set with a switch in the person's edit form (one per
+  person); saving with no contacts removes them all. Inline field saves are
+  quiet unless they fail. "Register new pet" there asks no household.
+- New-household forms fill the household name from the last name until the
+  name is typed into.
 
 ## Frontend states and caching
 - A failed load shows `components/common/LoadError` (message plus Retry that
@@ -106,6 +120,26 @@
   (`utils/globalErrorReporting.ts`, installed in `main.tsx`).
 - Settings that fail to load show `LoadError` with Retry and no Save; there
   are no stand-in defaults that Save could write back.
+- Queries retry once; a failed query is logged as `webview.query_failed` with
+  its key (`utils/queryClient.ts`).
+- Errors on screen go through `errorText` / `notifyError`
+  (`utils/notifyError.ts`, a translated text, never `String(e)`). Backup
+  errors name their cause (folder missing, no permission, disk full,
+  database busy) through `utils/backupErrors.ts`. Tauri commands go through
+  `services/invoke`; eslint forbids the raw `invoke` outside it, `main.tsx`
+  and `ErrorBoundary`.
+- Tauri event listeners in components use `useTauriEvent(name, handler)`: it
+  calls the latest handler and unlistens even when unmounted early.
+- The saved settings (language, theme, date format) are applied at start by
+  `AppSettingsSync`; localStorage `themeMode` only paints the first frame.
+- Clearing the currency sends `currencyId: null`; the backend tells null
+  (clear) from a missing field (keep). New settings rows default to
+  `DD.MM.YYYY`; the "default" row seeded by migration 017 keeps `DD/MM/YYYY`.
+- Species, breeds, rooms and price list items refuse a blank name and a name
+  another one has in any case or spacing (`services/names.rs`, Unicode
+  lower-case). People names are trimmed and required. Required text fields
+  in forms use `whitespace: true`, and forms set `scrollToFirstError`.
+- Species have no colour (no column stores one).
 - Launch at login is turned on once for a new install
   (`utils/autostart.ts`, localStorage `arkivet.autostartDefaultApplied`);
   after that the Settings switch decides, and a failed switch flips back with
@@ -150,6 +184,21 @@
   Saved-for-later count; the strip takes it as `waitingLabCount`), and patients
   seen today (`count_patients_seen`: patients with a record created in the
   local day).
+- The window title names the page ("Arkivet — Settings"), from each route's
+  `handle.titleKey` (`layouts/DocumentTitle.tsx`).
+- The dashboard keeps its tab and search in the URL (`?tab=households&q=…`).
+  The full-page loader shows on the first load only; later reloads update in
+  place. Adding a patient opens its page. Empty lists offer Add. When backups
+  are not set up or the last one failed, the dashboard shows a warning with a
+  link to backup settings (`components/BackupWarning.tsx`).
+- Settings sections are in the URL (`/settings?section=clinic`); menu clicks
+  update it.
+- Updates: checked 10 s after start, retried after 5, 15 and 60 minutes when
+  the check fails, then daily (`services/updateCheckSchedule.ts`). The offer
+  and its download/install progress sit in a banner under the header
+  (`components/UpdateBanner.tsx`), not a notification. A failed automatic
+  check shows on the Updates settings page (localStorage
+  `arkivet.updateCheckFailure`, this computer only).
 - The household list has no Status or Last activity columns: the list query
   has no real last-visit date.
 
