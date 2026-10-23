@@ -504,3 +504,65 @@ pub async fn get_person_with_contacts(
         contacts,
     }))
 }
+
+/// Add a person and their contacts to a household.
+pub async fn add_person_with_contacts(
+    db: &DatabaseConnection,
+    household_id: i32,
+    person: &CreatePersonWithContactsDto,
+) -> Result<i32, String> {
+    let person_result = db.execute(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "INSERT INTO people (household_id, first_name, last_name, is_primary) VALUES (?, ?, ?, ?)",
+        [
+            household_id.into(),
+            person.person.first_name.clone().into(),
+            person.person.last_name.clone().into(),
+            person.person.is_primary.unwrap_or(false).into(),
+        ]
+    ))
+    .await
+    .map_err(|e| format!("Failed to create person: {}", e))?;
+
+    let person_id = person_result.last_insert_id() as i32;
+    insert_contacts(db, person_id, &person.contacts).await?;
+    Ok(person_id)
+}
+
+/// Replace all of a person's contacts with the given list.
+pub async fn replace_person_contacts(
+    db: &DatabaseConnection,
+    person_id: i32,
+    contacts: &[CreateContactDto],
+) -> Result<(), String> {
+    db.execute(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "DELETE FROM person_contacts WHERE person_id = ?",
+        [person_id.into()]
+    ))
+    .await
+    .map_err(|e| format!("Failed to delete existing contacts: {}", e))?;
+    insert_contacts(db, person_id, contacts).await
+}
+
+async fn insert_contacts<C: ConnectionTrait>(
+    db: &C,
+    person_id: i32,
+    contacts: &[CreateContactDto],
+) -> Result<(), String> {
+    for contact in contacts {
+        db.execute(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "INSERT INTO person_contacts (person_id, contact_type, contact_value, is_primary) VALUES (?, ?, ?, ?)",
+            [
+                person_id.into(),
+                contact.contact_type.clone().into(),
+                contact.contact_value.clone().into(),
+                contact.is_primary.unwrap_or(false).into(),
+            ]
+        ))
+        .await
+        .map_err(|e| format!("Failed to create contact: {}", e))?;
+    }
+    Ok(())
+}

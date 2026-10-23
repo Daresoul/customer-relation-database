@@ -269,37 +269,7 @@ pub async fn add_person_to_household(
     household_id: i32,
     person: CreatePersonWithContactsDto,
 ) -> Result<PersonWithContacts, String> {
-    // Create person
-    let person_result = pool.execute(Statement::from_sql_and_values(
-        DbBackend::Sqlite,
-        "INSERT INTO people (household_id, first_name, last_name, is_primary) VALUES (?, ?, ?, ?)",
-        [
-            household_id.into(),
-            person.person.first_name.clone().into(),
-            person.person.last_name.clone().into(),
-            person.person.is_primary.unwrap_or(false).into(),
-        ]
-    ))
-    .await
-    .map_err(|e| format!("Failed to create person: {}", e))?;
-
-    let person_id = person_result.last_insert_id() as i32;
-
-    // Add contacts
-    for contact in &person.contacts {
-        pool.execute(Statement::from_sql_and_values(
-            DbBackend::Sqlite,
-            "INSERT INTO person_contacts (person_id, contact_type, contact_value, is_primary) VALUES (?, ?, ?, ?)",
-            [
-                person_id.into(),
-                contact.contact_type.clone().into(),
-                contact.contact_value.clone().into(),
-                contact.is_primary.unwrap_or(false).into(),
-            ]
-        ))
-        .await
-        .map_err(|e| format!("Failed to create contact: {}", e))?;
-    }
+    let person_id = household::add_person_with_contacts(&pool, household_id, &person).await?;
 
     // Fetch and return the created person with contacts
     household::get_person_with_contacts(&pool, person_id)
@@ -393,30 +363,7 @@ pub async fn update_person_contacts(
     person_id: i32,
     contacts: Vec<CreateContactDto>,
 ) -> Result<Vec<PersonContact>, String> {
-    // Delete existing contacts
-    pool.execute(Statement::from_sql_and_values(
-        DbBackend::Sqlite,
-        "DELETE FROM person_contacts WHERE person_id = ?",
-        [person_id.into()]
-    ))
-    .await
-    .map_err(|e| format!("Failed to delete existing contacts: {}", e))?;
-
-    // Insert new contacts
-    for contact in contacts {
-        pool.execute(Statement::from_sql_and_values(
-            DbBackend::Sqlite,
-            "INSERT INTO person_contacts (person_id, contact_type, contact_value, is_primary) VALUES (?, ?, ?, ?)",
-            [
-                person_id.into(),
-                contact.contact_type.into(),
-                contact.contact_value.into(),
-                contact.is_primary.unwrap_or(false).into(),
-            ]
-        ))
-        .await
-        .map_err(|e| format!("Failed to create contact: {}", e))?;
-    }
+    household::replace_person_contacts(&pool, person_id, &contacts).await?;
 
     // Fetch and return all contacts for this person
     let rows = pool.query_all(Statement::from_sql_and_values(
