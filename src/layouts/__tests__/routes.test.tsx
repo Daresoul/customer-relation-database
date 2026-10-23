@@ -30,10 +30,14 @@ vi.mock('../../components/AppWrapper', () => ({
     </div>
   ),
 }));
+vi.mock('../../components/LabInbox/LabInboxBadge', () => ({ default: () => <div>lab inbox badge</div> }));
+vi.mock('../../components/DeviceStatusBar', () => ({ DeviceHealthChip: () => null }));
+vi.mock('../../components/DeviceStatusBar/DevSimulatorButton', () => ({ DevSimulatorButton: () => null }));
 vi.mock('../../components/AppHeader', () => ({
-  AppShellHeader: () => (
+  AppShellHeader: ({ labInboxSlot }: { labInboxSlot?: React.ReactNode }) => (
     <div>
       app header <Link to="/settings">header settings</Link>
+      {labInboxSlot}
     </div>
   ),
   GlobalSearchProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -71,6 +75,13 @@ describe('app routes (data router)', () => {
     expect(await screen.findByText(page)).toBeInTheDocument();
     expect(screen.getByText(/app header/)).toBeInTheDocument();
     expect(screen.getByText('lab import modal')).toBeInTheDocument();
+  });
+
+  // device-import #6: the lab inbox badge existed but was never mounted.
+  it('shows the lab inbox badge in the header on every page', async () => {
+    renderAt('/patients/5');
+    expect(await screen.findByText('patient page')).toBeInTheDocument();
+    expect(screen.getByText('lab inbox badge')).toBeInTheDocument();
   });
 
   it('a crashing page keeps the header, and leaving the page recovers', async () => {

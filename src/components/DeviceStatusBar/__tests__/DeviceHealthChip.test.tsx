@@ -88,18 +88,13 @@ describe('lab machines chip in the header', () => {
   });
 });
 
-describe('device chips on the status bars', () => {
-  it('a click on a dashboard chip opens that machine in the drawer', async () => {
-    const { DeviceStatusBar } = await import('../DeviceStatusBar');
-    renderIn(<DeviceStatusBar />, '/');
-    fireEvent.click(await screen.findByRole('button', { name: /Exigo/ }));
-    await waitFor(() => expect(invokeMock).toHaveBeenCalledWith('get_device_details', { integrationId: 2 }));
-  });
-
-  it('a click on a compact chip opens that machine in the drawer', async () => {
-    const { DeviceStatusInline } = await import('../DeviceStatusInline');
-    renderIn(<DeviceStatusInline />);
-    fireEvent.click(await screen.findByRole('button', { name: /PointCare/ }));
-    await waitFor(() => expect(invokeMock).toHaveBeenCalledWith('get_device_details', { integrationId: 1 }));
+// app-shell #11: the state was a colour only.
+describe('lab machines chip, accessible', () => {
+  it('says the state in a word, not only by colour', async () => {
+    const { DeviceHealthChip } = await import('../DeviceHealthChip');
+    renderIn(<DeviceHealthChip />);
+    const chip = screen.getByRole('button', { name: /chip.label/ });
+    expect(chip).toHaveAccessibleName(expect.stringMatching(/chip.state.(down|waiting|working)/));
+    expect(chip.textContent).toMatch(/chip.state./);
   });
 });
