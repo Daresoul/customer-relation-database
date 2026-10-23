@@ -40,6 +40,15 @@ class DateOfBirthTest {
     }
 
     @Test
+    void dateOfBirthOnTheRecordReportUsesTheReportsDateStyle() throws Exception {
+        JsonObject in = ClinicLetterheadTest.report();
+        in.add("patient", withDob("2016-05-17"));
+        String text = InvoiceRenderTest.text(InvoiceRenderTest.renderToFile(in));
+        assertTrue(text.contains("17/05/2016"), text);
+        assertFalse(text.contains("2016-05-17"), text);
+    }
+
+    @Test
     void ageIsYearsOrMonthsOrDash() {
         LocalDate today = LocalDate.of(2026, 10, 22);
         assertEquals("6 години", Util.formatAge(LocalDate.of(2020, 1, 15), today));
