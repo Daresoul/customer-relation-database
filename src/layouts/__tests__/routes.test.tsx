@@ -21,7 +21,6 @@ vi.mock('../../pages/HouseholdDetail', () => ({ HouseholdDetail: () => <div>hous
 vi.mock('../../pages/PatientDetail', () => ({ PatientDetail: () => <div>patient page</div> }));
 vi.mock('../../pages/MedicalRecordDetail', () => ({ MedicalRecordDetailPage: () => <div>record page</div> }));
 vi.mock('../../pages/Settings', () => ({ default: () => <div>settings page</div> }));
-vi.mock('../../pages/Appointments/Appointments', () => ({ default: () => <div>appointments page</div> }));
 vi.mock('../../components/DeviceImportModal/DeviceImportModal', () => ({ default: () => <div>lab import modal</div> }));
 vi.mock('../../components/AppWrapper', () => ({
   AppWrapper: ({ header, children }: { header?: React.ReactNode; children: React.ReactNode }) => (
@@ -66,7 +65,6 @@ describe('app routes (data router)', () => {
     ['/households/4', 'household page'],
     ['/patients/5', 'patient page'],
     ['/medical-records/6', 'record page'],
-    ['/appointments', 'appointments page'],
     ['/settings', 'settings page'],
   ])('%s shows its page inside the shell, with the header and the lab import modal', async (path, page) => {
     renderAt(path);

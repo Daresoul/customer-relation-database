@@ -14,20 +14,19 @@ vi.mock('@/services/invoke', () => ({ invoke: (...a: unknown[]) => invokeMock(..
 // way it does (same mutation key, same variables) so the link can be checked.
 vi.mock('@/components/MedicalRecordModal/MedicalRecordModal', async () => {
   const { CREATE_RECORD_MUTATION_KEY } = await import('@/hooks/useMedicalRecords');
-  return {
-    default: ({ open, patientId, patientName }: { open: boolean; patientId: number; patientName: string }) => {
-      const save = useMutation({
-        mutationKey: CREATE_RECORD_MUTATION_KEY,
-        mutationFn: async (_v: { patientId: number }) => ({ id: 55 }),
-      });
-      return open ? (
-        <div data-testid="record-modal">
-          record for {patientName}
-          <button onClick={() => save.mutate({ patientId })}>stub-save-record</button>
-        </div>
-      ) : null;
-    },
-  };
+  function StubRecordModal({ open, patientId, patientName }: { open: boolean; patientId: number; patientName: string }) {
+    const save = useMutation({
+      mutationKey: CREATE_RECORD_MUTATION_KEY,
+      mutationFn: async (_v: { patientId: number }) => ({ id: 55 }),
+    });
+    return open ? (
+      <div data-testid="record-modal">
+        record for {patientName}
+        <button onClick={() => save.mutate({ patientId })}>stub-save-record</button>
+      </div>
+    ) : null;
+  }
+  return { default: StubRecordModal };
 });
 
 import { AppointmentDrawer } from '../AppointmentDrawer';
@@ -76,8 +75,10 @@ const household = {
   ],
 };
 
-function backend(overrides: Record<string, (args: any) => unknown> = {}) {
-  invokeMock.mockImplementation((cmd: string, args: any) => {
+type Args = { input?: Record<string, unknown> } & Record<string, unknown>;
+
+function backend(overrides: Record<string, (args: Args) => unknown> = {}) {
+  invokeMock.mockImplementation((cmd: string, args: Args) => {
     if (overrides[cmd]) return Promise.resolve(overrides[cmd](args));
     switch (cmd) {
       case 'get_appointment':
