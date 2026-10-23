@@ -585,7 +585,7 @@ const ManagedScannersSettings: React.FC = () => {
           <Form.Item
             name="name"
             label={t('settings:managedScanners.name', 'Name')}
-            rules={[{ required: true, message: t('forms:validation.required') }]}
+            rules={[{ required: true, whitespace: true, message: t('forms:validation.required') }]}
           >
             <Input
               placeholder={t(

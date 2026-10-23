@@ -100,7 +100,7 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({
         <Form.Item
           name="firstName"
           label={t('detail.people.modal.labels.firstName')}
-          rules={[{ required: true, message: t('detail.people.modal.validation.firstNameRequired') }]}
+          rules={[{ required: true, whitespace: true, message: t('detail.people.modal.validation.firstNameRequired') }]}
         >
           <Input placeholder={t('detail.people.modal.placeholders.firstName')} autoFocus />
         </Form.Item>
@@ -108,7 +108,7 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({
         <Form.Item
           name="lastName"
           label={t('detail.people.modal.labels.lastName')}
-          rules={[{ required: true, message: t('detail.people.modal.validation.lastNameRequired') }]}
+          rules={[{ required: true, whitespace: true, message: t('detail.people.modal.validation.lastNameRequired') }]}
         >
           <Input placeholder={t('detail.people.modal.placeholders.lastName')} />
         </Form.Item>
@@ -142,7 +142,7 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({
                       name={[name, 'contactValue']}
                       dependencies={[['contacts', name, 'contactType']]}
                       rules={[
-                        { required: true, message: t('detail.people.modal.validation.required') },
+                        { required: true, whitespace: true, message: t('detail.people.modal.validation.required') },
                         ({ getFieldValue }) => ({
                           validator(_, value) {
                             const type = getFieldValue(['contacts', name, 'contactType']);

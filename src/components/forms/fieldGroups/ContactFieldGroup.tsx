@@ -71,7 +71,7 @@ export const ContactFieldGroup: React.FC<ContactFieldGroupProps> = ({
               name={fieldName('firstName')}
               label={t('forms:labels.firstName', 'First Name')}
               rules={[
-                { required: true, message: t('forms:validation.required', 'First name is required') },
+                { required: true, whitespace: true, message: t('forms:validation.required', 'First name is required') },
                 { max: 50, message: t('forms:validation.maxLength', { max: 50 }) },
               ]}
             >
@@ -88,7 +88,7 @@ export const ContactFieldGroup: React.FC<ContactFieldGroupProps> = ({
               name={fieldName('lastName')}
               label={t('forms:labels.lastName', 'Last Name')}
               rules={[
-                { required: true, message: t('forms:validation.required', 'Last name is required') },
+                { required: true, whitespace: true, message: t('forms:validation.required', 'Last name is required') },
                 { max: 50, message: t('forms:validation.maxLength', { max: 50 }) },
               ]}
             >

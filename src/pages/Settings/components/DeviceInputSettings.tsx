@@ -712,7 +712,7 @@ const DeviceInputSettings: React.FC = () => {
           <Form.Item
             name="name"
             label={t('form.labels.integrationName')}
-            rules={[{ required: true, message: t('form.validation.nameRequired') }]}
+            rules={[{ required: true, whitespace: true, message: t('form.validation.nameRequired') }]}
           >
             <Input placeholder={t('form.placeholders.integrationName')} />
           </Form.Item>
@@ -787,7 +787,7 @@ const DeviceInputSettings: React.FC = () => {
                     <Form.Item
                       name="watch_directory"
                       label={t('form.labels.watchDirectory')}
-                      rules={[{ required: true, message: t('form.validation.directoryRequired') }]}
+                      rules={[{ required: true, whitespace: true, message: t('form.validation.directoryRequired') }]}
                     >
                       <Input
                         placeholder={t('form.placeholders.watchDirectory')}
@@ -854,7 +854,7 @@ const DeviceInputSettings: React.FC = () => {
                     <Form.Item
                       name="tcp_host"
                       label={t('form.labels.tcpHost')}
-                      rules={[{ required: true, message: t('form.validation.tcpHostRequired') }]}
+                      rules={[{ required: true, whitespace: true, message: t('form.validation.tcpHostRequired') }]}
                     >
                       <Input placeholder={t('form.placeholders.tcpHost')} />
                     </Form.Item>

@@ -244,7 +244,7 @@ export const CreateHouseholdInline: React.FC<CreateHouseholdInlineProps> = ({
             name="householdName"
             label={t('patients:detail.householdInfo.householdName', 'Household Name')}
             rules={[
-              { required: true, message: t('patients:detail.householdInfo.householdNameRequired', 'Household name is required') },
+              { required: true, whitespace: true, message: t('patients:detail.householdInfo.householdNameRequired', 'Household name is required') },
               { max: 100, message: t('patients:detail.householdInfo.householdNameTooLong', 'Household name must be 100 characters or less') },
             ]}
           >

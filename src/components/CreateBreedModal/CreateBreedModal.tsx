@@ -106,7 +106,7 @@ export const CreateBreedModal: React.FC<CreateBreedModalProps> = ({
           name="name"
           label={t('patients:fields.breed')}
           rules={[
-            { required: true, message: t('forms:validation.required') },
+            { required: true, whitespace: true, message: t('forms:validation.required') },
             { max: 50, message: t('forms:validation.maxLength', { max: 50 }) },
           ]}
         >

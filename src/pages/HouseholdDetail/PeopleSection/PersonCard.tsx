@@ -227,7 +227,7 @@ export const PersonCard: React.FC<PersonCardProps> = ({
                         name={[name, 'contactValue']}
                         dependencies={[['contacts', name, 'contactType']]}
                         rules={[
-                          { required: true, message: t('detail.people.modal.validation.required') },
+                          { required: true, whitespace: true, message: t('detail.people.modal.validation.required') },
                           ({ getFieldValue }) => ({
                             validator(_, value) {
                               const type = getFieldValue(['contacts', name, 'contactType']);

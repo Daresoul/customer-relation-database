@@ -216,7 +216,7 @@ const RoomsSettings: React.FC<RoomsSettingsProps> = ({ isUpdating }) => {
           <Form.Item
             name="name"
             label={t('appointments:rooms.nameLabel')}
-            rules={[{ required: true, message: t('appointments:rooms.nameRequired') }]}
+            rules={[{ required: true, whitespace: true, message: t('appointments:rooms.nameRequired') }]}
           >
             <Input placeholder={t('appointments:rooms.namePlaceholder')} />
           </Form.Item>

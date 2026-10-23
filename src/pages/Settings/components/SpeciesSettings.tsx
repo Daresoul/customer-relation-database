@@ -441,7 +441,7 @@ const SpeciesSettings: React.FC<SpeciesSettingsProps> = ({ isUpdating }) => {
           <Form.Item
             name="name"
             label={t('patients:fields.breed')}
-            rules={[{ required: true, message: t('forms:validation.required') }]}
+            rules={[{ required: true, whitespace: true, message: t('forms:validation.required') }]}
           >
             <Input placeholder={t('settings:breeds.breedPlaceholder')} />
           </Form.Item>

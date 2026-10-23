@@ -74,7 +74,7 @@ export const CreateSpeciesModal: React.FC<CreateSpeciesModalProps> = ({
           name="name"
           label={t('settings:species.nameColumn')}
           rules={[
-            { required: true, message: t('settings:species.nameRequired') },
+            { required: true, whitespace: true, message: t('settings:species.nameRequired') },
             { max: 50, message: t('settings:species.nameMaxLength', { max: 50 }) },
           ]}
         >

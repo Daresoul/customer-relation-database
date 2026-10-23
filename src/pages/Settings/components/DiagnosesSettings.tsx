@@ -331,7 +331,7 @@ const DiagnosesSettings: React.FC = () => {
             name="name"
             label={t('settings:diagnoses.name', 'Name')}
             rules={[
-              { required: true, message: t('forms:validation.required', 'Required') },
+              { required: true, whitespace: true, message: t('forms:validation.required', 'Required') },
               { max: 100, message: t('forms:validation.maxLength', { max: 100 }) },
             ]}
           >

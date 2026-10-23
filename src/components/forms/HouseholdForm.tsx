@@ -217,7 +217,7 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
               name="lastName"
               label={t('form.householdName')}
               rules={[
-                { required: true, message: t('form.householdNameRequired') },
+                { required: true, whitespace: true, message: t('form.householdNameRequired') },
                 { max: 100, message: t('form.nameTooLong') },
               ]}
             >
@@ -289,7 +289,7 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
                         {...restField}
                         name={[name, 'firstName']}
                         label={t('forms:labels.firstName')}
-                        rules={[{ required: true, message: t('form.firstNameRequired') }]}
+                        rules={[{ required: true, whitespace: true, message: t('form.firstNameRequired') }]}
                       >
                         <Input placeholder={t('form.firstNamePlaceholder')} prefix={<UserOutlined />} />
                       </Form.Item>
@@ -299,7 +299,7 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
                         {...restField}
                         name={[name, 'lastName']}
                         label={t('forms:labels.lastName')}
-                        rules={[{ required: true, message: t('form.lastNameRequired') }]}
+                        rules={[{ required: true, whitespace: true, message: t('form.lastNameRequired') }]}
                       >
                         <Input placeholder={t('form.lastNamePlaceholder')} />
                       </Form.Item>
