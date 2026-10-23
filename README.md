@@ -207,7 +207,7 @@
 
 ### Lab results history (`services/lab_results.rs`, patient page Labs tab)
 - Every lab attachment's values are stored one per row in `lab_results`
-  (migration `05x_lab_results`): patient, record, attachment, the inbox
+  (migration `057_lab_results`): patient, record, attachment, the inbox
   result (`source_file_id`), device type, sample time, analyte code and
   name, the value as sent (`value_text`) and as a number (`value_num`; "1,5"
   is 1.5, "<0.5" is 0.5, "---" none), unit, reference low/high and a flag

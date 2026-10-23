@@ -72,7 +72,7 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, WEIGHT_LOG_MIGRATION, create_patient_weight_log).await?;
     run_migration(pool, "055_lab_inbox", add_lab_inbox).await?;
     run_migration(pool, "056_clinic_profile_and_vat", add_clinic_profile_and_vat).await?;
-    run_migration(pool, "05x_lab_results", create_lab_results).await?;
+    run_migration(pool, "057_lab_results", create_lab_results).await?;
 
     Ok(())
 }
@@ -3365,7 +3365,7 @@ fn add_clinic_profile_and_vat(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::f
     })
 }
 
-/// Migration 05x: lab values one per row (`lab_results`), one row per analyte
+/// Migration 057: lab values one per row (`lab_results`), one row per analyte
 /// per lab attachment, and `lab_result_imports`, which notes each attachment
 /// read (or that could not be read) so it is read once. Rows for older
 /// attachments are filled at start by `services::lab_results::backfill`.
