@@ -312,7 +312,10 @@
       "existing": "An existing record",
       "record": "Record",
       "attach": "Add to record"
-    }
+    },
+    "optionChip": "chip …{{last4}}",
+    "optionAgeYears": "{{years}} y",
+    "optionAgeMonths": "{{months}} mo"
   },
   "autocomplete": {
     "typeToSearch": "Type at least 2 characters to search templates",
@@ -329,7 +332,9 @@
       "pharmacy_note": "Pharmacy note",
       "invoice": "Invoice",
       "device_report": "Lab report"
-    }
+    },
+    "valuesNotOnPdf": "Values not on the lab report ({{count}}): {{codes}}",
+    "valuesNotOnPdfHint": "The machine sent them but the report has no row for them. They stay with the result in the Lab inbox and on the patient's Labs tab."
   },
   "unsaved": {
     "title": "Discard your changes?",

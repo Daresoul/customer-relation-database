@@ -7,4 +7,12 @@ export type PdfStatus = {
 /**
  * `report`, `pharmacy_note`, `invoice` or `device_report`.
  */
-kind: string, ok: boolean, error: string | null, };
+kind: string, ok: boolean, error: string | null, 
+/**
+ * The stored PDF, when one was made (the lab report).
+ */
+attachmentId?: number, 
+/**
+ * Analyte codes the machine sent that have no row on the PDF.
+ */
+missingValues?: Array<string>, };

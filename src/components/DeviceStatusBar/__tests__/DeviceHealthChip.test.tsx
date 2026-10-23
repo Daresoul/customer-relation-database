@@ -55,6 +55,12 @@ function renderIn(node: React.ReactNode, path = '/patients/1') {
 
 describe('lab machines chip in the header', () => {
   it('rolls up to the worst state and counts the machines that are down', async () => {
+    // The port has been failing for two minutes, past the one-minute grace.
+    const { serialDownSince } = await import('../deviceHealth');
+    serialDownSince(
+      { integration_id: 1, port_name: 'COM3', device_type: 'mnchip_pointcare_chemistry', status: 'Error', retry_count: 2 },
+      Date.now() - 120_000,
+    );
     const { DeviceHealthChip } = await import('../DeviceHealthChip');
     renderIn(<DeviceHealthChip />);
     const chip = screen.getByRole('button', { name: /chip.label/ });
@@ -82,18 +88,13 @@ describe('lab machines chip in the header', () => {
   });
 });
 
-describe('device chips on the status bars', () => {
-  it('a click on a dashboard chip opens that machine in the drawer', async () => {
-    const { DeviceStatusBar } = await import('../DeviceStatusBar');
-    renderIn(<DeviceStatusBar />, '/');
-    fireEvent.click(await screen.findByRole('button', { name: /Exigo/ }));
-    await waitFor(() => expect(invokeMock).toHaveBeenCalledWith('get_device_details', { integrationId: 2 }));
-  });
-
-  it('a click on a compact chip opens that machine in the drawer', async () => {
-    const { DeviceStatusInline } = await import('../DeviceStatusInline');
-    renderIn(<DeviceStatusInline />);
-    fireEvent.click(await screen.findByRole('button', { name: /PointCare/ }));
-    await waitFor(() => expect(invokeMock).toHaveBeenCalledWith('get_device_details', { integrationId: 1 }));
+// app-shell #11: the state was a colour only.
+describe('lab machines chip, accessible', () => {
+  it('says the state in a word, not only by colour', async () => {
+    const { DeviceHealthChip } = await import('../DeviceHealthChip');
+    renderIn(<DeviceHealthChip />);
+    const chip = screen.getByRole('button', { name: /chip.label/ });
+    expect(chip).toHaveAccessibleName(expect.stringMatching(/chip.state.(down|waiting|working)/));
+    expect(chip.textContent).toMatch(/chip.state./);
   });
 });

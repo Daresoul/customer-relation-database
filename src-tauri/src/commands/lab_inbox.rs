@@ -10,6 +10,12 @@ pub async fn list_lab_inbox(pool: State<'_, SeaOrmPool>, state: Option<String>) 
     lab_inbox::list_inbox(&pool, state.as_deref()).await
 }
 
+/// The values of a result as the inbox shows them, for the lab import list.
+#[tauri::command]
+pub fn preview_lab_values(device_type: String, test_results: serde_json::Value) -> Vec<lab_inbox::LabValue> {
+    lab_inbox::lab_values(&device_type, &test_results)
+}
+
 #[tauri::command]
 pub async fn get_lab_inbox_count(pool: State<'_, SeaOrmPool>) -> Result<i64, String> {
     lab_inbox::waiting_count(&pool).await

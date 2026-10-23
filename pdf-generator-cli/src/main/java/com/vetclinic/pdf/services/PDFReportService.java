@@ -1419,8 +1419,7 @@ public class PDFReportService {
 
             table.addCell(createPcrDataCell(param.getName(), false));
 
-            // Sample type - empty to match reference
-            table.addCell(createPcrDataCell("", false));
+            table.addCell(createPcrDataCell(param.getSampleType() != null ? param.getSampleType() : "", false));
 
             String result = param.getResult() != null ? param.getResult() : "";
             table.addCell(createPcrDataCell(result, !control && redCall));

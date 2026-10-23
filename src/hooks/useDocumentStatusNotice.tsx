@@ -67,8 +67,24 @@ export function useDocumentStatusNotice() {
     });
   };
 
+  // The lab report was made, but the machine sent values it has no row for.
+  const warnMissingValues = (recordId: number, status: PdfStatus) => {
+    const codes = status.missingValues ?? [];
+    notification.warning({
+      key: `record-${recordId}-document-${status.kind}-missing`,
+      message: t('medical:documents.valuesNotOnPdf', { count: codes.length, codes: codes.join(', ') }),
+      description: t('medical:documents.valuesNotOnPdfHint'),
+      placement: 'bottomRight',
+      duration: 0,
+    });
+  };
+
   return (saved: SavedRecordDocuments, successMessage: string, onOpenRecord?: (recordId: number) => void) => {
-    const failed = (saved.pdfs ?? []).filter((p) => !p.ok);
+    const pdfs = saved.pdfs ?? [];
+    const failed = pdfs.filter((p) => !p.ok);
+    pdfs
+      .filter((p) => p.ok && (p.missingValues?.length ?? 0) > 0)
+      .forEach((status) => warnMissingValues(saved.id, status));
     if (failed.length === 0) {
       const key = `record-${saved.id}-saved`;
       notification.success({

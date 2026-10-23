@@ -303,3 +303,101 @@ async fn a_failed_settings_save_leaves_the_running_listener_alone() {
     assert!(result.is_err());
     assert!(!stopped, "the old listener must keep running when the save fails");
 }
+
+// Reconnect restarts every enabled serial machine, a connected but quiet one
+// included (device-health #11).
+#[tokio::test]
+async fn reconnect_restarts_every_enabled_serial_machine() {
+    use crate::commands::device_input::listeners_to_restart;
+    let db = create_test_db_with_migrations().await;
+    let healvet = DeviceIntegrationService::create(&db, serial_input("Healvet", DeviceType::HealvetHvFia3000, "COM3", 9600))
+        .await
+        .unwrap();
+    let pcr = DeviceIntegrationService::create(&db, serial_input("PCR", DeviceType::MnchipPcrAnalyzer, "COM4", 115200))
+        .await
+        .unwrap();
+    DeviceIntegrationService::toggle_enabled(&db, pcr.id).await.unwrap();
+    DeviceIntegrationService::create(&db, file_watch_input("Exigo", "/tmp/exigo", "*.xml")).await.unwrap();
+
+    let all = DeviceIntegrationService::get_all(&db).await.unwrap();
+    let restart = listeners_to_restart(&all);
+    assert_eq!(
+        restart,
+        vec![(healvet.id, "COM3".to_string(), "healvet_hv_fia_3000".to_string(), Some(9600))]
+    );
+}
+
+// ---------------------------------------------------------------------------
+// One serial port, one enabled machine (device-health #15)
+// ---------------------------------------------------------------------------
+
+fn no_changes() -> UpdateDeviceIntegrationInput {
+    UpdateDeviceIntegrationInput {
+        name: None,
+        connection_type: None,
+        watch_directory: MaybeNull::Undefined,
+        file_pattern: None,
+        serial_port_name: MaybeNull::Undefined,
+        serial_baud_rate: MaybeNull::Undefined,
+        tcp_host: MaybeNull::Undefined,
+        tcp_port: MaybeNull::Undefined,
+        enabled: None,
+    }
+}
+
+#[tokio::test]
+async fn a_second_enabled_machine_on_a_used_port_is_refused() {
+    let db = create_test_db_with_migrations().await;
+    DeviceIntegrationService::create(&db, serial_input("Healvet", DeviceType::HealvetHvFia3000, "COM3", 9600))
+        .await
+        .unwrap();
+
+    let err = DeviceIntegrationService::create(
+        &db,
+        serial_input("PointCare", DeviceType::MnchipPointcareChemistry, "COM3", 115200),
+    )
+    .await
+    .unwrap_err();
+    assert!(err.starts_with("port_in_use:"), "{err}");
+    assert!(err.contains("Healvet"), "{err}");
+}
+
+#[tokio::test]
+async fn moving_an_enabled_machine_onto_a_used_port_is_refused() {
+    let db = create_test_db_with_migrations().await;
+    DeviceIntegrationService::create(&db, serial_input("Healvet", DeviceType::HealvetHvFia3000, "COM3", 9600))
+        .await
+        .unwrap();
+    let pcr = DeviceIntegrationService::create(&db, serial_input("PCR", DeviceType::MnchipPcrAnalyzer, "COM4", 115200))
+        .await
+        .unwrap();
+
+    let mut input = no_changes();
+    input.serial_port_name = MaybeNull::Value("COM3".to_string());
+    let err = DeviceIntegrationService::update(&db, pcr.id, input).await.unwrap_err();
+    assert!(err.starts_with("port_in_use:"), "{err}");
+
+    // Saving it again on its own port still works.
+    let mut rename = no_changes();
+    rename.name = Some("PCR 2".to_string());
+    DeviceIntegrationService::update(&db, pcr.id, rename).await.unwrap();
+}
+
+#[tokio::test]
+async fn a_disabled_machine_may_share_a_port_but_not_be_switched_on() {
+    let db = create_test_db_with_migrations().await;
+    DeviceIntegrationService::create(&db, serial_input("Healvet", DeviceType::HealvetHvFia3000, "COM3", 9600))
+        .await
+        .unwrap();
+    let pcr = DeviceIntegrationService::create(&db, serial_input("PCR", DeviceType::MnchipPcrAnalyzer, "COM4", 115200))
+        .await
+        .unwrap();
+    DeviceIntegrationService::toggle_enabled(&db, pcr.id).await.unwrap();
+
+    let mut input = no_changes();
+    input.serial_port_name = MaybeNull::Value("COM3".to_string());
+    DeviceIntegrationService::update(&db, pcr.id, input).await.unwrap();
+
+    let err = DeviceIntegrationService::toggle_enabled(&db, pcr.id).await.unwrap_err();
+    assert!(err.starts_with("port_in_use:"), "{err}");
+}

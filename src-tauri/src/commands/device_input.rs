@@ -1,4 +1,4 @@
-use crate::services::device_input::{scan_ports, start_listen, stop_listen, get_all_connection_statuses, enrich_port_info_with_device_names, PortInfo, DeviceConnectionStatus, ConnectionState};
+use crate::services::device_input::{scan_ports, start_listen, stop_listen, get_all_connection_statuses, enrich_port_info_with_device_names, PortInfo, DeviceConnectionStatus};
 use crate::services::file_watcher::{get_all_file_watcher_statuses, FileWatcherStatus};
 use crate::services::device_integration::DeviceIntegrationService;
 use crate::models::device_integration::ConnectionType;
@@ -100,6 +100,7 @@ pub async fn start_device_integration_listener(
         serial_port_name,
         integration.device_type.to_db_string().to_string(),
         integration.id,
+        integration.serial_baud_rate,
     )?;
 
     Ok(())
@@ -177,14 +178,26 @@ fn normalize_for_match(s: &str) -> String {
     out.trim().to_string()
 }
 
-/// Manually (re)connect serial device listeners that aren't currently connected.
+/// Every enabled serial machine with a port: (id, port, device type, saved baud rate).
+pub(crate) fn listeners_to_restart(
+    integrations: &[crate::models::device_integration::DeviceIntegration],
+) -> Vec<(i64, String, String, Option<i64>)> {
+    integrations
+        .iter()
+        .filter(|i| i.enabled && i.connection_type == ConnectionType::SerialPort)
+        .filter_map(|i| {
+            let port = i.serial_port_name.clone()?;
+            Some((i.id, port, i.device_type.to_db_string().to_string(), i.serial_baud_rate))
+        })
+        .collect()
+}
+
+/// Manually reconnect every enabled serial machine.
 ///
-/// Backs the "refresh" button in the device status bar. For every enabled serial-port
-/// integration whose live status is not `Connected`, this stops any existing listener
-/// (waking it out of its backoff sleep) and starts a fresh connection attempt right
-/// away — so the user doesn't have to wait out the retry interval after fixing a cable,
-/// powering on an instrument, or reselecting a renumbered port. Already-connected
-/// devices are left untouched so we never interrupt a working stream.
+/// Backs the Reconnect button. Each listener is stopped (waking it out of its
+/// backoff sleep, or clearing one that stopped on its own) and started again
+/// right away. A machine that shows Connected is restarted too: a port can
+/// look connected and still be deaf, and a restart costs a second.
 ///
 /// Returns the connection statuses after kicking off the attempts.
 #[tauri::command]
@@ -194,35 +207,12 @@ pub async fn reconnect_device_listeners(
 ) -> Result<Vec<DeviceConnectionStatus>, String> {
     let integrations = DeviceIntegrationService::get_all(&pool).await?;
 
-    // integration_ids that are currently connected — skip these.
-    let connected: std::collections::HashSet<i64> = get_all_connection_statuses()
-        .into_iter()
-        .filter(|s| s.status == ConnectionState::Connected)
-        .map(|s| s.integration_id)
-        .collect();
-
-    for integration in integrations {
-        if !integration.enabled || integration.connection_type != ConnectionType::SerialPort {
-            continue;
-        }
-        let Some(port_name) = integration.serial_port_name.clone() else {
-            continue;
-        };
-        if connected.contains(&integration.id) {
-            log::info!("↩️  Reconnect: integration {} ({}) already connected, skipping",
-                integration.id, port_name);
-            continue;
-        }
-
-        let device_type = integration.device_type.to_db_string().to_string();
-        log::info!("🔁 Manual reconnect requested for integration {} ({} / {})",
-            integration.id, port_name, device_type);
-
-        // Stop any stale/sleeping listener, then immediately start a fresh attempt.
+    for (id, port_name, device_type, baud) in listeners_to_restart(&integrations) {
+        log::info!("🔁 Manual reconnect requested for integration {} ({} / {})", id, port_name, device_type);
         stop_listen(&port_name, &device_type);
-        if let Err(e) = start_listen(app_handle.clone(), port_name.clone(), device_type.clone(), integration.id) {
+        if let Err(e) = start_listen(app_handle.clone(), port_name.clone(), device_type, id, baud) {
             log::error!("❌ Manual reconnect failed to start listener for integration {} ({}): {}",
-                integration.id, port_name, e);
+                id, port_name, e);
         }
     }
 

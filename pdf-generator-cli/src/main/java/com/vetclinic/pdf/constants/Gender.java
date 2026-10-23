@@ -1,6 +1,5 @@
 package com.vetclinic.pdf.constants;
 
-import org.apache.commons.lang3.StringUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -49,28 +48,6 @@ public enum Gender {
         genders.add(FEMALE);
 //        genders.add(FEMALE_V2);
         return genders;
-    }
-
-    private static List<Gender> getAllGendersAnyType() {
-        List<Gender> genders = new ArrayList<>();
-        genders.add(MALE);
-        genders.add(MALE_V2);
-        genders.add(FEMALE);
-        genders.add(FEMALE_V2);
-        return genders;
-    }
-
-    public static Gender getGenderForCode(String code) {
-        if (code == null || code.isEmpty()) {
-            return null;
-        }
-        List<Gender> types = getAllGendersAnyType();
-        for(Gender type : types) {
-            if (StringUtils.containsIgnoreCase(code, type.getGenderCode())) {
-                return type;
-            }
-        }
-        return null;
     }
 
     /** Exact match on the stored sex value (English or Macedonian); anything else is UNKNOWN. */

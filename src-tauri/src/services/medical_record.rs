@@ -107,15 +107,29 @@ pub struct PdfStatus {
     pub kind: String,
     pub ok: bool,
     pub error: Option<String>,
+    /// The stored PDF, when one was made (the lab report).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub attachment_id: Option<i64>,
+    /// Analyte codes the machine sent that have no row on the PDF.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub missing_values: Option<Vec<String>>,
+}
+
+/// A stored lab report and the analyte codes it has no row for.
+pub(crate) struct LabReportPdf {
+    pub attachment_id: i64,
+    pub missing_values: Vec<String>,
 }
 
 impl PdfStatus {
-    fn ok(kind: &str) -> Self {
-        Self { kind: kind.to_string(), ok: true, error: None }
+    pub(crate) fn ok(kind: &str) -> Self {
+        Self { kind: kind.to_string(), ok: true, error: None, attachment_id: None, missing_values: None }
     }
 
-    fn failed(kind: &str, error: impl Into<String>) -> Self {
-        Self { kind: kind.to_string(), ok: false, error: Some(error.into()) }
+    pub(crate) fn failed(kind: &str, error: impl Into<String>) -> Self {
+        Self { kind: kind.to_string(), ok: false, error: Some(error.into()), attachment_id: None, missing_values: None }
     }
 }
 
@@ -725,7 +739,7 @@ impl MedicalRecordService {
     }
 
     /// The lab report for device results sent with a new record, if any.
-    async fn generate_device_report(
+    pub(crate) async fn generate_device_report(
         env: &PdfEnv,
         db: &DatabaseConnection,
         record: &MedicalRecord,
@@ -770,7 +784,16 @@ impl MedicalRecordService {
         }
         .await;
         Some(match result {
-            Ok(()) => PdfStatus::ok("device_report"),
+            Ok(report) => {
+                let mut status = PdfStatus::ok("device_report");
+                if let Some(report) = report {
+                    status.attachment_id = Some(report.attachment_id);
+                    if !report.missing_values.is_empty() {
+                        status.missing_values = Some(report.missing_values);
+                    }
+                }
+                status
+            }
             Err(e) => {
                 log::error!("❌ Device report for record {} failed: {}", record.id, e);
                 PdfStatus::failed("device_report", e)
@@ -1102,11 +1125,11 @@ impl MedicalRecordService {
         medical_record_id: i64,
         patient_data: &crate::services::device_pdf_service::PatientData,
         device_data_list: &[crate::services::device_pdf_service::DeviceTestData],
-    ) -> Result<(), String> {
+    ) -> Result<Option<LabReportPdf>, String> {
         use crate::services::java_pdf_service::JavaPdfService;
 
         if device_data_list.is_empty() {
-            return Ok(());
+            return Ok(None);
         }
 
         // Build the device-report filename. Single device: include the
@@ -1139,7 +1162,7 @@ impl MedicalRecordService {
         let clinic = crate::services::settings::SettingsService::get_clinic_profile(db).await?;
         let (jar, out, patient, devices) =
             (env.jar_path.clone(), pdf_path.clone(), patient_data.clone(), device_data_list.to_vec());
-        tokio::task::spawn_blocking(move || {
+        let missing_values = tokio::task::spawn_blocking(move || {
             JavaPdfService::generate_pdf_multi_with_clinic(
                 &jar,
                 out.to_str().ok_or("Invalid PDF path")?,
@@ -1178,7 +1201,7 @@ impl MedicalRecordService {
         ).await?;
 
         log::debug!("PDF report generated and saved as attachment {}", attachment_id);
-        Ok(())
+        Ok(Some(LabReportPdf { attachment_id, missing_values }))
     }
 
     /// Save a PDF file as an attachment to a medical record

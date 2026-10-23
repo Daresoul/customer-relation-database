@@ -641,4 +641,47 @@ async fn deleting_a_plain_file_leaves_the_lab_report_alone() {
 
     assert!(pdf.is_none());
     assert_eq!(live_lab_reports(&db, record).await.len(), 1);
+// device-import #7: the import showed only the file name; it shows the
+// values the same way the inbox does.
+#[test]
+fn the_import_previews_a_results_values_like_the_inbox() {
+    let values = crate::commands::lab_inbox::preview_lab_values(
+        "mnchip_pointcare_chemistry".to_string(),
+        serde_json::json!({ "GLU": "200", "GLU_unit": "mg/dL", "GLU_range": "70-142", "sample_id": "S1" }),
+    );
+    assert_eq!(values.len(), 1);
+    assert_eq!(values[0].code, "GLU");
+    assert_eq!(values[0].value, "200");
+    assert_eq!(values[0].unit.as_deref(), Some("mg/dL"));
+    assert_eq!(values[0].flag.as_deref(), Some("H"));
+}
+
+// device-import #10: how a result was matched is stored when it is attached.
+async fn stored_match_method(db: &DatabaseConnection, file_id: &str) -> Option<String> {
+    db.query_one(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "SELECT match_method FROM file_access_history WHERE file_id = ?",
+        [file_id.into()],
+    ))
+    .await
+    .unwrap()
+    .unwrap()
+    .try_get::<Option<String>>("", "match_method")
+    .unwrap()
+}
+
+#[tokio::test]
+async fn attaching_stores_how_the_result_was_matched() {
+    let db = create_test_db_with_migrations().await;
+    let dir = tempfile::tempdir().unwrap();
+    let koko = seed_patient(&db, "Koko", None).await;
+    let rex = seed_patient(&db, "Rex", None).await;
+    receive(&db, dir.path(), "r1", &koko_xml(), "ok", "2026-10-23T08:00:00+00:00").await;
+    receive(&db, dir.path(), "r2", &koko_xml(), "ok", "2026-10-23T08:05:00+00:00").await;
+
+    lab_inbox::attach_to_record(&db, dir.path(), "r1", seed_record(&db, koko, "Consult").await).await.unwrap();
+    lab_inbox::attach_to_record(&db, dir.path(), "r2", seed_record(&db, rex, "Consult").await).await.unwrap();
+
+    assert_eq!(stored_match_method(&db, "r1").await.as_deref(), Some("name"));
+    assert_eq!(stored_match_method(&db, "r2").await.as_deref(), Some("manual"));
 }

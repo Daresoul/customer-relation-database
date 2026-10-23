@@ -141,9 +141,9 @@ mod exigo_xml_parsing {
 
         assert!(result.is_ok());
         let data = result.unwrap();
-        // Note: quick-xml's attr.value returns raw bytes, entities are NOT unescaped
-        // This documents current behavior - entities remain escaped in attribute values
-        assert_eq!(data.patient_identifier, Some("Test&amp;Patient".to_string()));
+        // Attribute entities are decoded (wave2/parsers.md L3).
+        assert_eq!(data.patient_identifier, Some("Test&Patient".to_string()));
+        assert_eq!(data.test_results.get("RBC").unwrap(), "<5.0");
     }
 
     #[test]
@@ -879,14 +879,6 @@ mod exigo_daily_file {
         }
         assert!(parse(&utf16).is_err(), "UTF-16 must be an Err");
 
-        // CP1251 Cyrillic in an attribute (Macedonian Windows operator input)
-        // is invalid UTF-8.
-        let mut cp1251 = text.replace("ID2=\"KOKO\"", "ID2=\"XXXX\"").into_bytes();
-        if let Some(pos) = cp1251.windows(4).position(|w| w == b"XXXX") {
-            cp1251[pos..pos + 4].copy_from_slice(&[0xCA, 0xCE, 0xCA, 0xCE]); // КОКО
-        }
-        assert!(parse(&cp1251).is_err(), "CP1251 bytes must be an Err");
-
         // Empty and garbage inputs.
         assert!(parse(b"").is_err(), "empty file must be an Err");
         assert!(parse(b"not xml at all").is_err(), "non-XML must be an Err");
@@ -1305,5 +1297,124 @@ mod lab_report_sample_number {
     fn other_devices_keep_their_sample_id() {
         let r = json!({ "sample_id": "45512-10-7", "SEQ": "9" });
         assert_eq!(JavaPdfService::sample_number("mnchip_pointcare_chemistry", &r), "45512-10-7");
+    }
+}
+
+/// Round-1 device leftovers: HL7 empty values and escapes, Exigo attribute
+/// decoding, header ids, ranges and Windows-1251 files, Healvet one result
+/// per sample.
+mod r1_parser_leftovers {
+    use super::*;
+
+    fn hl7(bytes: &[u8]) -> serde_json::Map<String, serde_json::Value> {
+        DeviceParserService::parse_hl7_data("mnchip_pointcare_chemistry", "PointCare", bytes, "serial_port")
+            .expect("parses")
+            .test_results
+            .as_object()
+            .unwrap()
+            .clone()
+    }
+
+    fn exigo(xml: &[u8]) -> crate::services::device_parser::DeviceData {
+        DeviceParserService::parse_exigo_xml("Exigo", "f.xml", xml, "file_watch").expect("parses")
+    }
+
+    #[test]
+    fn hl7_analyte_with_an_empty_value_is_kept_as_no_result() {
+        let m = hl7(b"MSH|^~\\&|1|P\rPID|1||||dog|tesi\rOBX|1|ST||GLU|95|mg/dL|70-142|N\rOBX|2|ST||TBIL||mg/dL|0.1-0.9|\r");
+        assert_eq!(m.get("TBIL").unwrap(), crate::services::device_parser::NO_RESULT);
+        assert_eq!(m.get("TBIL_unit").unwrap(), "mg/dL");
+        assert_eq!(m.get("GLU").unwrap(), "95");
+    }
+
+    #[test]
+    fn hl7_escape_sequences_are_decoded() {
+        let d = DeviceParserService::parse_hl7_data(
+            "mnchip_pointcare_chemistry", "PointCare",
+            b"MSH|^~\\&|1|P\rPID|1||||dog|O\\T\\BRIEN\rOBX|1|ST||GLU|95|mg\\S\\dL|70\\F\\142|N\rOBX|2|ST||ALT|10|a\\E\\b\\R\\c|1-2|N\r",
+            "serial_port",
+        ).unwrap();
+        let m = d.test_results.as_object().unwrap();
+        assert_eq!(d.patient_identifier.as_deref(), Some("O&BRIEN"));
+        assert_eq!(m.get("patient_name").unwrap(), "O&BRIEN");
+        assert_eq!(m.get("GLU_unit").unwrap(), "mg^dL");
+        assert_eq!(m.get("GLU_range").unwrap(), "70|142");
+        assert_eq!(m.get("ALT_unit").unwrap(), "a\\b~c");
+    }
+
+    #[test]
+    fn exigo_attribute_values_are_unescaped_and_trimmed() {
+        let d = exigo(br#"<samples><sample ID2=" 807050000012345 " PLT="&gt;999" /></samples>"#);
+        assert_eq!(d.patient_identifier.as_deref(), Some("807050000012345"));
+        assert_eq!(d.test_results.get("PLT").unwrap(), ">999");
+    }
+
+    #[test]
+    fn exigo_header_patient_id_comes_from_a_known_element_not_any_id() {
+        let d = exigo(br#"<ExigoResult><Header><DeviceId>BM800-53672</DeviceId><Guid>x</Guid><SampleId>KOKO</SampleId></Header><Results><Parameter><Code>WBC</Code><Value>12.5</Value></Parameter></Results></ExigoResult>"#);
+        assert_eq!(d.patient_identifier.as_deref(), Some("KOKO"));
+    }
+
+    #[test]
+    fn exigo_range_with_an_en_dash_or_negative_low_is_split() {
+        let d = exigo("<ExigoResult><Header><SampleId>S</SampleId></Header><Results><Parameter><Code>WBC</Code><Value>20.0</Value><RefRange>5.5\u{2013}16.9</RefRange></Parameter><Parameter><Code>EA</Code><Value>-0.1</Value><RefRange>-0.5-1.2</RefRange></Parameter></Results></ExigoResult>".as_bytes());
+        let m = d.test_results.as_object().unwrap();
+        assert_eq!(m.get("WBC_L").unwrap(), "5.5");
+        assert_eq!(m.get("WBC_H").unwrap(), "16.9");
+        assert_eq!(m.get("EA_L").unwrap(), "-0.5");
+        assert_eq!(m.get("EA_H").unwrap(), "1.2");
+    }
+
+    // files-storage F1: an operator's Cyrillic sample id written as
+    // Windows-1251 made every later read of the day-file fail.
+    #[test]
+    fn exigo_file_in_windows_1251_is_read() {
+        let mut xml = br#"<samples><sample ID2="XXXX" WBC="10.4" /></samples>"#.to_vec();
+        let pos = xml.windows(4).position(|w| w == b"XXXX").unwrap();
+        xml[pos..pos + 4].copy_from_slice(&[0xCA, 0xCE, 0xCA, 0xCE]); // КОКО
+        let d = exigo(&xml);
+        assert_eq!(d.patient_identifier.as_deref(), Some("КОКО"));
+        assert_eq!(d.test_results.get("WBC").unwrap(), "10.4");
+    }
+
+    const TWO_SAMPLES: &[u8] = b"#AFS1000?#1##AFS1000&S1&12.5&06-04-2026 11:00:00&&cCRP&REX&&M&Serum&#AFS1000&S1&2.0&06-04-2026 11:00:00&&T4-1&REX&&M&Serum&#AFS1000&S2&3.1&06-04-2026 11:20:00&&T4-1&LUNA&&F&Serum&EE";
+
+    #[test]
+    fn healvet_stream_is_split_into_one_result_per_sample() {
+        let parts = DeviceParserService::split_healvet_samples(TWO_SAMPLES);
+        assert_eq!(parts.len(), 2);
+        let rex = DeviceParserService::parse_healvet_serial("H", &parts[0], "serial_port").unwrap();
+        let luna = DeviceParserService::parse_healvet_serial("H", &parts[1], "serial_port").unwrap();
+        assert_eq!(rex.patient_identifier.as_deref(), Some("REX"));
+        assert_eq!(rex.test_results.get("cCRP").unwrap(), "12.5");
+        assert_eq!(rex.test_results.get("T4-1").unwrap(), "2.0");
+        assert_eq!(luna.patient_identifier.as_deref(), Some("LUNA"));
+        assert_eq!(luna.test_results.get("T4-1").unwrap(), "3.1");
+        assert!(luna.test_results.get("cCRP").is_none());
+        assert_eq!(luna.test_results.get("gender").unwrap(), "F");
+    }
+
+    #[test]
+    fn healvet_stream_with_one_sample_is_left_whole() {
+        const RAW: &[u8] = include_bytes!("../../tests/fixtures/real_healvet_com12.bin");
+        assert_eq!(DeviceParserService::split_healvet_samples(RAW), vec![RAW.to_vec()]);
+    }
+
+    #[test]
+    fn healvet_parse_of_a_mixed_stream_never_blends_two_samples() {
+        let d = DeviceParserService::parse_healvet_serial("H", TWO_SAMPLES, "serial_port").unwrap();
+        let m = d.test_results.as_object().unwrap();
+        assert_eq!(d.patient_identifier.as_deref(), Some("REX"));
+        assert_eq!(m.get("T4-1").unwrap(), "2.0", "LUNA's value leaked into REX: {m:?}");
+    }
+}
+
+/// parsers L7: the legacy PCR type parsed but the PDF called it unknown.
+mod r1_java_contract {
+    use crate::services::java_pdf_service::JavaPdfService;
+
+    #[test]
+    fn legacy_pointcare_pcr_type_renders_as_pcr() {
+        assert_eq!(JavaPdfService::map_device_type("mnchip_pointcare_pcr_v1"), "pcr");
     }
 }

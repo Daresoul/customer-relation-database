@@ -104,6 +104,7 @@ const MIGRATIONS: &[(&str, MigrationFn)] = &[
     ("058_record_template_contents", add_record_template_contents),
     ("059_appointment_arrival", add_appointment_arrival),
     ("060_device_alerts", add_device_alerts),
+    ("061_lab_match_method", add_lab_match_method),
 ];
 
 /// How many migrations the app knows.
@@ -3552,6 +3553,24 @@ fn add_appointment_arrival(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::futu
 
 /// When to notify about lab machines (one row), and which machines warn when
 /// they stay quiet. Missing rows mean the defaults.
+/// How an attached lab result was matched to its patient (`microchip`,
+/// `name`, or `manual` when a person picked another patient); NULL before.
+fn add_lab_match_method(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        let exists: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM pragma_table_info('file_access_history') WHERE name = 'match_method'",
+        )
+        .fetch_one(pool)
+        .await?;
+        if exists.0 == 0 {
+            sqlx::query("ALTER TABLE file_access_history ADD COLUMN match_method TEXT")
+                .execute(pool)
+                .await?;
+        }
+        Ok(())
+    })
+}
+
 fn add_device_alerts(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
     Box::pin(async move {
         sqlx::query(

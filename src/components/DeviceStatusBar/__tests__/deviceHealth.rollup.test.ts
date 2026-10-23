@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { folderLevel, rollupHealth, serialLevel } from '../deviceHealth';
+import { folderLevel, rollupHealth, serialDownSince, serialLevel } from '../deviceHealth';
 import type { DeviceConnectionStatus, FileWatcherStatus } from '../../../types/deviceIntegration';
 
 const serial = (over: Partial<DeviceConnectionStatus>): DeviceConnectionStatus => ({
@@ -27,6 +27,24 @@ describe('device health level', () => {
     expect(serialLevel(serial({ status: 'Connecting', retry_count: 2 }))).toBe('down');
     expect(serialLevel(serial({ status: 'Error', error_kind: 'port_missing' }))).toBe('down');
     expect(serialLevel(undefined)).toBe('waiting');
+  });
+
+  // device-health #7: one failed retry turned the chip red at once.
+  it('a port that failed less than a minute ago waits; after a minute it is down', () => {
+    const t0 = 1_000_000;
+    const failing = serial({ status: 'Error', error_kind: 'port_missing', retry_count: 1 });
+    expect(serialLevel(failing, t0, t0 + 10_000)).toBe('waiting');
+    expect(serialLevel(serial({ status: 'Connecting', retry_count: 3 }), t0, t0 + 59_000)).toBe('waiting');
+    expect(serialLevel(failing, t0, t0 + 60_000)).toBe('down');
+  });
+
+  it('remembers when a port went down until it works again', () => {
+    const id = 9001;
+    const failing = serial({ integration_id: id, status: 'Error', error_kind: 'port_missing' });
+    expect(serialDownSince(failing, 100)).toBe(100);
+    expect(serialDownSince(serial({ integration_id: id, status: 'Connecting', retry_count: 1 }), 5_000)).toBe(100);
+    expect(serialDownSince(serial({ integration_id: id }), 9_000)).toBeUndefined();
+    expect(serialDownSince(failing, 20_000)).toBe(20_000);
   });
 
   it('a watched folder works, a missing one is down, a stopped one waits', () => {

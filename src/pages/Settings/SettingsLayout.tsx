@@ -21,7 +21,6 @@ import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useThemeColors } from '../../utils/themeStyles';
 import { useAppSettings } from '../../hooks/useAppSettings';
 import { useTheme } from '../../contexts/ThemeContext';
-import { DeviceStatusInline } from '../../components/DeviceStatusBar';
 import styles from './Settings.module.css';
 
 // Import category components
@@ -224,7 +223,6 @@ const SettingsLayout: React.FC = () => {
                   },
                 ]}
               />
-              <DeviceStatusInline />
             </div>
           </div>
 

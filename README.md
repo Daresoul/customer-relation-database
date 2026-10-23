@@ -138,7 +138,7 @@
 ## App shell and navigation
 - The app uses a data router: `createBrowserRouter(appRoutes)` in `App.tsx`,
   routes in `src/layouts/routes.tsx`. Every page renders inside
-  `layouts/RootLayout`: the header, the device bar, the lab import modal, the
+  `layouts/RootLayout`: the header (lab machines chip, lab inbox badge), the lab import modal, the
   chip-scan and wake-from-tray handlers, and the crash boundary. Code that
   needs the router (`useNavigate`, `useBlocker`) goes inside it. Tests render
   pages with `createMemoryRouter` + `RouterProvider`.
@@ -248,9 +248,15 @@
   stops, so a failed save leaves the analyzer listening.
 - Parsers: HL7 takes the patient id from PID-3, else the name in PID-6, never
   the species in PID-5; lines may end in CR or LF; a repeated analyte keeps
-  none of the earlier OBX's unit, range or flag. Healvet ignores anything
-  before the first `#AFS1000`. Exigo lab reports print the run number (`SEQ`)
-  as the sample number, not the analyzer serial (`SNO`).
+  none of the earlier OBX's unit, range or flag. An OBX with no value is kept
+  as `—` (no result), and HL7 escapes (`\F\ \S\ \T\ \R\ \E\`) are decoded.
+  Healvet ignores anything before the first `#AFS1000`; a stream with several
+  samples (sample id + patient) is delivered as one result per sample. Exigo
+  lab reports print the run number (`SEQ`) as the sample number, not the
+  analyzer serial (`SNO`); attribute values are decoded and trimmed, the
+  patient comes from `SampleId`/`PatientID`/`MicrochipID`/`ID2` only, ranges
+  split on `-` or `–`, and a file that is not UTF-8 is read as Windows-1251
+  (`encoding_rs`).
 - Serial framing (`FrameAssembler` in `services/device_input.rs`): a Healvet
   frame ends on `&EE` (every real frame has the `&`), so an `EE` inside a
   value such as LEELOO is data; a frame ending in a bare `EE` counts once the
@@ -261,9 +267,25 @@
   name, not the port (`device_events::named_by_machine`; a removed
   integration keeps the port name).
 - Serial read loop (`services/device_input.rs`): any read error other than a
-  timeout closes the port and reconnects with backoff (Windows unplug codes 22,
-  31, 1167 and 995 included). The backoff starts over after a connection that
-  stayed up for 30 s.
+  timeout closes the port and reconnects with backoff, capped at 10 s
+  (Windows unplug codes 22, 31, 1167 and 995 included). The backoff starts
+  over after a connection that stayed up for 30 s. The baud rate saved with a
+  device is used; empty means the protocol's default.
+- One enabled machine per serial port: saving or switching on a second one on
+  the same port is refused with `port_in_use:<other machine>`.
+- A listener thread that ends on its own (a crash) shows as Error with kind
+  `listener_stopped`; Reconnect stops and starts every enabled serial
+  machine, connected ones included.
+- The same serial frame from the same machine within 10 minutes is dropped
+  (logged), so a resend never makes a second result.
+- Raw serial logs (`raw_<port>-YYYY-MM-DD.log`) older than 30 days are deleted
+  at start; undated ones from older builds go by their last change.
+- Chip scanners: a HID scanner's reader stays open until a read fails. The
+  Windows Raw Input path sends scans off its message loop, and a buffered chip
+  whose Enter never came is still sent once the next key arrives.
+- Clinic PC setup: the lab PC must not sleep, and USB selective suspend must
+  be off (Power Options → USB settings). A serial line keeps nothing while
+  the app is not reading, so results sent then are lost.
 - Every result goes through `services/device_events.rs`: the copy is saved
   (`file_access_history`, status `ok`) before `device-data-received` is sent,
   and the payload carries `fileId` (that row's `file_id`). Bytes that don't
@@ -303,8 +325,11 @@
   `device_alert_settings` and `device_quiet_alerts`): on/off, N minutes
   (default 10), clinic hours (default 07:00–20:00, Mon–Sat), and the quiet
   alert per machine (default off, 4 h when switched on).
-- The header shows a "Lab machines" chip on every page with the worst state.
-  A click on it, or on any device chip, opens the details drawer: state with
+- The header shows a "Lab machines" chip on every page with the worst state,
+  as a shape and a word (it is the only device status; the dashboard bar and
+  the compact page chips are gone). A serial port that has failed for less
+  than 60 s shows as waiting, like the tray. Dev builds put the device
+  simulator button next to it. A click on the chip opens the details drawer: state with
   what to do, last result, last data, problems today, a live byte counter
   (serial), recent status changes, the last raw message (first 2 KB, text or
   hex), and Reconnect, Copy diagnostics and Open log folder. Diagnostics hold
@@ -313,6 +338,13 @@
   in memory for this session only.
 
 ### Lab inbox (`services/lab_inbox.rs`, page `/lab-inbox`, dashboard tab)
+- The header shows the lab inbox badge (waiting count) on every page.
+- The lab import lists each result's values the way the inbox does
+  (`preview_lab_values`), and its patient picker adds chip ending and age.
+- Attaching stores how the result reached its patient in
+  `file_access_history.match_method` (migration `061_lab_match_method`):
+  `microchip` or `name` when the matcher picked that patient, `manual`
+  otherwise (and for a move).
 - Every result row in `file_access_history` (one per result or Exigo sample)
   has `inbox_state`: `waiting`, `attached` or `discarded` (migration
   `055_lab_inbox`). A new result and a failed read start as `waiting`.
@@ -430,6 +462,16 @@
   fail) and its saved message has Open record. The price-list picker is
   searchable; picking an item already on the invoice adds one to its
   quantity. A diagnosis not in the list can be added from the picker.
+- A record made by the lab import gets its lab report from the save
+  (`device_report`, with `attachmentId`); the import only opens that one.
+  When the JAR prints `PDF_WARN code=unmapped_analytes … codes=A,B` (PointCare
+  codes without a row), the status carries `missingValues` and the save
+  warns "Values not on the lab report (2): A, B".
+- Lab PDF details: Healvet skips its test time and spare `field_N` keys,
+  "0-0" device ranges print blank, the PCR table shows each test's sample
+  type, PCR curves draw reading i at cycle i + 1, PointCare prints the sample
+  type the machine sent, and the legacy type `mnchip_pointcare_pcr_v1`
+  renders as PCR. A preview of a page past the end is an error.
 - The invoice number and date are assigned once, on the first invoice, in
   local time (`assign_invoice`; columns `invoice_number`, `invoice_date`). Later
   edits reprint the same number and date. The number's year is the local year.

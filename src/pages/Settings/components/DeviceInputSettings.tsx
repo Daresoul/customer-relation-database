@@ -421,6 +421,7 @@ const DeviceInputSettings: React.FC = () => {
       watch_directory: integration.watchDirectory,
       file_pattern: integration.filePattern,
       serial_port_name: integration.serialPortName,
+      serial_baud_rate: integration.serialBaudRate,
       tcp_host: integration.tcpHost,
       tcp_port: integration.tcpPort,
       enabled: integration.enabled,
@@ -464,6 +465,7 @@ const DeviceInputSettings: React.FC = () => {
         // Stop existing listener before updating (if enabled and config changed)
         const configChanged =
           editingIntegration.serialPortName !== values.serial_port_name ||
+          (editingIntegration.serialBaudRate ?? null) !== (values.serial_baud_rate ?? null) ||
           editingIntegration.watchDirectory !== values.watch_directory ||
           editingIntegration.filePattern !== values.file_pattern ||
           editingIntegration.tcpHost !== values.tcp_host ||
@@ -814,6 +816,7 @@ const DeviceInputSettings: React.FC = () => {
                 );
               } else if (connectionType === 'serial_port') {
                 return (
+                  <>
                   <Form.Item
                     name="serial_port_name"
                     label={t('form.labels.serialPort')}
@@ -847,6 +850,20 @@ const DeviceInputSettings: React.FC = () => {
                       }
                     />
                   </Form.Item>
+                  <Form.Item
+                    name="serial_baud_rate"
+                    label={t('form.labels.baudRate')}
+                    extra={t('form.help.baudRate')}
+                  >
+                    <InputNumber
+                      min={300}
+                      max={921600}
+                      precision={0}
+                      placeholder={t('form.placeholders.baudRate')}
+                      style={{ width: '100%' }}
+                    />
+                  </Form.Item>
+                  </>
                 );
               } else if (connectionType === 'hl7_tcp') {
                 return (

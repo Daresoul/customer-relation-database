@@ -2,7 +2,6 @@ import React, { useEffect } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useUpdater } from '../hooks/useUpdater';
 import { updateService } from '../services/updateService';
-import { DeviceStatusBar } from './DeviceStatusBar';
 import styles from './AppWrapper.module.css';
 
 export const AppWrapper: React.FC<{ header?: React.ReactNode; children: React.ReactNode }> = ({ header, children }) => {
@@ -56,10 +55,7 @@ export const AppWrapper: React.FC<{ header?: React.ReactNode; children: React.Re
         transition: 'background-color 0.3s ease'
       }}
     >
-      <div className={styles.shellTop}>
-        {header}
-        <DeviceStatusBar />
-      </div>
+      <div className={styles.shellTop}>{header}</div>
       {children}
     </div>
   );

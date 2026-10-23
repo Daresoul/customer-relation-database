@@ -25,6 +25,8 @@ pub enum DeviceErrorKind {
     FolderMissing,
     FolderLost,
     NotAFolder,
+    /// The listener thread ended on its own (a crash); Reconnect starts it again.
+    ListenerStopped,
     Unknown,
 }
 
@@ -82,6 +84,41 @@ pub fn classify_parse_error(error: &str) -> DeviceEventKind {
 fn has_message_header(raw: &[u8]) -> bool {
     let text = String::from_utf8_lossy(raw);
     text.contains("MSH|") || text.contains("#AFS1000") || text.contains("<sample") || text.contains("<?xml")
+}
+
+/// How long an identical serial frame from the same machine counts as a resend.
+const REPEAT_WINDOW: std::time::Duration = std::time::Duration::from_secs(10 * 60);
+
+/// Hashes of recent serial frames per integration, to drop a machine's resend.
+#[derive(Default)]
+pub struct FrameMemory {
+    seen: HashMap<(i64, u64), std::time::Instant>,
+}
+
+impl FrameMemory {
+    /// True when this machine sent the same bytes within the last 10 minutes.
+    /// Records the frame either way.
+    pub fn seen_recently(&mut self, integration_id: i64, frame: &[u8], now: std::time::Instant) -> bool {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        frame.hash(&mut hasher);
+        let key = (integration_id, hasher.finish());
+        self.seen.retain(|_, at| now.saturating_duration_since(*at) < REPEAT_WINDOW);
+        self.seen.insert(key, now).is_some()
+    }
+}
+
+/// One memory per storage folder: the app has one, each test its own.
+static RECENT_FRAMES: OnceLock<Mutex<HashMap<std::path::PathBuf, FrameMemory>>> = OnceLock::new();
+
+fn is_repeated_frame(storage_dir: &Path, integration_id: i64, frame: &[u8]) -> bool {
+    let mut all = RECENT_FRAMES
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    all.entry(storage_dir.to_path_buf())
+        .or_default()
+        .seen_recently(integration_id, frame, std::time::Instant::now())
 }
 
 static LAST_RESULT: OnceLock<Mutex<HashMap<i64, String>>> = OnceLock::new();
@@ -214,6 +251,42 @@ pub async fn deliver_result(
 ) -> Delivery {
     let source = &named_by_machine(db, source).await;
     device_health::note_raw_message(source.integration_id, raw);
+    if source.connection_method == "serial_port" && is_repeated_frame(storage_dir, source.integration_id, raw) {
+        log::info!(
+            "Dropped a repeat of a frame {} sent in the last 10 minutes ({} bytes)",
+            source.device_name,
+            raw.len()
+        );
+        return Delivery { file_id: None, parsed: true };
+    }
+
+    // A Healvet stream can carry several samples: each is its own result.
+    let is_raw_healvet = source.device_type == "healvet_hv_fia_3000"
+        && !String::from_utf8_lossy(raw).trim_start().starts_with('{');
+    if is_raw_healvet {
+        let parts = DeviceParserService::split_healvet_samples(raw);
+        if parts.len() > 1 {
+            log::info!("Healvet stream from {} holds {} samples", source.device_name, parts.len());
+            let mut last = Delivery { file_id: None, parsed: false };
+            let mut any_parsed = false;
+            for part in &parts {
+                last = deliver_one(db, storage_dir, sink, source, raw_name, part).await;
+                any_parsed |= last.parsed;
+            }
+            return Delivery { file_id: last.file_id, parsed: any_parsed };
+        }
+    }
+    deliver_one(db, storage_dir, sink, source, raw_name, raw).await
+}
+
+async fn deliver_one(
+    db: &DatabaseConnection,
+    storage_dir: &Path,
+    sink: &dyn DeviceSink,
+    source: &ResultSource,
+    raw_name: &str,
+    raw: &[u8],
+) -> Delivery {
     let parsed = DeviceParserService::parse_device_data(
         &source.device_type,
         &source.device_name,

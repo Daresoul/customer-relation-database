@@ -52,7 +52,7 @@ fn get_connection_status() -> &'static Mutex<HashMap<String, DeviceConnectionSta
 
 // Configuration for retry behavior
 const BASE_RETRY_DELAY_SECS: u64 = 1;  // Base delay for exponential backoff (1 second)
-const MAX_RETRY_DELAY_SECS: u64 = 60;  // Maximum delay cap (60 seconds)
+const MAX_RETRY_DELAY_SECS: u64 = 10;  // Opening a port is cheap; a port back is found within ~15 s
 
 /// Get the path to the raw data log file for a specific port for today.
 /// Creates the log directory if it doesn't exist.
@@ -237,10 +237,37 @@ pub fn emit_status_for(app_handle: &AppHandle, integration_id: i64) {
     }
 }
 
-/// Get all connection statuses
+/// Get all connection statuses. A listener whose thread ended without
+/// `stop_listen` (a crash) is shown as stopped instead of its last state.
 pub fn get_all_connection_statuses() -> Vec<DeviceConnectionStatus> {
-    let statuses = get_connection_status().lock()
+    let stopped: Vec<(i64, String)> = {
+        let listeners = get_active_listeners().lock()
+            .expect("ACTIVE_LISTENERS mutex poisoned - a thread panicked while holding the lock");
+        listeners
+            .values()
+            .filter(|l| l.handle.is_finished())
+            .map(|l| (l.integration_id, l.port_name.clone()))
+            .collect()
+    };
+    let mut statuses = get_connection_status().lock()
         .expect("CONNECTION_STATUS mutex poisoned - a thread panicked while holding the lock");
+    for (integration_id, port_name) in stopped {
+        if let Some(status) = statuses.get_mut(&format!("{}:{}", integration_id, port_name)) {
+            if status.error_kind != Some(DeviceErrorKind::ListenerStopped) {
+                log::error!("Listener for integration {} ({}) stopped on its own", integration_id, port_name);
+                status.status = ConnectionState::Error;
+                status.error_kind = Some(DeviceErrorKind::ListenerStopped);
+                status.last_error = Some("The listener stopped".to_string());
+                status.next_retry = None;
+                device_health::record_status(
+                    integration_id,
+                    "Error",
+                    status.error_kind,
+                    device_health::serial_health(status),
+                );
+            }
+        }
+    }
     statuses.values().cloned().collect()
 }
 
@@ -1113,6 +1140,7 @@ pub fn start_listen(
     port_name: String,
     device_type: String,
     integration_id: i64,
+    saved_baud_rate: Option<i64>,
 ) -> Result<(), String> {
     log::info!("🎧 Starting device listener - Integration ID: {}, Port: {}, Device Type: {}",
         integration_id, port_name, device_type);
@@ -1173,7 +1201,8 @@ pub fn start_listen(
                 ConnectionState::Connecting, None, None, retry_count, None);
 
             // Get protocol configuration for the device type
-            let protocol = get_device_protocol(&device_type_clone);
+            let mut protocol = get_device_protocol(&device_type_clone);
+            protocol.baud_rate = effective_baud_rate(protocol.baud_rate, saved_baud_rate);
             log::info!("📋 Using protocol for {} - Baud: {}, Start: {:?}, End: {:?}",
                 device_type_clone, protocol.baud_rate, protocol.start_symbol, protocol.end_symbol);
 
@@ -1336,6 +1365,23 @@ pub fn stop_listen(port_name: &str, device_type: &str) {
     }
 }
 
+/// Pseudo-terminals (macOS `/dev/ttysNNN`, simulator links under `/tmp/`),
+/// not real USB serial ports such as `/dev/tty.usbserial-*`.
+fn is_pty(port_name: &str) -> bool {
+    let is_macos_pty = port_name
+        .strip_prefix("/dev/ttys")
+        .is_some_and(|rest| !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit()));
+    is_macos_pty || port_name.starts_with("/tmp/")
+}
+
+/// The baud rate saved with the device when set, else the protocol default.
+fn effective_baud_rate(protocol_default: u32, stored: Option<i64>) -> u32 {
+    stored
+        .filter(|b| *b > 0)
+        .and_then(|b| u32::try_from(b).ok())
+        .unwrap_or(protocol_default)
+}
+
 fn handle_listening_serial(
     port_name: &str,
     app_handle: &AppHandle,
@@ -1350,8 +1396,7 @@ fn handle_listening_serial(
     // Detect if this is a PTY device (macOS virtual serial port workaround)
     // PTY devices on macOS (created by socat, etc.) need baud_rate=0 to avoid ENOTTY error
     // See: https://github.com/serialport/serialport-rs/issues/22
-    let is_pty = port_name.contains("/dev/tty") || port_name.contains("/tmp/");
-    let baud_rate = if cfg!(target_os = "macos") && is_pty {
+    let baud_rate = if cfg!(target_os = "macos") && is_pty(port_name) {
         log::info!("   🍎 macOS PTY device detected, using baud_rate=0 workaround");
         0
     } else {
@@ -1641,5 +1686,105 @@ mod frame_assembler_tests {
             }
         }
         frames
+    }
+}
+
+/// device-health #8 / #17, connection-followup #9, serial-pipeline #11.
+#[cfg(test)]
+mod listener_supervision_tests {
+    use super::*;
+
+    fn status(integration_id: i64, port: &str, state: ConnectionState) -> DeviceConnectionStatus {
+        DeviceConnectionStatus {
+            integration_id,
+            port_name: port.to_string(),
+            device_type: "healvet_hv_fia_3000".to_string(),
+            status: state,
+            last_connected: None,
+            last_error: None,
+            error_kind: None,
+            retry_count: 0,
+            next_retry: None,
+            last_result_at: None,
+            last_byte_at: None,
+        }
+    }
+
+    // A panicked listener thread used to leave its last status, often green.
+    #[test]
+    fn a_listener_thread_that_died_shows_as_stopped_until_restarted() {
+        let port = "/test/supervisor-port-4242".to_string();
+        let handle = thread::spawn(|| panic!("listener crashed (expected in this test)"));
+        while !handle.is_finished() {
+            thread::sleep(Duration::from_millis(5));
+        }
+        let (shutdown_sender, _rx) = mpsc::channel();
+        get_active_listeners().lock().unwrap().insert(
+            format!("{}:healvet_hv_fia_3000", port),
+            ListenerThread { handle, shutdown_sender, integration_id: 4242, port_name: port.clone() },
+        );
+        get_connection_status()
+            .lock()
+            .unwrap()
+            .insert(format!("4242:{}", port), status(4242, &port, ConnectionState::Connected));
+
+        let s = get_all_connection_statuses().into_iter().find(|s| s.integration_id == 4242).unwrap();
+        assert_eq!(s.status, ConnectionState::Error);
+        assert_eq!(s.error_kind, Some(DeviceErrorKind::ListenerStopped));
+
+        // Reconnect stops the dead listener first, which clears it.
+        stop_listen(&port, "healvet_hv_fia_3000");
+        assert!(get_all_connection_statuses().iter().all(|s| s.integration_id != 4242));
+    }
+
+    #[test]
+    fn a_running_listener_keeps_its_status() {
+        let port = "/test/supervisor-port-4343".to_string();
+        let (shutdown_sender, rx) = mpsc::channel::<()>();
+        let handle = thread::spawn(move || {
+            let _ = rx.recv();
+        });
+        get_active_listeners().lock().unwrap().insert(
+            format!("{}:healvet_hv_fia_3000", port),
+            ListenerThread { handle, shutdown_sender, integration_id: 4343, port_name: port.clone() },
+        );
+        get_connection_status()
+            .lock()
+            .unwrap()
+            .insert(format!("4343:{}", port), status(4343, &port, ConnectionState::Connected));
+
+        let s = get_all_connection_statuses().into_iter().find(|s| s.integration_id == 4343).unwrap();
+        assert_eq!(s.status, ConnectionState::Connected);
+        stop_listen(&port, "healvet_hv_fia_3000");
+    }
+
+    // Any "/dev/tty..." path used to count as a pty, real USB serial ports included.
+    #[test]
+    fn only_pseudo_terminals_count_as_ptys() {
+        assert!(is_pty("/dev/ttys003"));
+        assert!(is_pty("/tmp/ttyHealvet"));
+        assert!(!is_pty("/dev/tty.usbserial-1410"));
+        assert!(!is_pty("/dev/cu.usbserial-1410"));
+        assert!(!is_pty("/dev/ttyUSB0"));
+        assert!(!is_pty("COM3"));
+    }
+
+    // A port back after an outage was found up to 65 s later.
+    #[test]
+    fn reconnect_backoff_stays_near_ten_seconds() {
+        for attempt in [4, 6, 12, 30] {
+            for _ in 0..20 {
+                assert!(calculate_backoff_delay(attempt) <= Duration::from_secs(15), "attempt {attempt}");
+            }
+        }
+    }
+
+    // The baud rate saved with the device was never used.
+    #[test]
+    fn the_saved_baud_rate_wins_over_the_protocol_default() {
+        assert_eq!(effective_baud_rate(9600, Some(19200)), 19200);
+        assert_eq!(effective_baud_rate(9600, None), 9600);
+        assert_eq!(effective_baud_rate(9600, Some(0)), 9600);
+        assert_eq!(effective_baud_rate(9600, Some(-5)), 9600);
     }
 }

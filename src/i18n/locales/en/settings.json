@@ -21,7 +21,7 @@
     "openLabInbox": "Open lab inbox",
     "labInboxDescription": "Results from lab machines that are not attached to a record yet wait in the lab inbox. Discarded results stay there too, and can be restored.",
     "recentDeviceFiles": "Recent Device Files (Last 14 Days)",
-    "recentDescription": "Files received from devices are tracked here for crash protection and recovery. You can view details and attach unprocessed files to medical records."
+    "recentDescription": "Every file a lab machine sent in the last 14 days, including ones that could not be read. Open one to see its details. Results not yet on a record wait in the lab inbox, where you attach them."
   },
   "diagnoses": {
     "title": "Diagnoses",

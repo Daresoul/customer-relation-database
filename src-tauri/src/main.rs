@@ -555,6 +555,7 @@ fn main() {
                             port_name,
                             integration.device_type.to_db_string().to_string(),
                             integration.id,
+                            integration.serial_baud_rate,
                         ) {
                             log::error!("❌ Failed to start listener for {}: {}", integration.name, e);
                         }
@@ -735,6 +736,7 @@ fn main() {
             // Lab inbox
             commands::list_lab_inbox,
             commands::get_lab_inbox_count,
+            commands::preview_lab_values,
             commands::discard_lab_result,
             commands::restore_lab_result,
             commands::attach_lab_result,

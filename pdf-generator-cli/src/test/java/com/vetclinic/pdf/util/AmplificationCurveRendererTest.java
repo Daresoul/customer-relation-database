@@ -54,6 +54,23 @@ class AmplificationCurveRendererTest {
         assertTrue((y[1] - y[0]) < 2 * (6100 - 900));
     }
 
+    // gaps M1: points were spread evenly over cycles 8-40, so a rise at Ct 20
+    // was drawn near cycle 23. One point per cycle, from the first cycle.
+    @Test
+    void eachPointIsDrawnAtItsOwnCycle() {
+        assertEquals(1.0, AmplificationCurveRenderer.cycleFor(0), 1e-9);
+        assertEquals(32.0, AmplificationCurveRenderer.cycleFor(31), 1e-9);
+        assertEquals(41.0, AmplificationCurveRenderer.cycleFor(40), 1e-9);
+    }
+
+    @Test
+    void cycleAxisFollowsTheData() {
+        assertArrayEquals(new double[]{1, 41}, AmplificationCurveRenderer.xAxisRange(41), 1e-9);
+        assertArrayEquals(new double[]{1, 12}, AmplificationCurveRenderer.xAxisRange(12), 1e-9);
+        double[] none = AmplificationCurveRenderer.xAxisRange(0);
+        assertTrue(none[1] > none[0]);
+    }
+
     @Test
     void singlePointAndEmptyCurvesRender() {
         assertNotNull(AmplificationCurveRenderer.renderCurve(withCurve(Arrays.asList(640.0)), 1));

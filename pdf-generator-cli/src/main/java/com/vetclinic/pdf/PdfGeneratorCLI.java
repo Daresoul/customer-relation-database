@@ -553,6 +553,9 @@ public class PdfGeneratorCLI {
             String deviceRange = getStr(testResults, deviceKey + "_range", null);
             String refLow = paramDef[3];
             String refHigh = paramDef[4];
+            if (deviceRange != null && isZeroRange(deviceRange)) {
+                deviceRange = null;
+            }
             if (deviceRange != null && !deviceRange.isEmpty()) {
                 parameter.setReferentValues(deviceRange);
             } else if (!refLow.isEmpty() && !refHigh.isEmpty()) {
@@ -572,19 +575,18 @@ public class PdfGeneratorCLI {
             parameters.add(parameter);
         }
 
-        // Observability: warn about analyte value codes the device sent that we
-        // did NOT render, so a newly-added parameter on the analyzer surfaces in
-        // the logs (captured by the Rust JavaPdfService) instead of vanishing.
-        // Skip metadata (MSH/PID/OBR/message headers, patient fields) and the
-        // per-analyte metadata suffixes, which are not results themselves.
-        for (Map.Entry<String, com.google.gson.JsonElement> e : testResults.entrySet()) {
-            String key = e.getKey();
-            if (consumedKeys.contains(key) || isMetadataKey(key)) {
-                continue;
+        // Analyte codes the device sent that have no row. The app reads this
+        // line and tells the user which values are not on the PDF.
+        List<String> unmapped = new ArrayList<>();
+        for (String key : testResults.keySet()) {
+            if (!consumedKeys.contains(key) && !isMetadataKey(key)) {
+                unmapped.add(key);
             }
-            System.err.println(
-                "PointCare: unmapped analyte code not shown on report: '" + key
-                    + "' = " + e.getValue());
+        }
+        if (!unmapped.isEmpty()) {
+            java.util.Collections.sort(unmapped);
+            System.err.println("PDF_WARN code=unmapped_analytes device=pointcare codes="
+                    + String.join(",", unmapped));
         }
 
         sample.setParameters(parameters);
@@ -661,6 +663,18 @@ public class PdfGeneratorCLI {
             default:
                 return false;
         }
+    }
+
+    /** Devices send "0-0" for analytes that have no reference range. */
+    static boolean isZeroRange(String range) {
+        String r = range.trim().replace('–', '-');
+        int dash = r.indexOf('-', 1);
+        if (dash < 0) {
+            return false;
+        }
+        Double low = ResultClassifier.parseNumber(r.substring(0, dash));
+        Double high = ResultClassifier.parseNumber(r.substring(dash + 1));
+        return low != null && high != null && low == 0 && high == 0;
     }
 
     /** Read a string field from the results object; returns {@code dflt} when absent, null, or empty. */
@@ -741,7 +755,9 @@ public class PdfGeneratorCLI {
                 // OBR segment fields
                 paramCode.equals("observation_datetime") || paramCode.equals("specimen_received_datetime") ||
                 // Other common metadata
-                paramCode.equals("name") || paramCode.equals("ID2") || paramCode.equals("APNA")) {
+                paramCode.equals("name") || paramCode.equals("ID2") || paramCode.equals("APNA") ||
+                // The test time and the parser's spare Healvet fields (field_10, ...)
+                isMetadataKey(paramCode) || paramCode.startsWith("field_")) {
                 continue;
             }
 

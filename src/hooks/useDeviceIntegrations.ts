@@ -6,7 +6,29 @@ import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api';
 import { DeviceIntegrationService } from '../services/deviceIntegrationService';
 import { DeviceIntegration, CreateDeviceIntegrationInput, UpdateDeviceIntegrationInput, DeviceConnectionStatus, FileWatcherStatus } from '../types/deviceIntegration';
-import { createMutationErrorHandler } from '../utils/errors';
+import { createMutationErrorHandler, type MutationOperation } from '../utils/errors';
+import { portInUseBy } from '../utils/deviceErrors';
+
+type Notification = ReturnType<typeof App.useApp>['notification'];
+type Translate = (key: string, options?: Record<string, unknown>) => string;
+
+/** Like createMutationErrorHandler, but names the machine already on the port. */
+function saveErrorHandler(notification: Notification, operation: MutationOperation, t: Translate) {
+  const generic = createMutationErrorHandler(notification, operation, t, 'useDeviceIntegrations');
+  return (error: unknown) => {
+    const other = portInUseBy(error);
+    if (other === null) {
+      generic(error);
+      return;
+    }
+    notification.error({
+      message: t('errors:failedTo', { operation: t(`errors:operations.${operation}`) }),
+      description: t('devices:messages.portInUse', { device: other }),
+      placement: 'bottomRight',
+      duration: 6,
+    });
+  };
+}
 
 export const useDeviceIntegrations = () => {
   return useQuery({
@@ -40,7 +62,7 @@ export const useCreateDeviceIntegration = () => {
         duration: 3,
       });
     },
-    onError: createMutationErrorHandler(notification, 'createDeviceIntegration', t, 'useDeviceIntegrations'),
+    onError: saveErrorHandler(notification, 'createDeviceIntegration', t),
   });
 };
 
@@ -62,7 +84,7 @@ export const useUpdateDeviceIntegration = () => {
         duration: 3,
       });
     },
-    onError: createMutationErrorHandler(notification, 'updateDeviceIntegration', t, 'useDeviceIntegrations'),
+    onError: saveErrorHandler(notification, 'updateDeviceIntegration', t),
   });
 };
 
@@ -102,7 +124,7 @@ export const useToggleDeviceIntegration = () => {
         duration: 3,
       });
     },
-    onError: createMutationErrorHandler(notification, 'toggleDeviceIntegration', t, 'useDeviceIntegrations'),
+    onError: saveErrorHandler(notification, 'toggleDeviceIntegration', t),
   });
 };
 
