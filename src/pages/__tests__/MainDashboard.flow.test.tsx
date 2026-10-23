@@ -16,7 +16,14 @@ vi.mock('react-i18next', () => ({
 
 const invokeMock = vi.fn();
 vi.mock('@/services/invoke', () => ({ invoke: (...a: unknown[]) => invokeMock(...a) }));
-vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn().mockResolvedValue(() => {}), emit: vi.fn() }));
+const tauriEvents = vi.hoisted(() => new Map<string, (e: { payload: unknown }) => void>());
+vi.mock('@tauri-apps/api/event', () => ({
+  listen: (name: string, handler: (e: { payload: unknown }) => void) => {
+    tauriEvents.set(name, handler);
+    return Promise.resolve(() => {});
+  },
+  emit: vi.fn(),
+}));
 
 const getPatients = vi.fn();
 vi.mock('../../services', () => ({ PatientService: { getPatients: () => getPatients() } }));
@@ -111,18 +118,18 @@ describe('MainDashboard flow', () => {
     document.body.innerHTML = '';
   });
 
-  it('keeps the lists on screen while it reloads after a save', async () => {
+  it('keeps the lists on screen while it reloads after a patient is added elsewhere', async () => {
     backup(healthyBackup);
     getPatients.mockResolvedValueOnce([{ id: 1, name: 'Rex' }]).mockReturnValue(new Promise(() => {}));
     householdSearch.mockResolvedValue([]);
-    createPatient.mockResolvedValue({ id: 2, name: 'Bella' });
     renderDashboard();
 
     expect(await screen.findByText('Rex')).toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('add-patient-btn'));
-    fireEvent.click(await screen.findByText('stub-submit'));
+    await waitFor(() => expect(tauriEvents.has('patient-created')).toBe(true));
+    tauriEvents.get('patient-created')!({ payload: { id: 9 } });
 
     await waitFor(() => expect(getPatients).toHaveBeenCalledTimes(2));
+    expect(screen.getByText('Rex')).toBeInTheDocument();
     expect(screen.queryByText('common:loading')).not.toBeInTheDocument();
   });
 
