@@ -1019,4 +1019,159 @@ mod tests {
             "https://loki.stage.sagdegames.com/…",
         );
     }
+
+    // ----- file identity (lifecycle.md #8) -----
+    // A position was keyed by path only. A file rotated away and regrown past
+    // the old position under the same name was read from the old position, so
+    // the start of the new file was never shipped.
+
+    fn write_file(dir: &Path, name: &str, text: &str) -> PathBuf {
+        let path = dir.join(name);
+        std::fs::write(&path, text).unwrap();
+        path
+    }
+
+    #[test]
+    fn identity_follows_the_first_line() {
+        let tmp = tempfile::tempdir().unwrap();
+        let a = write_file(tmp.path(), "a.log", "[2026-10-22][08:00:00][INFO] start\nmore\n");
+        let b = write_file(tmp.path(), "b.log", "[2026-10-22][08:00:00][INFO] start\nother\n");
+        let c = write_file(tmp.path(), "c.log", "[2026-10-23][08:00:00][INFO] start\nmore\n");
+        let empty = write_file(tmp.path(), "d.log", "");
+        let partial = write_file(tmp.path(), "e.log", "[2026-10-23][08:00");
+
+        assert!(file_identity(&a).is_some());
+        assert_eq!(file_identity(&a), file_identity(&b));
+        assert_ne!(file_identity(&a), file_identity(&c));
+        assert_eq!(file_identity(&empty), None);
+        assert_eq!(file_identity(&partial), None);
+    }
+
+    #[test]
+    fn a_regrown_file_with_a_new_first_line_is_read_from_the_start() {
+        assert_eq!(resume_offset(500, Some("old"), Some("new"), 900), 0);
+    }
+
+    #[test]
+    fn the_same_file_resumes_where_it_stopped() {
+        assert_eq!(resume_offset(500, Some("same"), Some("same"), 900), 500);
+    }
+
+    #[test]
+    fn a_position_saved_before_identities_existed_is_kept() {
+        assert_eq!(resume_offset(500, None, Some("any"), 900), 500);
+    }
+
+    #[test]
+    fn a_shrunk_file_is_read_from_the_start() {
+        assert_eq!(resume_offset(500, Some("same"), Some("same"), 100), 0);
+    }
+
+    #[test]
+    fn an_old_state_file_without_identities_still_loads() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("state.json");
+        std::fs::write(&path, r#"{"offsets":{"/x/Arkivet.log":42}}"#).unwrap();
+
+        let loaded = load_state(&path);
+
+        assert_eq!(loaded.offsets.get("/x/Arkivet.log"), Some(&42));
+        assert!(loaded.identities.is_empty());
+    }
+
+    // ----- push once at a failed start (lifecycle.md #1) -----
+    // The shipper's first send is 30 s after start, so a start that fails in
+    // a second never reached Loki.
+
+    fn config_for(url: &str, root: &Path) -> ShipperConfig {
+        config_from_parts(
+            LokiCredentials { url: url.into(), user: "u".into(), password: "p".into() },
+            "Reception PC".into(),
+            "test",
+            "0.8.0".into(),
+            root.join("logs"),
+            root,
+        )
+    }
+
+    /// Answers each request with `status` and counts the requests.
+    fn fake_loki(status: &'static str) -> (String, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/loki/api/v1/push", listener.local_addr().unwrap());
+        let hits = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counter = hits.clone();
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut stream) = stream else { continue };
+                let mut request = Vec::new();
+                let mut buf = [0u8; 4096];
+                loop {
+                    let n = stream.read(&mut buf).unwrap_or(0);
+                    if n == 0 {
+                        break;
+                    }
+                    request.extend_from_slice(&buf[..n]);
+                    let text = String::from_utf8_lossy(&request).to_lowercase();
+                    if let Some(end) = text.find("\r\n\r\n") {
+                        let length = text
+                            .lines()
+                            .find_map(|l| l.strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap_or(0)))
+                            .unwrap_or(0);
+                        if request.len() >= end + 4 + length {
+                            break;
+                        }
+                    }
+                }
+                counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                let _ = stream.write_all(format!("HTTP/1.1 {status}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").as_bytes());
+            }
+        });
+        (url, hits)
+    }
+
+    #[test]
+    fn push_once_without_loki_settings_returns_at_once() {
+        let started = std::time::Instant::now();
+        assert_eq!(push_pending_now(None, Duration::from_secs(5)), 0);
+        assert!(started.elapsed() < Duration::from_secs(1));
+    }
+
+    #[test]
+    fn push_once_ships_the_log_tail_and_saves_the_position() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join("logs")).unwrap();
+        let log = write_file(
+            &tmp.path().join("logs"),
+            "Arkivet.log",
+            "[2026-10-23][08:00:00][INFO][app] started\n[2026-10-23][08:00:01][ERROR][app] Startup failed: boom\n",
+        );
+        let (url, hits) = fake_loki("204 No Content");
+        let config = config_for(&url, tmp.path());
+        let state_file = config.state_file.clone();
+
+        let shipped = push_pending_now(Some(config), Duration::from_secs(5));
+
+        assert_eq!(shipped, 2);
+        assert_eq!(hits.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert_eq!(load_state(&state_file).offsets.values().copied().max(), Some(std::fs::metadata(&log).unwrap().len()));
+    }
+
+    #[test]
+    fn push_once_gives_up_within_its_time_budget() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join("logs")).unwrap();
+        write_file(&tmp.path().join("logs"), "Arkivet.log", "[2026-10-23][08:00:00][ERROR][app] boom\n");
+        // Accepts the connection and never answers.
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/push", listener.local_addr().unwrap());
+        std::thread::spawn(move || {
+            let _held: Vec<_> = listener.incoming().take(3).collect();
+            std::thread::sleep(Duration::from_secs(30));
+        });
+
+        let started = std::time::Instant::now();
+        assert_eq!(push_pending_now(Some(config_for(&url, tmp.path())), Duration::from_millis(500)), 0);
+        assert!(started.elapsed() < Duration::from_secs(3), "took {:?}", started.elapsed());
+    }
 }
