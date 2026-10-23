@@ -172,7 +172,7 @@ describe('patient page navigation', () => {
     answer({ get_appointments: { appointments: [], total: 0, has_more: false } });
     renderPage();
 
-    const crumb = screen.getByRole('link', { name: 'Petrovski' });
+    const crumb = within(screen.getByRole('navigation')).getByRole('link', { name: 'Petrovski' });
     expect(crumb).toHaveAttribute('href', '/households/8');
   });
 });
