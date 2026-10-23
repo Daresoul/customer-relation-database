@@ -52,6 +52,7 @@ export const AddWeightModal: React.FC<AddWeightModalProps> = ({ open, patient, o
         <Form.Item label={t('patients:chart.weights.weight')} required>
           <InputNumber
             autoFocus
+            aria-label={t('patients:chart.weights.weight')}
             value={weight}
             onChange={(v) => setWeight(typeof v === 'number' ? v : null)}
             min={0.01}
