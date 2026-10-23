@@ -98,6 +98,7 @@ export type DeviceErrorKind =
   | 'folder_missing'
   | 'folder_lost'
   | 'not_a_folder'
+  | 'listener_stopped'
   | 'unknown';
 
 // Payload of the `device-event` Tauri event

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Button, Tooltip } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useDeviceConnectionStatus, useDeviceIntegrations, useFileWatcherStatus } from '../../hooks/useDeviceIntegrations';
-import { folderLevel, rollupHealth, serialLevel } from './deviceHealth';
+import { folderLevel, rollupHealth, serialDownSince, serialLevel } from './deviceHealth';
 import { DeviceDetailsDrawer, HealthIcon } from './DeviceDetailsDrawer';
 
 /** Header chip on every page: the worst lab machine state; a click opens the details drawer. */
@@ -17,7 +17,10 @@ export const DeviceHealthChip: React.FC = () => {
     .filter((i) => i.enabled && (i.connectionType === 'serial_port' || i.connectionType === 'file_watch'))
     .map((i) => ({
       id: i.id,
-      level: i.connectionType === 'serial_port' ? serialLevel(getSerialStatus(i.id)) : folderLevel(getFolderStatus(i.id)),
+      level:
+        i.connectionType === 'serial_port'
+          ? serialLevel(getSerialStatus(i.id), serialDownSince(getSerialStatus(i.id)))
+          : folderLevel(getFolderStatus(i.id)),
     }));
   const { level, count } = rollupHealth(devices.map((d) => d.level));
   if (level === 'none') return null;
