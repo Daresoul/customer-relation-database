@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { App, Button, Descriptions, Drawer, Space, Switch, Typography, theme } from 'antd';
 import {
   CheckCircleFilled,
@@ -155,6 +155,12 @@ export const DeviceDetailsDrawer: React.FC<DeviceDetailsDrawerProps> = ({ open, 
   const lastData = clock(serialStatus?.last_byte_at);
   const raw = details?.lastRaw;
   const recent = [...(details?.log ?? [])].reverse().slice(0, 8);
+  // A string key, so the hint doesn't rescan ports on every refresh.
+  const takenKey = devices
+    .filter((d) => d.id !== device?.id && d.serialPortName)
+    .map((d) => d.serialPortName)
+    .join('\n');
+  const takenPorts = useMemo(() => (takenKey ? takenKey.split('\n') : []), [takenKey]);
   const downLine = formatDownSince(details?.downSince, serialStatus?.retry_count ?? 0, serialStatus?.next_retry, t);
 
   return (
@@ -249,7 +255,7 @@ export const DeviceDetailsDrawer: React.FC<DeviceDetailsDrawerProps> = ({ open, 
           </div>
 
           {isSerial && serialStatus?.error_kind === 'port_missing' && device.serialPortName && (
-            <PortMovedHint integrationId={device.id} missingPort={device.serialPortName} />
+            <PortMovedHint integrationId={device.id} missingPort={device.serialPortName} takenPorts={takenPorts} />
           )}
 
           <Descriptions column={1} size="small" bordered>

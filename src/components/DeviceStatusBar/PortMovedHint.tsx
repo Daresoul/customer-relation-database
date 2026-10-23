@@ -11,7 +11,11 @@ const { Text } = Typography;
  * The machine's port is gone. A replugged USB-serial cable usually comes back
  * under another COM number, so offer the ports this computer has now.
  */
-export const PortMovedHint: React.FC<{ integrationId: number; missingPort: string }> = ({ integrationId, missingPort }) => {
+export const PortMovedHint: React.FC<{ integrationId: number; missingPort: string; takenPorts: string[] }> = ({
+  integrationId,
+  missingPort,
+  takenPorts,
+}) => {
   const { t } = useTranslation('devices');
   const { message } = App.useApp();
   const update = useUpdateDeviceIntegration();
@@ -23,7 +27,8 @@ export const PortMovedHint: React.FC<{ integrationId: number; missingPort: strin
     invoke<PortInfo[]>('get_available_ports')
       .then((list) => {
         if (!cancelled) {
-          setPorts((list ?? []).filter((p) => !('HIDDevice' in p.port_type) && p.port_name !== missingPort));
+          // Another machine's port is not offered: taking it would break that machine.
+          setPorts((list ?? []).filter((p) => !('HIDDevice' in p.port_type) && p.port_name !== missingPort && !takenPorts.includes(p.port_name)));
         }
       })
       .catch(() => {
@@ -32,7 +37,7 @@ export const PortMovedHint: React.FC<{ integrationId: number; missingPort: strin
     return () => {
       cancelled = true;
     };
-  }, [missingPort]);
+  }, [missingPort, takenPorts]);
 
   if (ports === null) return null;
 
