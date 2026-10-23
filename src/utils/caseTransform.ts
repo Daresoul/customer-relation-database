@@ -18,6 +18,14 @@ export function camelToSnake(str: string): string {
 }
 
 /**
+ * An array with no objects in it (a file's bytes, a list of ids) has no
+ * keys to rename; it is passed through as is instead of copied item by item.
+ */
+function isPlainValueArray(arr: unknown[]): boolean {
+  return arr.length > 0 && typeof arr[0] !== 'object' && arr.every(v => v === null || typeof v !== 'object');
+}
+
+/**
  * Transform all keys of an object from snake_case to camelCase
  */
 export function snakeToCamelObject<T extends Record<string, any>>(obj: T): Record<string, any> {
@@ -26,7 +34,7 @@ export function snakeToCamelObject<T extends Record<string, any>>(obj: T): Recor
   }
 
   if (Array.isArray(obj)) {
-    return obj.map(item => snakeToCamelObject(item)) as any;
+    return isPlainValueArray(obj) ? obj : obj.map(item => snakeToCamelObject(item)) as any;
   }
 
   if (typeof obj !== 'object') {
@@ -57,7 +65,7 @@ export function camelToSnakeObject<T extends Record<string, any>>(obj: T): Recor
   }
 
   if (Array.isArray(obj)) {
-    return obj.map(item => camelToSnakeObject(item)) as any;
+    return isPlainValueArray(obj) ? obj : obj.map(item => camelToSnakeObject(item)) as any;
   }
 
   if (typeof obj !== 'object') {
