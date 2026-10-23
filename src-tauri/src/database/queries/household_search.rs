@@ -1,5 +1,6 @@
 use sea_orm::{DatabaseConnection, ConnectionTrait, Statement, DbBackend};
 use crate::models::household::*;
+use super::household_duplicates::normalize_phone;
 
 /// `INSERT INTO household_search` of one row per household matching `filter`
 /// (an SQL condition on `h`, e.g. `h.id = NEW.id`), built from the live
@@ -68,6 +69,54 @@ pub(crate) fn sanitize_fts5_query(query: &str) -> String {
         .join(" OR ")
 }
 
+/// Macedonian Cyrillic in alphabet order. Russian letters missing here sort
+/// after these.
+const MACEDONIAN_ALPHABET: &str = "абвгдѓежзѕијклљмнњопрстќуфхцчџш";
+
+/// Sort key for a name: case-folded, Latin letters first, then Cyrillic in
+/// Macedonian alphabet order.
+pub(crate) fn alphabet_key(name: &str) -> Vec<u32> {
+    name.trim()
+        .chars()
+        .flat_map(char::to_lowercase)
+        .map(|c| match MACEDONIAN_ALPHABET.chars().position(|m| m == c) {
+            Some(pos) => 0x10000 + pos as u32,
+            None if (c as u32) >= 0x0400 && (c as u32) <= 0x04FF => 0x10100 + c as u32,
+            None => c as u32,
+        })
+        .collect()
+}
+
+/// For a query that is only a phone number, FTS alternatives for its local
+/// (0…) and international (389…) digits, so "+389 70 123 456" and
+/// "070123456" find each other.
+fn phone_alternatives(query: &str) -> Option<String> {
+    let phone_chars = |c: char| c.is_ascii_digit() || " +-/().".contains(c);
+    if !query.chars().all(phone_chars) {
+        return None;
+    }
+    let local = normalize_phone(query);
+    if local.len() < 6 {
+        return None;
+    }
+    let international = match local.strip_prefix('0') {
+        Some(rest) => format!("389{rest}"),
+        None => local.clone(),
+    };
+    Some(format!("\"{local}\"* OR \"{international}\"*"))
+}
+
+/// The FTS query for household search: the typed words, plus the phone
+/// alternatives when the query is a phone number.
+fn household_fts_query(query: &str) -> String {
+    let words = sanitize_fts5_query(query);
+    match phone_alternatives(query) {
+        Some(phone) if words.is_empty() => phone,
+        Some(phone) => format!("{words} OR {phone}"),
+        None => words,
+    }
+}
+
 // Helper function to get all households without search
 // `limit: None` returns every household.
 async fn get_all_households_internal(
@@ -75,22 +124,24 @@ async fn get_all_households_internal(
     limit: Option<i32>,
     offset: i32,
 ) -> Result<SearchHouseholdsResponse, String> {
-    // Get households directly without FTS5
-    let household_rows = db.query_all(Statement::from_sql_and_values(
+    // SQLite orders text by code point, which puts Ѓ, Ј, Љ, Њ, Ќ, Џ before
+    // А and lower case after upper case; sort and page here instead.
+    let mut household_rows = db.query_all(Statement::from_string(
         DbBackend::Sqlite,
-        r#"
-        SELECT
-            id,
-            household_name,
-            address
-        FROM households WHERE merged_into_id IS NULL
-        ORDER BY household_name, id
-        LIMIT ? OFFSET ?
-        "#,
-        [limit.unwrap_or(-1).into(), offset.into()]
+        "SELECT id, household_name, address FROM households WHERE merged_into_id IS NULL",
     ))
     .await
     .map_err(|e| format!("Failed to fetch households: {}", e))?;
+    household_rows.sort_by_cached_key(|row| {
+        let name: Option<String> = row.try_get("", "household_name").ok().flatten();
+        let id: i64 = row.try_get("", "id").unwrap_or(0);
+        (alphabet_key(name.as_deref().unwrap_or("")), id)
+    });
+    let household_rows: Vec<_> = household_rows
+        .into_iter()
+        .skip(offset.max(0) as usize)
+        .take(limit.map_or(usize::MAX, |l| l.max(0) as usize))
+        .collect();
 
     // Get total count
     let total_row = db.query_one(Statement::from_sql_and_values(
@@ -238,7 +289,7 @@ pub async fn search_households(
         return get_all_households_internal(db, Some(limit), offset).await;
     }
 
-    let fts_query = sanitize_fts5_query(query);
+    let fts_query = household_fts_query(query);
     if fts_query.is_empty() {
         return Ok(SearchHouseholdsResponse { results: Vec::new(), total: 0, has_more: false });
     }
@@ -395,7 +446,7 @@ pub async fn quick_search_households(
     query: &str,
     limit: i32,
 ) -> Result<Vec<(i32, String)>, String> {
-    let fts_query = sanitize_fts5_query(query);
+    let fts_query = household_fts_query(query);
     if fts_query.is_empty() {
         return Ok(Vec::new());
     }
