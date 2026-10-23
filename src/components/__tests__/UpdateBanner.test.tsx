@@ -13,7 +13,7 @@ vi.mock('react-i18next', () => ({
 
 import { UpdateBanner } from '../UpdateBanner';
 
-const manifest = { version: '2.4.0', notes: 'Faster lab import\nmore', pub_date: '', platforms: {} };
+const manifest = { version: '2.4.0', body: 'Faster lab import\nmore', date: '' };
 
 function renderBanner(props: Partial<React.ComponentProps<typeof UpdateBanner>>) {
   const onInstall = vi.fn();

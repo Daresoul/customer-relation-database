@@ -25,13 +25,7 @@ export function useUpdater() {
       updateService.clearCheckFailure();
 
       if (result.shouldUpdate && result.manifest) {
-        // Tauri calls the release notes `body`.
-        setManifest({
-          version: result.manifest.version,
-          notes: result.manifest.body,
-          pub_date: result.manifest.date,
-          platforms: {},
-        });
+        setManifest(result.manifest);
         setStatus('ready');
         await updateService.recordCheck(result.manifest.version);
       } else {

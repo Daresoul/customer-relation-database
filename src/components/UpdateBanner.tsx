@@ -33,7 +33,7 @@ export const UpdateBanner: React.FC<UpdateBannerProps> = ({ status, manifest, on
       banner
       showIcon
       message={t('updates.updateAvailableVersion', { version: manifest.version })}
-      description={manifest.notes ? manifest.notes.split('\n')[0] : t('updates.newVersionAvailable')}
+      description={manifest.body ? manifest.body.split('\n')[0] : t('updates.newVersionAvailable')}
       action={
         <Button type="primary" size="small" onClick={onInstall}>
           {t('updates.installAndRestart')}
