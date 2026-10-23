@@ -746,6 +746,8 @@ pub(crate) fn record_status_at(
     kick_monitor();
 }
 
+pub(crate) fn note_unrecognized_at(_integration_id: i64, _bytes: usize, _at: DateTime<Utc>) {}
+
 pub fn record_event(integration_id: i64, kind: DeviceEventKind) {
     let label = snake_case(&kind).unwrap_or_else(|| format!("{kind:?}"));
     with_runtime(integration_id, |rt| {
@@ -1405,6 +1407,21 @@ mod tests {
         assert_eq!(d.outages_today, 2);
         assert_eq!(d.down_minutes_today, 45, "the outage still going on counts too");
         assert_eq!(d.down_since.as_deref(), Some(at(10, 0, 0).to_rfc3339().as_str()));
+    }
+
+    // A machine on the wrong speed or type: data arrives, none of it a result.
+    #[test]
+    fn data_that_is_not_a_result_shows_in_the_history_once_per_ten_minutes() {
+        let id = 9_100_012;
+        let at = |m: u32| Utc.with_ymd_and_hms(2026, 10, 19, 9, m, 0).unwrap();
+        note_unrecognized_at(id, 1200, at(0));
+        note_unrecognized_at(id, 1500, at(5));
+        let d = device_details(id, at(6).fixed_offset());
+        assert_eq!(d.log.iter().filter(|e| e.label == "unrecognized_data").count(), 1);
+        note_unrecognized_at(id, 1100, at(11));
+        let d = device_details(id, at(12).fixed_offset());
+        assert_eq!(d.log.iter().filter(|e| e.label == "unrecognized_data").count(), 2);
+        assert_eq!(d.errors_today, 0, "not an outage");
     }
 
     #[test]

@@ -411,6 +411,7 @@ struct FrameAssembler {
     started: bool,
     consecutive_end_symbols: u32,
     dropped: Option<Vec<u8>>,
+    ignored: usize,
 }
 
 impl FrameAssembler {
@@ -421,6 +422,7 @@ impl FrameAssembler {
             started: protocol.start_symbol.is_none(),
             consecutive_end_symbols: 0,
             dropped: None,
+            ignored: 0,
         }
     }
 
@@ -457,7 +459,14 @@ impl FrameAssembler {
 
     /// Bytes since the last call that were outside any result.
     fn take_ignored(&mut self) -> usize {
-        0
+        std::mem::take(&mut self.ignored)
+    }
+
+    /// Past the size limit, hand the buffered part back as cut off and start over.
+    fn cap(&mut self, protocol: &DeviceProtocol) {
+        if self.data.len() >= MAX_FRAME_BYTES {
+            self.dropped = Some(self.take_partial(protocol));
+        }
     }
 
     /// A frame that a new start byte cut short (MLLP), handed back once.
@@ -486,6 +495,7 @@ impl FrameAssembler {
                 frame.truncate(frame.len() - 2);
                 return Some(frame);
             }
+            self.cap(protocol);
             return None;
         }
 
@@ -527,14 +537,19 @@ impl FrameAssembler {
                 self.started = true;
             } else if self.started {
                 self.data.push(byte);
+                self.cap(protocol);
+            } else {
+                self.ignored += 1;
             }
             None
         } else if self.started {
             // No start symbol: accumulate everything.
             self.consecutive_end_symbols = 0;
             self.data.push(byte);
+            self.cap(protocol);
             None
         } else {
+            self.ignored += 1;
             None
         }
     }
@@ -1058,6 +1073,9 @@ pub(crate) trait FrameSink {
     fn on_unrecognized(&mut self, _bytes: usize) {}
 }
 
+/// Bytes outside any result before the panel hears about it.
+const NOISE_REPORT_BYTES: usize = 1024;
+
 /// Some drivers return a read timeout at once instead of after the port's
 /// timeout; without a pause the loop would spin a CPU core.
 const MIN_EMPTY_READ: Duration = Duration::from_millis(10);
@@ -1074,6 +1092,7 @@ pub(crate) fn run_read_loop<R: std::io::Read + ?Sized>(
 ) -> Result<(), String> {
     let mut assembler = FrameAssembler::new(protocol);
     let mut buffer = vec![0; 1024];
+    let mut ignored = 0usize;
     let mut last_byte_at = Instant::now();
 
     loop {
@@ -1093,6 +1112,10 @@ pub(crate) fn run_read_loop<R: std::io::Read + ?Sized>(
                     if let Some(cut) = assembler.take_dropped() {
                         sink.on_cut_off(cut);
                     }
+                }
+                ignored += assembler.take_ignored();
+                if ignored >= NOISE_REPORT_BYTES {
+                    sink.on_unrecognized(std::mem::take(&mut ignored));
                 }
                 false
             }
