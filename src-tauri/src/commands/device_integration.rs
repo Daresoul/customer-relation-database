@@ -79,7 +79,8 @@ fn stop_serial_listener(integration: &DeviceIntegration) {
     }
 }
 
-/// Save an integration's new settings and stop the listener of its old ones.
+/// Save an integration's new settings, then stop the listener of its old
+/// ones. A failed save leaves the running listener as it was.
 pub(crate) async fn save_then_stop_old_listener(
     db: &sea_orm::DatabaseConnection,
     id: i64,
@@ -87,8 +88,9 @@ pub(crate) async fn save_then_stop_old_listener(
     stop: impl FnOnce(&DeviceIntegration),
 ) -> Result<DeviceIntegration, String> {
     let old_integration = DeviceIntegrationService::get_by_id(db, id).await?;
+    let integration = DeviceIntegrationService::update(db, id, input).await?;
     stop(&old_integration);
-    DeviceIntegrationService::update(db, id, input).await
+    Ok(integration)
 }
 
 #[tauri::command]
@@ -96,17 +98,10 @@ pub async fn delete_device_integration(
     pool: State<'_, SeaOrmPool>,
     id: i64,
 ) -> Result<(), String> {
-    // Get integration to stop listener if needed
     let integration = DeviceIntegrationService::get_by_id(&pool, id).await?;
-
-    // Stop listener if it was a serial port integration
-    if integration.connection_type == ConnectionType::SerialPort {
-        if let Some(ref port_name) = integration.serial_port_name {
-            stop_listen(port_name, &integration.device_type.to_db_string());
-        }
-    }
-
+    // Delete first: a failed delete keeps the device listening.
     DeviceIntegrationService::delete(&pool, id).await?;
+    stop_serial_listener(&integration);
     reload_file_watchers().await;
     Ok(())
 }
