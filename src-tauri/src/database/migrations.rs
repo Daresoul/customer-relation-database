@@ -72,6 +72,7 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, WEIGHT_LOG_MIGRATION, create_patient_weight_log).await?;
     run_migration(pool, "055_lab_inbox", add_lab_inbox).await?;
     run_migration(pool, "056_clinic_profile_and_vat", add_clinic_profile_and_vat).await?;
+    run_migration(pool, "05x_record_template_contents", add_record_template_contents).await?;
 
     Ok(())
 }
@@ -3360,6 +3361,49 @@ fn add_clinic_profile_and_vat(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::f
                     .await?;
             }
         }
+        Ok(())
+    })
+}
+
+// A record template can also fill the prescription, price-list lines (with
+// quantity) and diagnoses. Additive: old templates keep working without them.
+fn add_record_template_contents(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        let exists: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM pragma_table_info('record_templates') WHERE name = 'prescription_notes'")
+                .fetch_one(pool)
+                .await?;
+        if exists.0 == 0 {
+            sqlx::query("ALTER TABLE record_templates ADD COLUMN prescription_notes TEXT")
+                .execute(pool)
+                .await?;
+        }
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS record_template_line_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                record_template_id INTEGER NOT NULL REFERENCES record_templates(id) ON DELETE CASCADE,
+                line_item_template_id INTEGER NOT NULL REFERENCES line_item_templates(id) ON DELETE CASCADE,
+                quantity INTEGER NOT NULL DEFAULT 1 CHECK (quantity >= 1),
+                position INTEGER NOT NULL DEFAULT 0
+            )",
+        )
+        .execute(pool)
+        .await?;
+        sqlx::query(
+            "CREATE INDEX IF NOT EXISTS idx_record_template_line_items_template \
+             ON record_template_line_items(record_template_id)",
+        )
+        .execute(pool)
+        .await?;
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS record_template_diagnoses (
+                record_template_id INTEGER NOT NULL REFERENCES record_templates(id) ON DELETE CASCADE,
+                diagnosis_id INTEGER NOT NULL REFERENCES diagnoses(id) ON DELETE CASCADE,
+                PRIMARY KEY (record_template_id, diagnosis_id)
+            )",
+        )
+        .execute(pool)
+        .await?;
         Ok(())
     })
 }
