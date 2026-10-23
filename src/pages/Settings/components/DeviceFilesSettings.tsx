@@ -3,9 +3,7 @@
  * Healvet, MNChip, etc.).
  *
  * Two sections:
- *   - "Saved For Later" — files queued with a patient identifier for
- *     processing later. Opening the drawer lets the user review them
- *     and feed them into the medical-record import flow.
+ *   - "Lab inbox" — a link to the inbox of results waiting to be attached.
  *   - "Recent Device Files" — a 14-day rolling list of everything the
  *     device-watcher subsystem has captured. Used for recovery if the
  *     app crashed mid-import or a file got dropped — the user can
@@ -16,19 +14,19 @@
  * directories) instead of mixing in file-management UI.
  */
 
-import React, { useState } from 'react';
+import React from 'react';
 import { Card, Button, Typography, Space } from 'antd';
 import { FileTextOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import RecentDeviceFiles from '../../../components/RecentDeviceFiles';
-import PendingDeviceList from '../../../components/PendingDeviceList';
 import styles from '../Settings.module.css';
 
 const { Text } = Typography;
 
 const DeviceFilesSettings: React.FC = () => {
   const { t } = useTranslation(['settings', 'common']);
-  const [pendingOpen, setPendingOpen] = useState(false);
+  const navigate = useNavigate();
 
   return (
     <div>
@@ -37,22 +35,17 @@ const DeviceFilesSettings: React.FC = () => {
           title={
             <span className={styles.cardTitle}>
               <FileTextOutlined />{' '}
-              {t('settings:deviceFiles.savedForLater', 'Saved For Later')}
+              {t('settings:deviceFiles.labInbox')}
             </span>
           }
           className={styles.settingsCard}
           extra={
-            <Button type="default" onClick={() => setPendingOpen(true)}>
-              {t('settings:deviceFiles.openSavedForLater', 'Open Saved For Later')}
+            <Button type="default" onClick={() => navigate('/lab-inbox')}>
+              {t('settings:deviceFiles.openLabInbox')}
             </Button>
           }
         >
-          <Text type="secondary">
-            {t(
-              'settings:deviceFiles.savedForLaterDescription',
-              'Device files saved with a patient serial for later processing. Click "Open Saved For Later" to review and load files into the import flow.',
-            )}
-          </Text>
+          <Text type="secondary">{t('settings:deviceFiles.labInboxDescription')}</Text>
         </Card>
 
         <Card
@@ -73,9 +66,6 @@ const DeviceFilesSettings: React.FC = () => {
           <RecentDeviceFiles days={14} />
         </Card>
       </Space>
-
-      {/* Saved For Later Drawer */}
-      <PendingDeviceList open={pendingOpen} onClose={() => setPendingOpen(false)} />
     </div>
   );
 };

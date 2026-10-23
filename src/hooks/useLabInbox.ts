@@ -1,3 +1,5 @@
+import { useEffect } from 'react';
+import { listen } from '@tauri-apps/api/event';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { labInboxService } from '@/services/labInboxService';
 import { invalidateLabInboxData, invalidateLabResultRecords } from './invalidation';
@@ -50,4 +52,21 @@ export function useMoveLabResult() {
   });
 }
 
-export function useLabInboxLiveUpdates(): void {}
+/** Refresh the inbox and its badge when a machine sends a result or a failed read. */
+export function useLabInboxLiveUpdates(): void {
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    let cancelled = false;
+    const stops: Array<() => void> = [];
+    for (const name of ['device-data-received', 'device-event']) {
+      listen(name, () => invalidateLabInboxData(queryClient)).then((stop) => {
+        if (cancelled) stop();
+        else stops.push(stop);
+      });
+    }
+    return () => {
+      cancelled = true;
+      stops.forEach((stop) => stop());
+    };
+  }, [queryClient]);
+}

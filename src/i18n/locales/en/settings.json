@@ -15,9 +15,9 @@
     "updates": "Updates"
   },
   "deviceFiles": {
-    "savedForLater": "Saved For Later",
-    "openSavedForLater": "Open Saved For Later",
-    "savedForLaterDescription": "Device files saved with a patient serial for later processing. Click \"Open Saved For Later\" to review and load files into the import flow.",
+    "labInbox": "Lab inbox",
+    "openLabInbox": "Open lab inbox",
+    "labInboxDescription": "Results from lab machines that are not attached to a record yet wait in the lab inbox. Discarded results stay there too, and can be restored.",
     "recentDeviceFiles": "Recent Device Files (Last 14 Days)",
     "recentDescription": "Files received from devices are tracked here for crash protection and recovery. You can view details and attach unprocessed files to medical records."
   },

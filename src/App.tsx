@@ -18,6 +18,7 @@ import { PatientDetail } from './pages/PatientDetail';
 import { MedicalRecordDetailPage } from './pages/MedicalRecordDetail';
 import Settings from './pages/Settings';
 import Appointments from './pages/Appointments/Appointments';
+import LabInboxPage from './pages/LabInbox';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ViewProvider } from './contexts';
 import { DeviceImportProvider } from './contexts/DeviceImportContext';
@@ -26,6 +27,7 @@ import { RouteErrorBoundary } from './components/common/ErrorBoundary';
 import DeviceImportModal from './components/DeviceImportModal/DeviceImportModal';
 import { useDeviceDataListener } from './hooks/useDeviceDataListener';
 import { useDeviceEvents } from './hooks/useDeviceEvents';
+import { useLabInboxLiveUpdates } from './hooks/useLabInbox';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@/services/invoke';
 import { useDeviceImport } from './contexts/DeviceImportContext';
@@ -49,6 +51,7 @@ const queryClient = new QueryClient({
 function DeviceDataHandler() {
   useDeviceDataListener();
   useDeviceEvents();
+  useLabInboxLiveUpdates();
   return null;
 }
 
@@ -137,6 +140,7 @@ function AppContent() {
                       <Route path="/medical-records/:id" element={<MedicalRecordDetailPage />} />
                       <Route path="/appointments" element={<Appointments />} />
                       <Route path="/settings" element={<Settings />} />
+                      <Route path="/lab-inbox" element={<LabInboxPage />} />
                     </Routes>
                   </RouteErrorBoundary>
                 </AppWrapper>

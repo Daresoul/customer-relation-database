@@ -188,6 +188,82 @@
     "couldNotRead": "Couldn't read",
     "couldNotReadHint": "The device sent data we couldn't read. The raw file is kept for support."
   },
+  "inbox": {
+    "title": "Lab inbox",
+    "description": "Every result a lab machine sent stays here until it is attached to a record or discarded.",
+    "badge_one": "{{count}} lab result waiting",
+    "badge_other": "{{count}} lab results waiting",
+    "badgeUnknown": "Lab inbox: count unavailable",
+    "filter": {
+      "waiting": "Waiting",
+      "attached": "Attached",
+      "discarded": "Discarded"
+    },
+    "columns": {
+      "received": "Received",
+      "machine": "Machine",
+      "machineId": "Machine's patient ID",
+      "patient": {
+        "waiting": "Match",
+        "attached": "Attached to",
+        "discarded": "Reason"
+      },
+      "values": "Values"
+    },
+    "match": {
+      "chip": "Chip match",
+      "name": "Name guess — please check",
+      "ambiguous": "Several patients match — choose",
+      "none": "No match — choose the patient"
+    },
+    "overdue": "Waiting over 24 h",
+    "noMachineId": "No patient ID",
+    "openRecord": "Open record",
+    "attach": "Attach…",
+    "discard": "Discard",
+    "restore": "Restore",
+    "move": "Move to another patient…",
+    "openFailed": "Could not open this result",
+    "restored": "The result is back in Waiting.",
+    "restoreFailed": "Could not restore the result",
+    "loadFailed": "Could not load the lab inbox",
+    "empty": {
+      "waiting": "No lab results are waiting.",
+      "attached": "No attached lab results yet.",
+      "discarded": "No discarded lab results."
+    },
+    "discarded": "The result was discarded. You can restore it from Discarded.",
+    "discardTitle": "Discard this result?",
+    "discardConfirm": "Discard result",
+    "reason": "Reason",
+    "reasonRequired": "Choose a reason.",
+    "note": "Note (optional)",
+    "discardFailed": "Could not discard the result",
+    "reasons": {
+      "qc": "Quality control run",
+      "test": "Test sample",
+      "duplicate": "Duplicate",
+      "other": "Other",
+      "before_inbox": "Arrived before the lab inbox"
+    },
+    "moveTitle": "Move to another patient",
+    "moveConfirm": "Move result",
+    "moveHelp": "{{file}} leaves its current record (with that record's lab report) and goes onto the record you choose. The lab report is rebuilt there.",
+    "movePatient": "Patient",
+    "pickPatient": "Search by name",
+    "samePatient": "The result is already on this patient. Choose another patient.",
+    "moveRecord": "Record",
+    "moveFailed": "Could not move the result",
+    "moved": "The result was moved.",
+    "movedPdfFailed": "The result was moved, but the lab report could not be rebuilt. Use Regenerate PDF on the record.",
+    "movedRecordTitle": "Lab result",
+    "movedRecordDescription": "Lab result moved here from another patient: {{file}}",
+    "recordsLoadFailed": "Could not load this patient's records",
+    "pickRecord": "Choose a record",
+    "noRecords": "This patient has no records",
+    "newLabRecord": "New lab record",
+    "today": "today"
+  },
   "portTypeTooltips": {
     "serialUsb": "Connected USB Serial Device",
     "hid": "Connected HID Device",
