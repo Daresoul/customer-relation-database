@@ -33,7 +33,7 @@ describe('dates on screen', () => {
   it('are never formatted with a pattern written into the component', () => {
     // Numeric day/month patterns and US-style month-name dates; YYYY-MM-DD
     // for data sent to the backend is fine.
-    const shown = /\.format\(\s*['"`](DD|D|MM)[./ -]|\.format\(\s*['"`]MMM+ DD, YYYY/;
+    const shown = /\.format\(\s*['"`](DD|D|MM)[./ -]|\.format\(\s*['"`]MMM+ DD, YYYY|\.format\(\s*['"`][^'"`]*\bD{1,2} MMM/;
     const offenders = sourceFiles(SRC).flatMap((file) => {
       if (file.endsWith('dateFormatter.ts')) return [];
       const text = readFileSync(file, 'utf8');
