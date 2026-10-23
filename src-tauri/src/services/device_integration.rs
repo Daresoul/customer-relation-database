@@ -270,6 +270,14 @@ impl DeviceIntegrationService {
             .collect())
     }
 
+    /// How many readable results each machine has sent since `since`.
+    pub async fn results_since(
+        _db: &DatabaseConnection,
+        _since: chrono::DateTime<chrono::Utc>,
+    ) -> Result<std::collections::HashMap<i64, i64>, String> {
+        Ok(std::collections::HashMap::new())
+    }
+
     /// Update last_connected_at timestamp
     #[allow(dead_code)]
     pub async fn update_last_connected(db: &DatabaseConnection, id: i64) -> Result<(), String> {

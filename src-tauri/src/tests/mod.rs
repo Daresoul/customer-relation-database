@@ -159,3 +159,6 @@ pub mod pdf_name_tests;
 
 #[cfg(test)]
 pub mod window_fit_tests;
+
+#[cfg(test)]
+pub mod results_today_tests;
