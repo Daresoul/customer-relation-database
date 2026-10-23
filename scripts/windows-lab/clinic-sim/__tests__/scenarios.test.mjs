@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { SCENARIOS, chunk, serialPlan, exigoPlan } from '../scenarios.mjs';
+import { SCENARIOS, chunk, serialPlan, exigoPlan, parseConfig } from '../scenarios.mjs';
 
 // vitest runs from the repo root.
 const fixture = (name) => readFileSync(resolve(process.cwd(), 'src-tauri/tests/fixtures', name));
@@ -90,5 +90,11 @@ describe('exigoPlan', () => {
     const [step] = exigoPlan(SCENARIOS['exigo-unreadable'], DAY, NOW);
     expect(step.name.endsWith('.xml')).toBe(true);
     expect(step.content).not.toContain('<samples');
+  });
+});
+
+describe('lab config', () => {
+  it('reads a config file Windows PowerShell wrote (with a byte-order mark)', () => {
+    expect(parseConfig('\uFEFF{"exigo":"C:\\\\ArkivetLab\\\\exigo"}')).toEqual({ exigo: 'C:\\ArkivetLab\\exigo' });
   });
 });

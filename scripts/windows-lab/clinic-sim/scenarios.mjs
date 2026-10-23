@@ -87,3 +87,7 @@ export function exigoPlan(scenario, dayXml, now = new Date()) {
       throw new Error(`unknown Exigo mode: ${scenario.mode}`);
   }
 }
+
+export function parseConfig(text) {
+  return JSON.parse(text);
+}
