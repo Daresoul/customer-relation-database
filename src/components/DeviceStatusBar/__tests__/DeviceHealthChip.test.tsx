@@ -64,7 +64,7 @@ describe('lab machines chip in the header', () => {
     renderIn(<DeviceHealthChip />);
     const chip = screen.getByRole('button', { name: /chip.label/ });
     expect(chip).toHaveAttribute('data-level', 'down');
-    expect(chip.textContent).toContain('· 1');
+    expect(chip.textContent).toBe('chip.oneDown {"name":"PointCare"}');
   });
 
   it('opens the details drawer on the machine that is down', async () => {
@@ -94,6 +94,6 @@ describe('lab machines chip, accessible', () => {
     renderIn(<DeviceHealthChip />);
     const chip = screen.getByRole('button', { name: /chip.label/ });
     expect(chip).toHaveAccessibleName(expect.stringMatching(/chip.state.(down|waiting|working)/));
-    expect(chip.textContent).toMatch(/chip.state./);
+    expect(chip.textContent).toMatch(/chip\.(oneDown|manyDown|oneWaiting|manyWaiting|allWorking)/);
   });
 });
