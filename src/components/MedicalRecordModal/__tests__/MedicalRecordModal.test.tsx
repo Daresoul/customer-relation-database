@@ -67,10 +67,10 @@ describe('MedicalRecordModal: unsaved changes', () => {
 
     fireEvent.click(closeX());
 
-    expect(await screen.findByText('unsaved.title')).toBeInTheDocument();
+    expect(await screen.findByText('medical:unsaved.title')).toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'unsaved.keepEditing' }));
-    await waitFor(() => expect(screen.queryByText('unsaved.title')).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'medical:unsaved.keepEditing' }));
+    await waitFor(() => expect(screen.queryByText('medical:unsaved.title')).not.toBeInTheDocument());
     expect(onClose).not.toHaveBeenCalled();
   });
 
@@ -79,7 +79,7 @@ describe('MedicalRecordModal: unsaved changes', () => {
     fireEvent.click(screen.getByText('type something'));
 
     fireEvent.click(screen.getByText('form cancel'));
-    fireEvent.click(await screen.findByRole('button', { name: 'unsaved.discard' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'medical:unsaved.discard' }));
 
     await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
