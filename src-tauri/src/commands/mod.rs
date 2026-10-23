@@ -19,6 +19,7 @@ pub mod device_input;
 pub mod device_integration;
 pub mod file_history;
 pub mod pending;
+pub mod lab_inbox;
 #[cfg(debug_assertions)]
 pub mod dev_tools;
 pub mod line_item;
@@ -49,6 +50,7 @@ pub use device_input::*;
 pub use device_integration::*;
 pub use file_history::*;
 pub use pending::*;
+pub use lab_inbox::*;
 #[cfg(debug_assertions)]
 pub use dev_tools::*;
 pub use line_item::*;
