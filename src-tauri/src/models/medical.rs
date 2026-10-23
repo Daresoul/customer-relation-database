@@ -241,7 +241,7 @@ pub struct AttachmentData {
 }
 
 // T033: RecordTemplate model for medical record templates
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RecordTemplate {
     pub id: i64,
@@ -250,8 +250,41 @@ pub struct RecordTemplate {
     pub description: String,
     pub price: Option<f64>,
     pub currency_id: Option<i64>,
+    pub prescription_notes: Option<String>,
+    pub line_items: Vec<RecordTemplateLineItem>,
+    pub diagnosis_ids: Vec<i64>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+/// A price-list line on a template. Name, price, currency and VAT rate are
+/// the price-list item's current ones, read when the template is loaded.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecordTemplateLineItem {
+    pub line_item_template_id: i64,
+    pub quantity: i32,
+    pub name: String,
+    pub description: Option<String>,
+    pub unit_price: f64,
+    pub currency_id: i64,
+    pub tax_rate_id: Option<i64>,
+    pub vat_name: Option<String>,
+    pub vat_percent: Option<f64>,
+    /// False once the price-list item was removed.
+    pub is_active: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecordTemplateLineItemInput {
+    pub line_item_template_id: i64,
+    #[serde(default = "one")]
+    pub quantity: i32,
+}
+
+fn one() -> i32 {
+    1
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -262,15 +295,45 @@ pub struct CreateRecordTemplateInput {
     pub description: String,
     pub price: Option<f64>,
     pub currency_id: Option<i64>,
+    #[serde(default)]
+    pub prescription_notes: Option<String>,
+    #[serde(default)]
+    pub line_items: Vec<RecordTemplateLineItemInput>,
+    #[serde(default)]
+    pub diagnosis_ids: Vec<i64>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// A missing field is left unchanged. A blank prescription clears it.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateRecordTemplateInput {
     pub title: Option<String>,
     pub description: Option<String>,
     pub price: Option<f64>,
     pub currency_id: Option<i64>,
+    #[serde(default)]
+    pub record_type: Option<String>,
+    #[serde(default)]
+    pub prescription_notes: Option<String>,
+    #[serde(default)]
+    pub line_items: Option<Vec<RecordTemplateLineItemInput>>,
+    #[serde(default)]
+    pub diagnosis_ids: Option<Vec<i64>>,
+}
+
+/// What "Copy from last record" fills into a new record. Never the invoice
+/// number, invoice date or attachments.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LastRecordCopy {
+    pub record_id: i64,
+    pub record_type: String,
+    pub name: String,
+    pub created_at: String,
+    pub description: String,
+    pub prescription_notes: Option<String>,
+    pub diagnosis_ids: Vec<i64>,
+    pub line_items: Vec<MedicalRecordLineItem>,
 }
 
 /// Patient overrides for configurable PDF report generation

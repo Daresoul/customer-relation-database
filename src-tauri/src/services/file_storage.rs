@@ -175,6 +175,14 @@ impl FileStorageService {
         Ok(())
     }
 
+    /// The record page's Delete: a user's file or a lab result only.
+    pub async fn delete_user_attachment(
+        _db: &DatabaseConnection,
+        _attachment_id: i64,
+    ) -> Result<(), String> {
+        Err("not implemented".into())
+    }
+
     /// Clean up orphaned files (files in storage but not in database)
     pub async fn cleanup_orphaned_files(
         _app_handle: &AppHandle,

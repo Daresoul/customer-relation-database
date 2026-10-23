@@ -569,6 +569,7 @@ fn main() {
             commands::create_record_template,
             commands::update_record_template,
             commands::delete_record_template,
+            commands::get_last_record_for_copy,
             // Settings commands
             commands::get_app_settings,
             commands::update_app_settings,
