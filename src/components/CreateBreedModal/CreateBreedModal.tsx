@@ -4,13 +4,15 @@ import { useCreateBreed } from '../../hooks/useBreeds';
 import { useTranslation } from 'react-i18next';
 import { useSpecies } from '../../hooks/useSpecies';
 import { toTitleCase } from '../../utils/stringUtils';
+import type { Breed } from '../../types/breed';
 
 interface CreateBreedModalProps {
   open: boolean;
   initialName?: string;
   speciesId?: number;
   onClose: () => void;
-  onSuccess: (breedName: string) => void;
+  /** Called with the new breed, so callers needn't look it up in a list that may be stale. */
+  onSuccess: (breedName: string, created: Breed) => void;
 }
 
 export const CreateBreedModal: React.FC<CreateBreedModalProps> = ({
@@ -44,7 +46,7 @@ export const CreateBreedModal: React.FC<CreateBreedModalProps> = ({
       const values = await form.validateFields();
       const titleCasedName = toTitleCase(values.name.trim());
 
-      await createBreed.mutateAsync({
+      const created = await createBreed.mutateAsync({
         name: titleCasedName,
         speciesId: values.speciesId,
       });
@@ -56,7 +58,7 @@ export const CreateBreedModal: React.FC<CreateBreedModalProps> = ({
         duration: 3,
       });
 
-      onSuccess(titleCasedName);
+      onSuccess(titleCasedName, created);
       form.resetFields();
       onClose();
     } catch (error) {

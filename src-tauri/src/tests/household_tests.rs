@@ -478,3 +478,103 @@ mod edge_cases {
         assert!(dto.validate().is_ok());
     }
 }
+
+/// household.md #12: a failed contact write must not leave half a change.
+mod person_writes_are_all_or_nothing {
+    use crate::database::queries::household;
+    use crate::models::household::{CreateContactDto, CreatePersonDto, CreatePersonWithContactsDto};
+    use crate::test_utils::create_test_db_with_migrations;
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+
+    fn contact(kind: &str, value: &str) -> CreateContactDto {
+        CreateContactDto { contact_type: kind.into(), contact_value: value.into(), is_primary: None }
+    }
+
+    async fn count(db: &sea_orm::DatabaseConnection, sql: &str) -> i64 {
+        db.query_one(Statement::from_string(DbBackend::Sqlite, sql.to_string()))
+            .await.unwrap().unwrap().try_get_by_index::<i64>(0).unwrap()
+    }
+
+    async fn household_with_person(db: &sea_orm::DatabaseConnection) -> (i32, i32) {
+        db.execute(Statement::from_string(DbBackend::Sqlite,
+            "INSERT INTO households (household_name) VALUES ('Petrovski')".to_string())).await.unwrap();
+        let hid = count(db, "SELECT MAX(id) FROM households").await as i32;
+        let dto = CreatePersonWithContactsDto {
+            person: CreatePersonDto { first_name: "Ana".into(), last_name: "Petrovska".into(), is_primary: Some(true) },
+            contacts: vec![contact("phone", "070 111 222")],
+        };
+        let pid = household::add_person_with_contacts(db, hid, &dto).await.unwrap();
+        (hid, pid)
+    }
+
+    #[tokio::test]
+    async fn a_failed_contact_replace_keeps_the_old_contacts() {
+        let db = create_test_db_with_migrations().await;
+        let (_, pid) = household_with_person(&db).await;
+
+        // 'fax' breaks the contact_type CHECK, after the first new row is in.
+        let result = household::replace_person_contacts(
+            &db, pid, &[contact("email", "ana@example.com"), contact("fax", "123")],
+        ).await;
+
+        assert!(result.is_err());
+        let phones = count(&db, &format!(
+            "SELECT COUNT(*) FROM person_contacts WHERE person_id = {pid} AND contact_value = '070 111 222'")).await;
+        let total = count(&db, &format!("SELECT COUNT(*) FROM person_contacts WHERE person_id = {pid}")).await;
+        assert_eq!((phones, total), (1, 1), "the old phone must survive and nothing new be half-saved");
+    }
+
+    #[tokio::test]
+    async fn a_failed_add_person_leaves_no_person_behind() {
+        let db = create_test_db_with_migrations().await;
+        let (hid, _) = household_with_person(&db).await;
+        let dto = CreatePersonWithContactsDto {
+            person: CreatePersonDto { first_name: "Marko".into(), last_name: "Petrovski".into(), is_primary: None },
+            contacts: vec![contact("fax", "123")],
+        };
+
+        let result = household::add_person_with_contacts(&db, hid, &dto).await;
+
+        assert!(result.is_err());
+        let people = count(&db, &format!("SELECT COUNT(*) FROM people WHERE household_id = {hid}")).await;
+        assert_eq!(people, 1, "Marko must not be saved without the contact that failed");
+    }
+}
+
+/// dates-time.md #7: SQLite stores UTC without a zone, so the page read the
+/// household's Created/Updated as local time and showed them 1–2 h early.
+mod household_dates_are_marked_utc {
+    use crate::models::household::{Household, Person, PersonContact};
+    use chrono::NaiveDate;
+
+    fn at_nine() -> chrono::NaiveDateTime {
+        NaiveDate::from_ymd_opt(2026, 10, 23).unwrap().and_hms_opt(9, 0, 0).unwrap()
+    }
+
+    #[test]
+    fn household_person_and_contact_times_serialize_with_a_z() {
+        let h = Household {
+            id: 1, household_name: None, address: None, city: None, postal_code: None, notes: None,
+            created_at: at_nine(), updated_at: at_nine(),
+        };
+        let json = serde_json::to_value(&h).unwrap();
+        assert_eq!(json["created_at"], "2026-10-23T09:00:00Z");
+        assert_eq!(json["updated_at"], "2026-10-23T09:00:00Z");
+
+        let p = Person { id: 1, household_id: 1, first_name: "A".into(), last_name: "B".into(), is_primary: true, created_at: at_nine(), updated_at: at_nine() };
+        assert_eq!(serde_json::to_value(&p).unwrap()["updated_at"], "2026-10-23T09:00:00Z");
+
+        let c = PersonContact { id: 1, person_id: 1, contact_type: "phone".into(), contact_value: "070".into(), is_primary: false, created_at: at_nine() };
+        assert_eq!(serde_json::to_value(&c).unwrap()["created_at"], "2026-10-23T09:00:00Z");
+    }
+
+    #[test]
+    fn both_forms_read_back() {
+        let with_z: Household = serde_json::from_value(serde_json::json!({
+            "id": 1, "household_name": null, "address": null, "city": null, "postal_code": null, "notes": null,
+            "created_at": "2026-10-23T09:00:00Z", "updated_at": "2026-10-23T09:00:00"
+        })).unwrap();
+        assert_eq!(with_z.created_at, at_nine());
+        assert_eq!(with_z.updated_at, at_nine());
+    }
+}

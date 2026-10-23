@@ -1,20 +1,52 @@
 // T038: Periodic sync scheduler - checks Google Calendar for cancellations every 1 minute (with immediate check on startup)
 use crate::services::google_calendar::{calendar_ready_for_sync, mark_needs_reauth, record_sync_outcome};
 use crate::services::oauth::{get_valid_access_token, REAUTH_REQUIRED};
-use chrono::{Utc, Duration};
+use chrono::{DateTime, Duration, Utc};
 use std::sync::Arc;
 use sea_orm::{DatabaseConnection, ConnectionTrait, Statement, DbBackend};
 
 pub struct SyncScheduler;
+
+/// Delete sync log rows older than 30 days; returns how many went.
+pub async fn prune_sync_logs(db: &DatabaseConnection, now: DateTime<Utc>) -> Result<u64, String> {
+    let cutoff = (now - Duration::days(30)).format("%Y-%m-%d %H:%M:%S").to_string();
+    db.execute(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "DELETE FROM sync_logs WHERE started_at < ?",
+        [cutoff.into()],
+    ))
+    .await
+    .map(|r| r.rows_affected())
+    .map_err(|e| format!("Failed to prune sync logs: {}", e))
+}
+
+/// Query for the Google events the cancellation pull reads: every event
+/// changed in the last week, whenever it takes place. A time window
+/// (timeMin/timeMax) would miss a cancelled appointment in the future.
+pub fn cancellation_query(now: DateTime<Utc>) -> Vec<(&'static str, String)> {
+    vec![
+        ("updatedMin", (now - Duration::days(7)).to_rfc3339()),
+        ("showDeleted", "true".to_string()),
+        ("singleEvents", "true".to_string()),
+        ("maxResults", "2500".to_string()),
+    ]
+}
 
 impl SyncScheduler {
     /// Start the periodic sync scheduler
     pub fn start(db: Arc<DatabaseConnection>) {
         tokio::spawn(async move {
             log::info!("Running initial sync on startup...");
+            match prune_sync_logs(&db, Utc::now()).await {
+                Ok(n) if n > 0 => log::info!("Pruned {} sync log rows older than 30 days", n),
+                Ok(_) => {}
+                Err(e) => log::warn!("{}", e),
+            }
             Self::run_once(&db).await;
 
-            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(60)); // 1 minute
+            // After sleep, run once instead of firing every missed minute.
+            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(60));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
             loop {
                 interval.tick().await;
@@ -90,20 +122,11 @@ impl SyncScheduler {
         calendar_id: &str,
         access_token: &str,
     ) -> Result<(i32, i32), String> {
-        // Get events from last 7 days to now
-        let time_min = (Utc::now() - Duration::days(7)).to_rfc3339();
-        let time_max = Utc::now().to_rfc3339();
-
         let client = reqwest::Client::new();
         let response = client
             .get(format!("https://www.googleapis.com/calendar/v3/calendars/{}/events", calendar_id))
             .header("Authorization", format!("Bearer {}", access_token))
-            .query(&[
-                ("timeMin", time_min.as_str()),
-                ("timeMax", time_max.as_str()),
-                ("showDeleted", "true"),
-                ("singleEvents", "true"),
-            ])
+            .query(&cancellation_query(Utc::now()))
             .send()
             .await
             .map_err(|e| format!("Failed to fetch Google Calendar events: {}", e))?;

@@ -39,6 +39,7 @@ import DiagnosesSettings from './components/DiagnosesSettings';
 import BackupSettings from './components/BackupSettings';
 import ManagedScannersSettings from './components/ManagedScannersSettings';
 import { UpdateSettings } from './UpdateSettings';
+import { LoadError } from '../../components/common/LoadError';
 
 const { Content, Sider } = Layout;
 
@@ -69,7 +70,7 @@ const SettingsLayout: React.FC = () => {
   // Only create form for tabs that need it (not for rooms tab which has its own form)
   const [form] = Form.useForm();
 
-  const { settings, updateSettings, isLoading, isUpdating } = useAppSettings();
+  const { settings, updateSettings, isLoading, isUpdating, error: loadError, refetch, isRefetching } = useAppSettings();
 
   // Define menu items
   const menuItems: MenuItem[] = [
@@ -168,7 +169,6 @@ const SettingsLayout: React.FC = () => {
         currencyId: settings.currencyId,
         theme: settings.theme,
         dateFormat: settings.dateFormat,
-        googleCalendarSync: settings.googleCalendarSync || false,
       });
     }
   }, [settings, form]);
@@ -181,7 +181,6 @@ const SettingsLayout: React.FC = () => {
       currencyId: values.currencyId !== undefined ? values.currencyId : settings?.currencyId,
       theme: values.theme !== undefined ? values.theme : (settings?.theme || 'light'),
       dateFormat: values.dateFormat !== undefined ? values.dateFormat : (settings?.dateFormat || 'DD/MM/YYYY'),
-      googleCalendarSync: values.googleCalendarSync || false,
     };
 
 
@@ -265,6 +264,9 @@ const SettingsLayout: React.FC = () => {
               {/* Rooms, Species, Devices, Templates, LineItems and Updates tabs don't need the parent form - they manage their own state */}
               {selectedCategory === 'clinic' || selectedCategory === 'rooms' || selectedCategory === 'species' || selectedCategory === 'devices' || selectedCategory === 'deviceFiles' || selectedCategory === 'templates' || selectedCategory === 'lineItems' || selectedCategory === 'backups' || selectedCategory === 'updates' ? (
                 <CurrentComponent isUpdating={isUpdating} />
+              ) : loadError && !settings ? (
+                // No made-up defaults: Save would write them over the real settings.
+                <LoadError title={t('settings:loadFailed')} onRetry={() => refetch?.()} retrying={isRefetching} />
               ) : (
                 <Form
                   form={form}

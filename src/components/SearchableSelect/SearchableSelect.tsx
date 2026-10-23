@@ -100,12 +100,17 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Enter' && searchText && onCreateNew) {
-      // Check if the current search text matches any existing option
-      const exactMatch = options.some(
-        option => option.value.toLowerCase() === searchText.toLowerCase()
+      // The user types names, so match on the label (and the value too).
+      const typed = searchText.trim().toLowerCase();
+      const exactMatch = options.find(
+        option => option.label.trim().toLowerCase() === typed || option.value.toLowerCase() === typed
       );
 
-      if (!exactMatch) {
+      if (exactMatch) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleSelect(exactMatch.value);
+      } else {
         // Prevent default form submission
         e.preventDefault();
         e.stopPropagation();

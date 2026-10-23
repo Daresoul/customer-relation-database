@@ -136,3 +136,21 @@ describe('PatientTable — inactive and deceased patients', () => {
     expect(screen.getByText(/chart\.alerts\.short\.aggressive|Caution/)).toBeInTheDocument();
   });
 });
+
+// dashboard.md #14: the species filter offered five fixed values, so a
+// clinic's own species (ferret, hamster…) could never be filtered.
+describe('PatientTable — species filter', () => {
+  it('offers the species the patients have', async () => {
+    const { container } = renderTable([
+      makePatient({ id: 1, name: 'Rex', species: 'Dog' }),
+      makePatient({ id: 2, name: 'Slinky', species: 'Ferret' }),
+    ]);
+
+    const trigger = container.querySelector('.ant-table-filter-trigger') as HTMLElement;
+    fireEvent.click(trigger);
+
+    const menu = await screen.findByRole('menu');
+    expect(menu.textContent).toContain('Ferret');
+    expect(menu.textContent).not.toMatch(/bird/i);
+  });
+});

@@ -468,3 +468,65 @@ fn backup_is_due_once_the_last_success_is_a_day_old() {
 fn backup_is_due_when_the_last_time_is_unreadable() {
     assert!(is_backup_due(&cfg_with(Some("/b"), Some("garbage".into())), Utc::now()));
 }
+
+// settings.md #6: the rerun deleted today's snapshot before writing the new
+// one, so a failed write left no snapshot for today at all.
+#[tokio::test]
+async fn a_rerun_that_cannot_write_keeps_todays_earlier_snapshot() {
+    let fx = setup().await;
+    BackupService::set_directory(fx.app_dir.path(), fx.dest_dir.path().to_str().unwrap()).unwrap();
+    let name = snapshot_file_name(&SnapshotKind::Daily, Utc::now());
+    let snapshot = fx.dest_dir.path().join("db").join(&name);
+    write(&snapshot, "EARLIER SNAPSHOT");
+    // Something in the way of the new copy: a folder where the temporary
+    // file has to go.
+    fs::create_dir_all(fx.dest_dir.path().join("db").join(format!("{name}.part")).join("x")).unwrap();
+
+    let result = BackupService::run_backup(fx.app_dir.path(), &fx.test_db).await;
+
+    assert!(result.is_err(), "the run must report the failed write");
+    assert_eq!(fs::read_to_string(&snapshot).unwrap(), "EARLIER SNAPSHOT");
+}
+
+#[tokio::test]
+async fn a_rerun_replaces_todays_snapshot_and_leaves_no_temporary_file() {
+    let fx = setup().await;
+    BackupService::set_directory(fx.app_dir.path(), fx.dest_dir.path().to_str().unwrap()).unwrap();
+    let name = snapshot_file_name(&SnapshotKind::Daily, Utc::now());
+    let snapshot = fx.dest_dir.path().join("db").join(&name);
+    write(&snapshot, "EARLIER SNAPSHOT");
+
+    BackupService::run_backup(fx.app_dir.path(), &fx.test_db).await.unwrap();
+
+    assert_ne!(fs::read(&snapshot).unwrap(), b"EARLIER SNAPSHOT");
+    assert!(!fx.dest_dir.path().join("db").join(format!("{name}.part")).exists());
+}
+
+// backend-errors.md L6: an unreadable config silently became "no backup
+// folder", so backups stopped with nothing on screen but "not set up".
+#[test]
+fn an_unreadable_config_is_reported_not_silently_reset() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("backup_config.json"), "{\"directory\": \"D:\\\\Backup").unwrap();
+
+    let cfg = BackupService::load_config(dir.path());
+
+    assert!(cfg.directory.is_none());
+    let err = cfg.last_error.expect("the broken settings file must show as an error");
+    assert!(err.contains("backup_config.json"), "got: {err}");
+}
+
+// A save is written to a temporary file and swapped in, so a failed write
+// can't leave half a config behind.
+#[test]
+fn a_config_save_that_cannot_finish_keeps_the_old_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let old = BackupConfig { directory: Some("D:/Backup".into()), last_backup_at: None, last_error: None };
+    BackupService::save_config(dir.path(), &old).unwrap();
+    fs::create_dir_all(dir.path().join("backup_config.json.tmp").join("x")).unwrap();
+
+    let new = BackupConfig { directory: Some("E:/Other".into()), last_backup_at: None, last_error: None };
+    assert!(BackupService::save_config(dir.path(), &new).is_err());
+
+    assert_eq!(BackupService::load_config(dir.path()).directory.as_deref(), Some("D:/Backup"));
+}

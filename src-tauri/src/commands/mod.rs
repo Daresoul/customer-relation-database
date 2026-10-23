@@ -1,5 +1,4 @@
 pub mod patient;
-pub mod database;
 pub mod view_preference;
 pub mod household;
 #[cfg(debug_assertions)]
@@ -7,7 +6,6 @@ pub mod debug;
 #[cfg(debug_assertions)]
 pub mod database_reset;
 pub mod medical;
-pub mod stats;
 pub mod settings;
 pub mod appointments;
 pub mod rooms;
@@ -33,7 +31,6 @@ pub mod telemetry;
 pub mod shell;
 
 pub use patient::*;
-pub use database::*;
 pub use view_preference::*;
 pub use household::*;
 #[cfg(debug_assertions)]
@@ -41,7 +38,6 @@ pub use debug::*;
 #[cfg(debug_assertions)]
 pub use database_reset::*;
 pub use medical::*;
-pub use stats::*;
 pub use settings::*;
 pub use appointments::*;
 pub use rooms::*;

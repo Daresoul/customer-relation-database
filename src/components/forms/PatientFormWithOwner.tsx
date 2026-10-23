@@ -398,11 +398,8 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
           setShowCreateSpeciesModal(false);
           setNewSpeciesName('');
         }}
-        onSuccess={(speciesName) => {
-          const newSpecies = speciesData.find(s => s.name === speciesName);
-          if (newSpecies) {
-            form.setFieldValue('speciesId', newSpecies.id);
-          }
+        onSuccess={(_speciesName, created) => {
+          form.setFieldValue('speciesId', created.id);
         }}
       />
 
@@ -414,11 +411,8 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
           setShowCreateBreedModal(false);
           setNewBreedName('');
         }}
-        onSuccess={(breedName) => {
-          const newBreed = breedsData.find(b => b.name === breedName);
-          if (newBreed) {
-            form.setFieldValue('breedId', newBreed.id);
-          }
+        onSuccess={(_breedName, created) => {
+          form.setFieldValue('breedId', created.id);
         }}
       />
     </Card>

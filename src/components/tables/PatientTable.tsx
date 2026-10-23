@@ -43,9 +43,6 @@ const { Text } = Typography;
 interface PatientTableProps extends Partial<BaseTableProps<PatientWithHousehold>> {
   patients: PatientWithHousehold[];
   loading?: boolean;
-  onView?: (patient: PatientWithHousehold) => void;
-  onEdit?: (patient: PatientWithHousehold) => void;
-  onDelete?: (patient: PatientWithHousehold) => void;
   searchText?: string;
   onSearchTextChange?: (text: string) => void;
 }
@@ -53,9 +50,6 @@ interface PatientTableProps extends Partial<BaseTableProps<PatientWithHousehold>
 export const PatientTable: React.FC<PatientTableProps> = ({
   patients,
   loading = false,
-  onView,
-  onEdit,
-  onDelete,
   searchText: controlledSearchText,
   onSearchTextChange,
 }) => {
@@ -81,6 +75,27 @@ export const PatientTable: React.FC<PatientTableProps> = ({
     });
     return map;
   }, [speciesList]);
+
+  // A species' name in the app language; species the app has no word for
+  // keep their own name.
+  const speciesLabel = (species: string): string => {
+    let speciesKey = species.toLowerCase();
+    if (species.includes(' ')) {
+      const underscoreKey = species.toLowerCase().replace(/\s+/g, '_');
+      const camelKey = species === 'Guinea Pig' ? 'guineaPig' : speciesKey;
+      if (t(`entities:species.${underscoreKey}`, { defaultValue: '' }) !== '') {
+        speciesKey = underscoreKey;
+      } else if (t(`entities:species.${camelKey}`, { defaultValue: '' }) !== '') {
+        speciesKey = camelKey;
+      }
+    }
+    return t(`entities:species.${speciesKey}`, { defaultValue: species });
+  };
+
+  // Filter choices: the species these patients actually have.
+  const speciesFilters = Array.from(new Set(patients.map((p) => p.species).filter((s): s is string => !!s)))
+    .map((species) => ({ text: speciesLabel(species), value: species }))
+    .sort((a, b) => a.text.localeCompare(b.text));
 
   // Filter data based on search
   const filteredData = useMemo(() => {
@@ -155,24 +170,7 @@ export const PatientTable: React.FC<PatientTableProps> = ({
       render: (species) => {
         if (!species) return null;
 
-        // Convert species to translation key format
-        let speciesKey = species.toLowerCase();
-
-        // For species with spaces, also try with underscore
-        if (species.includes(' ')) {
-          const underscoreKey = species.toLowerCase().replace(/\s+/g, '_');
-          const camelKey = species === 'Guinea Pig' ? 'guineaPig' : speciesKey;
-
-          // Try to find which key has a translation
-          if (t(`entities:species.${underscoreKey}`, { defaultValue: '' }) !== '') {
-            speciesKey = underscoreKey;
-          } else if (t(`entities:species.${camelKey}`, { defaultValue: '' }) !== '') {
-            speciesKey = camelKey;
-          }
-        }
-
-        // Try to get the translation, fallback to original species name if not found
-        const translatedSpecies = t(`entities:species.${speciesKey}`, { defaultValue: species });
+        const translatedSpecies = speciesLabel(species);
 
         // Get color from database or use default
         const speciesColor = speciesColorMap[species] || '#1890ff';
@@ -192,13 +190,7 @@ export const PatientTable: React.FC<PatientTableProps> = ({
           </Space>
         );
       },
-      filters: [
-        { text: t('entities:species.dog'), value: 'Dog' },
-        { text: t('entities:species.cat'), value: 'Cat' },
-        { text: t('entities:species.bird'), value: 'Bird' },
-        { text: t('entities:species.rabbit'), value: 'Rabbit' },
-        { text: t('entities:species.other'), value: 'Other' },
-      ],
+      filters: speciesFilters,
       onFilter: (value, record) => record.species === value,
     },
     {

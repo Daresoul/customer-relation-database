@@ -158,28 +158,35 @@ export function useBarcodeScanner(options: UseBarcodeScannerOptions) {
       }, WATCHDOG_MS) as unknown as number;
     };
 
-    const finalize = () => {
-      const raw = bufferRef.current;
-      reset();
-      if (!raw) return;
+    // The chip code in a buffered burst, or null when it isn't one.
+    const chipCode = (raw: string): string | null => {
+      if (!raw) return null;
       // Strip prefix if configured
       if (prefix) {
-        if (!raw.startsWith(prefix)) return; // Not a scan we care about
+        if (!raw.startsWith(prefix)) return null; // Not a scan we care about
       }
       const code = prefix ? raw.slice(prefix.length) : raw;
       // Enforce exact lengths
-      if (!allowedLengths.includes(code.length)) return;
+      if (!allowedLengths.includes(code.length)) return null;
       // Validate character set based on code length
       if (digitsOnly) {
         if (code.length === 10 || code.length === 12) {
           // AVID FDX-A (10) and raw FDX-B (12): hex digits (0-9, A-F)
-          if (!/^[0-9A-Fa-f]+$/.test(code)) return;
+          if (!/^[0-9A-Fa-f]+$/.test(code)) return null;
         } else {
           // ISO 15-digit and legacy 9-digit: digits only
-          if (!/^\d+$/.test(code)) return;
+          if (!/^\d+$/.test(code)) return null;
         }
       }
-      if (code.length < minLength) return;
+      if (code.length < minLength) return null;
+      return code;
+    };
+
+    const finalize = () => {
+      const raw = bufferRef.current;
+      reset();
+      const code = chipCode(raw);
+      if (code === null) return;
       // Normalize: 12-hex FDX-B reads are converted to the 15-digit passport form
       // so downstream consumers always see a single canonical representation.
       const normalized = normalizeMicrochip(code);
@@ -245,6 +252,12 @@ export function useBarcodeScanner(options: UseBarcodeScannerOptions) {
       //     so stray scanner output doesn't navigate / trigger shortcuts.
       if (isScanningRef.current) {
         if (suffixKey && e.key === suffixKey) {
+          // Hold the key back only for a real chip; fast typing that isn't
+          // one keeps its Enter (submit, search, new line).
+          if (chipCode(bufferRef.current) === null) {
+            reset();
+            return;
+          }
           e.preventDefault();
           finalize();
           return;
@@ -280,6 +293,10 @@ export function useBarcodeScanner(options: UseBarcodeScannerOptions) {
       // Determine if this is the start or continuation of a fast burst
       const delta = now - (lastTimeRef.current || now);
       lastTimeRef.current = now;
+
+      // A slow gap means a person is typing: start the burst over, so typed
+      // characters never add up to a "scan".
+      if (delta > interKeyDelay) bufferRef.current = '';
 
       // Append char
       if (isChar) bufferRef.current += e.key;

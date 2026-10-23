@@ -77,3 +77,26 @@ describe('Google Calendar settings', () => {
     expect(document.body.textContent).not.toContain('settings:googleCalendar.messages.manualSyncStarted');
   });
 });
+
+// settings.md #5: the switch sat in the parent form under a field nobody
+// saves, so the form's value hid whether sync is really on.
+describe('Google sync switch', () => {
+  afterEach(() => {
+    cleanup();
+    invokeMock.mockReset();
+    document.body.innerHTML = '';
+  });
+
+  it('shows sync as on when the backend says it is on', async () => {
+    backend({ connected: true, needs_reauth: false, sync_enabled: true });
+    render(
+      <App>
+        <Form initialValues={{ googleCalendarSync: false }}>
+          <AppointmentsSettings isUpdating={false} />
+        </Form>
+      </App>,
+    );
+
+    await waitFor(() => expect(screen.getByRole('switch')).toHaveAttribute('aria-checked', 'true'));
+  });
+});

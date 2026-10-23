@@ -267,3 +267,39 @@ async fn delete_then_get_all_excludes_row() {
     assert!(ids.contains(&i1.id));
     assert!(!ids.contains(&i2.id));
 }
+
+// frontend-data.md #10 / serial-pipeline.md #12: the old listener was stopped
+// before the save, so a failed save left the analyzer unheard until restart.
+#[tokio::test]
+async fn a_failed_settings_save_leaves_the_running_listener_alone() {
+    use crate::commands::device_integration::save_then_stop_old_listener;
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+
+    let db = create_test_db_with_migrations().await;
+    let created = DeviceIntegrationService::create(&db, serial_input("PointCare", DeviceType::MnchipPointcareChemistry, "COM3", 115200))
+        .await
+        .unwrap();
+    db.execute(Statement::from_string(
+        DbBackend::Sqlite,
+        "CREATE TRIGGER refuse_update BEFORE UPDATE ON device_integrations BEGIN SELECT RAISE(ABORT, 'disk full'); END".to_string(),
+    ))
+    .await
+    .unwrap();
+    let input = UpdateDeviceIntegrationInput {
+        name: Some("PointCare 2".to_string()),
+        connection_type: None,
+        watch_directory: MaybeNull::Undefined,
+        file_pattern: None,
+        serial_port_name: MaybeNull::Undefined,
+        serial_baud_rate: MaybeNull::Undefined,
+        tcp_host: MaybeNull::Undefined,
+        tcp_port: MaybeNull::Undefined,
+        enabled: None,
+    };
+
+    let mut stopped = false;
+    let result = save_then_stop_old_listener(&db, created.id, input, |_| stopped = true).await;
+
+    assert!(result.is_err());
+    assert!(!stopped, "the old listener must keep running when the save fails");
+}

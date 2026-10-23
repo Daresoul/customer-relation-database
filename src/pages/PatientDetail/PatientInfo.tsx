@@ -213,7 +213,6 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
 
               // Find the species ID from the name
               const species = speciesData.find(s => s.name === value);
-              console.log('Species selected:', value, 'Found species:', species, 'All species:', speciesData);
               if (species) {
                 // Update local state immediately to filter breeds
                 setSelectedSpeciesName(value);
@@ -394,12 +393,9 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
           setShowCreateSpeciesModal(false);
           setNewSpeciesName('');
         }}
-        onSuccess={(speciesName) => {
-          // Find the newly created species ID
-          const species = speciesData.find(s => s.name === speciesName);
-          if (species) {
-            handleFieldUpdate('speciesId', species.id);
-          }
+        onSuccess={(speciesName, created) => {
+          setSelectedSpeciesName(speciesName);
+          handleFieldUpdate('speciesId', created.id);
         }}
       />
 
@@ -411,12 +407,8 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
           setShowCreateBreedModal(false);
           setNewBreedName('');
         }}
-        onSuccess={(breedName) => {
-          // Find the newly created breed ID
-          const breed = breedsData.find(b => b.name === breedName);
-          if (breed) {
-            handleFieldUpdate('breedId', breed.id);
-          }
+        onSuccess={(_breedName, created) => {
+          handleFieldUpdate('breedId', created.id);
         }}
       />
     </div>

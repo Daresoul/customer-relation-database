@@ -264,176 +264,12 @@ pub async fn rebuild_household_search_index(
 // New commands for household detail view
 
 #[tauri::command]
-pub async fn get_household_detail(
-    pool: State<'_, SeaOrmPool>,
-    household_id: i32,
-) -> Result<serde_json::Value, String> {
-    // Get household with people (a merged-away id opens the kept household)
-    let household_with_people = household::get_household_with_people(&pool, household_id)
-        .await?
-        .ok_or_else(|| format!("Household {} not found", household_id))?;
-    let household_id = household_with_people.household.id;
-
-    // Get associated patients - CAST weight to REAL to avoid type conversion issues
-    let patients = pool.query_all(Statement::from_sql_and_values(
-        DbBackend::Sqlite,
-        r#"
-        SELECT p.id, p.name, s.name as species, b.name as breed, p.date_of_birth,
-               CAST(p.weight AS REAL) as weight, p.gender, p.is_active, p.deceased_at
-        FROM patients p
-        JOIN patient_households ph ON p.id = ph.patient_id
-        LEFT JOIN species s ON p.species_id = s.id
-        LEFT JOIN breeds b ON p.breed_id = b.id
-        WHERE ph.household_id = ?
-        ORDER BY p.name
-        "#,
-        [household_id.into()]
-    ))
-    .await
-    .map_err(|e| format!("Failed to fetch patients: {}", e))?;
-
-    let patients_json: Vec<serde_json::Value> = patients
-        .iter()
-        .map(|row| {
-            let id: i64 = row.try_get("", "id").unwrap_or(0);
-            let name: String = row.try_get("", "name").unwrap_or_default();
-            let species: String = row.try_get("", "species").unwrap_or_default();
-            let breed: Option<String> = row.try_get("", "breed").ok();
-            let date_of_birth: Option<String> = row.try_get("", "date_of_birth").ok();
-            let weight: Option<f64> = row.try_get("", "weight").ok();
-            let gender: Option<String> = row.try_get("", "gender").ok();
-            let deceased_at: Option<String> = row
-                .try_get::<Option<chrono::NaiveDate>>("", "deceased_at")
-                .ok()
-                .flatten()
-                .map(|d| d.format("%Y-%m-%d").to_string());
-            let is_active = row.try_get::<i64>("", "is_active").map(|v| v == 1).unwrap_or(true);
-            let status = if deceased_at.is_some() { "deceased" } else if is_active { "active" } else { "inactive" };
-
-            serde_json::json!({
-                "id": id,
-                "name": name,
-                "species": species,
-                "breed": breed,
-                "dateOfBirth": date_of_birth,
-                "weight": weight,
-                "gender": gender,
-                "status": status,
-                "deceasedAt": deceased_at,
-            })
-        })
-        .collect();
-
-    Ok(serde_json::json!({
-        "household": household_with_people.household,
-        "people": household_with_people.people,
-        "patients": patients_json,
-        "petCount": household_with_people.pet_count
-    }))
-}
-
-#[tauri::command]
-pub async fn update_household_fields(
-    pool: State<'_, SeaOrmPool>,
-    household_id: i32,
-    updates: serde_json::Value,
-) -> Result<Household, String> {
-    // Build dynamic update query based on provided fields
-    let mut query_parts = Vec::new();
-    let mut params: Vec<Value> = Vec::new();
-
-    if let Some(name) = updates.get("householdName").and_then(|v| v.as_str()) {
-        query_parts.push("household_name = ?");
-        params.push(name.to_string().into());
-    }
-
-    if let Some(address) = updates.get("address") {
-        query_parts.push("address = ?");
-        params.push(address.as_str().unwrap_or("").to_string().into());
-    }
-
-    if let Some(city) = updates.get("city") {
-        query_parts.push("city = ?");
-        params.push(city.as_str().unwrap_or("").to_string().into());
-    }
-
-    if let Some(postal) = updates.get("postalCode") {
-        query_parts.push("postal_code = ?");
-        params.push(postal.as_str().unwrap_or("").to_string().into());
-    }
-
-    if let Some(notes) = updates.get("notes") {
-        query_parts.push("notes = ?");
-        params.push(notes.as_str().unwrap_or("").to_string().into());
-    }
-
-    if query_parts.is_empty() {
-        return Err("No fields to update".to_string());
-    }
-
-    // Add household_id as final parameter
-    params.push(household_id.into());
-
-    // Execute update
-    let sql = format!(
-        "UPDATE households SET {}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-        query_parts.join(", ")
-    );
-
-    pool.execute(Statement::from_sql_and_values(DbBackend::Sqlite, &sql, params))
-        .await
-        .map_err(|e| format!("Failed to update household: {}", e))?;
-
-    // Return updated household
-    let row = pool.query_one(Statement::from_sql_and_values(
-        DbBackend::Sqlite,
-        "SELECT id, household_name, address, city, postal_code, notes, created_at, updated_at FROM households WHERE id = ?",
-        [household_id.into()]
-    ))
-    .await
-    .map_err(|e| format!("Failed to fetch updated household: {}", e))?
-    .ok_or("Updated household not found")?;
-
-    Ok(row_to_household(&row)?)
-}
-
-#[tauri::command]
 pub async fn add_person_to_household(
     pool: State<'_, SeaOrmPool>,
     household_id: i32,
     person: CreatePersonWithContactsDto,
 ) -> Result<PersonWithContacts, String> {
-    // Create person
-    let person_result = pool.execute(Statement::from_sql_and_values(
-        DbBackend::Sqlite,
-        "INSERT INTO people (household_id, first_name, last_name, is_primary) VALUES (?, ?, ?, ?)",
-        [
-            household_id.into(),
-            person.person.first_name.clone().into(),
-            person.person.last_name.clone().into(),
-            person.person.is_primary.unwrap_or(false).into(),
-        ]
-    ))
-    .await
-    .map_err(|e| format!("Failed to create person: {}", e))?;
-
-    let person_id = person_result.last_insert_id() as i32;
-
-    // Add contacts
-    for contact in &person.contacts {
-        pool.execute(Statement::from_sql_and_values(
-            DbBackend::Sqlite,
-            "INSERT INTO person_contacts (person_id, contact_type, contact_value, is_primary) VALUES (?, ?, ?, ?)",
-            [
-                person_id.into(),
-                contact.contact_type.clone().into(),
-                contact.contact_value.clone().into(),
-                contact.is_primary.unwrap_or(false).into(),
-            ]
-        ))
-        .await
-        .map_err(|e| format!("Failed to create contact: {}", e))?;
-    }
+    let person_id = household::add_person_with_contacts(&pool, household_id, &person).await?;
 
     // Fetch and return the created person with contacts
     household::get_person_with_contacts(&pool, person_id)
@@ -527,30 +363,7 @@ pub async fn update_person_contacts(
     person_id: i32,
     contacts: Vec<CreateContactDto>,
 ) -> Result<Vec<PersonContact>, String> {
-    // Delete existing contacts
-    pool.execute(Statement::from_sql_and_values(
-        DbBackend::Sqlite,
-        "DELETE FROM person_contacts WHERE person_id = ?",
-        [person_id.into()]
-    ))
-    .await
-    .map_err(|e| format!("Failed to delete existing contacts: {}", e))?;
-
-    // Insert new contacts
-    for contact in contacts {
-        pool.execute(Statement::from_sql_and_values(
-            DbBackend::Sqlite,
-            "INSERT INTO person_contacts (person_id, contact_type, contact_value, is_primary) VALUES (?, ?, ?, ?)",
-            [
-                person_id.into(),
-                contact.contact_type.into(),
-                contact.contact_value.into(),
-                contact.is_primary.unwrap_or(false).into(),
-            ]
-        ))
-        .await
-        .map_err(|e| format!("Failed to create contact: {}", e))?;
-    }
+    household::replace_person_contacts(&pool, person_id, &contacts).await?;
 
     // Fetch and return all contacts for this person
     let rows = pool.query_all(Statement::from_sql_and_values(

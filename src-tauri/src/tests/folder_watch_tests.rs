@@ -4,7 +4,7 @@
 use crate::services::device_events::{DeviceEvent, DeviceErrorKind, DeviceSink};
 use crate::services::device_parser::{DeviceData, DeviceParserService};
 use crate::services::file_watcher::{
-    catch_up, pattern_matches, plan_watchers, process_file, split_exigo_samples,
+    catch_up, pattern_matches, plan_watchers, process_file, rescan_recent, split_exigo_samples,
     wait_until_settled, DirState, ProcessMode, WatchAction, WatchConfig, WatchContext,
 };
 use crate::test_utils::{create_test_db_with_migrations, TestDb};
@@ -384,4 +384,50 @@ fn a_changed_folder_restarts_the_watcher() {
     let active = HashMap::from([(1, cfg(1, "/old"))]);
     let actions = plan_watchers(&[cfg(1, "/new")], &active, &dirs(&["/old", "/new"], &[]));
     assert_eq!(actions, vec![WatchAction::Stop(1), WatchAction::Start(cfg(1, "/new"))]);
+}
+
+// ---- periodic rescan (device-health #3: events can be missed) ----
+
+#[tokio::test]
+async fn the_rescan_offers_a_new_result_no_folder_event_reported() {
+    let f = exigo_folder().await;
+    let path = f.file("BM-53672_2026-07-10.xml");
+    write_old(&path, &first_sample_only());
+    process_file(&f.ctx, &RecordingSink::default(), &path, ProcessMode::Offer).await.unwrap();
+
+    // The analyzer adds a sample; the OS event is lost.
+    write_old(&path, DAY_FILE);
+    let sink = RecordingSink::default();
+    assert_eq!(rescan_recent(&f.ctx, &sink).await.unwrap(), 1);
+    assert_eq!(sink.patient_ids(), vec!["KIRE"]);
+
+    // The next rescan finds nothing new.
+    let again = RecordingSink::default();
+    assert_eq!(rescan_recent(&f.ctx, &again).await.unwrap(), 0);
+}
+
+#[tokio::test]
+async fn the_rescan_offers_a_result_in_a_folder_seen_empty_at_start() {
+    let f = exigo_folder().await;
+    let path = f.file("BM-53672_2026-07-10.xml");
+    write_old(&path, DAY_FILE);
+
+    let sink = RecordingSink::default();
+    assert_eq!(rescan_recent(&f.ctx, &sink).await.unwrap(), 2, "a new file, not history");
+}
+
+#[tokio::test]
+async fn the_rescan_leaves_files_older_than_its_window() {
+    let f = exigo_folder().await;
+    let old = f.file("yesterday.xml");
+    std::fs::write(&old, DAY_FILE).unwrap();
+    std::fs::File::options()
+        .write(true)
+        .open(&old)
+        .unwrap()
+        .set_modified(SystemTime::now() - Duration::from_secs(3600))
+        .unwrap();
+
+    let sink = RecordingSink::default();
+    assert_eq!(rescan_recent(&f.ctx, &sink).await.unwrap(), 0);
 }

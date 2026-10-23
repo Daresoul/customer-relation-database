@@ -101,6 +101,15 @@
   cache keys show that data.
 - Routed pages sit inside `RouteErrorBoundary`; a crash shows a translated
   screen with Reload and Go to dashboard, and leaving the page clears it.
+- Errors outside React render (handlers, timers, unawaited promises) go to
+  `log_event` as `webview.uncaught` / `webview.unhandled_rejection`
+  (`utils/globalErrorReporting.ts`, installed in `main.tsx`).
+- Settings that fail to load show `LoadError` with Retry and no Save; there
+  are no stand-in defaults that Save could write back.
+- Launch at login is turned on once for a new install
+  (`utils/autostart.ts`, localStorage `arkivet.autostartDefaultApplied`);
+  after that the Settings switch decides, and a failed switch flips back with
+  a message.
 
 ## App shell and navigation
 - The app uses a data router: `createBrowserRouter(appRoutes)` in `App.tsx`,
@@ -129,6 +138,10 @@
   "Create patient" (dashboard form, chip filled in) when none has it. It is
   ignored while a text field has focus, while the lab import is open, or over
   another dialog. The dashboard no longer handles scans itself.
+- Scan detection (`hooks/useBarcodeScanner.ts`): a gap longer than the
+  inter-key delay starts the burst over, so typed characters never add up to
+  a scan. Enter is held back only when the burst is a valid chip; otherwise
+  it reaches the field (submit, search, new line).
 - Backup light: red when the last backup attempt failed, amber when no folder
   is set, no backup ran yet, or the last one is 26 hours old or more, green
   otherwise. Click opens `/settings?section=backups` (any section key works).
@@ -163,8 +176,8 @@
 - Start medical record sets the visit to in consult and opens the record
   modal. The record it saves is linked through `appointments.medical_record_id`:
   the panel watches the `CREATE_RECORD_MUTATION_KEY` mutation
-  (`hooks/useMedicalRecords.ts`) for that patient. The record title is not
-  prefilled yet; the record modal takes no initial values.
+  (`hooks/useMedicalRecords.ts`) for that patient. The record starts with the
+  visit reason as its title (`defaultTitle` on `MedicalRecordModal`).
 - Today opens as a waiting-room list (time, patient, reason, room, status,
   "waiting N min" since check-in, the next status as a button); the hour grid is
   one click away. The calendar fetches exactly the range its view shows
@@ -178,9 +191,15 @@
   panel.
 
 ## Google Calendar
+- The sync is one-way plus cancellations: new and changed appointments are
+  sent to Google, and an event cancelled in Google cancels the appointment.
+  The pull asks for events changed in the last 7 days (`updatedMin`), so a
+  future appointment cancelled in Google is seen.
 - Cancelling an appointment removes its Google event; other status changes
   (no-show included) update the event's text. Deleting removes the event and
   duplicating creates one.
+- `sync_logs` rows older than 30 days are deleted at start; after sleep the
+  minute timer runs once instead of catching up every missed minute.
 - When Google refuses the stored login (refresh rejected or a 401), the app
   sets `google_calendar_settings.needs_reauth` (migration 048). Settings then
   shows "Reconnect", and the background sync stops until the user reconnects.
@@ -191,6 +210,13 @@
 
 ## Lab devices (read-only)
 - The app only reads from analyzers. It never writes to a serial port.
+- Saving or deleting a device integration happens before its old listener
+  stops, so a failed save leaves the analyzer listening.
+- Parsers: HL7 takes the patient id from PID-3, else the name in PID-6, never
+  the species in PID-5; lines may end in CR or LF; a repeated analyte keeps
+  none of the earlier OBX's unit, range or flag. Healvet ignores anything
+  before the first `#AFS1000`. Exigo lab reports print the run number (`SEQ`)
+  as the sample number, not the analyzer serial (`SNO`).
 - Serial read loop (`services/device_input.rs`): any read error other than a
   timeout closes the port and reconnects with backoff (Windows unplug codes 22,
   31, 1167 and 995 included). The backoff starts over after a connection that
@@ -207,6 +233,9 @@
 - Folder watchers (`services/file_watcher.rs`) follow the settings: they
   restart after any device integration change or Reconnect, a missing folder
   is checked every 30 s, and a folder that disappears turns the status red.
+  Every 2 minutes, files changed in the last 15 minutes are read again
+  (`rescan_recent`), so a lost folder event delays a result instead of losing
+  it; samples already offered are skipped.
 - An Exigo per-day file is split per `<sample>`; each sample is offered once,
   keyed by `SNO:SEQ` in `device_processed_samples`. A file is read only after
   its size and time stayed the same for 1 s. On start, results that arrived
@@ -406,6 +435,14 @@
   listed in `file_access_history` is skipped. A file already gone is marked
   purged. A missing attachment folder stops the run.
 - Backups mirror files additively, so a purged file stays in earlier backups.
+
+## Backups (`services/backup.rs`)
+- The database snapshot is written as `<name>.part` and renamed over the old
+  one only when complete, so a failed rerun keeps today's earlier snapshot.
+- `backup_config.json` is saved through a `.tmp` file. A config that exists
+  but can't be read comes back with `last_error` set (the backup light turns
+  red and says to choose the folder again), instead of silently reading as
+  "no folder".
 
 ## Translations
 - English (`en`) and Macedonian (`mk`) texts live in

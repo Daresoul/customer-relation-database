@@ -107,3 +107,48 @@ fn events_use_the_local_time_zone() {
         assert!(!source.contains("America/New_York"));
     }
 }
+
+// A client who cancels next week's visit in Google must be seen: the pull asks
+// for events changed lately, not for events that took place in the last week.
+#[test]
+fn the_cancellation_pull_asks_for_recent_changes_including_future_events() {
+    use crate::services::sync_scheduler::cancellation_query;
+    use chrono::{TimeZone, Utc};
+
+    let now = Utc.with_ymd_and_hms(2026, 10, 23, 9, 0, 0).unwrap();
+    let query = cancellation_query(now);
+    let get = |k: &str| query.iter().find(|(key, _)| *key == k).map(|(_, v)| v.clone());
+
+    assert_eq!(get("updatedMin").as_deref(), Some("2026-10-16T09:00:00+00:00"));
+    assert_eq!(get("timeMax"), None, "a time window would hide future appointments");
+    assert_eq!(get("timeMin"), None);
+    assert_eq!(get("showDeleted").as_deref(), Some("true"));
+}
+
+// lifecycle.md #13: one sync_logs row a minute, never cleaned up.
+#[tokio::test]
+async fn sync_log_rows_older_than_30_days_are_pruned() {
+    use crate::services::sync_scheduler::prune_sync_logs;
+    let db = create_test_db_with_migrations().await;
+    for started in ["2026-08-01 10:00:00", "2026-09-30 10:00:00", "2026-10-22 10:00:00"] {
+        db.execute(Statement::from_string(
+            DbBackend::Sqlite,
+            format!("INSERT INTO sync_logs (direction, sync_type, status, started_at) VALUES ('from_google', 'incremental', 'success', '{started}')"),
+        ))
+        .await
+        .unwrap();
+    }
+    let now = chrono::TimeZone::with_ymd_and_hms(&chrono::Utc, 2026, 10, 23, 9, 0, 0).unwrap();
+
+    let removed = prune_sync_logs(&db, now).await.unwrap();
+
+    let left: Vec<String> = db
+        .query_all(Statement::from_string(DbBackend::Sqlite, "SELECT started_at FROM sync_logs ORDER BY started_at".to_string()))
+        .await
+        .unwrap()
+        .iter()
+        .map(|r| r.try_get::<String>("", "started_at").unwrap())
+        .collect();
+    assert_eq!(removed, 1);
+    assert_eq!(left, vec!["2026-09-30 10:00:00", "2026-10-22 10:00:00"]);
+}

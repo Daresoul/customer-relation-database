@@ -223,10 +223,8 @@ const AppointmentsSettings: React.FC<AppointmentsSettingsProps> = ({ isUpdating 
         />
 
         <Form.Item
-          name="googleCalendarSync"
           label={<span className={styles.formLabel}>{t('settings:googleCalendar.enableSync')}</span>}
           extra={<span className={styles.formHint}>{t('settings:googleCalendar.syncHint')}</span>}
-          valuePropName="checked"
         >
           <Switch
             disabled={isUpdating || !settings.connected}

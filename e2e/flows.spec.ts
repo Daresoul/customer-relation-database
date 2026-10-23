@@ -233,6 +233,5 @@ test.describe('Dashboard data loading', () => {
 
     const calls = await getCalls(page);
     expect(calls.find((c) => c.cmd === 'get_patients'), 'dashboard must fetch patients').toBeTruthy();
-    expect(calls.find((c) => c.cmd === 'get_dashboard_stats'), 'dashboard must fetch stats').toBeTruthy();
   });
 });

@@ -285,7 +285,7 @@ mod healvet_serial_parsing {
 
     #[test]
     fn parse_healvet_unicode_patient_name() {
-        let serial = "FS1000&&15.5&2025-01-14&&T4-1&Мурка 🐱&&Female&SerumEE".as_bytes();
+        let serial = "#AFS1000&&15.5&2025-01-14&&T4-1&Мурка 🐱&&Female&Serum&EE".as_bytes();
 
         let result = DeviceParserService::parse_healvet_serial(
             "Device",
@@ -927,8 +927,8 @@ mod zero_value_results {
         let empty_values = b"MSH|^~\\&|1|P\rPID|1||||dog|tesi\rOBX|1|ST||TBIL||mg/dL|0.1-0.9|\r";
         assert!(DeviceParserService::parse_hl7_data("mnchip_pointcare_chemistry", "M", empty_values, "serial_port").is_err());
 
-        // LF-only line ends collapse into one MSH line with dozens of keys but no analyte.
-        let lf_only = b"MSH|^~\\&|1|PointcareV|||20260115003112|2|ORU^R01|1|p|2.3.1\nPID|1||||dog|tesi\nOBX|1|ST||GLU|159|mg/dL|70-142|H\n";
+        // LF-only line ends without any OBX value are still an error.
+        let lf_only = b"MSH|^~\\&|1|PointcareV|||20260115003112|2|ORU^R01|1|p|2.3.1\nPID|1||||dog|tesi\n";
         assert!(DeviceParserService::parse_hl7_data("mnchip_pointcare_chemistry", "M", lf_only, "serial_port").is_err());
 
         assert!(DeviceParserService::parse_hl7_data("mnchip_pcr_analyzer", "M", b"", "serial_port").is_err());
@@ -1212,4 +1212,98 @@ fn daily_file_no_cross_patient_blend() {
     assert!(m.get("PLT").is_none(), "FIRST's PLT leaked into SECOND's result");
     // SECOND's own range/flag keys are still present.
     assert_eq!(m.get("PLT_L").unwrap(), "200");
+}
+
+/// Leftovers from wave2/parsers.md and serial-pipeline.md.
+mod parser_leftovers {
+    use super::*;
+
+    fn hl7(bytes: &[u8]) -> serde_json::Map<String, serde_json::Value> {
+        let d = DeviceParserService::parse_hl7_data("mnchip_pointcare_chemistry", "PointCare", bytes, "serial_port")
+            .expect("parses");
+        d.test_results.as_object().unwrap().clone()
+    }
+
+    // PID-5 is the species; taking it as the patient id made the match
+    // suggest any dog for "Dog".
+    #[test]
+    fn hl7_species_is_never_the_patient_identifier() {
+        let named = DeviceParserService::parse_hl7_data(
+            "mnchip_pointcare_chemistry", "PointCare",
+            b"MSH|^~\\&|M|L|||20250114||ORU^R01|1|P|2.5\rPID|1||||Dog|Rex\rOBX|1|NM||GLU|95|mg/dL\r",
+            "serial_port",
+        ).unwrap();
+        assert_eq!(named.patient_identifier.as_deref(), Some("Rex"));
+
+        let species_only = DeviceParserService::parse_hl7_data(
+            "mnchip_pointcare_chemistry", "PointCare",
+            b"MSH|^~\\&|M|L|||20250114||ORU^R01|1|P|2.5\rPID|1||||Dog|\rOBX|1|NM||GLU|95|mg/dL\r",
+            "serial_port",
+        ).unwrap();
+        assert_eq!(species_only.patient_identifier, None);
+    }
+
+    #[test]
+    fn hl7_with_line_feed_separators_keeps_every_result() {
+        let m = hl7(b"MSH|^~\\&|M|L|||20250114||ORU^R01|1|P|2.5\nPID|1||42\nOBX|1|NM||GLU|95|mg/dL\nOBX|2|NM||BUN|20|mg/dL\n");
+        assert_eq!(m.get("GLU").unwrap(), "95");
+        assert_eq!(m.get("BUN").unwrap(), "20");
+        assert_eq!(m.get("patient_id_internal").unwrap(), "42");
+    }
+
+    // A repeated analyte must not keep the earlier OBX's unit, range or flag.
+    #[test]
+    fn hl7_repeated_analyte_does_not_keep_the_earlier_unit_range_or_flag() {
+        let m = hl7(b"MSH|^~\\&|M|L|||20250114||ORU^R01|1|P|2.5\rPID|1||42\rOBX|1|NM||GLU|95|mg/dL|70-110|H\rOBX|2|NM||GLU|300\r");
+        assert_eq!(m.get("GLU").unwrap(), "300");
+        assert!(m.get("GLU_unit").is_none(), "{m:?}");
+        assert!(m.get("GLU_range").is_none(), "{m:?}");
+        assert!(m.get("GLU_flag").is_none(), "{m:?}");
+    }
+
+    // Healvet has no start byte: noise before the first #AFS1000 (a cut
+    // frame, line noise) must not become a "message".
+    #[test]
+    fn healvet_text_before_the_first_marker_is_ignored() {
+        let d = DeviceParserService::parse_healvet_serial(
+            "Healvet",
+            b"000&&3.3&2025-01-14 10:00:00&&cCRP&OLD&&M&Serum&#AFS1000&&15.5&2025-01-14 10:30:00&&T4-1&Max&&Male&Serum&EE",
+            "serial_port",
+        ).unwrap();
+        let m = d.test_results.as_object().unwrap();
+        assert_eq!(m.get("T4-1").unwrap(), "15.5");
+        assert!(m.get("cCRP").is_none(), "noise became a result: {m:?}");
+        assert_eq!(d.patient_identifier.as_deref(), Some("Max"));
+    }
+
+    #[test]
+    fn healvet_data_without_any_marker_is_refused() {
+        let r = DeviceParserService::parse_healvet_serial("Healvet", b"&3.3&x&&cCRP&OLD&&M&Serum&EE", "serial_port");
+        assert!(r.is_err(), "{r:?}");
+    }
+}
+
+/// wave2/parsers.md M8: the Exigo report printed the analyzer's serial (SNO,
+/// the same on every sample of the day) as the sample number.
+mod lab_report_sample_number {
+    use crate::services::java_pdf_service::JavaPdfService;
+    use serde_json::json;
+
+    #[test]
+    fn exigo_reports_print_the_run_number_not_the_analyzer_serial() {
+        let r = json!({ "SNO": "53672", "SEQ": "1219", "ID2": "REX" });
+        assert_eq!(JavaPdfService::sample_number("exigo_eos_vet", &r), "1219");
+    }
+
+    #[test]
+    fn exigo_without_a_run_number_falls_back_to_the_serial() {
+        let r = json!({ "SNO": "53672" });
+        assert_eq!(JavaPdfService::sample_number("exigo_eos_vet", &r), "53672");
+    }
+
+    #[test]
+    fn other_devices_keep_their_sample_id() {
+        let r = json!({ "sample_id": "45512-10-7", "SEQ": "9" });
+        assert_eq!(JavaPdfService::sample_number("mnchip_pointcare_chemistry", &r), "45512-10-7");
+    }
 }

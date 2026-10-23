@@ -290,12 +290,12 @@ describe('useBarcodeScanner — regression: stuck-scanning recovery', () => {
       textarea.dispatchEvent(letterEvent);
       expect(letterEvent.defaultPrevented).toBe(false);
 
-      // But the suffix key (Enter) MUST still preventDefault — otherwise
-      // it would submit the surrounding form before the hook gets to
-      // overwrite the value with the normalized scan code.
+      // "12345a" is no chip, so its Enter belongs to the field (a new line
+      // here). A real chip's Enter is still held back; see "prevents form
+      // submission on the scanner Enter inside an input".
       const enterEvent = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
       textarea.dispatchEvent(enterEvent);
-      expect(enterEvent.defaultPrevented).toBe(true);
+      expect(enterEvent.defaultPrevented).toBe(false);
     } finally {
       document.body.removeChild(textarea);
     }
@@ -370,5 +370,43 @@ describe('useBarcodeScanner — focused field with text', () => {
     await user.keyboard('C9C2540C01FE{Enter}');
 
     expect(search.value).toBe('807010000007678');
+  });
+});
+
+// frontend-data.md #5 / serial-pipeline.md #7: typed digits kept piling up in
+// the scan buffer, so a number typed by hand plus Enter counted as a scan;
+// and a fast typist's Enter was swallowed even when no chip was read.
+describe('useBarcodeScanner — typing is not scanning', () => {
+  it('a number typed by hand and Enter is not a scan', async () => {
+    const onScan = vi.fn();
+    renderHook(() => useBarcodeScanner({ onScan, suffixKey: 'Enter' }));
+    render(<input data-testid="notes" />);
+    const input = screen.getByTestId('notes') as HTMLInputElement;
+    input.focus();
+
+    const human = userEvent.setup({ delay: 120 });
+    await human.keyboard('123456789{Enter}');
+
+    expect(onScan).not.toHaveBeenCalled();
+    expect(input.value).toBe('123456789');
+  });
+
+  it('Enter after fast typing that is no chip still submits the form', async () => {
+    const onScan = vi.fn();
+    const onSubmit = vi.fn((e: { preventDefault: () => void }) => e.preventDefault());
+    renderHook(() => useBarcodeScanner({ onScan, suffixKey: 'Enter' }));
+    render(
+      <form onSubmit={onSubmit}>
+        <input data-testid="search" />
+        <button type="submit">Go</button>
+      </form>,
+    );
+    (screen.getByTestId('search') as HTMLInputElement).focus();
+
+    const fast = userEvent.setup({ delay: 5 });
+    await fast.keyboard('rex{Enter}');
+
+    expect(onScan).not.toHaveBeenCalled();
+    expect(onSubmit).toHaveBeenCalled();
   });
 });

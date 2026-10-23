@@ -231,7 +231,7 @@ const SpeciesSettings: React.FC<SpeciesSettingsProps> = ({ isUpdating }) => {
               danger
               loading={deleteBreedMutation.isPending}
             >
-              {t('common:delete')}
+              {t('common:deactivate')}
             </Button>
           </Popconfirm>
         </Space>
@@ -308,7 +308,7 @@ const SpeciesSettings: React.FC<SpeciesSettingsProps> = ({ isUpdating }) => {
               danger
               loading={deleteSpeciesMutation.isPending}
             >
-              {t('common:delete')}
+              {t('common:deactivate')}
             </Button>
           </Popconfirm>
         </Space>

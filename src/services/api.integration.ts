@@ -60,14 +60,6 @@ const showLoading = (text: string) => {
 
 // Patient API methods
 export const patientApi = {
-  search: async (query: string, limit?: number): Promise<Patient[]> => {
-    try {
-      return await invoke<Patient[]>('search_patients', { query: query || '', limit });
-    } catch (error) {
-      return handleApiError(error, 'searchPatients');
-    }
-  },
-
   create: async (patient: Partial<Patient>): Promise<Patient> => {
     const hide = showLoading(i18n.t('common:api.loading.creatingPatient'));
     try {
@@ -82,46 +74,6 @@ export const patientApi = {
     }
   },
 
-  update: async (id: number, updates: Partial<Patient>): Promise<Patient> => {
-    const hide = showLoading(i18n.t('common:api.loading.updatingPatient'));
-    try {
-      const result = await invoke<Patient>('update_patient', { id, dto: updates });
-      hide();
-      showSuccess(i18n.t('common:api.success.patientUpdated'), i18n.t('common:api.success.changesSaved'));
-      return result;
-    } catch (error) {
-      hide();
-      return handleApiError(error, 'updatePatient');
-    }
-  },
-
-  delete: async (id: number): Promise<void> => {
-    const hide = showLoading(i18n.t('common:api.loading.deletingPatient'));
-    try {
-      await invoke('delete_patient', { id });
-      hide();
-      showSuccess(i18n.t('common:api.success.patientDeleted'), i18n.t('common:api.success.patientDeletedDesc'));
-    } catch (error) {
-      hide();
-      return handleApiError(error, 'deletePatient');
-    }
-  },
-
-  get: async (id: number): Promise<Patient> => {
-    try {
-      return await invoke<Patient>('get_patient', { id });
-    } catch (error) {
-      return handleApiError(error, 'getPatient');
-    }
-  },
-
-  list: async (ownerId?: number): Promise<Patient[]> => {
-    try {
-      return await invoke<Patient[]>('list_patients', { ownerId });
-    } catch (error) {
-      return handleApiError(error, 'listPatients');
-    }
-  },
 };
 
 // Household API methods
@@ -269,19 +221,6 @@ export const householdApi = {
     }
   },
 
-  update: async (id: number, updates: Partial<HouseholdTableRecord>): Promise<HouseholdTableRecord> => {
-    const hide = showLoading(i18n.t('common:api.loading.updatingHousehold'));
-    try {
-      const result = await invoke<HouseholdTableRecord>('update_household', { id, updates });
-      hide();
-      showSuccess(i18n.t('common:api.success.householdUpdated'), i18n.t('common:api.success.changesSaved'));
-      return result;
-    } catch (error) {
-      hide();
-      return handleApiError(error, 'updateHousehold');
-    }
-  },
-
   delete: async (id: number): Promise<void> => {
     const hide = showLoading(i18n.t('common:api.loading.deletingHousehold'));
     try {
@@ -294,122 +233,10 @@ export const householdApi = {
     }
   },
 
-  get: async (id: number): Promise<HouseholdTableRecord> => {
-    try {
-      return await invoke<HouseholdTableRecord>('get_household', { id });
-    } catch (error) {
-      return handleApiError(error, 'getHousehold');
-    }
-  },
-
-  list: async (): Promise<HouseholdTableRecord[]> => {
-    try {
-      return await invoke<HouseholdTableRecord[]>('list_households');
-    } catch (error) {
-      return handleApiError(error, 'listHouseholds');
-    }
-  },
-
-  addPatient: async (householdId: number, patientId: number): Promise<void> => {
-    const hide = showLoading(i18n.t('common:api.loading.addingPatientToHousehold'));
-    try {
-      await invoke('add_patient_to_household', { householdId, patientId });
-      hide();
-      showSuccess(i18n.t('common:api.success.patientAdded'), i18n.t('common:api.success.patientAddedDesc'));
-    } catch (error) {
-      hide();
-      return handleApiError(error, 'addPatientToHousehold');
-    }
-  },
-
-  removePatient: async (householdId: number, patientId: number): Promise<void> => {
-    const hide = showLoading(i18n.t('common:api.loading.removingPatientFromHousehold'));
-    try {
-      await invoke('remove_patient_from_household', { householdId, patientId });
-      hide();
-      showSuccess(i18n.t('common:api.success.patientRemoved'), i18n.t('common:api.success.patientRemovedDesc'));
-    } catch (error) {
-      hide();
-      return handleApiError(error, 'removePatientFromHousehold');
-    }
-  },
-};
-
-// View preference API
-export const viewApi = {
-  getPreference: async (): Promise<string> => {
-    try {
-      return await invoke<string>('get_view_preference');
-    } catch (error) {
-      console.error('Failed to get view preference:', error);
-      return 'patients'; // Default fallback
-    }
-  },
-
-  setPreference: async (view: string): Promise<void> => {
-    try {
-      await invoke('set_view_preference', { activeView: view });
-    } catch (error) {
-      console.error('Failed to set view preference:', error);
-    }
-  },
-};
-
-// Batch operations with progress
-export const batchOperations = {
-  importPatients: async (patients: Partial<Patient>[], onProgress?: (current: number, total: number) => void): Promise<Patient[]> => {
-    const results: Patient[] = [];
-    const total = patients.length;
-    
-    for (let i = 0; i < patients.length; i++) {
-      try {
-        const patient = await patientApi.create(patients[i]);
-        results.push(patient);
-        onProgress?.(i + 1, total);
-      } catch (error) {
-        console.error(`Failed to import patient ${i + 1}:`, error);
-      }
-    }
-    
-    showSuccess(i18n.t('common:api.success.importComplete'), i18n.t('common:api.success.importCompleteDesc', { imported: results.length, total }));
-    return results;
-  },
-
-  deleteMultiplePatients: async (ids: number[]): Promise<void> => {
-    const hide = showLoading(i18n.t('common:api.loading.deletingPatients', { count: ids.length }));
-    let successCount = 0;
-    
-    for (const id of ids) {
-      try {
-        await invoke('delete_patient', { id });
-        successCount++;
-      } catch (error) {
-        console.error(`Failed to delete patient ${id}:`, error);
-      }
-    }
-    
-    hide();
-    
-    if (successCount === ids.length) {
-      showSuccess(i18n.t('common:api.success.patientsDeleted'), i18n.t('common:api.success.patientsDeletedDesc', { count: successCount }));
-    } else {
-      if (appInstance?.notification) {
-        appInstance.notification.warning({
-          message: i18n.t('common:api.success.partialSuccess'),
-          description: i18n.t('common:api.success.partialDeleteDesc', { deleted: successCount, total: ids.length }),
-          placement: 'topRight',
-        });
-      } else {
-        console.warn('Partial Success:', `Deleted ${successCount} of ${ids.length} patients`);
-      }
-    }
-  },
 };
 
 // Export all APIs
 export default {
   patient: patientApi,
   household: householdApi,
-  view: viewApi,
-  batch: batchOperations,
 };

@@ -106,18 +106,38 @@ impl BackupService {
         app_data_dir.join("backup_config.json")
     }
 
+    /// A missing file is a fresh install. A file that can't be read comes
+    /// back as an error in `last_error`, so the backup light shows it.
     pub fn load_config(app_data_dir: &Path) -> BackupConfig {
         let path = Self::config_path(app_data_dir);
-        std::fs::read_to_string(&path)
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default()
+        let text = match std::fs::read_to_string(&path) {
+            Ok(text) => text,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return BackupConfig::default(),
+            Err(e) => return Self::unreadable_config(&path, &e.to_string()),
+        };
+        serde_json::from_str(&text).unwrap_or_else(|e| Self::unreadable_config(&path, &e.to_string()))
     }
 
+    fn unreadable_config(path: &Path, reason: &str) -> BackupConfig {
+        log::error!("Backup: cannot read {}: {}", path.display(), reason);
+        BackupConfig {
+            last_error: Some(format!(
+                "The backup settings file {} can't be read ({}). Choose the backup folder again.",
+                path.display(),
+                reason
+            )),
+            ..BackupConfig::default()
+        }
+    }
+
+    /// Written to a temporary file and swapped in, so a failed write keeps
+    /// the old settings whole.
     pub fn save_config(app_data_dir: &Path, config: &BackupConfig) -> Result<(), String> {
         let path = Self::config_path(app_data_dir);
+        let tmp = path.with_extension("json.tmp");
         let s = serde_json::to_string_pretty(config).map_err(|e| e.to_string())?;
-        std::fs::write(&path, s).map_err(|e| format!("Write backup config: {}", e))
+        std::fs::write(&tmp, s).map_err(|e| format!("Write backup config: {}", e))?;
+        std::fs::rename(&tmp, &path).map_err(|e| format!("Replace backup config: {}", e))
     }
 
     pub fn set_directory(app_data_dir: &Path, directory: &str) -> Result<BackupConfig, String> {
@@ -134,6 +154,10 @@ impl BackupService {
             return Err(format!("Backup path is not a directory: {}", trimmed));
         }
         let mut cfg = Self::load_config(app_data_dir);
+        if cfg.directory.is_none() {
+            // Nothing was set up (or the old file was unreadable): start clean.
+            cfg.last_error = None;
+        }
         cfg.directory = Some(trimmed.to_string());
         Self::save_config(app_data_dir, &cfg)?;
         Ok(cfg)
@@ -193,17 +217,23 @@ impl BackupService {
 
         // VACUUM INTO produces a consistent point-in-time copy that doesn't
         // require quiescing other writers (unlike a raw file copy + WAL).
+        // Written to a temporary name first, so an earlier snapshot of the
+        // same name survives until the new one is complete.
         let db_target = db_dir.join(snapshot_file_name(kind, Utc::now()));
-        if db_target.exists() {
-            std::fs::remove_file(&db_target).map_err(|e| format!("Remove old snapshot: {}", e))?;
+        let mut part_name = db_target.file_name().unwrap_or_default().to_os_string();
+        part_name.push(".part");
+        let db_part = db_dir.join(part_name);
+        if db_part.exists() {
+            std::fs::remove_file(&db_part).map_err(|e| format!("Remove unfinished snapshot: {}", e))?;
         }
-        let target_str = db_target.to_string_lossy().replace('\'', "''");
+        let part_str = db_part.to_string_lossy().replace('\'', "''");
         db.execute(Statement::from_string(
             DbBackend::Sqlite,
-            format!("VACUUM INTO '{}'", target_str),
+            format!("VACUUM INTO '{}'", part_str),
         ))
         .await
         .map_err(|e| format!("VACUUM INTO failed: {}", e))?;
+        std::fs::rename(&db_part, &db_target).map_err(|e| format!("Replace snapshot: {}", e))?;
 
         // Mirror files directory (additive; never deletes from destination)
         let files_src = app_data_dir.join("files");

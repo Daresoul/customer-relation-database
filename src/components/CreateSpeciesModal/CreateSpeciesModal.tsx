@@ -3,12 +3,14 @@ import { Modal, Form, Input, App } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useCreateSpecies } from '../../hooks/useSpecies';
 import { toTitleCase } from '../../utils/stringUtils';
+import type { Species } from '../../types/species';
 
 interface CreateSpeciesModalProps {
   open: boolean;
   initialName?: string;
   onClose: () => void;
-  onSuccess: (speciesName: string) => void;
+  /** Called with the new species, so callers needn't look it up in a list that may be stale. */
+  onSuccess: (speciesName: string, created: Species) => void;
 }
 
 export const CreateSpeciesModal: React.FC<CreateSpeciesModalProps> = ({
@@ -32,14 +34,14 @@ export const CreateSpeciesModal: React.FC<CreateSpeciesModalProps> = ({
     try {
       const values = await form.validateFields();
       const titleCasedName = toTitleCase(values.name.trim());
-      await createSpecies.mutateAsync({ name: titleCasedName });
+      const created = await createSpecies.mutateAsync({ name: titleCasedName });
       notification.success({
         message: t('common:success'),
         description: t('settings:species.createdNamed', { name: titleCasedName }),
         placement: 'bottomRight',
         duration: 3,
       });
-      onSuccess(titleCasedName);
+      onSuccess(titleCasedName, created);
       form.resetFields();
       onClose();
     } catch (error) {

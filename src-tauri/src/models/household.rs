@@ -12,8 +12,10 @@ pub struct Household {
     pub postal_code: Option<String>,
     pub notes: Option<String>,
     #[ts(type = "string")]
+    #[serde(with = "utc_naive")]
     pub created_at: chrono::NaiveDateTime,
     #[ts(type = "string")]
+    #[serde(with = "utc_naive")]
     pub updated_at: chrono::NaiveDateTime,
 }
 
@@ -26,8 +28,10 @@ pub struct Person {
     pub last_name: String,
     pub is_primary: bool,
     #[ts(type = "string")]
+    #[serde(with = "utc_naive")]
     pub created_at: chrono::NaiveDateTime,
     #[ts(type = "string")]
+    #[serde(with = "utc_naive")]
     pub updated_at: chrono::NaiveDateTime,
 }
 
@@ -40,6 +44,7 @@ pub struct PersonContact {
     pub contact_value: String,
     pub is_primary: bool,
     #[ts(type = "string")]
+    #[serde(with = "utc_naive")]
     pub created_at: chrono::NaiveDateTime,
 }
 
@@ -202,5 +207,24 @@ impl CreateHouseholdWithPeopleDto {
         }
 
         Ok(())
+    }
+}
+/// SQLite keeps these times as UTC without a zone. Sent with a `Z`, so the
+/// screen converts them to local time instead of reading them as local.
+mod utc_naive {
+    use chrono::{NaiveDateTime, SecondsFormat, TimeZone, Utc};
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer>(value: &NaiveDateTime, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(&Utc.from_utc_datetime(value).to_rfc3339_opts(SecondsFormat::AutoSi, true))
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<NaiveDateTime, D::Error> {
+        let raw = String::deserialize(d)?;
+        chrono::DateTime::parse_from_rfc3339(&raw)
+            .map(|t| t.naive_utc())
+            .or_else(|_| raw.parse::<NaiveDateTime>())
+            .or_else(|_| NaiveDateTime::parse_from_str(&raw, "%Y-%m-%d %H:%M:%S%.f"))
+            .map_err(serde::de::Error::custom)
     }
 }
