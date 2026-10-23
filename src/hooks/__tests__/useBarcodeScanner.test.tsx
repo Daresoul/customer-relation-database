@@ -10,6 +10,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { useState } from 'react';
 import { render, renderHook, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useBarcodeScanner, normalizeMicrochip } from '../useBarcodeScanner';
@@ -180,6 +181,25 @@ describe('useBarcodeScanner — editable focus', () => {
     (screen.getByTestId('chip') as HTMLInputElement).focus();
 
     await user.keyboard('C9C2540C01FE{Enter}');
+    expect(onScan).toHaveBeenCalledWith('807010000007678');
+  });
+});
+
+describe('useBarcodeScanner — host re-renders', () => {
+  it('a scan into a field that re-renders its host on every key still fires', async () => {
+    const onScan = vi.fn();
+    const user = userEvent.setup({ delay: 5 });
+    function Host() {
+      const [value, setValue] = useState('');
+      // A new handler each render, as callers write it.
+      useBarcodeScanner({ suffixKey: 'Enter', onScan: (code) => onScan(code) });
+      return <input data-testid="search" value={value} onChange={(e) => setValue(e.target.value)} />;
+    }
+    render(<Host />);
+    (screen.getByTestId('search') as HTMLInputElement).focus();
+
+    await user.keyboard('807010000007678{Enter}');
+
     expect(onScan).toHaveBeenCalledWith('807010000007678');
   });
 });
