@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { App } from 'antd';
 
@@ -67,6 +67,7 @@ beforeEach(() => {
   invokeMock.mockReset();
   invokeMock.mockImplementation(async (cmd: string) => {
     if (cmd === 'get_device_details') return details;
+    if (cmd === 'get_results_today') return { 1: 4, 2: 7 };
     if (cmd === 'get_device_diagnostics') return 'Arkivet diagnostics\nDevice: PointCare';
     return undefined;
   });
@@ -87,6 +88,24 @@ async function renderDrawer(integrationId = 1) {
 }
 
 describe('device details drawer', () => {
+  // Machine status #1: tabs hid which machine was broken and cut the names off.
+  it('lists every machine with its state in words, last result and results today', async () => {
+    await renderDrawer();
+    const pointcare = await screen.findByRole('button', { name: /PointCare/ });
+    // It failed less than a minute ago, so it still waits (see serialLevel).
+    expect(pointcare).toHaveTextContent('chip.state.waiting');
+    expect(pointcare).toHaveTextContent('health.lastResult {"time":"08:55"}');
+    expect(await within(pointcare).findByText('drawer.resultsToday {"count":4}')).toBeInTheDocument();
+    expect(pointcare).toHaveAttribute('aria-pressed', 'true');
+
+    const exigo = screen.getByRole('button', { name: /Exigo/ });
+    expect(exigo).toHaveTextContent('chip.state.working');
+    expect(exigo).toHaveTextContent('drawer.resultsToday {"count":7}');
+    fireEvent.click(exigo);
+    await waitFor(() => expect(invokeMock).toHaveBeenCalledWith('get_device_details', { integrationId: 2 }));
+    expect(exigo).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('shows the state in plain words, what to do, and the times', async () => {
     await renderDrawer();
     expect(await screen.findByText('health.kinds.port_missing.title {"port":"COM3"}')).toBeInTheDocument();
