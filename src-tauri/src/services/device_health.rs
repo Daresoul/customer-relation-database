@@ -1183,6 +1183,38 @@ mod tests {
         assert_eq!(empty, DeviceDetails { bytes_last_minute: 0, errors_today: 0, last_raw: None, log: vec![] });
     }
 
+    struct NullSink;
+    impl crate::services::device_events::DeviceSink for NullSink {
+        fn result_ready(&self, _: &serde_json::Value, _: &crate::services::device_parser::DeviceData) {}
+        fn device_event(&self, _: &crate::services::device_events::DeviceEvent) {}
+        fn result_recorded(&self, _: i64) {}
+    }
+
+    #[tokio::test]
+    async fn delivered_bytes_and_device_events_show_in_the_details() {
+        use crate::services::device_events::{deliver_result, report_cut_off, ResultSource};
+        let test_db = crate::test_utils::create_test_db_with_migrations().await;
+        let dir = tempfile::tempdir().unwrap();
+        let id = 9_200_001;
+        let source = ResultSource {
+            integration_id: id,
+            device_name: "COM9".into(),
+            device_type: "mnchip_pointcare_chemistry".into(),
+            connection_method: "serial_port".into(),
+        };
+
+        deliver_result(&test_db.db, dir.path(), &NullSink, &source, "x.hl7", b"not a message").await;
+        let d = device_details(id, Utc::now().fixed_offset());
+        assert_eq!(d.last_raw.map(|m| m.text), Some("not a message".to_string()));
+        assert_eq!(d.errors_today, 1);
+        assert_eq!(d.log.last().map(|e| e.label.as_str()), Some("parse_failed"));
+
+        report_cut_off(&test_db.db, dir.path(), &NullSink, &source, b"MSH|partial").await;
+        let d = device_details(id, Utc::now().fixed_offset());
+        assert_eq!(d.last_raw.map(|m| m.text), Some("MSH|partial".to_string()));
+        assert_eq!(d.errors_today, 2);
+    }
+
     fn integration(id: i64, name: &str, connection: crate::models::device_integration::ConnectionType, enabled: bool) -> DeviceIntegration {
         use crate::models::device_integration::DeviceType;
         DeviceIntegration {
