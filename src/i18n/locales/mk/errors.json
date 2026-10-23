@@ -189,6 +189,13 @@
     "server": "Нешто тргна наопаку од наша страна. Обидете се повторно подоцна."
   },
   "operations": {
+    "markPatientDeceased": "означување на пациентот како починат",
+    "markPatientInactive": "означување на пациентот како неактивен",
+    "reactivatePatient": "повторно активирање на пациентот",
+    "savePatientAlert": "зачувување на предупредувањето",
+    "deletePatientAlert": "отстранување на предупредувањето",
+    "addPatientWeight": "додавање на тежината",
+    "deletePatientWeight": "отстранување на тежината",
     "createTemplate": "креирање на шаблон",
     "updateTemplate": "ажурирање на шаблонот",
     "deleteTemplate": "бришење на шаблонот",
