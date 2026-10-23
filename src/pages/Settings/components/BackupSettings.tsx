@@ -51,7 +51,7 @@ const BackupSettings: React.FC = () => {
         placement: 'bottomRight',
       });
     }
-  }, [notification]);
+  }, [notification, setConfig]);
 
   useEffect(() => {
     reload();
