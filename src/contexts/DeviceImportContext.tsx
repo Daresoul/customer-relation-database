@@ -57,7 +57,9 @@ export const DeviceImportProvider: React.FC<{ children: ReactNode }> = ({ childr
       if ([...prev.pendingFiles, ...prev.waitingResults].some((f) => fileKey(f) === key)) {
         return prev;
       }
-      if (prev.modalOpen || prev.pendingFiles.length > 0) {
+      // Only a result already on screen makes a new one wait; an open but
+      // empty import takes it.
+      if (prev.pendingFiles.length > 0) {
         return { ...prev, waitingResults: [...prev.waitingResults, file] };
       }
       return startImport(prev, file, prev.waitingResults);

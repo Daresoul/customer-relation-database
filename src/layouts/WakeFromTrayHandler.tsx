@@ -1,16 +1,14 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { listen } from '@tauri-apps/api/event';
-import { useDeviceImport } from '../contexts/useDeviceImport';
 import { useViewContext } from '../contexts';
 
 /**
- * The tray brings the window back: a new lab file opens the import and the
- * dashboard; a manual wake resets to the dashboard. A wake by chip scan is
- * left to the chip-scan handler, which opens the patient.
+ * The tray brings the window back: a new lab file and a manual wake go to the
+ * dashboard (the result opens the import itself when it arrives). A wake by
+ * chip scan is left to the chip-scan handler, which opens the patient.
  */
 export function WakeFromTrayHandler() {
-  const { openModal } = useDeviceImport();
   const { setCurrentView } = useViewContext();
   const navigate = useNavigate();
 
@@ -19,11 +17,7 @@ export function WakeFromTrayHandler() {
     let cancelled = false;
     listen<{ cause?: string }>('wake-from-tray', (event) => {
       const cause = event.payload?.cause;
-      if (cause === 'file') {
-        openModal();
-        setCurrentView('animal');
-        navigate('/');
-      } else if (cause === 'manual') {
+      if (cause === 'file' || cause === 'manual') {
         setCurrentView('animal');
         navigate('/');
       }
@@ -35,7 +29,7 @@ export function WakeFromTrayHandler() {
       cancelled = true;
       unlisten?.();
     };
-  }, [openModal, setCurrentView, navigate]);
+  }, [setCurrentView, navigate]);
 
   return null;
 }
