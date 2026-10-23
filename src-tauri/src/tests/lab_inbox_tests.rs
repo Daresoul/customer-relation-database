@@ -77,6 +77,24 @@ async fn receive(
     .unwrap();
 }
 
+const RAW_CHEM: &[u8] = include_bytes!("../../tests/fixtures/real_chem_pcv.bin");
+
+/// A PointCare chemistry result, as the serial delivery stores it.
+async fn receive_chemistry(db: &DatabaseConnection, dir: &std::path::Path, file_id: &str) {
+    let bytes = &RAW_CHEM[1..RAW_CHEM.len() - 2];
+    let path = dir.join(file_id);
+    std::fs::write(&path, bytes).unwrap();
+    db.execute(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "INSERT INTO file_access_history (file_id, original_name, file_path, file_size, mime_type, device_type, device_name, \
+         connection_method, status) \
+         VALUES (?, 'chem.hl7', ?, ?, 'text/plain', 'mnchip_pointcare_chemistry', 'COM7', 'serial_port', 'ok')",
+        [file_id.into(), path.display().to_string().into(), (bytes.len() as i64).into()],
+    ))
+    .await
+    .unwrap();
+}
+
 async fn scalar_i64(db: &DatabaseConnection, sql: &str) -> i64 {
     db.query_one(Statement::from_string(DbBackend::Sqlite, sql.to_string()))
         .await
@@ -422,7 +440,7 @@ async fn a_second_result_on_a_record_gives_one_lab_report_for_both() {
     let patient = seed_patient(&db, "Bella", None).await;
     let record = seed_record(&db, patient, "Consult").await;
     receive(&db, dir.path(), "r1", &koko_xml(), "ok", "2026-10-23T08:00:00+00:00").await;
-    receive(&db, dir.path(), "r2", &koko_xml(), "ok", "2026-10-23T08:10:00+00:00").await;
+    receive_chemistry(&db, dir.path(), "r2").await;
 
     lab_inbox::attach_to_record(&db, dir.path(), "r1", record).await.unwrap();
     let first = lab_inbox::regenerate_lab_report(&env, &db, record).await.unwrap();
