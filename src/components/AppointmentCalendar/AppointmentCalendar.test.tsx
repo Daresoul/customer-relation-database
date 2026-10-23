@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import * as appointmentHooks from '../../hooks/useAppointments';
 import AppointmentCalendar from './AppointmentCalendar';
 
 // Mock Ant Design Calendar
@@ -82,11 +83,12 @@ const createWrapper = () => {
     },
   });
 
-  return ({ children }: { children: React.ReactNode }) => (
+  const Wrapper = ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={queryClient}>
       {children}
     </QueryClientProvider>
   );
+  return Wrapper;
 };
 
 // TDD scaffold from appointments feature branch — stale antd mock
@@ -216,7 +218,7 @@ describe.skip('AppointmentCalendar', () => {
 
   it('shows loading state when appointments are loading', () => {
     // Mock loading state
-    vi.mocked(require('../../hooks/useAppointments').useAppointments).mockReturnValue({
+    vi.mocked(appointmentHooks.useAppointments).mockReturnValue({
       data: null,
       isLoading: true,
       error: null,
@@ -249,7 +251,7 @@ describe.skip('AppointmentCalendar', () => {
   });
 
   it('handles empty appointment data gracefully', () => {
-    vi.mocked(require('../../hooks/useAppointments').useAppointments).mockReturnValue({
+    vi.mocked(appointmentHooks.useAppointments).mockReturnValue({
       data: { appointments: [] },
       isLoading: false,
       error: null,
@@ -269,7 +271,7 @@ describe.skip('AppointmentCalendar', () => {
   });
 
   it('shows error message when appointments fail to load', () => {
-    vi.mocked(require('../../hooks/useAppointments').useAppointments).mockReturnValue({
+    vi.mocked(appointmentHooks.useAppointments).mockReturnValue({
       data: null,
       isLoading: false,
       error: new Error('Failed to fetch appointments'),

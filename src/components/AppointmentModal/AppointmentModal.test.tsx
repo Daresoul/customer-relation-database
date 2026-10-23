@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import * as appointmentHooks from '../../hooks/useAppointments';
 import AppointmentModal from './AppointmentModal';
 
 // Mock Ant Design components
@@ -157,11 +158,12 @@ const createWrapper = () => {
     },
   });
 
-  return ({ children }: { children: React.ReactNode }) => (
+  const Wrapper = ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={queryClient}>
       {children}
     </QueryClientProvider>
   );
+  return Wrapper;
 };
 
 // TDD scaffold from appointments feature branch — stale antd mock
@@ -290,7 +292,7 @@ describe.skip('AppointmentModal', () => {
       },
     ]);
 
-    vi.mocked(require('../../hooks/useAppointments').useCheckConflicts).mockReturnValue({
+    vi.mocked(appointmentHooks.useCheckConflicts).mockReturnValue({
       mutate: mockCheckConflicts,
       data: [
         {
@@ -318,7 +320,7 @@ describe.skip('AppointmentModal', () => {
 
   it('saves appointment when form is submitted with valid data', async () => {
     const mockCreate = vi.fn();
-    vi.mocked(require('../../hooks/useAppointments').useCreateAppointment).mockReturnValue({
+    vi.mocked(appointmentHooks.useCreateAppointment).mockReturnValue({
       mutate: mockCreate,
       isPending: false,
     });
@@ -419,7 +421,7 @@ describe.skip('AppointmentModal', () => {
   });
 
   it('shows loading state while saving', () => {
-    vi.mocked(require('../../hooks/useAppointments').useCreateAppointment).mockReturnValue({
+    vi.mocked(appointmentHooks.useCreateAppointment).mockReturnValue({
       mutate: vi.fn(),
       isPending: true,
     });
@@ -437,7 +439,7 @@ describe.skip('AppointmentModal', () => {
   });
 
   it('disables save button during conflict check', () => {
-    vi.mocked(require('../../hooks/useAppointments').useCheckConflicts).mockReturnValue({
+    vi.mocked(appointmentHooks.useCheckConflicts).mockReturnValue({
       mutate: vi.fn(),
       data: null,
       isPending: true,
