@@ -285,7 +285,7 @@ export const householdApi = {
   delete: async (id: number): Promise<void> => {
     const hide = showLoading(i18n.t('common:api.loading.deletingHousehold'));
     try {
-      await invoke('delete_household', { id });
+      await invoke('delete_household', { householdId: id });
       hide();
       showSuccess(i18n.t('common:api.success.householdDeleted'), i18n.t('common:api.success.householdDeletedDesc'));
     } catch (error) {

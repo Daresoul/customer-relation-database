@@ -229,6 +229,21 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
     }
   };
 
+  // Puts the household into the picker's options so the Select can render
+  // it, selects it, and closes the create pop-up. Returns its display name.
+  const selectHousehold = (household: CreatedHousehold): string => {
+    const householdName =
+      (typeof household.householdName === 'string' && household.householdName) ||
+      t('households:newHousehold');
+    setHouseholds((prev) => {
+      if (prev.some((h) => h.id === household.id)) return prev;
+      return [{ id: household.id, lastName: householdName }, ...prev];
+    });
+    form.setFieldValue('householdId', household.id);
+    setCreateHouseholdOpen(false);
+    return householdName;
+  };
+
   const handleCreateSpecies = (name: string) => {
     setNewSpeciesName(name);
     setShowCreateSpeciesModal(true);
@@ -337,24 +352,11 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
         <CreateHouseholdModal
           open={createHouseholdOpen}
           onCancel={() => setCreateHouseholdOpen(false)}
+          onUseExisting={(existing: CreatedHousehold) => {
+            selectHousehold(existing);
+          }}
           onCreated={async (newHousehold: CreatedHousehold) => {
-            // Inject the new household into the local search results so
-            // the Select can render it, then select it on the parent form.
-            const householdName =
-              (typeof newHousehold.householdName === 'string' && newHousehold.householdName) ||
-              t('households:newHousehold');
-            setHouseholds((prev) => {
-              if (prev.some((h) => h.id === newHousehold.id)) return prev;
-              return [
-                {
-                  id: newHousehold.id,
-                  lastName: householdName,
-                },
-                ...prev,
-              ];
-            });
-            form.setFieldValue('householdId', newHousehold.id);
-            setCreateHouseholdOpen(false);
+            const householdName = selectHousehold(newHousehold);
             notification.success({
               message: t('patients:detail.householdInfo.createSuccess'),
               description: t('households:createdAndSelected', { name: householdName }),
