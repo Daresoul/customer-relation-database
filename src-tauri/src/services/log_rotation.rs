@@ -345,6 +345,22 @@ mod tests {
         assert!(tmp.path().join(&recent).exists());
     }
 
+    // Raw serial logs from older builds have no date in their name
+    // (`raw_COM3.log`) and were kept forever.
+    #[test]
+    fn prune_dates_undated_raw_serial_logs_by_their_last_change() {
+        let tmp = tempfile::tempdir().unwrap();
+        touch_days_ago(tmp.path(), "raw_COM3.log", 100);
+        touch_days_ago(tmp.path(), "raw__tmp_ttyV0.log", 5);
+        touch_days_ago(tmp.path(), "Arkivet.log", 100); // the live main log stays
+
+        prune_old_logs(tmp.path(), 30);
+
+        assert!(!tmp.path().join("raw_COM3.log").exists());
+        assert!(tmp.path().join("raw__tmp_ttyV0.log").exists());
+        assert!(tmp.path().join("Arkivet.log").exists());
+    }
+
     #[test]
     fn prune_zero_days_keeps_only_today() {
         let tmp = tempfile::tempdir().unwrap();

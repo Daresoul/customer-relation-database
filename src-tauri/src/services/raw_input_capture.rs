@@ -2200,3 +2200,27 @@ pub async fn reload_managed_ids(pool: &crate::database::SeaOrmPool) {
 pub async fn reload_managed_ids(_pool: &crate::database::SeaOrmPool) {
     // No-op on non-Windows: there's no Raw Input capture to refresh.
 }
+
+#[allow(dead_code)]
+pub(crate) fn stale_scan(_buffer: &str) -> Option<String> {
+    None
+}
+
+#[cfg(test)]
+mod stale_scan_tests {
+    use super::stale_scan;
+
+    // serial-pipeline #9: a chip whose Enter never came was dropped after 1 s.
+    #[test]
+    fn a_stale_buffer_that_is_a_chip_is_kept() {
+        assert_eq!(stale_scan("807010000007678").as_deref(), Some("807010000007678"));
+        assert_eq!(stale_scan("1A2B3C4D5E").as_deref(), Some("1A2B3C4D5E"));
+    }
+
+    #[test]
+    fn a_stale_buffer_that_is_not_a_chip_is_dropped() {
+        assert_eq!(stale_scan(""), None);
+        assert_eq!(stale_scan("123"), None);
+        assert_eq!(stale_scan("80701000000767"), None);
+    }
+}

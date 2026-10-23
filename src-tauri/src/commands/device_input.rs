@@ -177,6 +177,12 @@ fn normalize_for_match(s: &str) -> String {
     out.trim().to_string()
 }
 
+pub(crate) fn listeners_to_restart(
+    _integrations: &[crate::models::device_integration::DeviceIntegration],
+) -> Vec<(i64, String, String, Option<i64>)> {
+    Vec::new()
+}
+
 /// Manually (re)connect serial device listeners that aren't currently connected.
 ///
 /// Backs the "refresh" button in the device status bar. For every enabled serial-port

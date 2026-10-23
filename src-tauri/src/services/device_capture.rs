@@ -125,6 +125,10 @@ pub fn normalize_microchip_public(code: &str) -> String {
     normalize_microchip(code)
 }
 
+fn hid_thread_should_close(_read_failed: bool) -> bool {
+    false
+}
+
 fn emit_barcode(app: &AppHandle, device_name: &str, code: &str) {
     if looks_like_microchip(code) {
         let normalized = normalize_microchip(code);
@@ -388,6 +392,14 @@ pub fn start_device_capture(app: AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // serial-pipeline #13: a quiet scanner was closed after 60 s and its
+    // next scan was missed while it reopened.
+    #[test]
+    fn a_hid_scanner_stays_open_however_long_it_is_quiet() {
+        assert!(!hid_thread_should_close(false));
+        assert!(hid_thread_should_close(true));
+    }
 
     // -----------------------------------------------------------------------
     // looks_like_microchip — accept/reject matrix
