@@ -120,3 +120,6 @@ pub mod lab_results_tests;
 
 #[cfg(test)]
 pub mod record_template_tests;
+
+#[cfg(test)]
+pub mod appointment_arrival_tests;

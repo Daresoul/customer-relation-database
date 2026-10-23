@@ -1,4 +1,14 @@
-export type AppointmentStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
+/**
+ * scheduled → checked_in (arrival time) → in_progress (in consult) → completed
+ * (done); cancelled and no_show close a visit without it happening.
+ */
+export type AppointmentStatus =
+  | 'scheduled'
+  | 'checked_in'
+  | 'in_progress'
+  | 'completed'
+  | 'cancelled'
+  | 'no_show';
 
 export interface Appointment {
   id: number;
@@ -19,12 +29,20 @@ export interface Appointment {
   breed?: string;
   microchipId?: string;
   roomName?: string;
+  /** Arrival time, set by check-in. */
+  checkedInAt?: string | null;
+  /** The record started from this appointment. */
+  medicalRecordId?: number | null;
 }
 
-export interface AppointmentDetail {
-  appointment: Appointment;
+export type GoogleSyncState = 'off' | 'synced' | 'not_synced' | 'reconnect';
+
+/** `get_appointment`: the appointment's own fields, plus patient, room and Google state. */
+export interface AppointmentDetail extends Appointment {
   patient?: PatientInfo;
   room?: Room;
+  googleSyncState: GoogleSyncState;
+  googleSyncedAt?: string | null;
 }
 
 export interface PatientInfo {
@@ -55,12 +73,15 @@ export interface CreateAppointmentInput {
 }
 
 export interface UpdateAppointmentInput {
+  patientId?: number;
   title?: string;
   description?: string;
   startTime?: string;
   endTime?: string;
-  roomId?: number;
+  /** Left out: keep the room. null: no room. */
+  roomId?: number | null;
   status?: AppointmentStatus;
+  medicalRecordId?: number;
 }
 
 export interface AppointmentFilter {
@@ -89,11 +110,14 @@ export interface ConflictCheckInput {
   endTime: string;
   roomId?: number;
   excludeAppointmentId?: number;
+  /** Also list this patient's other appointments at that time. */
+  patientId?: number;
 }
 
 export interface ConflictCheckResponse {
   hasConflicts: boolean;
   conflicts: Appointment[];
+  patientConflicts?: Appointment[];
 }
 
 export interface CreateRoomInput {

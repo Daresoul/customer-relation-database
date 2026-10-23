@@ -10,6 +10,10 @@ vi.mock('react-i18next', () => ({
 }));
 const invokeMock = vi.fn();
 vi.mock('@/services/invoke', () => ({ invoke: (...a: unknown[]) => invokeMock(...a) }));
+vi.mock('@/components/AppointmentDrawer/AppointmentDrawer', () => ({
+  AppointmentDrawer: ({ appointmentId }: { appointmentId: number | null }) =>
+    appointmentId ? <div>stub-panel-{appointmentId}</div> : null,
+}));
 
 import { TodayStrip } from '../TodayStrip';
 
@@ -82,13 +86,14 @@ describe('Today strip', () => {
     expect(end.getTime() - start.getTime()).toBeLessThanOrEqual(24 * 3600_000);
   });
 
-  it('opens the patient from an appointment', async () => {
+  it('opens the appointment panel from an appointment (Open patient lives there)', async () => {
     backend();
     const { router } = renderStrip();
 
     fireEvent.click(await screen.findByText('Шарко'));
 
-    await waitFor(() => expect(router.state.location.pathname).toBe('/patients/21'));
+    expect(await screen.findByText('stub-panel-2')).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/');
   });
 
   it('says when there are no appointments today', async () => {

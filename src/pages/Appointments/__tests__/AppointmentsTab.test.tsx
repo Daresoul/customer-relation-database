@@ -1,38 +1,72 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor, act } from '@testing-library/react';
 import { App } from 'antd';
+import type { Appointment } from '../../../types/appointments';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
 const createAppointment = vi.fn();
-const calendarCalls: Array<{ start: Date; end: Date }> = [];
+const updateAppointment = vi.fn();
+const refetchCalendar = vi.fn();
+const calendarCalls: Array<{ start: Date; end: Date; filter?: Record<string, unknown> }> = [];
 vi.mock('../../../hooks/useAppointments', () => ({
   useAppointments: () => ({
-    appointments: [],
     createAppointment,
-    updateAppointment: vi.fn(),
+    updateAppointment,
     deleteAppointment: vi.fn(),
     duplicateAppointment: vi.fn(),
-    refetch: vi.fn(),
     isCreating: false,
     isUpdating: false,
     isDeleting: false,
-    isLoading: false,
-    error: null,
   }),
   useAppointmentDetail: () => ({ data: undefined }),
-  useCalendarAppointments: (start: Date, end: Date) => {
-    calendarCalls.push({ start, end });
-    return { data: { appointments: [] }, isLoading: false, error: null, refetch: vi.fn() };
+  useCalendarAppointments: (start: Date, end: Date, filter?: Record<string, unknown>) => {
+    calendarCalls.push({ start, end, filter });
+    return { data: { appointments: [] }, isLoading: false, error: null, refetch: refetchCalendar };
   },
 }));
 
+const bella = { id: 4, patientId: 20, patientName: 'Bella', status: 'scheduled' } as Appointment;
+
 vi.mock('../../../hooks/useRooms', () => ({ useRooms: () => ({ data: [] }) }));
-vi.mock('../../../components/AppointmentCalendar/AppointmentCalendar', () => ({ default: () => null }));
-vi.mock('../../../components/AppointmentList/AppointmentList', () => ({ default: () => null }));
-vi.mock('../../../components/AppointmentCalendar/TodaysAppointments', () => ({ default: () => null }));
+vi.mock('../../../components/AppointmentCalendar/AppointmentCalendar', () => ({
+  default: ({
+    onSelectAppointment,
+    onRangeChange,
+  }: {
+    onSelectAppointment: (a: Appointment) => void;
+    onRangeChange?: (s: Date, e: Date) => void;
+  }) => (
+    <div>
+      <button onClick={() => onSelectAppointment(bella)}>stub-calendar-card</button>
+      <button onClick={() => onRangeChange?.(new Date(2030, 4, 1), new Date(2030, 4, 31, 23, 59))}>stub-page-to-may</button>
+    </div>
+  ),
+}));
+vi.mock('../../../components/AppointmentCalendar/TodaysAppointments', () => ({
+  default: () => <div>stub-today-grid</div>,
+}));
+vi.mock('../../../components/AppointmentCalendar/WaitingRoomList', () => ({
+  default: ({
+    onSelect,
+    onStatusChange,
+  }: {
+    onSelect: (a: Appointment) => void;
+    onStatusChange: (a: Appointment, s: string) => void;
+  }) => (
+    <div>
+      stub-waiting-list
+      <button onClick={() => onSelect(bella)}>stub-row</button>
+      <button onClick={() => onStatusChange(bella, 'checked_in')}>stub-check-in</button>
+    </div>
+  ),
+}));
+vi.mock('../../../components/AppointmentDrawer/AppointmentDrawer', () => ({
+  AppointmentDrawer: ({ appointmentId }: { appointmentId: number | null }) =>
+    appointmentId ? <div>stub-panel-{appointmentId}</div> : null,
+}));
 
 const saveOutcome: { error?: unknown } = {};
 vi.mock('../../../components/AppointmentModal/AppointmentModal', () => ({
@@ -121,5 +155,73 @@ describe('AppointmentsTab save', () => {
       window.dispatchEvent(new Event('focus'));
     });
     expect(calendarCalls.at(-1)!.start.getDate()).toBe(11);
+  });
+});
+
+describe('AppointmentsTab panel, Today list and data range', () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+    calendarCalls.length = 0;
+    document.body.innerHTML = '';
+  });
+
+  it('Today opens as the waiting-room list, with the grid one click away', () => {
+    renderTab();
+
+    expect(screen.getByText(/stub-waiting-list/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText('appointments:views.grid'));
+    expect(screen.getByText('stub-today-grid')).toBeInTheDocument();
+  });
+
+  it('opens the appointment panel from the Today list, not the edit form', () => {
+    renderTab();
+
+    fireEvent.click(screen.getByText('stub-row'));
+
+    expect(screen.getByText('stub-panel-4')).toBeInTheDocument();
+    expect(screen.queryByText('stub-save')).not.toBeInTheDocument();
+  });
+
+  it('opens the appointment panel from a calendar card', () => {
+    renderTab();
+    fireEvent.click(screen.getByText('appointments:tabs.calendarView'));
+
+    fireEvent.click(screen.getByText('stub-calendar-card'));
+
+    expect(screen.getByText('stub-panel-4')).toBeInTheDocument();
+  });
+
+  it('changes a status from the Today list in one click', async () => {
+    updateAppointment.mockResolvedValue({ ...bella, status: 'checked_in' });
+    renderTab();
+
+    fireEvent.click(screen.getByText('stub-check-in'));
+
+    await waitFor(() => expect(updateAppointment).toHaveBeenCalledWith({ id: 4, input: { status: 'checked_in' } }));
+  });
+
+  it('shows cancelled and no-show visits so they can be styled', () => {
+    renderTab();
+    expect(calendarCalls.at(-1)!.filter).toEqual(expect.objectContaining({ includeCancelled: true }));
+  });
+
+  it('the calendar fetches the range it shows', () => {
+    renderTab();
+    fireEvent.click(screen.getByText('appointments:tabs.calendarView'));
+
+    fireEvent.click(screen.getByText('stub-page-to-may'));
+
+    const last = calendarCalls.at(-1)!;
+    expect(last.start.getMonth()).toBe(4);
+    expect(last.end.getMonth()).toBe(4);
+  });
+
+  it('Refresh refetches what is on screen', () => {
+    renderTab();
+
+    fireEvent.click(screen.getByText('appointments:calendar.refresh'));
+
+    expect(refetchCalendar).toHaveBeenCalled();
   });
 });

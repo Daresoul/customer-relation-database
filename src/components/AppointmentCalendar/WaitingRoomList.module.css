@@ -1,0 +1,70 @@
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(127, 127, 127, 0.18);
+}
+
+.row[data-closed='true'] {
+  opacity: 0.55;
+}
+
+.row[data-closed='true'] .patient,
+.row[data-closed='true'] .reason {
+  text-decoration: line-through;
+}
+
+.main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.main:hover,
+.main:focus-visible {
+  background: rgba(127, 127, 127, 0.12);
+}
+
+.time {
+  min-width: 48px;
+  font-variant-numeric: tabular-nums;
+}
+
+.patient {
+  min-width: 140px;
+}
+
+.reason {
+  flex: 1;
+  min-width: 0;
+}
+
+.room {
+  white-space: nowrap;
+}
+
+.side {
+  flex-shrink: 0;
+}
+
+.wait {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}

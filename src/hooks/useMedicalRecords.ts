@@ -59,6 +59,9 @@ export function useSearchMedicalRecords(
   });
 }
 
+/** Lets a caller that opened the record form see which record it created (the appointment panel links it). */
+export const CREATE_RECORD_MUTATION_KEY = ['medical-records', 'create'] as const;
+
 // Mutation hooks
 export function useCreateMedicalRecord() {
   const queryClient = useQueryClient();
@@ -67,6 +70,7 @@ export function useCreateMedicalRecord() {
   const reportDocuments = useDocumentStatusNotice();
 
   return useMutation({
+    mutationKey: CREATE_RECORD_MUTATION_KEY,
     mutationFn: (input: CreateMedicalRecordInput) =>
       MedicalService.createMedicalRecord(input),
     onSuccess: (data, variables) => {

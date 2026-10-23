@@ -74,6 +74,7 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, "056_clinic_profile_and_vat", add_clinic_profile_and_vat).await?;
     run_migration(pool, "057_lab_results", create_lab_results).await?;
     run_migration(pool, "058_record_template_contents", add_record_template_contents).await?;
+    run_migration(pool, "059_appointment_arrival", add_appointment_arrival).await?;
 
     Ok(())
 }
@@ -3459,6 +3460,35 @@ fn add_record_template_contents(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std:
         )
         .execute(pool)
         .await?;
+        Ok(())
+    })
+}
+
+
+// Migration 059: arrival statuses and the record link. The status CHECK from
+// 018 can't change without a table rebuild, so a check-in is `scheduled` plus
+// `checked_in_at`, and a no-show is `cancelled` plus `no_show_at`.
+fn add_appointment_arrival(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        let columns = [
+            ("checked_in_at", "ALTER TABLE appointments ADD COLUMN checked_in_at TIMESTAMP"),
+            ("no_show_at", "ALTER TABLE appointments ADD COLUMN no_show_at TIMESTAMP"),
+            (
+                "medical_record_id",
+                "ALTER TABLE appointments ADD COLUMN medical_record_id INTEGER REFERENCES medical_records(id) ON DELETE SET NULL",
+            ),
+        ];
+        for (column, ddl) in columns {
+            let exists: (i64,) = sqlx::query_as(
+                "SELECT COUNT(*) FROM pragma_table_info('appointments') WHERE name = ?",
+            )
+            .bind(column)
+            .fetch_one(pool)
+            .await?;
+            if exists.0 == 0 {
+                sqlx::query(ddl).execute(pool).await?;
+            }
+        }
         Ok(())
     })
 }

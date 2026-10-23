@@ -1,16 +1,16 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Calendar, Badge, Button, Space, Tooltip, Tag, Radio } from 'antd';
-import { CalendarMode } from 'antd/es/calendar/generateCalendar';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import updateLocale from 'dayjs/plugin/updateLocale';
-import { LeftOutlined, RightOutlined, PlusOutlined } from '@ant-design/icons';
-import { Appointment, CalendarView } from '../../types/appointments';
+import { LeftOutlined, RightOutlined } from '@ant-design/icons';
+import { Appointment, AppointmentStatus, CalendarView } from '../../types/appointments';
+import { isClosedStatus, statusColor, statusLabelKey } from '../../utils/appointmentStatus';
+import { AppointmentStatusMenu } from './AppointmentStatusMenu';
+import cardStyles from './AppointmentCard.module.css';
 import { useRooms } from '../../hooks/useRooms';
 import { useThemeColors } from '../../utils/themeStyles';
-import appointmentService from '../../services/appointmentService';
 import WeekView from './WeekView';
-import DayView from './DayView';
 import DayViewSimple from './DayViewSimple';
 import { useTranslation } from 'react-i18next';
 import styles from './AppointmentCalendar.module.css';
@@ -29,6 +29,9 @@ interface AppointmentCalendarProps {
   view: CalendarView;
   onViewChange: (view: CalendarView) => void;
   onDateChange?: (date: Dayjs) => void;
+  /** The dates the current view shows; the parent fetches exactly this range. */
+  onRangeChange?: (start: Date, end: Date) => void;
+  onStatusChange?: (appointment: Appointment, status: AppointmentStatus) => void;
 }
 
 const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
@@ -39,11 +42,13 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
   view,
   onViewChange,
   onDateChange,
+  onRangeChange,
+  onStatusChange,
 }) => {
   const { t } = useTranslation('appointments');
   const [selectedDate, setSelectedDate] = useState<Dayjs>(dayjs());
   const themeColors = useThemeColors();
-  const statusLabel = (status: string) => t(`status.${status === 'in_progress' ? 'inProgress' : status}`);
+  const statusLabel = (status: AppointmentStatus) => t(statusLabelKey(status));
 
 
   // Fetch room data for colors
@@ -111,8 +116,9 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
         break;
       case 'month':
       default:
-        start = selectedDate.startOf('month');
-        end = selectedDate.endOf('month');
+        // The month grid also shows the edges of the weeks around it.
+        start = selectedDate.startOf('month').startOf('week');
+        end = selectedDate.endOf('month').endOf('week');
         break;
     }
 
@@ -121,6 +127,11 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
       endDate: end.toDate(),
     };
   }, [selectedDate, view]);
+
+  useEffect(() => {
+    onRangeChange?.(startDate, endDate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- report a new range only
+  }, [startDate.getTime(), endDate.getTime()]);
 
   // Filter appointments by room if selected
   const filteredAppointments = useMemo(() => {
@@ -153,15 +164,17 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
       return (
         <div className={styles.appointmentsCell}>
           {dayAppointments.slice(0, 3).map((apt) => (
+            <AppointmentStatusMenu key={apt.id} appointment={apt} onStatusChange={onStatusChange}>
             <Tooltip
-              key={apt.id}
               title={getTooltipContent(apt)}
               placement="top"
               mouseEnterDelay={0.5}
               styles={{ root: { maxWidth: '300px' } }}
             >
               <div
-                className={`${styles.appointmentBadge} ${apt.status === 'cancelled' ? styles.appointmentCancelled : ''}`}
+                className={`${styles.appointmentBadge} ${isClosedStatus(apt.status) ? cardStyles.closed : ''}`}
+                data-status={apt.status}
+                data-closed={isClosedStatus(apt.status) ? 'true' : undefined}
                 onClick={(e) => {
                   e.stopPropagation();
                   onSelectAppointment(apt);
@@ -172,12 +185,16 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                   color={getRoomColor(apt)}
                   text={
                     <span className={styles.appointmentText}>
-                      {dayjs(apt.startTime).format('HH:mm')} - {apt.title}
+                      {dayjs(apt.startTime).format('HH:mm')}{' '}
+                      <span className={cardStyles.patientName}>{apt.patientName || t('details.unknownPatient')}</span>
+                      {' · '}
+                      <span className={cardStyles.title}>{apt.title}</span>
                     </span>
                   }
                 />
               </div>
             </Tooltip>
+            </AppointmentStatusMenu>
           ))}
           {dayAppointments.length > 3 && (
             <div className={styles.moreAppointments}>{t('calendar.more', { count: dayAppointments.length - 3 })}</div>
@@ -210,7 +227,7 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
               </div>
               <div className={styles.appointmentTitle}>{apt.title}</div>
               <div className={styles.appointmentPatient}>{apt.patientName || t('details.patient')}</div>
-              <Tag color={getRoomColor(apt)}>
+              <Tag color={statusColor(apt.status)}>
                 {statusLabel(apt.status)}
               </Tag>
             </div>
@@ -331,6 +348,7 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
               onCreateAppointment(startDate, endDate);
             }}
             onDayHeaderClick={handleDayHeaderClick}
+            onStatusChange={onStatusChange}
           />
         );
       case 'day':
@@ -343,6 +361,7 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
               // Pass both dates to parent
               onCreateAppointment(startDate, endDate);
             }}
+            onStatusChange={onStatusChange}
           />
         );
       default:

@@ -19,6 +19,9 @@ pub struct Model {
     pub updated_at: ChronoDateTimeUtc,
     pub deleted_at: Option<ChronoDateTimeUtc>,
     pub created_by: String,
+    pub checked_in_at: Option<ChronoDateTimeUtc>,
+    pub no_show_at: Option<ChronoDateTimeUtc>,
+    pub medical_record_id: Option<i64>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

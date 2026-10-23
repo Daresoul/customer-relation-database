@@ -34,6 +34,18 @@ export function invalidateHouseholdData(queryClient: QueryClient): void {
 }
 
 /**
+ * Appointments: a booking, edit, status change, move, copy or delete.
+ *
+ *   appointments   calendar views, Today waiting-room list, dashboard Today
+ *                  strip, the appointment panel (detail), conflict checks
+ */
+const APPOINTMENT_READERS = ['appointments'];
+
+export function invalidateAppointmentData(queryClient: QueryClient): void {
+  APPOINTMENT_READERS.forEach((key) => queryClient.invalidateQueries({ queryKey: [key] }));
+}
+
+/**
  * Lab results: a result arriving, discarded, restored, attached or moved.
  *
  *   lab-inbox, lab-inbox-count   lab inbox list and its "N waiting" badge

@@ -8,8 +8,17 @@ use crate::models::{
     AppointmentListResponse, DuplicateAppointmentInput,
     ConflictCheckInput, ConflictCheckResponse, Room
 };
+use crate::models::dto::MaybeNull;
+use crate::models::AppointmentStatus;
 
 pub struct AppointmentService;
+
+/// The status the app shows, from the stored status and the arrival columns
+/// (see `AppointmentService::stored_status`).
+const EFFECTIVE_STATUS_SQL: &str = "(CASE \
+    WHEN a.status = 'cancelled' AND a.no_show_at IS NOT NULL THEN 'no_show' \
+    WHEN a.status = 'scheduled' AND a.checked_in_at IS NOT NULL THEN 'checked_in' \
+    ELSE a.status END)";
 
 impl AppointmentService {
     pub async fn get_appointments(
@@ -69,14 +78,19 @@ impl AppointmentService {
         }
 
         if let Some(ref status) = filter.status {
-            sql.push_str(" AND a.status = ?");
-            count_sql.push_str(" AND a.status = ?");
+            let clause = format!(" AND {} = ?", EFFECTIVE_STATUS_SQL);
+            sql.push_str(&clause);
+            count_sql.push_str(&clause);
             params.push(status.to_string().into());
             count_params.push(status.to_string().into());
         }
 
-        // Exclude cancelled unless explicitly included
-        if filter.include_cancelled != Some(true) && filter.status != Some(crate::models::AppointmentStatus::Cancelled) {
+        // Cancelled and no-show (stored as cancelled) stay out unless asked for.
+        let asks_for_cancelled = matches!(
+            filter.status,
+            Some(AppointmentStatus::Cancelled) | Some(AppointmentStatus::NoShow)
+        );
+        if filter.include_cancelled != Some(true) && !asks_for_cancelled {
             sql.push_str(" AND a.status != 'cancelled'");
             count_sql.push_str(" AND a.status != 'cancelled'");
         }
@@ -170,10 +184,14 @@ impl AppointmentService {
             None
         };
 
+        let (google_sync_state, google_synced_at) = Self::google_state(db, id).await?;
+
         Ok(AppointmentDetail {
             appointment,
             patient,
             room,
+            google_sync_state,
+            google_synced_at,
         })
     }
 
@@ -185,17 +203,7 @@ impl AppointmentService {
         // Validate input
         input.validate()?;
 
-        let deceased = db
-            .query_one(Statement::from_sql_and_values(
-                DbBackend::Sqlite,
-                "SELECT deceased_at FROM patients WHERE id = ? AND deceased_at IS NOT NULL",
-                [input.patient_id.into()],
-            ))
-            .await
-            .map_err(|e| format!("Failed to check the patient: {}", e))?;
-        if deceased.is_some() {
-            return Err("PATIENT_DECEASED: a deceased patient can't be booked".to_string());
-        }
+        Self::refuse_deceased(db, input.patient_id).await?;
 
         let now = Utc::now();
 
@@ -243,15 +251,26 @@ impl AppointmentService {
             return Err("Cannot update deleted appointment".to_string());
         }
 
-        if input.title.is_none() && input.description.is_none()
+        if input.patient_id.is_none() && input.title.is_none() && input.description.is_none()
             && input.start_time.is_none() && input.end_time.is_none()
-            && input.room_id.is_none() && input.status.is_none() {
+            && matches!(input.room_id, MaybeNull::Undefined) && input.status.is_none()
+            && input.medical_record_id.is_none() {
             return Self::get_appointment_simple(db, id).await;
         }
 
+        if let Some(patient_id) = input.patient_id {
+            if patient_id != existing.patient_id {
+                Self::refuse_deceased(db, patient_id).await?;
+            }
+        }
+
         let now = Utc::now();
+        let was_checked_in_at = existing.checked_in_at;
         let mut model: appointment::ActiveModel = existing.into();
 
+        if let Some(patient_id) = input.patient_id {
+            model.patient_id = Set(patient_id);
+        }
         if let Some(title) = input.title {
             model.title = Set(title);
         }
@@ -264,11 +283,19 @@ impl AppointmentService {
         if let Some(end_time) = input.end_time {
             model.end_time = Set(end_time);
         }
-        if let Some(room_id) = input.room_id {
-            model.room_id = Set(Some(room_id));
+        match input.room_id {
+            MaybeNull::Value(room_id) => model.room_id = Set(Some(room_id)),
+            MaybeNull::Null => model.room_id = Set(None),
+            MaybeNull::Undefined => {}
         }
         if let Some(status) = input.status {
-            model.status = Set(status.to_string());
+            let (stored, checked_in_at, no_show_at) = Self::stored_status(&status, was_checked_in_at, now);
+            model.status = Set(stored.to_string());
+            model.checked_in_at = Set(checked_in_at);
+            model.no_show_at = Set(no_show_at);
+        }
+        if let Some(record_id) = input.medical_record_id {
+            model.medical_record_id = Set(Some(record_id));
         }
         model.updated_at = Set(now);
 
@@ -278,6 +305,84 @@ impl AppointmentService {
             .map_err(|e| format!("Failed to update appointment: {}", e))?;
 
         Self::get_appointment_simple(db, id).await
+    }
+
+    /// How a status is stored: the status column keeps its four original
+    /// values (its CHECK predates the arrival statuses), so a check-in is
+    /// `scheduled` + arrival time and a no-show is `cancelled` + `no_show_at`.
+    /// A repeated check-in keeps the first arrival time.
+    fn stored_status(
+        status: &AppointmentStatus,
+        checked_in_at: Option<DateTime<Utc>>,
+        now: DateTime<Utc>,
+    ) -> (&'static str, Option<DateTime<Utc>>, Option<DateTime<Utc>>) {
+        match status {
+            AppointmentStatus::Scheduled => ("scheduled", None, None),
+            AppointmentStatus::CheckedIn => ("scheduled", checked_in_at.or(Some(now)), None),
+            AppointmentStatus::InProgress => ("in_progress", checked_in_at, None),
+            AppointmentStatus::Completed => ("completed", checked_in_at, None),
+            AppointmentStatus::Cancelled => ("cancelled", checked_in_at, None),
+            AppointmentStatus::NoShow => ("cancelled", None, Some(now)),
+        }
+    }
+
+    async fn refuse_deceased(db: &DatabaseConnection, patient_id: i64) -> Result<(), String> {
+        let deceased = db
+            .query_one(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "SELECT deceased_at FROM patients WHERE id = ? AND deceased_at IS NOT NULL",
+                [patient_id.into()],
+            ))
+            .await
+            .map_err(|e| format!("Failed to check the patient: {}", e))?;
+        if deceased.is_some() {
+            return Err("PATIENT_DECEASED: a deceased patient can't be booked".to_string());
+        }
+        Ok(())
+    }
+
+    /// `off` (sync not on), `reconnect` (Google refused the login), `synced`
+    /// (the event exists) or `not_synced`; plus when it was last pushed.
+    async fn google_state(db: &DatabaseConnection, id: i64) -> Result<(String, Option<String>), String> {
+        let settings = db
+            .query_one(Statement::from_string(
+                DbBackend::Sqlite,
+                "SELECT sync_enabled, needs_reauth FROM google_calendar_settings WHERE user_id = 'default'".to_string(),
+            ))
+            .await
+            .map_err(|e| format!("Failed to read the Google settings: {}", e))?;
+        let (enabled, needs_reauth) = settings
+            .map(|row| {
+                (
+                    row.try_get::<bool>("", "sync_enabled").unwrap_or(false),
+                    row.try_get::<bool>("", "needs_reauth").unwrap_or(false),
+                )
+            })
+            .unwrap_or((false, false));
+        if !enabled {
+            return Ok(("off".to_string(), None));
+        }
+
+        let mapping = db
+            .query_one(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "SELECT last_synced_at FROM calendar_event_mappings WHERE appointment_id = ?",
+                [id.into()],
+            ))
+            .await
+            .map_err(|e| format!("Failed to read the Google event: {}", e))?;
+        let synced_at = mapping
+            .as_ref()
+            .and_then(|row| row.try_get::<Option<String>>("", "last_synced_at").ok().flatten());
+
+        let state = if needs_reauth {
+            "reconnect"
+        } else if mapping.is_some() {
+            "synced"
+        } else {
+            "not_synced"
+        };
+        Ok((state.to_string(), synced_at))
     }
 
     pub async fn delete_appointment(
@@ -318,12 +423,26 @@ impl AppointmentService {
             input.start_time,
             input.end_time,
             input.room_id,
+            None,
             input.exclude_appointment_id,
         ).await?;
+
+        let patient_conflicts = match input.patient_id {
+            Some(patient_id) => Self::check_conflicts_internal(
+                db,
+                input.start_time,
+                input.end_time,
+                None,
+                Some(patient_id),
+                input.exclude_appointment_id,
+            ).await?,
+            None => Vec::new(),
+        };
 
         Ok(ConflictCheckResponse {
             has_conflicts: !conflicts.is_empty(),
             conflicts,
+            patient_conflicts,
         })
     }
 
@@ -364,6 +483,7 @@ impl AppointmentService {
         start_time: DateTime<Utc>,
         end_time: DateTime<Utc>,
         room_id: Option<i64>,
+        patient_id: Option<i64>,
         exclude_id: Option<i64>,
     ) -> Result<Vec<Appointment>, String> {
         let mut sql = String::from(
@@ -381,6 +501,11 @@ impl AppointmentService {
         if let Some(room_id) = room_id {
             sql.push_str(" AND a.room_id = ?");
             params.push(room_id.into());
+        }
+
+        if let Some(patient_id) = patient_id {
+            sql.push_str(" AND a.patient_id = ?");
+            params.push(patient_id.into());
         }
 
         if let Some(exclude_id) = exclude_id {
@@ -446,12 +571,16 @@ impl AppointmentService {
     fn row_to_appointment(row: &QueryResult) -> Result<Appointment, String> {
         // Read status as String and parse to enum
         let status_str: String = row.try_get("", "status").map_err(|e| e.to_string())?;
+        let checked_in_at: Option<DateTime<Utc>> = row.try_get("", "checked_in_at").ok().flatten();
+        let no_show_at: Option<DateTime<Utc>> = row.try_get("", "no_show_at").ok().flatten();
         let status = match status_str.as_str() {
-            "scheduled" => crate::models::AppointmentStatus::Scheduled,
-            "in_progress" => crate::models::AppointmentStatus::InProgress,
-            "completed" => crate::models::AppointmentStatus::Completed,
-            "cancelled" => crate::models::AppointmentStatus::Cancelled,
-            _ => crate::models::AppointmentStatus::Scheduled, // Default fallback
+            "scheduled" if checked_in_at.is_some() => AppointmentStatus::CheckedIn,
+            "scheduled" => AppointmentStatus::Scheduled,
+            "in_progress" => AppointmentStatus::InProgress,
+            "completed" => AppointmentStatus::Completed,
+            "cancelled" if no_show_at.is_some() => AppointmentStatus::NoShow,
+            "cancelled" => AppointmentStatus::Cancelled,
+            _ => AppointmentStatus::Scheduled, // Default fallback
         };
 
         Ok(Appointment {
@@ -471,6 +600,8 @@ impl AppointmentService {
             species: row.try_get("", "species").ok(),
             breed: row.try_get("", "breed").ok(),
             microchip_id: row.try_get("", "microchip_id").ok(),
+            checked_in_at,
+            medical_record_id: row.try_get("", "medical_record_id").ok().flatten(),
         })
     }
 }
@@ -744,8 +875,9 @@ mod tests {
             description: Some("Updated description".to_string()),
             start_time: None,
             end_time: None,
-            room_id: None,
+            room_id: MaybeNull::Undefined,
             status: None,
+            ..Default::default()
         };
 
         let result = AppointmentService::update_appointment(
@@ -778,8 +910,9 @@ mod tests {
             description: None,
             start_time: None,
             end_time: None,
-            room_id: None,
+            room_id: MaybeNull::Undefined,
             status: Some(AppointmentStatus::InProgress),
+            ..Default::default()
         };
 
         let updated = AppointmentService::update_appointment(
@@ -913,6 +1046,7 @@ mod tests {
             end_time: test_time_slot(11, 2),
             room_id: Some(room_id),
             exclude_appointment_id: None,
+            patient_id: None,
         };
 
         let result = AppointmentService::check_conflicts(&db, input).await.unwrap();
@@ -940,6 +1074,7 @@ mod tests {
             end_time: test_time_slot(10, 3),   // 10:45
             room_id: Some(room_id),
             exclude_appointment_id: None,
+            patient_id: None,
         };
 
         let result = AppointmentService::check_conflicts(&db, input).await.unwrap();
@@ -968,6 +1103,7 @@ mod tests {
             end_time: test_time_slot(10, 2),
             room_id: Some(room2_id),
             exclude_appointment_id: None,
+            patient_id: None,
         };
 
         let result = AppointmentService::check_conflicts(&db, input).await.unwrap();
@@ -994,6 +1130,7 @@ mod tests {
             end_time: test_time_slot(10, 2),
             room_id: Some(room_id),
             exclude_appointment_id: Some(created.id),
+            patient_id: None,
         };
 
         let result = AppointmentService::check_conflicts(&db, input).await.unwrap();

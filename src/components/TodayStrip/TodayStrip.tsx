@@ -1,13 +1,14 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Card, Row, Col, Tag, Alert, Spin, Statistic, Typography, Badge } from 'antd';
 import { CalendarOutlined, ExperimentOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { invoke } from '@/services/invoke';
 import { useCalendarAppointments } from '@/hooks/useAppointments';
 import type { Appointment } from '@/types/appointments';
+import { AppointmentDrawer } from '@/components/AppointmentDrawer/AppointmentDrawer';
+import { isClosedStatus, statusColor, statusLabelKey } from '@/utils/appointmentStatus';
 import styles from './TodayStrip.module.css';
 
 const { Text } = Typography;
@@ -17,15 +18,6 @@ export interface TodayStripProps {
   waitingLabCount: number;
   onOpenLabResults: () => void;
 }
-
-const STATUS_COLOR: Record<string, string> = {
-  scheduled: 'blue',
-  in_progress: 'orange',
-  completed: 'green',
-  cancelled: 'default',
-};
-
-const statusKey = (status: string) => status.replace(/_([a-z])/g, (_m, c: string) => c.toUpperCase());
 
 function useToday() {
   const day = dayjs().format('YYYY-MM-DD');
@@ -39,7 +31,7 @@ function useToday() {
 /** Dashboard top: today's appointments, lab results waiting, patients seen today. */
 export function TodayStrip({ waitingLabCount, onOpenLabResults }: TodayStripProps) {
   const { t } = useTranslation(['shell', 'appointments']);
-  const navigate = useNavigate();
+  const [openId, setOpenId] = useState<number | null>(null);
   const { start, end } = useToday();
   const appointments = useCalendarAppointments(start, end);
   const seen = useQuery({
@@ -73,13 +65,16 @@ export function TodayStrip({ waitingLabCount, onOpenLabResults }: TodayStripProp
       <ul className={styles.appointments}>
         {list.map((a) => (
           <li key={a.id}>
-            <button type="button" className={styles.appointment} onClick={() => navigate(`/patients/${a.patientId}`)}>
+            <button
+              type="button"
+              className={styles.appointment}
+              data-closed={isClosedStatus(a.status) ? 'true' : undefined}
+              onClick={() => setOpenId(a.id)}
+            >
               <Text strong className={styles.time}>{dayjs(a.startTime).format('HH:mm')}</Text>
               <Text className={styles.patient}>{a.patientName || t('shell:today.noName')}</Text>
               <Text type="secondary" ellipsis className={styles.title}>{a.title}</Text>
-              <Tag color={STATUS_COLOR[a.status] ?? 'default'}>
-                {t(`appointments:status.${statusKey(a.status)}`)}
-              </Tag>
+              <Tag color={statusColor(a.status)}>{t(statusLabelKey(a.status))}</Tag>
             </button>
           </li>
         ))}
@@ -89,6 +84,7 @@ export function TodayStrip({ waitingLabCount, onOpenLabResults }: TodayStripProp
 
   return (
     <Card title={t('shell:today.title')} size="small">
+      <AppointmentDrawer appointmentId={openId} onClose={() => setOpenId(null)} />
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={16}>
           <Text type="secondary" className={styles.sectionLabel}>

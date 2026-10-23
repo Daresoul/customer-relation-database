@@ -133,14 +133,54 @@
   is set, no backup ran yet, or the last one is 26 hours old or more, green
   otherwise. Click opens `/settings?section=backups` (any section key works).
 - Dashboard "Today" strip (replaces the all-time counters): today's
-  appointments (click opens the patient), lab results waiting (today the
+  appointments (click opens the appointment panel), lab results waiting (today the
   Saved-for-later count; the strip takes it as `waitingLabCount`), and patients
   seen today (`count_patients_seen`: patients with a record created in the
   local day).
 - The household list has no Status or Last activity columns: the list query
   has no real last-visit date.
 
+## Appointments
+- Statuses: scheduled → checked in → in consult (`in_progress`) → done
+  (`completed`), plus cancelled and no-show. The `status` column keeps its
+  original four values (its CHECK can't change without a table rebuild), so
+  migration `059_appointment_arrival` adds `checked_in_at` and `no_show_at`:
+  checked in is `scheduled` + `checked_in_at`, no-show is `cancelled` +
+  `no_show_at`. `AppointmentService` turns them into one status on read, maps
+  a status filter the same way (`EFFECTIVE_STATUS_SQL`), and writes both
+  columns on every status change. A second check-in keeps the first arrival
+  time. Cancelled and no-show free the room and stay out of lists unless
+  `include_cancelled`; the appointments tab asks for them and shows them grey
+  and struck out.
+- The appointment panel (`components/AppointmentDrawer`) opens from calendar
+  cards, the Today list and the dashboard Today strip: time, room, patient with
+  alert chips, owner and phone, reason, notes, status with arrival time and wait,
+  Google state (`google_sync_state`: off, synced, not_synced, reconnect) and the
+  linked record. Actions: status moves (one click), Open patient, Start medical
+  record, Edit, Reschedule (keeps the length), Duplicate (to a chosen date),
+  Delete (asks first). A right click on a calendar card offers the same status
+  moves.
+- Start medical record sets the visit to in consult and opens the record
+  modal. The record it saves is linked through `appointments.medical_record_id`:
+  the panel watches the `CREATE_RECORD_MUTATION_KEY` mutation
+  (`hooks/useMedicalRecords.ts`) for that patient. The record title is not
+  prefilled yet; the record modal takes no initial values.
+- Today opens as a waiting-room list (time, patient, reason, room, status,
+  "waiting N min" since check-in, the next status as a button); the hour grid is
+  one click away. The calendar fetches exactly the range its view shows
+  (`onRangeChange`), and Refresh refetches it.
+- Edit saves a changed patient (`patient_id`; a deceased patient is refused)
+  and a cleared room (`room_id: null`; left out keeps the room). The conflict
+  check also returns `patient_conflicts`: the same patient booked at an
+  overlapping time in any room, shown as a warning (it doesn't block). The
+  patient picker shows owner (household name) and the chip's last 4 digits.
+- The old `/appointments` page is gone; its delete and duplicate live in the
+  panel.
+
 ## Google Calendar
+- Cancelling an appointment removes its Google event; other status changes
+  (no-show included) update the event's text. Deleting removes the event and
+  duplicating creates one.
 - When Google refuses the stored login (refresh rejected or a 401), the app
   sets `google_calendar_settings.needs_reauth` (migration 048). Settings then
   shows "Reconnect", and the background sync stops until the user reconnects.

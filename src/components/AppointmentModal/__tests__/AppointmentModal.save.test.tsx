@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { App } from 'antd';
 
 vi.mock('react-i18next', () => ({
@@ -13,6 +14,8 @@ vi.mock('../../../hooks/usePatients', () => ({
 vi.mock('../../../hooks/useRooms', () => ({
   useRooms: () => ({ data: [] }),
 }));
+
+vi.mock('@/services/invoke', () => ({ invoke: () => Promise.resolve([]) }));
 
 const checkConflicts = vi.fn();
 vi.mock('../../../services/appointmentService', () => ({
@@ -39,9 +42,11 @@ const rooms = [{ id: 3, name: 'Exam 1', capacity: 1 }];
 
 function renderModal(onSave: (d: unknown) => Promise<void>) {
   return render(
-    <App>
-      <AppointmentModal open mode="edit" appointment={appointment} onCancel={vi.fn()} onSave={onSave} rooms={rooms} />
-    </App>,
+    <QueryClientProvider client={new QueryClient()}>
+      <App>
+        <AppointmentModal open mode="edit" appointment={appointment} onCancel={vi.fn()} onSave={onSave} rooms={rooms} />
+      </App>
+    </QueryClientProvider>,
   );
 }
 

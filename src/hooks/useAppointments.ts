@@ -1,137 +1,68 @@
-import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useCallback } from 'react';
 import { App } from 'antd';
 import { useTranslation } from 'react-i18next';
 import appointmentService from '../services/appointmentService';
 import { createMutationErrorHandler } from '../utils/errors';
+import { invalidateAppointmentData } from './invalidation';
 import {
-  Appointment,
   AppointmentFilter,
   CreateAppointmentInput,
   UpdateAppointmentInput,
   ConflictCheckInput,
   DuplicateAppointmentInput,
-  Room,
-  RoomFilter,
 } from '../types/appointments';
 
 const APPOINTMENTS_KEY = 'appointments';
-const ROOMS_KEY = 'rooms';
-const PAGE_SIZE = 20;
 
-export const useAppointments = (filter: AppointmentFilter = {}) => {
+/**
+ * Appointment writes. Each resolves only after the backend confirms and
+ * rejects on failure (the error notification is shown here), so callers show
+ * their own success message and keep forms open on failure. The calendar and
+ * lists read through `useCalendarAppointments`.
+ */
+export const useAppointments = (_filter: AppointmentFilter = {}) => {
   const { notification } = App.useApp();
   const { t } = useTranslation('errors');
   const queryClient = useQueryClient();
-  const [currentFilter, setCurrentFilter] = useState<AppointmentFilter>(filter);
+  const onSuccess = () => invalidateAppointmentData(queryClient);
 
-  // Sync external filter changes
-  useEffect(() => {
-    setCurrentFilter(filter);
-  }, [filter]);
-
-  // Fetch appointments with pagination
-  const {
-    data,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    isLoading,
-    error,
-    refetch,
-  } = useInfiniteQuery({
-    queryKey: [APPOINTMENTS_KEY, currentFilter],
-    queryFn: ({ pageParam = 0 }) => {
-      return appointmentService.getAppointments(currentFilter, PAGE_SIZE, pageParam);
-    },
-    getNextPageParam: (lastPage, allPages) => {
-      const totalFetched = allPages.length * PAGE_SIZE;
-      return lastPage.hasMore ? totalFetched : undefined;
-    },
-    initialPageParam: 0,
-    staleTime: 0, // Force immediate refetch
-    gcTime: 0, // Don't cache
-  });
-
-  // Flatten appointments from all pages
-  const appointments = useMemo(
-    () => data?.pages.flatMap((page) => page.appointments) ?? [],
-    [data]
-  );
-
-  const totalCount = data?.pages[0]?.total ?? 0;
-
-  // Create appointment mutation
   const createMutation = useMutation({
-    mutationFn: (input: CreateAppointmentInput) =>
-      appointmentService.createAppointment(input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [APPOINTMENTS_KEY] });
-    },
+    mutationFn: (input: CreateAppointmentInput) => appointmentService.createAppointment(input),
+    onSuccess,
     onError: createMutationErrorHandler(notification, 'createAppointment', t, 'useAppointments'),
   });
 
-  // Update appointment mutation
   const updateMutation = useMutation({
     mutationFn: ({ id, input }: { id: number; input: UpdateAppointmentInput }) =>
       appointmentService.updateAppointment(id, input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [APPOINTMENTS_KEY] });
-    },
+    onSuccess,
     onError: createMutationErrorHandler(notification, 'updateAppointment', t, 'useAppointments'),
   });
 
-  // Delete appointment mutation
   const deleteMutation = useMutation({
     mutationFn: (id: number) => appointmentService.deleteAppointment(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [APPOINTMENTS_KEY] });
-    },
+    onSuccess,
     onError: createMutationErrorHandler(notification, 'cancelAppointment', t, 'useAppointments'),
   });
 
-  // Duplicate appointment mutation
   const duplicateMutation = useMutation({
-    mutationFn: (input: DuplicateAppointmentInput) =>
-      appointmentService.duplicateAppointment(input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [APPOINTMENTS_KEY] });
-    },
+    mutationFn: (input: DuplicateAppointmentInput) => appointmentService.duplicateAppointment(input),
+    onSuccess,
     onError: createMutationErrorHandler(notification, 'duplicateAppointment', t, 'useAppointments'),
   });
 
-  // Check conflicts
   const checkConflicts = useCallback(
-    async (input: ConflictCheckInput) => {
-      return appointmentService.checkConflicts(input);
-    },
-    []
-  );
-
-  // Update filter and refetch
-  const updateFilter = useCallback(
-    (newFilter: AppointmentFilter) => {
-      setCurrentFilter(newFilter);
-    },
-    []
+    async (input: ConflictCheckInput) => appointmentService.checkConflicts(input),
+    [],
   );
 
   return {
-    appointments,
-    totalCount,
-    isLoading,
-    error,
-    hasNextPage,
-    isFetchingNextPage,
-    fetchNextPage,
-    refetch,
     createAppointment: createMutation.mutateAsync,
     updateAppointment: updateMutation.mutateAsync,
     deleteAppointment: deleteMutation.mutateAsync,
     duplicateAppointment: duplicateMutation.mutateAsync,
     checkConflicts,
-    updateFilter,
-    filter: currentFilter,
     isCreating: createMutation.isPending,
     isUpdating: updateMutation.isPending,
     isDeleting: deleteMutation.isPending,
@@ -139,16 +70,16 @@ export const useAppointments = (filter: AppointmentFilter = {}) => {
   };
 };
 
-// Hook for single appointment detail
-export const useAppointmentDetail = (id: number | undefined) => {
+/** One appointment with patient, room and Google state (the appointment panel). */
+export const useAppointmentDetail = (id: number | undefined | null) => {
   return useQuery({
     queryKey: [APPOINTMENTS_KEY, 'detail', id],
-    queryFn: () => (id ? appointmentService.getAppointment(id) : null),
+    queryFn: () => appointmentService.getAppointment(id as number),
     enabled: !!id,
   });
 };
 
-// Hook for calendar view appointments
+/** Appointments starting in [startDate, endDate]: the range a view shows. */
 export const useCalendarAppointments = (startDate: Date, endDate: Date, additionalFilter?: Partial<AppointmentFilter>) => {
   const filter: AppointmentFilter = {
     startDate: startDate.toISOString(),

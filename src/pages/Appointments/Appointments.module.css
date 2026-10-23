@@ -99,6 +99,14 @@
   overflow: auto;
 }
 
+.layoutToggle {
+  margin-bottom: 12px;
+}
+
+.loadError {
+  margin-bottom: 12px;
+}
+
 .filterLabel {
   margin-bottom: 8px;
   font-weight: 500;

@@ -1,18 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import {
-  Tabs,
-  Button,
-  Space,
-  Select,
-  DatePicker,
-  Input,
-  Drawer,
-  Modal,
-  App,
-  Row,
-  Col,
-  Checkbox,
-} from 'antd';
+import { Tabs, Button, Space, Select, Drawer, App, Checkbox, Segmented } from 'antd';
 import {
   CalendarOutlined,
   UnorderedListOutlined,
@@ -20,39 +7,47 @@ import {
   FilterOutlined,
   ReloadOutlined,
 } from '@ant-design/icons';
+import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import AppointmentCalendar from '../../components/AppointmentCalendar/AppointmentCalendar';
-import AppointmentList from '../../components/AppointmentList/AppointmentList';
 import AppointmentModal from '../../components/AppointmentModal/AppointmentModal';
 import TodaysAppointments from '../../components/AppointmentCalendar/TodaysAppointments';
+import WaitingRoomList from '../../components/AppointmentCalendar/WaitingRoomList';
+import { AppointmentDrawer } from '../../components/AppointmentDrawer/AppointmentDrawer';
+import { LoadError } from '../../components/common/LoadError';
 import {
   Appointment,
   AppointmentFilter,
   AppointmentStatus,
   CalendarView,
+  CreateAppointmentInput,
+  UpdateAppointmentInput,
 } from '../../types/appointments';
-import {
-  useAppointments,
-  useAppointmentDetail,
-  useCalendarAppointments,
-} from '../../hooks/useAppointments';
+import { useAppointments, useCalendarAppointments } from '../../hooks/useAppointments';
 import { useRooms } from '../../hooks/useRooms';
+import { statusLabelKey } from '../../utils/appointmentStatus';
 import styles from './Appointments.module.css';
 
-const { RangePicker } = DatePicker;
+const FILTER_STATUSES: AppointmentStatus[] = ['scheduled', 'checked_in', 'in_progress', 'completed', 'cancelled', 'no_show'];
+
+/** Cancelled and no-show visits are shown, greyed and struck out. */
+const DEFAULT_FILTER: AppointmentFilter = { includeCancelled: true };
+
+type Range = { start: Date; end: Date };
 
 const AppointmentsTab: React.FC = () => {
   const { t } = useTranslation(['appointments', 'common']);
-  const { message, modal } = App.useApp();
+  const { message } = App.useApp();
   const [activeView, setActiveView] = useState<'calendar' | 'list'>('list');
+  const [todayLayout, setTodayLayout] = useState<'list' | 'grid'>('list');
   const [calendarView, setCalendarView] = useState<CalendarView>('month');
+  const [calendarRange, setCalendarRange] = useState<Range | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
-  const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
-  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [filterDrawerVisible, setFilterDrawerVisible] = useState(false);
   const [initialDate, setInitialDate] = useState<Date>(new Date());
   const [initialEndDate, setInitialEndDate] = useState<Date | undefined>();
-  const [filter, setFilter] = useState<AppointmentFilter>({});
+  const [filter, setFilter] = useState<AppointmentFilter>(DEFAULT_FILTER);
   const [today, setToday] = useState(() => new Date().toDateString());
 
   // The app lives in the tray for days, so "today" must follow the clock.
@@ -66,131 +61,85 @@ const AppointmentsTab: React.FC = () => {
     };
   }, []);
 
-  const {
-    appointments: listAppointments,
-    createAppointment,
-    updateAppointment,
-    deleteAppointment,
-    duplicateAppointment,
-    refetch,
-    isCreating,
-    isUpdating,
-    isDeleting,
-    isLoading: listLoading,
-    error: listError,
-  } = useAppointments(filter);
+  const { createAppointment, updateAppointment } = useAppointments();
 
-  // Use different data strategies based on view
+  // Today shows today; the calendar shows the range its view reports.
   const { startDate, endDate } = useMemo(() => {
     if (activeView === 'calendar') {
-      const start = new Date();
-      start.setMonth(start.getMonth() - 1); // Look back 1 month
-      const end = new Date();
-      end.setMonth(end.getMonth() + 2); // Look ahead 2 months
-      return { startDate: start, endDate: end };
-    } else {
-      // For list view, just show today's appointments
-      const start = new Date();
-      start.setHours(0, 0, 0, 0);
-      const end = new Date();
-      end.setHours(23, 59, 59, 999);
-      return { startDate: start, endDate: end };
+      if (calendarRange) return { startDate: calendarRange.start, endDate: calendarRange.end };
+      return {
+        startDate: dayjs().startOf('month').startOf('week').toDate(),
+        endDate: dayjs().endOf('month').endOf('week').toDate(),
+      };
     }
-  }, [activeView, today]);
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
+    return { startDate: start, endDate: end };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `today` re-runs this at midnight
+  }, [activeView, calendarRange, today]);
 
-  const { data: calendarData, isLoading: calendarLoading, error: calendarError } = useCalendarAppointments(
-    startDate,
-    endDate,
-    {
-      includeCancelled: filter.includeCancelled,
-      status: filter.status,
-      roomId: filter.roomId,
-    }
-  );
-
-  // Use calendar data for both views now, as it's more efficient
-  const appointments = calendarData?.appointments || [];
-  const isLoading = calendarLoading;
-  const error = calendarError;
-
-
+  const calendarQuery = useCalendarAppointments(startDate, endDate, {
+    includeCancelled: filter.includeCancelled,
+    status: filter.status,
+    roomId: filter.roomId,
+  });
+  const appointments = calendarQuery.data?.appointments ?? [];
 
   const { data: rooms = [] } = useRooms();
 
-  const { data: appointmentDetail } = useAppointmentDetail(
-    selectedAppointment?.id
-  );
+  const handleRangeChange = useCallback((start: Date, end: Date) => {
+    setCalendarRange((prev) =>
+      prev && prev.start.getTime() === start.getTime() && prev.end.getTime() === end.getTime() ? prev : { start, end },
+    );
+  }, []);
 
-  // Handle create appointment
   const handleCreateAppointment = useCallback((date?: Date, endDate?: Date) => {
     setInitialDate(date || new Date());
     setInitialEndDate(endDate);
-    setModalMode('create');
-    setSelectedAppointment(null);
     setModalVisible(true);
   }, []);
 
-  // Handle edit appointment
-  const handleEditAppointment = useCallback((appointment: Appointment) => {
-    setSelectedAppointment(appointment);
-    setModalMode('edit');
-    setModalVisible(true);
+  const handleSelectAppointment = useCallback((appointment: Appointment) => {
+    setSelectedId(appointment.id);
   }, []);
 
-  // Handle delete appointment
-  const handleDeleteAppointment = useCallback(
-    async (appointment: Appointment) => {
-      modal.confirm({
-        title: t('appointments:messages.deleteTitle'),
-        content: t('appointments:messages.deleteConfirm'),
-        okText: t('appointments:actions.delete'),
-        okType: 'danger',
-        cancelText: t('common:cancel'),
-        onOk: async () => {
-          try {
-            await deleteAppointment(appointment.id);
-            message.success(t('appointments:messages.deletedSuccess'));
-          } catch {
-            // useAppointments already reported the failure
-          }
-        },
-      });
-    },
-    [deleteAppointment, t, modal, message]
-  );
-
-  // Handle duplicate appointment
-  const handleDuplicateAppointment = useCallback(
-    async (appointment: Appointment) => {
+  const handleStatusChange = useCallback(
+    async (appointment: Appointment, status: AppointmentStatus) => {
       try {
-        await duplicateAppointment({
-          appointmentId: appointment.id,
-          targetDate: new Date().toISOString(),
-        });
-        message.success(t('appointments:messages.duplicatedSuccess'));
+        await updateAppointment({ id: appointment.id, input: { status } });
+        message.success(
+          t('appointments:messages.statusChanged', {
+            name: appointment.patientName ?? '',
+            status: t(statusLabelKey(status)),
+          }),
+        );
       } catch {
         // useAppointments already reported the failure
       }
     },
-    [duplicateAppointment, t, message]
+    [updateAppointment, message, t],
   );
 
-  // Handle save appointment (create or update)
   const handleSaveAppointment = useCallback(
-    async (values: any) => {
+    async (values: CreateAppointmentInput | UpdateAppointmentInput) => {
       // A failure is reported by useAppointments; rethrow so the modal keeps the form.
-      if (modalMode === 'edit' && selectedAppointment) {
-        await updateAppointment({ id: selectedAppointment.id, input: values });
-        message.success(t('appointments:messages.updatedSuccess'));
-      } else {
-        await createAppointment(values);
-        message.success(t('appointments:messages.createdSuccess'));
-      }
+      await createAppointment(values as CreateAppointmentInput);
+      message.success(t('appointments:messages.createdSuccess'));
       setModalVisible(false);
-      setSelectedAppointment(null);
     },
-    [modalMode, selectedAppointment, updateAppointment, createAppointment, t, message]
+    [createAppointment, t, message],
   );
+
+  const loadError = calendarQuery.error ? (
+    <LoadError
+      title={t('appointments:loadFailed')}
+      onRetry={() => calendarQuery.refetch()}
+      retrying={calendarQuery.isFetching}
+      className={styles.loadError}
+    />
+  ) : null;
 
   return (
     <div className={styles.fullHeightScroll}>
@@ -199,24 +148,17 @@ const AppointmentsTab: React.FC = () => {
         onChange={(key) => setActiveView(key as 'calendar' | 'list')}
         tabBarExtraContent={
           <Space>
-            <Button
-              icon={<FilterOutlined />}
-              onClick={() => setFilterDrawerVisible(true)}
-            >
+            <Button icon={<FilterOutlined />} onClick={() => setFilterDrawerVisible(true)}>
               {t('appointments:filters.filter')}
             </Button>
             <Button
               icon={<ReloadOutlined />}
-              onClick={() => refetch()}
-              loading={false}
+              onClick={() => calendarQuery.refetch()}
+              loading={calendarQuery.isFetching && !calendarQuery.isLoading}
             >
               {t('appointments:calendar.refresh')}
             </Button>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => handleCreateAppointment()}
-            >
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => handleCreateAppointment()}>
               {t('appointments:newAppointment')}
             </Button>
           </Space>
@@ -231,11 +173,32 @@ const AppointmentsTab: React.FC = () => {
               </span>
             ),
             children: (
-              <TodaysAppointments
-                appointments={appointments || []}
-                onSelectAppointment={handleEditAppointment}
-                onCreateAppointment={handleCreateAppointment}
-              />
+              <>
+                {loadError}
+                <Segmented
+                  className={styles.layoutToggle}
+                  value={todayLayout}
+                  onChange={(value) => setTodayLayout(value as 'list' | 'grid')}
+                  options={[
+                    { value: 'list', label: t('appointments:views.list') },
+                    { value: 'grid', label: t('appointments:views.grid') },
+                  ]}
+                />
+                {todayLayout === 'list' ? (
+                  <WaitingRoomList
+                    appointments={appointments}
+                    onSelect={handleSelectAppointment}
+                    onStatusChange={handleStatusChange}
+                  />
+                ) : (
+                  <TodaysAppointments
+                    appointments={appointments}
+                    onSelectAppointment={handleSelectAppointment}
+                    onCreateAppointment={handleCreateAppointment}
+                    onStatusChange={handleStatusChange}
+                  />
+                )}
+              </>
             ),
           },
           {
@@ -247,19 +210,23 @@ const AppointmentsTab: React.FC = () => {
               </span>
             ),
             children: (
-              <AppointmentCalendar
-                appointments={appointments || []}
-                view={calendarView}
-                onViewChange={setCalendarView}
-                onSelectAppointment={handleEditAppointment}
-                onCreateAppointment={handleCreateAppointment}
-              />
+              <>
+                {loadError}
+                <AppointmentCalendar
+                  appointments={appointments}
+                  view={calendarView}
+                  onViewChange={setCalendarView}
+                  onSelectAppointment={handleSelectAppointment}
+                  onCreateAppointment={handleCreateAppointment}
+                  onRangeChange={handleRangeChange}
+                  onStatusChange={handleStatusChange}
+                />
+              </>
             ),
           },
         ]}
       />
 
-      {/* Filter Drawer */}
       <Drawer
         title={t('appointments:filters.title')}
         placement="right"
@@ -273,25 +240,16 @@ const AppointmentsTab: React.FC = () => {
             <Select
               className={styles.fullWidth}
               onChange={(value) => {
-                if (value && value !== 'all') {
-                  setFilter({
-                    ...filter,
-                    status: value as AppointmentStatus,
-                    // Clear includeCancelled when selecting a specific status
-                    includeCancelled: value === 'cancelled' ? true : undefined
-                  });
-                } else {
-                  const { status, includeCancelled, ...rest } = filter;
-                  setFilter(rest);
-                }
+                setFilter({ ...filter, status: value && value !== 'all' ? (value as AppointmentStatus) : undefined });
               }}
               value={filter.status || 'all'}
             >
               <Select.Option value="all">{t('appointments:filters.allStatuses')}</Select.Option>
-              <Select.Option value="scheduled">{t('appointments:status.scheduled')}</Select.Option>
-              <Select.Option value="in_progress">{t('appointments:status.inProgress')}</Select.Option>
-              <Select.Option value="completed">{t('appointments:status.completed')}</Select.Option>
-              <Select.Option value="cancelled">{t('appointments:status.cancelled')}</Select.Option>
+              {FILTER_STATUSES.map((status) => (
+                <Select.Option key={status} value={status}>
+                  {t(statusLabelKey(status))}
+                </Select.Option>
+              ))}
             </Select>
           </div>
 
@@ -300,12 +258,7 @@ const AppointmentsTab: React.FC = () => {
             <Select
               className={styles.fullWidth}
               onChange={(value) => {
-                if (value && value !== 'all') {
-                  setFilter({ ...filter, roomId: value });
-                } else {
-                  const { roomId, ...rest } = filter;
-                  setFilter(rest);
-                }
+                setFilter({ ...filter, roomId: value && value !== 'all' ? Number(value) : undefined });
               }}
               value={filter.roomId || 'all'}
             >
@@ -318,26 +271,16 @@ const AppointmentsTab: React.FC = () => {
             </Select>
           </div>
 
-          {/* Include cancelled - Only show when not filtering by cancelled status specifically */}
-          {filter.status !== 'cancelled' && (
-            <Checkbox
-              checked={filter.includeCancelled || false}
-              onChange={(e) => {
-                if (e.target.checked) {
-                  setFilter({ ...filter, includeCancelled: true });
-                } else {
-                  const { includeCancelled, ...rest } = filter;
-                  setFilter(rest);
-                }
-              }}
-            >
-              {t('appointments:filters.includeCancelled')}
-            </Checkbox>
-          )}
+          <Checkbox
+            checked={filter.includeCancelled || false}
+            onChange={(e) => setFilter({ ...filter, includeCancelled: e.target.checked || undefined })}
+          >
+            {t('appointments:filters.includeCancelled')}
+          </Checkbox>
 
           <Button
             onClick={() => {
-              setFilter({});
+              setFilter(DEFAULT_FILTER);
               setFilterDrawerVisible(false);
             }}
             block
@@ -347,22 +290,21 @@ const AppointmentsTab: React.FC = () => {
         </Space>
       </Drawer>
 
-      {/* Appointment Modal */}
       <AppointmentModal
         open={modalVisible}
-        appointment={selectedAppointment}
-        mode={modalMode}
+        appointment={null}
+        mode="create"
         onCancel={() => {
           setModalVisible(false);
-          setSelectedAppointment(null);
           setInitialEndDate(undefined);
         }}
         onSave={handleSaveAppointment}
-        initialDate={modalMode === 'create' ? initialDate : undefined}
-        initialEndDate={modalMode === 'create' ? initialEndDate : undefined}
+        initialDate={initialDate}
+        initialEndDate={initialEndDate}
         rooms={rooms}
       />
 
+      <AppointmentDrawer appointmentId={selectedId} onClose={() => setSelectedId(null)} />
     </div>
   );
 };
