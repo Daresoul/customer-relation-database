@@ -80,6 +80,11 @@ describe("Today's waiting-room list", () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
+  it('offers no step for a finished visit — reopening is in the panel', () => {
+    renderList([apt({ status: 'completed' })]);
+    expect(screen.queryByRole('button', { name: /appointments:actions/ })).not.toBeInTheDocument();
+  });
+
   it('opens the panel when a row is clicked', () => {
     const { onSelect } = renderList([apt({ id: 5 })]);
 

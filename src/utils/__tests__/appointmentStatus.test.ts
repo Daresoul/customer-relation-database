@@ -5,6 +5,7 @@ import {
   isClosedStatus,
   nextStatuses,
   waitingMinutes,
+  statusActionKey,
 } from '../appointmentStatus';
 
 describe('appointment status helpers', () => {
@@ -51,4 +52,10 @@ describe('appointment status helpers', () => {
     expect(waitingMinutes(undefined, now)).toBeNull();
     expect(waitingMinutes('2030-01-10T10:40:00Z', now)).toBe(0);
   });
+
+  it('calls taking a finished visit back "back to exam", not "start exam"', () => {
+    expect(statusActionKey('in_progress', 'completed')).toBe('appointments:actions.backToConsult');
+    expect(statusActionKey('in_progress', 'checked_in')).toBe('appointments:actions.startConsult');
+  });
 });
+
