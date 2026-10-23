@@ -10,7 +10,8 @@
  * real error.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import i18n from '../../i18n';
 
 const mocks = vi.hoisted(() => ({
   tauriInvoke: vi.fn(),
@@ -21,7 +22,7 @@ vi.mock('@tauri-apps/api/tauri', () => ({
 }));
 
 // Import AFTER the mock so the module picks up the stub.
-import { invoke } from '../invoke';
+import { invoke, DEFAULT_INVOKE_TIMEOUT_MS } from '../invoke';
 
 /**
  * The wrapper makes TWO underlying invoke calls on error: the original
@@ -177,6 +178,89 @@ describe('wrapped invoke', () => {
     await expect(invoke('big_error')).rejects.toBeTruthy();
 
     expect(lastLogEventInput().message.length).toBeLessThanOrEqual(2_000);
+  });
+
+  // lifecycle.md #14: a command that never answers (a panic inside an async
+  // command leaves the promise pending) kept the screen spinning forever.
+  describe('timeout', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    function hangCommandButLog(): void {
+      mocks.tauriInvoke.mockImplementation((command: string) =>
+        command === 'log_event' ? Promise.resolve(undefined) : new Promise(() => {}),
+      );
+    }
+
+    it('rejects a command that does not answer within the default time, with a translated message', async () => {
+      hangCommandButLog();
+
+      const result = invoke('get_patients');
+      const settled = expect(result).rejects.toBe(
+        i18n.t('errors:commandTimeout', { seconds: DEFAULT_INVOKE_TIMEOUT_MS / 1000 }),
+      );
+      await vi.advanceTimersByTimeAsync(DEFAULT_INVOKE_TIMEOUT_MS);
+      await settled;
+    });
+
+    it('does not reject before the default time', async () => {
+      hangCommandButLog();
+      let rejected = false;
+      invoke('get_patients').catch(() => {
+        rejected = true;
+      });
+
+      await vi.advanceTimersByTimeAsync(DEFAULT_INVOKE_TIMEOUT_MS - 1);
+
+      expect(rejected).toBe(false);
+    });
+
+    it('logs the timeout with the command name only', async () => {
+      hangCommandButLog();
+
+      const result = invoke('get_patient', { id: 7, name: 'Rex' }).catch(() => undefined);
+      await vi.advanceTimersByTimeAsync(DEFAULT_INVOKE_TIMEOUT_MS);
+      await result;
+
+      const input = lastLogEventInput();
+      expect(input.level).toBe('error');
+      expect(input.message).toContain('get_patient');
+      expect(input.message).toContain('timed out');
+      expect(input.extras).toEqual({
+        command: 'get_patient',
+        durationMs: DEFAULT_INVOKE_TIMEOUT_MS,
+        errorType: 'timeout',
+      });
+      expect(JSON.stringify(input)).not.toContain('Rex');
+    });
+
+    it.each(['run_backup_now', 'create_medical_record', 'regenerate_record_document', 'attach_lab_result', 'complete_oauth_flow'])(
+      'never times out the long-running command %s',
+      async (command) => {
+        hangCommandButLog();
+        let rejected = false;
+        invoke(command).catch(() => {
+          rejected = true;
+        });
+
+        await vi.advanceTimersByTimeAsync(60 * 60 * 1000);
+
+        expect(rejected).toBe(false);
+      },
+    );
+
+    it('a command that answers in time is not affected by the timer', async () => {
+      mocks.tauriInvoke.mockResolvedValue('ok');
+
+      await expect(invoke('get_patients')).resolves.toBe('ok');
+      await vi.advanceTimersByTimeAsync(DEFAULT_INVOKE_TIMEOUT_MS);
+
+      expect(mocks.tauriInvoke).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('still re-throws when log_event itself fails (fire-and-forget)', async () => {
