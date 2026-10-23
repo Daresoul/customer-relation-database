@@ -471,3 +471,111 @@ async fn one_document_can_be_retried_on_its_own() {
     assert_eq!(active_documents(&db, record.id, "invoice").await, 1);
     assert_eq!(active_documents(&db, record.id, "simple_report").await, 0);
 }
+
+// ---------------------------------------------------------------------------
+// A record whose line items or files can't be read is an error, not an empty
+// list (a save would then drop the invoice)
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn a_record_whose_line_items_cant_be_read_is_an_error() {
+    let db = create_test_db_with_migrations().await;
+    let patient_id = seed_patient(&db).await;
+    let record = MedicalRecordService::save_new_record(&db, new_record(patient_id, vec![item("Exam", 1500.0)])).await.unwrap();
+    db.execute_unprepared("DROP TABLE medical_record_line_items").await.unwrap();
+
+    assert!(MedicalRecordService::get_medical_record(&db, record.id, false).await.is_err());
+
+    let mut changes = no_changes();
+    changes.name = Some("Renamed".to_string());
+    assert!(MedicalRecordService::save_record_changes(&db, record.id, changes).await.is_err());
+}
+
+#[tokio::test]
+async fn a_record_whose_files_cant_be_read_is_an_error() {
+    let db = create_test_db_with_migrations().await;
+    let patient_id = seed_patient(&db).await;
+    let record = MedicalRecordService::save_new_record(&db, new_record(patient_id, vec![])).await.unwrap();
+    db.execute_unprepared("PRAGMA foreign_keys = OFF").await.unwrap();
+    db.execute_unprepared("DROP TABLE medical_attachments").await.unwrap();
+
+    assert!(MedicalRecordService::get_medical_record(&db, record.id, false).await.is_err());
+    assert!(MedicalRecordService::get_medical_records(&db, patient_id, None, None).await.is_err());
+}
+
+// ---------------------------------------------------------------------------
+// Versions: an invoice-only edit is a new version; an edit that changes
+// nothing writes no history
+// ---------------------------------------------------------------------------
+
+async fn history_versions(db: &DatabaseConnection, record_id: i64) -> Vec<(i64, String)> {
+    db.query_all(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "SELECT version, changed_fields FROM medical_record_history WHERE medical_record_id = ? ORDER BY id",
+        [record_id.into()],
+    ))
+    .await
+    .unwrap()
+    .iter()
+    .map(|r| (r.try_get::<i64>("", "version").unwrap(), r.try_get::<String>("", "changed_fields").unwrap()))
+    .collect()
+}
+
+#[tokio::test]
+async fn an_edit_of_only_the_invoice_lines_is_a_new_version() {
+    let db = create_test_db_with_migrations().await;
+    let patient_id = seed_patient(&db).await;
+    let record = MedicalRecordService::save_new_record(&db, new_record(patient_id, vec![item("Exam", 1500.0)])).await.unwrap();
+
+    let mut changes = no_changes();
+    changes.line_items = Some(vec![item("Exam", 1500.0), item("Vaccine", 800.0)]);
+    let updated = MedicalRecordService::save_record_changes(&db, record.id, changes).await.unwrap();
+
+    assert_eq!(updated.version, 2);
+    let history = history_versions(&db, record.id).await;
+    assert_eq!(history.len(), 2);
+    assert_eq!(history[1].0, 2);
+    assert!(history[1].1.contains("line_items"), "{:?}", history);
+}
+
+#[tokio::test]
+async fn an_edit_that_changes_nothing_keeps_the_version_and_writes_no_history() {
+    let db = create_test_db_with_migrations().await;
+    let patient_id = seed_patient(&db).await;
+    let record = MedicalRecordService::save_new_record(&db, new_record(patient_id, vec![item("Exam", 1500.0)])).await.unwrap();
+
+    let mut changes = no_changes();
+    changes.name = Some("Visit".to_string());
+    changes.line_items = Some(vec![item("Exam", 1500.0)]);
+    let updated = MedicalRecordService::save_record_changes(&db, record.id, changes).await.unwrap();
+
+    assert_eq!(updated.version, 1);
+    assert_eq!(history_versions(&db, record.id).await.len(), 1);
+}
+
+// ---------------------------------------------------------------------------
+// An old version shows that version's values, empty ones included
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn an_old_version_shows_its_own_values_including_empty_ones() {
+    let db = create_test_db_with_migrations().await;
+    let patient_id = seed_patient(&db).await;
+    let mut input = new_record(patient_id, vec![item("Exam", 1500.0)]);
+    input.prescription_notes = None;
+    let record = MedicalRecordService::save_new_record(&db, input).await.unwrap();
+
+    let mut changes = no_changes();
+    changes.prescription_notes = Some("Amoxicillin".to_string());
+    changes.discount_percent = MaybeNull::Null;
+    changes.manual_total = MaybeNull::Value(2000.0);
+    MedicalRecordService::save_record_changes(&db, record.id, changes).await.unwrap();
+
+    let v1 = MedicalRecordService::get_record_at_version(&db, record.id, 1).await.unwrap();
+
+    assert_eq!(v1.version, 1);
+    assert_eq!(v1.prescription_notes, None);
+    assert_eq!(v1.discount_percent, Some(10.0));
+    assert_eq!(v1.manual_total, None);
+    assert!(v1.line_items.is_none(), "a snapshot has no invoice lines");
+}

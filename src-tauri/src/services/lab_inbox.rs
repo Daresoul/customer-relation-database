@@ -703,6 +703,15 @@ pub async fn move_result(
     Ok(MoveOutcome { attachment_id: new_id, from_record_id, to_record_id: target_record_id, pdfs })
 }
 
+pub async fn delete_and_refresh_lab_report(
+    _env: &PdfEnv,
+    db: &DatabaseConnection,
+    attachment_id: i64,
+) -> Result<Option<PdfStatus>, String> {
+    crate::services::file_storage::FileStorageService::delete_user_attachment(db, attachment_id).await?;
+    Ok(None)
+}
+
 /// Soft-delete an attachment (see `FileStorageService::delete_attachment`).
 /// When it was the record's copy of a lab result, the result goes back to
 /// waiting in the inbox.
