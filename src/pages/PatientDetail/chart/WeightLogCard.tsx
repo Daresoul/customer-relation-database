@@ -13,7 +13,7 @@ const { Text } = Typography;
 
 /** The weight log on the overview: trend line and every entry, newest first. */
 export const WeightLogCard: React.FC<{ patientId: number }> = ({ patientId }) => {
-  const { t } = useTranslation(['patients', 'common']);
+  const { t, i18n } = useTranslation(['patients', 'common']);
   const { data: weights = [], isLoading, isError, refetch, isFetching } = usePatientWeights(patientId);
   const deleteWeight = useDeleteWeight();
 
@@ -56,7 +56,7 @@ export const WeightLogCard: React.FC<{ patientId: number }> = ({ patientId }) =>
             >
               <span className={styles.weightRow}>
                 <Text type="secondary">{formatDate(w.measuredOn)}</Text>
-                <Text strong>{t('patients:units.weightKg', { weight: formatKg(w.weight) })}</Text>
+                <Text strong>{t('patients:units.weightKg', { weight: formatKg(w.weight, i18n.language) })}</Text>
                 {w.medicalRecordId != null && (
                   <Tooltip title={t('patients:chart.weights.fromRecord')}>
                     <FileTextOutlined />

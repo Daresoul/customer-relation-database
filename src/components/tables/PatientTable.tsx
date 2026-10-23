@@ -29,7 +29,7 @@ import { formatPatientAge } from '../../utils/patientChart';
 import { formatDate } from '../../utils/dateFormatter';
 import styles from './Tables.module.css';
 import { AlertChips } from '../patient/AlertChips';
-import { patientStatus, visiblePatients } from '../../utils/patientChart';
+import { formatKg, patientStatus, visiblePatients } from '../../utils/patientChart';
 import { speciesLabel } from '../../utils/species';
 
 const { Text } = Typography;
@@ -47,7 +47,7 @@ export const PatientTable: React.FC<PatientTableProps> = ({
   searchText: controlledSearchText,
   onSearchTextChange,
 }) => {
-  const { t } = useTranslation(['patients', 'entities', 'common']);
+  const { t, i18n } = useTranslation(['patients', 'entities', 'common']);
   const navigate = useNavigate();
   const [internalSearchText, setInternalSearchText] = useState('');
   const [showInactive, setShowInactive] = useState(false);
@@ -192,7 +192,7 @@ export const PatientTable: React.FC<PatientTableProps> = ({
       width: 100,
       align: 'right',
       render: (weight) =>
-        weight ? <Text>{t('patients:units.weightKg', { weight: weight.toFixed(1) })}</Text> : <Text type="secondary">-</Text>,
+        weight ? <Text>{t('patients:units.weightKg', { weight: formatKg(weight, i18n.language) })}</Text> : <Text type="secondary">-</Text>,
       sorter: (a, b) => (a.weight || 0) - (b.weight || 0),
     },
     {

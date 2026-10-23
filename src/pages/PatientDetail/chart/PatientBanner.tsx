@@ -50,7 +50,7 @@ function ownerPhone(patient: PatientDetail): string | undefined {
 
 /** Who this animal is, in the first glance: signalment, weight, owner, alerts and status. */
 export const PatientBanner: React.FC<PatientBannerProps> = ({ patient, onDelete, onNewRecord, onBook }) => {
-  const { t } = useTranslation(['patients', 'entities', 'common']);
+  const { t, i18n } = useTranslation(['patients', 'entities', 'common']);
   const { modal } = App.useApp();
   const [dialog, setDialog] = useState<Dialog>(null);
   const { data: weights = [] } = usePatientWeights(patient.id);
@@ -163,8 +163,8 @@ export const PatientBanner: React.FC<PatientBannerProps> = ({ patient, onDelete,
           {patient.weight ? (
             <Text>
               {patient.lastWeightAt
-                ? t('patients:chart.banner.weightOn', { weight: formatKg(patient.weight), date: formatDate(patient.lastWeightAt) })
-                : t('patients:units.weightKg', { weight: formatKg(patient.weight) })}
+                ? t('patients:chart.banner.weightOn', { weight: formatKg(patient.weight, i18n.language), date: formatDate(patient.lastWeightAt) })
+                : t('patients:units.weightKg', { weight: formatKg(patient.weight, i18n.language) })}
             </Text>
           ) : (
             <Text type="secondary">{t('patients:chart.banner.noWeight')}</Text>

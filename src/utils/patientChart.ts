@@ -44,7 +44,11 @@ export function bookablePatients<P extends StatusFields & { id: number }>(list: 
 }
 
 /** 12.4, not 12.40 */
-export const formatKg = (weight: number): string => String(Number(weight.toFixed(2)));
+/** Up to two decimals; Macedonian uses a decimal comma, as money does. */
+export const formatKg = (weight: number, lang: string): string => {
+  const text = String(Number(weight.toFixed(2)));
+  return lang.startsWith('mk') ? text.replace('.', ',') : text;
+};
 
 export function alertColor(type: string): string {
   switch (type) {
