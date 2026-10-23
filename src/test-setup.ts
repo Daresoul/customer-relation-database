@@ -29,6 +29,18 @@ if (typeof globalThis.localStorage?.getItem !== 'function') {
   Object.defineProperty(globalThis, 'localStorage', { configurable: true, writable: true, value: memoryStorage });
 }
 
+// React Router's data routers build a fetch `Request` with an AbortSignal for
+// every navigation. Node's `Request` rejects jsdom's AbortSignal, so drop it;
+// the Request then carries a signal of its own.
+{
+  const NodeRequest = globalThis.Request;
+  globalThis.Request = class extends NodeRequest {
+    constructor(input: RequestInfo | URL, init?: RequestInit) {
+      super(input, init ? { ...init, signal: undefined } : init);
+    }
+  } as typeof Request;
+}
+
 // matchMedia stub — antd uses this in a few places (e.g., responsive utils).
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
