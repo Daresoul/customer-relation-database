@@ -67,7 +67,7 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, "049_fix_medical_records_fts_triggers", fix_medical_records_fts_triggers).await?;
     run_migration(pool, "050_add_invoice_date", add_invoice_date_column).await?;
     run_migration(pool, "051_add_attachment_purged_at", add_attachment_purged_at_column).await?;
-    run_migration(pool, "05x_household_merge", add_household_merge).await?;
+    run_migration(pool, "052_household_merge", add_household_merge).await?;
 
     Ok(())
 }
