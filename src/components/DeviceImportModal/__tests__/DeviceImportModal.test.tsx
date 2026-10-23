@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   generateReport: vi.fn(),
   openAttachment: vi.fn(),
   previewValues: vi.fn(),
+  listen: vi.fn(),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -27,7 +28,7 @@ vi.mock('react-i18next', () => ({
     },
   }),
 }));
-vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn(async () => () => {}) }));
+vi.mock('@tauri-apps/api/event', () => ({ listen: mocks.listen }));
 vi.mock('@/hooks/usePatients', () => ({
   usePatients: () => ({ patients: mocks.patients, refreshPatients: vi.fn(), loading: false }),
 }));
@@ -155,6 +156,7 @@ beforeEach(() => {
   mocks.generateReport.mockReset().mockResolvedValue({ id: 600 });
   mocks.openAttachment.mockReset();
   mocks.previewValues.mockReset().mockResolvedValue([]);
+  mocks.listen.mockReset().mockImplementation(async () => () => {});
 });
 
 describe('DeviceImportModal — one result at a time', () => {
@@ -444,5 +446,36 @@ describe('DeviceImportModal — closed', () => {
     await user.keyboard('807010000009999{Enter}');
 
     expect(screen.queryByText('medical:deviceImport.noPatientMatch')).not.toBeInTheDocument();
+  });
+});
+
+describe('DeviceImportModal — scanner events', () => {
+  it('a scan listener that registers after the import closed is removed', async () => {
+    // Tauri registers listeners over IPC: listen() resolves later than the effect runs.
+    const handlers = new Map<string, Set<(event: { payload: unknown }) => void>>();
+    const pending: Array<() => void> = [];
+    mocks.listen.mockImplementation(
+      (name: string, handler: (event: { payload: unknown }) => void) =>
+        new Promise((resolve) => {
+          pending.push(() => {
+            if (!handlers.has(name)) handlers.set(name, new Set());
+            handlers.get(name)!.add(handler);
+            resolve(() => handlers.get(name)!.delete(handler));
+          });
+        }),
+    );
+    const user = userEvent.setup();
+    renderModal();
+    receive(result({ fileName: 'a.xml', patientIdentifier: 'REX' }));
+    await screen.findByText('a.xml');
+
+    await user.click(screen.getByRole('button', { name: /medical:deviceImport.notNow/ }));
+    await waitFor(() => expect(screen.queryByText('a.xml')).not.toBeInTheDocument());
+    await act(async () => {
+      pending.splice(0).forEach((register) => register());
+    });
+
+    expect(handlers.get('scanner:barcode')?.size ?? 0).toBe(0);
+    expect(handlers.get('wake-from-tray')?.size ?? 0).toBe(0);
   });
 });
