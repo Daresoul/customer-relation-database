@@ -669,6 +669,31 @@ workflow runs it as its own step before the tests. Catch variables are
 `npm run lint` must report no errors and no warnings (`--max-warnings 0`); the
 release workflow runs it right after the type check.
 
+## Browser harness (dev only)
+Drive the real app from a plain browser (Playwright), with the real Rust
+backend and a real SQLite file:
+
+    npm run dev:bridge          # fresh sandbox with demo data
+    npm run dev:bridge -- --keep   # reuse the last sandbox
+
+Then open `http://localhost:1420/?bridge=1` (the flag is remembered per tab;
+`?bridge=0` turns it off).
+
+- **How it works:** the debug app runs with `ARKIVET_DEV_BRIDGE=1`. Its hidden
+  window waits on `public/bridge-host.html`, and `services::dev_bridge` (on
+  `127.0.0.1:1421`, CORS for `http://localhost:1420` only) replays each
+  browser call there through Tauri's own IPC. The browser side is
+  `src/devBridge/ipcShim.ts`, loaded by `main.tsx` only in dev builds, only
+  with `?bridge=1`, and never inside Tauri. Events arrive over SSE.
+- **Data:** the app runs with `HOME=.dev-bridge-sandbox/home`, so its database,
+  files and logs stay in the sandbox (git-ignored). App log:
+  `.dev-bridge-sandbox/app.log`.
+- **Lab machines:** use the DEV drawer (device simulator). For Exigo, add a
+  folder device that watches a folder inside the sandbox.
+- **Not covered:** printing, native file dialogs (they open on the Mac
+  behind the browser), the tray, real serial ports and scanners, and
+  `asset://` previews of PDFs and images.
+
 ## Release build secrets
 
 The release workflow (`.github/workflows/release.yml`) reads these GitHub

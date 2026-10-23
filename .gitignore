@@ -54,3 +54,6 @@ CLAUDE.md
 src-tauri/resources/pdf-generator*.jar
 .tauri-password-backup.txt
 *.db
+
+# Dev bridge sandbox (scripts/dev-bridge.sh)
+.dev-bridge-sandbox/
