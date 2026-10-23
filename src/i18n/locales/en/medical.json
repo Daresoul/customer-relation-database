@@ -305,7 +305,10 @@
       "existing": "An existing record",
       "record": "Record",
       "attach": "Add to record"
-    }
+    },
+    "optionChip": "chip …{{last4}}",
+    "optionAgeYears": "{{years}} y",
+    "optionAgeMonths": "{{months}} mo"
   },
   "autocomplete": {
     "typeToSearch": "Type at least 2 characters to search templates",

@@ -360,7 +360,51 @@ pub async fn mark_attached(
     record_id: i64,
     attachment_id: Option<i64>,
 ) -> Result<(), String> {
-    set_attached(db, file_id, record_id, attachment_id).await
+    let method = match_method_for(db, file_id, record_id).await;
+    set_attached(db, file_id, record_id, attachment_id, &method).await
+}
+
+/// How the result reached the record's patient: the matcher's `microchip` or
+/// `name` when it matched that patient, else `manual` (a person picked them).
+async fn match_method_for(db: &DatabaseConnection, file_id: &str, record_id: i64) -> String {
+    const MANUAL: &str = "manual";
+    let row = match db
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "SELECT h.file_path, h.device_type, h.device_name, h.original_name, h.connection_method, h.status, \
+                    r.patient_id AS record_patient_id \
+             FROM file_access_history h, medical_records r WHERE h.file_id = ? AND r.id = ?",
+            [file_id.into(), record_id.into()],
+        ))
+        .await
+    {
+        Ok(Some(row)) => row,
+        _ => return MANUAL.to_string(),
+    };
+    let text = |c: &str| row.try_get::<Option<String>>("", c).ok().flatten().unwrap_or_default();
+    let record_patient = row.try_get::<Option<i64>>("", "record_patient_id").ok().flatten();
+    if text("status") == "failed" {
+        return MANUAL.to_string();
+    }
+    let Some(parsed) = std::fs::read(text("file_path")).ok().and_then(|bytes| {
+        DeviceParserService::parse_device_data(
+            &text("device_type"),
+            &text("device_name"),
+            &text("original_name"),
+            &bytes,
+            &text("connection_method"),
+        )
+        .ok()
+    }) else {
+        return MANUAL.to_string();
+    };
+    let Some(machine_id) = machine_patient_id(parsed.patient_identifier.clone(), &parsed.test_results) else {
+        return MANUAL.to_string();
+    };
+    match resolve_patient(db, machine_id).await {
+        Ok(m) if !m.ambiguous && m.patient.as_ref().map(|p| p.id) == record_patient && record_patient.is_some() => m.method,
+        _ => MANUAL.to_string(),
+    }
 }
 
 async fn set_attached<C: ConnectionTrait>(
@@ -368,13 +412,14 @@ async fn set_attached<C: ConnectionTrait>(
     file_id: &str,
     record_id: i64,
     attachment_id: Option<i64>,
+    match_method: &str,
 ) -> Result<(), String> {
     db.execute(Statement::from_sql_and_values(
         DbBackend::Sqlite,
         "UPDATE file_access_history SET inbox_state = 'attached', attached_record_id = ?, attached_at = ?, \
-             discard_reason = NULL, discard_note = NULL, discarded_at = NULL \
+             discard_reason = NULL, discard_note = NULL, discarded_at = NULL, match_method = ? \
          WHERE file_id = ?",
-        [record_id.into(), now().into(), file_id.into()],
+        [record_id.into(), now().into(), match_method.into(), file_id.into()],
     ))
     .await
     .map_err(|e| format!("Failed to mark the lab result attached: {}", e))?;
@@ -473,6 +518,7 @@ pub async fn attach_to_record(
     }
     let bytes = std::fs::read(text("file_path").unwrap_or_default())
         .map_err(|e| format!("Failed to read the stored lab result: {}", e))?;
+    let match_method = match_method_for(db, file_id, record_id).await;
     let stored_id = copy_into_storage(storage_dir, &bytes)?;
 
     let txn = db.begin().await.map_err(|e| format!("Failed to start attaching: {}", e))?;
@@ -489,7 +535,7 @@ pub async fn attach_to_record(
         Some(file_id.to_string()),
     )
     .await?;
-    set_attached(&txn, file_id, record_id, Some(attachment_id)).await?;
+    set_attached(&txn, file_id, record_id, Some(attachment_id), &match_method).await?;
     txn.execute(Statement::from_sql_and_values(
         DbBackend::Sqlite,
         "UPDATE file_access_history SET first_attached_to_record_id = COALESCE(first_attached_to_record_id, ?), \
@@ -683,7 +729,7 @@ pub async fn move_result(
     .await
     .map_err(|e| format!("Failed to log the move: {}", e))?;
     if let Some(file_id) = &source_file_id {
-        set_attached(&txn, file_id, target_record_id, Some(new_id)).await?;
+        set_attached(&txn, file_id, target_record_id, Some(new_id), "manual").await?;
     }
     txn.commit().await.map_err(|e| format!("Failed to move the lab result: {}", e))?;
     if let Err(e) = crate::services::lab_results::index_attachment(db, &env.storage_dir, new_id).await {

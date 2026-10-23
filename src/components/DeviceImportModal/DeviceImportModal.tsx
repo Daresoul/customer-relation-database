@@ -49,6 +49,9 @@ import { MedicalService } from '@/services/medicalService';
 import { fileHistoryService } from '@/services/fileHistoryService';
 import { labInboxService } from '@/services/labInboxService';
 import PatientRecordSelect from '@/components/LabInbox/PatientRecordSelect';
+import LabValues from '@/components/LabInbox/LabValues';
+import type { LabValue } from '@/types/labInbox';
+import dayjs from 'dayjs';
 import RecentDeviceFiles from '../RecentDeviceFiles';
 import CreatePatientSection from './CreatePatientSection';
 import { TabbedMedicalRecordFields } from '@/components/forms/fieldGroups';
@@ -71,6 +74,44 @@ const MATCH_TAGS: Record<MatchStrength, { color?: string; key: string; fallback:
   manual: { key: 'matchManual', fallback: 'Picked by hand' },
   none: { key: 'matchNone', fallback: 'No automatic match — choose the patient' },
 };
+
+/** A result's values, read the same way as in the lab inbox. */
+const FileValues: React.FC<{ deviceType: string; testResults?: Record<string, unknown> }> = ({ deviceType, testResults }) => {
+  const [values, setValues] = useState<LabValue[] | null>(null);
+  useEffect(() => {
+    if (!testResults || Object.keys(testResults).length === 0) return undefined;
+    let cancelled = false;
+    labInboxService
+      .previewValues(deviceType, testResults)
+      .then((v) => !cancelled && setValues(v))
+      .catch((e) => console.warn('Could not read the values of a lab result:', e));
+    return () => {
+      cancelled = true;
+    };
+  }, [deviceType, testResults]);
+  if (!values || values.length === 0) return null;
+  return <LabValues values={values} />;
+};
+
+/** Chip ending and age, to tell patients with the same name apart. */
+function patientHints(
+  patient: { microchipId?: string | null; dateOfBirth?: string | null },
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string[] {
+  const hints: string[] = [];
+  const chip = patient.microchipId?.trim();
+  if (chip) hints.push(t('medical:deviceImport.optionChip', { last4: chip.slice(-4) }));
+  const born = patient.dateOfBirth ? dayjs(patient.dateOfBirth) : null;
+  if (born?.isValid()) {
+    const years = dayjs().diff(born, 'year');
+    hints.push(
+      years >= 1
+        ? t('medical:deviceImport.optionAgeYears', { years })
+        : t('medical:deviceImport.optionAgeMonths', { months: Math.max(0, dayjs().diff(born, 'month')) }),
+    );
+  }
+  return hints;
+}
 
 // One import per result: remounting on importId starts every result with a fresh form and serial
 const DeviceImportModal: React.FC = () => {
@@ -685,11 +726,7 @@ const DeviceImportDialog: React.FC = () => {
                         {t('medical:deviceImport.identifier')}: {file.patientIdentifier}
                       </Text>
                     )}
-                    {file.isSession && file.testResults && (
-                      <Text type="secondary" style={{ fontSize: '0.85em' }}>
-                        {Object.keys(file.testResults).join(', ')}
-                      </Text>
-                    )}
+                    <FileValues deviceType={file.deviceType} testResults={file.testResults} />
                   </Space>
                 }
               />
@@ -727,18 +764,23 @@ const DeviceImportDialog: React.FC = () => {
           <Select
             placeholder={t('medical:deviceImport.selectPatientPlaceholder')}
             showSearch
-            optionFilterProp="children"
+            optionFilterProp="label"
             suffixIcon={<UserOutlined />}
             size="large"
             loading={patientsLoading}
             notFoundContent={patientsLoading ? t('medical:deviceImport.loadingPatients') : t('medical:deviceImport.noPatientsFound')}
             data-testid="device-import-patient-select"
           >
-            {patients?.map((patient: any) => (
-              <Option key={patient.id} value={patient.id}>
-                {patient.name} - {patient.species}
-              </Option>
-            ))}
+            {patients?.map((patient: any) => {
+              const main = `${patient.name} - ${patient.species}`;
+              const hints = patientHints(patient, t);
+              return (
+                <Option key={patient.id} value={patient.id} label={[main, ...hints, patient.microchipId ?? ''].join(' ')}>
+                  <span>{main}</span>
+                  {hints.length > 0 && <Text type="secondary">{` · ${hints.join(' · ')}`}</Text>}
+                </Option>
+              );
+            })}
           </Select>
         </Form.Item>
 

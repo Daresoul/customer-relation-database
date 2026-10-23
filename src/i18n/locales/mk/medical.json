@@ -305,7 +305,10 @@
       "existing": "Постоечки запис",
       "record": "Запис",
       "attach": "Додај во записот"
-    }
+    },
+    "optionChip": "чип …{{last4}}",
+    "optionAgeYears": "{{years}} г.",
+    "optionAgeMonths": "{{months}} мес."
   },
   "autocomplete": {
     "typeToSearch": "Внесете најмалку 2 знаци за пребарување на шаблони",

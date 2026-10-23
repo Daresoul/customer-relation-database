@@ -4,6 +4,7 @@ import type {
   LabInboxItem,
   LabInboxState,
   LabMoveOutcome,
+  LabValue,
   StoredDeviceData,
 } from '../types/labInbox';
 import type { MedicalAttachment } from '../types/medical';
@@ -17,6 +18,11 @@ export const labInboxService = {
 
   countWaiting(): Promise<number> {
     return invoke<number>('get_lab_inbox_count');
+  },
+
+  /** A result's values as the inbox shows them, for the lab import list. */
+  previewValues(deviceType: string, testResults: Record<string, unknown>): Promise<LabValue[]> {
+    return invoke<LabValue[]>('preview_lab_values', { deviceType, testResults });
   },
 
   discard(fileId: string, reason: DiscardReason, note?: string): Promise<void> {

@@ -679,6 +679,7 @@ fn main() {
             // Lab inbox
             commands::list_lab_inbox,
             commands::get_lab_inbox_count,
+            commands::preview_lab_values,
             commands::discard_lab_result,
             commands::restore_lab_result,
             commands::attach_lab_result,
