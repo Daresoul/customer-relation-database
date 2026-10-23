@@ -99,3 +99,6 @@ pub mod household_merge_tests;
 
 #[cfg(test)]
 pub mod household_duplicate_tests;
+
+#[cfg(test)]
+pub mod patient_chart_tests;

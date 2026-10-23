@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next';
 import {
   ArrowLeftOutlined,
   HomeOutlined,
-  DeleteOutlined,
   UserOutlined,
   MedicineBoxOutlined,
   TeamOutlined,
@@ -16,6 +15,8 @@ import { usePatientDetail, useDeleteConfirmation } from '../../hooks/usePatient'
 import { PatientInfo } from './PatientInfo';
 import { MedicalSection } from './MedicalSection';
 import { HouseholdSection } from './HouseholdSection';
+import { PatientBanner } from './chart/PatientBanner';
+import { WeightLogCard } from './chart/WeightLogCard';
 import DiagnosisTagList from '../../components/DiagnosisTagList';
 import MedicalHistorySection from './MedicalHistory/MedicalHistorySection';
 import { Link } from 'react-router-dom';
@@ -46,7 +47,7 @@ export const PatientDetail: React.FC = () => {
 
   const queryClient = useQueryClient();
   const { data: patient, isLoading, error, refetch } = usePatientDetail(patientId);
-  const { showDeleteConfirm, isDeleting } = useDeleteConfirmation();
+  const { showDeleteConfirm } = useDeleteConfirmation();
 
   // Callback when household assignment changes
   const handleHouseholdChanged = () => {
@@ -173,6 +174,7 @@ export const PatientDetail: React.FC = () => {
       children: (
         <div className={styles.tabContent}>
           <PatientInfo patient={patient} />
+          <WeightLogCard patientId={patient.id} />
           {/* Aggregated diagnoses for this patient — every distinct
               diagnosis ever applied to any of their medical records.
               Rendered inline with showLabel so it looks like a meta
@@ -238,16 +240,9 @@ export const PatientDetail: React.FC = () => {
         >
           {t('common:back')}
         </Button>
-        <Button
-          danger
-          icon={<DeleteOutlined />}
-          onClick={handleDelete}
-          loading={isDeleting}
-          className={styles.deleteButton}
-        >
-          {t('patients:deletePatient')}
-        </Button>
       </div>
+
+      <PatientBanner patient={patient} onDelete={handleDelete} />
 
       <Tabs
         activeKey={activeTab}

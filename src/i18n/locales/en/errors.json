@@ -189,6 +189,13 @@
     "server": "Something went wrong on our end. Please try again later."
   },
   "operations": {
+    "markPatientDeceased": "mark the patient as deceased",
+    "markPatientInactive": "mark the patient inactive",
+    "reactivatePatient": "reactivate the patient",
+    "savePatientAlert": "save the alert",
+    "deletePatientAlert": "remove the alert",
+    "addPatientWeight": "add the weight",
+    "deletePatientWeight": "remove the weight",
     "createTemplate": "create template",
     "updateTemplate": "update template",
     "deleteTemplate": "delete template",

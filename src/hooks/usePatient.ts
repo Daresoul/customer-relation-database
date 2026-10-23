@@ -12,6 +12,7 @@ import { PatientDetail, DeletePatientResponse } from '../types/patient';
 import dayjs from 'dayjs';
 import { createMutationErrorHandler, extractErrorMessage, type TFunction } from '../utils/errors';
 import { invalidatePatientData } from './invalidation';
+import { formatPatientAge } from '../utils/patientChart';
 
 /**
  * Calculate age from date of birth
@@ -26,17 +27,7 @@ function calculateAge(dateOfBirth: string | undefined, t: TFunction) {
 
   const years = today.diff(birthDate, 'year');
   const months = today.diff(birthDate.add(years, 'year'), 'month');
-
-  const yearsText = t('households:detail.animals.age.years', { count: years });
-  const monthsText = t('households:detail.animals.age.months', { count: months });
-  let display: string;
-  if (years === 0) {
-    display = monthsText;
-  } else if (months === 0) {
-    display = yearsText;
-  } else {
-    display = `${yearsText} ${monthsText}`;
-  }
+  const display = formatPatientAge(dateOfBirth, t, today) ?? '';
 
   return { years, months, display };
 }
@@ -159,6 +150,7 @@ export function useUpdatePatient() {
       if (updates.microchipId !== undefined) transformedUpdates.microchipId = updates.microchipId;
       if (updates.notes !== undefined) transformedUpdates.notes = updates.notes;
       if (updates.isActive !== undefined) transformedUpdates.isActive = updates.isActive;
+      if (updates.neutered !== undefined) transformedUpdates.neutered = updates.neutered;
 
       return PatientService.updatePatient(patientId, transformedUpdates);
     },

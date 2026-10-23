@@ -1,0 +1,92 @@
+.banner {
+  background: var(--card-bg);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+  border-left: 4px solid var(--ant-color-primary, #1890ff);
+}
+
+.banner[data-alert='true'] {
+  border-left-color: #ff4d4f;
+}
+
+.banner[data-status='deceased'],
+.banner[data-status='inactive'] {
+  border-left-color: #8c8c8c;
+  filter: grayscale(0.6);
+}
+
+.topRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.name {
+  margin: 0 !important;
+  color: var(--text-primary);
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 20px;
+  margin-top: 10px;
+  color: var(--text-primary);
+}
+
+.fact {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.statusNote {
+  margin-top: 6px;
+}
+
+.card {
+  background: var(--card-bg);
+  padding: 16px 20px;
+  border-radius: 8px;
+  margin-top: 12px;
+}
+
+.cardTitle {
+  color: var(--text-primary);
+  margin-top: 0 !important;
+}
+
+.trend {
+  color: var(--ant-color-primary, #1890ff);
+  margin-bottom: 8px;
+}
+
+.weightRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.alertRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

@@ -472,6 +472,7 @@ fn row_to_patient(row: &sea_orm::QueryResult) -> Result<Patient, String> {
         created_at,
         updated_at,
         microchip_id: row.try_get("", "microchip_id").unwrap_or(None),
+        ..Default::default()
     })
 }
 

@@ -34,7 +34,35 @@
 ## Patients and households
 - Deleting a patient is refused (`PATIENT_HAS_HISTORY`) while it has medical
   records or appointments, because those would cascade away. Only an empty
-  patient can be hard-deleted.
+  patient can be hard-deleted. It sits in the banner's More menu.
+- A patient that died or left is marked, not deleted: `mark_patient_deceased`
+  (date, not after today, and an optional note) or `mark_patient_inactive`
+  (optional reason). Both set `is_active = 0` and keep the chart;
+  `deceased_at` tells the two apart. `reactivate_patient` clears both, and is
+  refused when the chip now belongs to another active patient.
+- Inactive and deceased patients are left out of `search_patients` (unless
+  `includeInactive`), the lab-result chip match, the appointment picker and
+  the patient table (its "Show inactive" switch brings them back, greyed).
+  `get_patients` still returns everyone. Household pets come with `status`
+  (`active`, `inactive`, `deceased`) and show greyed when not active.
+- A deceased patient can't be booked (`PATIENT_DECEASED`). Marking one
+  deceased lists its future appointments, ticked; the ticked ones are
+  cancelled through `update_appointment`, so Google Calendar follows.
+- The patient page opens with a banner: name, species, breed, sex with
+  neuter status (`neutered`: true, false or NULL for not recorded), age (days
+  under a week, weeks under 8 weeks, then months, then years; frozen at the
+  date of death), last weight with its date and a trend line, the owner with
+  a copyable phone, and alert chips.
+- Alerts (`patient_alerts`) are typed: `allergy`, `aggressive`, `chronic`,
+  `other`, each with a note of at most 200 characters. Allergy and aggressive
+  show red. The patient table shows them next to the name.
+- Weights are a log (`patient_weights`: weight, `measured_on`, optional
+  `medical_record_id`). `patients.weight` always holds the newest entry (by
+  date, then by entry), for older readers; adding or removing an entry keeps
+  it in step. Creating a patient with a weight, or setting the weight field,
+  also logs it for today. A weight typed in a new medical record is logged
+  against that record. Migration `05x_patient_weight_log` moved each
+  existing weight into the log, dated at the patient's `updated_at`.
 - `update_household`: a field left out (`None`) is kept; an empty string clears
   address, city, postal code or notes to NULL. The name can't be cleared.
 - Duplicate warning: every household create form (dashboard, Add patient, lab

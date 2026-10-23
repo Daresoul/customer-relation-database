@@ -236,5 +236,138 @@
     "conflicts": "Conflicting data detected across files",
     "vs": "vs",
     "usingFirst": "Using first detected value. You can modify below if needed."
+  },
+  "chart": {
+    "age": {
+      "days_one": "{{count}} day",
+      "days_other": "{{count}} days",
+      "weeks_one": "{{count}} week",
+      "weeks_other": "{{count}} weeks",
+      "months_one": "{{count}} month",
+      "months_other": "{{count}} months",
+      "years_one": "{{count}} year",
+      "years_other": "{{count}} years",
+      "atDeath": "Age at death"
+    },
+    "sex": {
+      "femaleSpayed": "Female (spayed)",
+      "femaleIntact": "Female (intact)",
+      "maleNeutered": "Male (neutered)",
+      "maleIntact": "Male (intact)",
+      "neutered": "Neutered",
+      "intact": "Intact"
+    },
+    "neutered": {
+      "label": "Neutered / spayed",
+      "yes": "Yes",
+      "no": "No",
+      "unknown": "Not recorded"
+    },
+    "status": {
+      "active": "Active",
+      "inactive": "Inactive",
+      "deceased": "Deceased",
+      "deceasedOn": "Deceased {{date}}",
+      "inactiveReason": "Inactive: {{reason}}"
+    },
+    "banner": {
+      "noWeight": "No weight yet",
+      "weightOn": "{{weight}} kg · {{date}}",
+      "owner": "Owner",
+      "noOwner": "No owner",
+      "copyPhone": "Copy phone number",
+      "phoneCopied": "Phone number copied",
+      "copyFailed": "Could not copy the phone number",
+      "addWeight": "Add weight",
+      "editAlerts": "Alerts",
+      "more": "More actions",
+      "markDeceased": "Mark as deceased",
+      "markInactive": "Mark inactive",
+      "reactivate": "Reactivate",
+      "deleteHint": "Only a patient with no records or appointments can be deleted"
+    },
+    "alerts": {
+      "title": "Alerts for {{name}}",
+      "types": {
+        "allergy": "Allergy",
+        "aggressive": "Aggressive / handle with care",
+        "chronic": "Chronic condition",
+        "other": "Other"
+      },
+      "short": {
+        "allergy": "Allergy",
+        "aggressive": "Caution",
+        "chronic": "Chronic",
+        "other": "Note"
+      },
+      "none": "No alerts",
+      "type": "Type",
+      "note": "Note",
+      "notePlaceholder": "e.g. Penicillin, bites when restrained",
+      "add": "Add alert",
+      "edit": "Edit",
+      "save": "Save",
+      "remove": "Remove",
+      "removeConfirm": "Remove this alert?",
+      "added": "Alert added",
+      "updated": "Alert updated",
+      "removed": "Alert removed"
+    },
+    "weights": {
+      "title": "Weight",
+      "addTitle": "Add weight for {{name}}",
+      "weight": "Weight (kg)",
+      "date": "Date",
+      "added": "Weight added",
+      "removed": "Weight removed",
+      "remove": "Remove",
+      "removeConfirm": "Remove this weight?",
+      "empty": "No weights recorded yet",
+      "loadFailed": "Could not load the weight log",
+      "fromRecord": "Taken during a medical record",
+      "trend": "Weight trend",
+      "recordField": "Weight today (kg)",
+      "recordFieldHint": "Adds an entry to the patient's weight log",
+      "recordSaveFailed": "The record was saved, but the weight was not. Add it from the patient page."
+    },
+    "deceased": {
+      "title": "Mark {{name}} as deceased",
+      "date": "Date of death",
+      "note": "Note (optional)",
+      "notePlaceholder": "e.g. euthanasia, cause of death",
+      "futureAppointments": "Future appointments",
+      "cancelHint": "Ticked appointments are cancelled",
+      "noFuture": "No future appointments",
+      "appointmentsLoadFailed": "Could not load future appointments",
+      "confirm": "Mark as deceased",
+      "done": "{{name}} is marked as deceased",
+      "cancelled_one": "{{count}} appointment cancelled",
+      "cancelled_other": "{{count}} appointments cancelled",
+      "cancelFailed_one": "{{count}} appointment could not be cancelled. Cancel it from the calendar.",
+      "cancelFailed_other": "{{count}} appointments could not be cancelled. Cancel them from the calendar."
+    },
+    "inactive": {
+      "title": "Mark {{name}} inactive",
+      "reason": "Reason (optional)",
+      "reasonPlaceholder": "e.g. moved away, changed clinic",
+      "hint": "An inactive patient is hidden from lists and pickers. The chart is kept.",
+      "confirm": "Mark inactive",
+      "done": "{{name}} is marked inactive"
+    },
+    "reactivate": {
+      "title": "Reactivate {{name}}?",
+      "body": "The patient shows in lists again and can be booked.",
+      "confirm": "Reactivate",
+      "done": "{{name}} is active again"
+    },
+    "list": {
+      "showInactive": "Show inactive and deceased"
+    },
+    "errors": {
+      "deceasedDateInFuture": "The date of death can't be after today.",
+      "patientDeceased": "This patient is deceased and can't be booked.",
+      "invalidWeight": "Enter a weight above 0 kg.",
+      "alertNoteTooLong": "An alert note can be at most 200 characters."
+    }
   }
 }

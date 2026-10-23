@@ -108,3 +108,31 @@ describe('PatientTable — controlled search text', () => {
     expect((search as HTMLInputElement).value).toBe('Find');
   });
 });
+
+describe('PatientTable — inactive and deceased patients', () => {
+  const list = [
+    makePatient({ id: 1, name: 'Rex' }),
+    makePatient({ id: 2, name: 'Old', isActive: false }),
+    makePatient({ id: 3, name: 'Gone', isActive: false, deceasedAt: '2026-01-05' }),
+  ];
+
+  it('hides them until "show inactive" is on, then marks the deceased one', () => {
+    renderTable(list);
+    expect(screen.getByRole('button', { name: 'Rex' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Old' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Gone' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('switch'));
+
+    expect(screen.getByRole('button', { name: 'Old' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Gone' })).toBeInTheDocument();
+    expect(screen.getByText(/chart\.status\.deceased|Deceased/)).toBeInTheDocument();
+  });
+
+  it('shows alert chips next to the name', () => {
+    renderTable([
+      makePatient({ alerts: [{ id: 1, patientId: 1, alertType: 'aggressive', note: 'Bites', createdAt: '' }] }),
+    ]);
+    expect(screen.getByText(/chart\.alerts\.short\.aggressive|Caution/)).toBeInTheDocument();
+  });
+});

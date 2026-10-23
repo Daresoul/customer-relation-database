@@ -12,8 +12,9 @@ import type { QueryClient } from '@tanstack/react-query';
  *   households, all-households, household-search, household-quick-search
  *                       household lists and pickers
  *   appointments        calendar (patient names; removed with a deleted patient)
+ *   patient-weights     weight log and trend on the patient page
  */
-const PATIENT_READERS = ['patients', 'patient', 'household-patients', 'household', 'appointments'];
+const PATIENT_READERS = ['patients', 'patient', 'household-patients', 'household', 'appointments', 'patient-weights'];
 const HOUSEHOLD_READERS = [
   'household',
   'households',

@@ -113,6 +113,7 @@ async fn create_test_schema(db: &DatabaseConnection) {
             microchip_id TEXT,
             date_of_birth DATE,
             gender TEXT,
+            deceased_at DATE,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )

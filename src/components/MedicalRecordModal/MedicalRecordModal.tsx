@@ -8,6 +8,9 @@ import { invoke } from '@/services/invoke';
 import { useQueryClient } from '@tanstack/react-query';
 import { DIAGNOSES_KEYS } from '@/hooks/useDiagnoses';
 import styles from './MedicalRecordModal.module.css';
+import dayjs from 'dayjs';
+import { PatientService } from '@/services/patientService';
+import { invalidatePatientData } from '@/hooks/invalidation';
 
 interface MedicalRecordModalProps {
   open: boolean;
@@ -88,6 +91,7 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
     fileSourceIds?: Map<string, string>,
     deviceDataList?: DeviceDataInput[],
     diagnosisIds?: number[],
+    visitWeight?: number,
   ) => {
     setLoading(true);
     try {
@@ -180,6 +184,20 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
           notification.error({
             message: t('messages.diagnosesPartialSave', 'Diagnoses not saved'),
             description: String(tagErr),
+            placement: 'bottomRight',
+            duration: 8,
+          });
+        }
+      }
+      if (!isEdit && savedRecordId != null && visitWeight) {
+        try {
+          await PatientService.addWeight(patientId, visitWeight, dayjs().format('YYYY-MM-DD'), savedRecordId);
+          invalidatePatientData(queryClient);
+        } catch (weightErr) {
+          console.error('Failed to add the visit weight:', weightErr);
+          notification.error({
+            message: t('common:error'),
+            description: t('patients:chart.weights.recordSaveFailed'),
             placement: 'bottomRight',
             duration: 8,
           });

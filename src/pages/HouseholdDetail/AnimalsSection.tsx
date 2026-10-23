@@ -12,6 +12,7 @@ import { LoadError } from '../../components/common/LoadError';
 import { PatientService } from '../../services/patientService';
 import type { CreatePatientInput, UpdatePatientInput } from '../../types';
 import styles from './HouseholdDetail.module.css';
+import { formatDate } from '../../utils/dateFormatter';
 
 const { Title } = Typography;
 
@@ -124,7 +125,14 @@ export const AnimalsSection: React.FC<AnimalsSectionProps> = ({
       title: t('detail.animals.columns.status'),
       dataIndex: 'status',
       key: 'status',
-      render: (status: string | undefined) => {
+      render: (status: string | undefined, record: Patient) => {
+        if (status === 'deceased') {
+          return (
+            <Tag color="default" title={formatDate(record.deceasedAt)}>
+              {t('patients:chart.status.deceased')}
+            </Tag>
+          );
+        }
         const isActive = status === 'active' || !status;
         return (
           <Tag color={isActive ? 'green' : 'default'}>
@@ -187,6 +195,7 @@ export const AnimalsSection: React.FC<AnimalsSectionProps> = ({
           dataSource={patients}
           rowKey="id"
           pagination={false}
+          onRow={(record) => (record.status && record.status !== 'active' ? { style: { opacity: 0.55 } } : {})}
         />
       ) : (
         <Empty
