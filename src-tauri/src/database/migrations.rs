@@ -1,6 +1,20 @@
 use sqlx::{self, SqlitePool, Row};
 
-pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
+pub async fn run_migrations(app_pool: &SqlitePool) -> Result<(), sqlx::Error> {
+    // Every migration runs on one connection of its own. Spread over the
+    // app's pool, a step could run on a connection that hadn't seen the
+    // previous step's table yet, and a new install failed in migration 035.
+    let options = (*app_pool.connect_options()).clone();
+    let single = sqlx::sqlite::SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(options)
+        .await?;
+    let result = run_migrations_on(&single).await;
+    single.close().await;
+    result
+}
+
+async fn run_migrations_on(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     // Create migrations tracking table
     sqlx::query(
         r#"
