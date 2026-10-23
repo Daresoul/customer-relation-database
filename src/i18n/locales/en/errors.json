@@ -189,6 +189,10 @@
     "server": "Something went wrong on our end. Please try again later."
   },
   "operations": {
+    "saveClinicProfile": "save the clinic profile",
+    "saveClinicLogo": "save the logo",
+    "removeClinicLogo": "remove the logo",
+    "saveTaxRate": "save the VAT rate",
     "createTemplate": "create template",
     "updateTemplate": "update template",
     "deleteTemplate": "delete template",

@@ -24,6 +24,7 @@ import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import type { MedicalRecord, MedicalRecordHistory, UpdateMedicalRecordInput } from '@/types/medical';
 import type { MedicalRecordLineItem } from '@/types/lineItem';
 import { DeviceStatusInline } from '@/components/DeviceStatusBar';
+import { InvoiceSummaryRows } from '@/components/InvoiceSummaryRows';
 import styles from './MedicalRecordDetailPage.module.css';
 
 const { Content } = Layout;
@@ -814,19 +815,11 @@ export const MedicalRecordDetailPage: React.FC = () => {
 
                     if (!lineItems || lineItems.length === 0) return null;
 
-                    // Calculate subtotal
-                    const subtotal = lineItems.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
-
-                    // Calculate total with discount
-                    const discountMultiplier = discount ? (100 - discount) / 100 : 1;
-                    const calculatedTotal = subtotal * discountMultiplier;
-                    // A manual total only stands in when there are no items.
-                    const finalTotal = calculatedTotal;
-
                     // Get currency for display
                     const firstCurrencyId = lineItems[0]?.currencyId;
                     const currency = currencies?.find(c => c.id === firstCurrencyId);
                     const currencySymbol = currency?.symbol || currency?.code || '';
+                    const hasVat = lineItems.some(item => item.vatName);
 
                     return (
                       <div className={styles.marginTop16}>
@@ -843,6 +836,15 @@ export const MedicalRecordDetailPage: React.FC = () => {
                               dataIndex: 'name',
                               key: 'name',
                             },
+                            ...(hasVat
+                              ? [{
+                                  title: t('medical:lineItems.vat'),
+                                  dataIndex: 'vatName',
+                                  key: 'vatName',
+                                  width: 110,
+                                  render: (name: string | null | undefined) => name ?? t('medical:lineItems.noVat'),
+                                }]
+                              : []),
                             {
                               title: t('medical:lineItems.quantity', 'Qty'),
                               dataIndex: 'quantity',
@@ -869,34 +871,12 @@ export const MedicalRecordDetailPage: React.FC = () => {
                             },
                           ]}
                           summary={() => (
-                            <Table.Summary>
-                              <Table.Summary.Row>
-                                <Table.Summary.Cell index={0} colSpan={3} align="right">
-                                  <Text type="secondary">{t('medical:lineItems.subtotal', 'Subtotal')}:</Text>
-                                </Table.Summary.Cell>
-                                <Table.Summary.Cell index={1} align="right">
-                                  <Text>{currencySymbol}{subtotal.toFixed(2)}</Text>
-                                </Table.Summary.Cell>
-                              </Table.Summary.Row>
-                              {discount && discount > 0 && (
-                                <Table.Summary.Row>
-                                  <Table.Summary.Cell index={0} colSpan={3} align="right">
-                                    <Text type="secondary">{t('medical:lineItems.discount', 'Discount')} ({discount}%):</Text>
-                                  </Table.Summary.Cell>
-                                  <Table.Summary.Cell index={1} align="right">
-                                    <Text type="danger">-{currencySymbol}{(subtotal - calculatedTotal).toFixed(2)}</Text>
-                                  </Table.Summary.Cell>
-                                </Table.Summary.Row>
-                              )}
-                              <Table.Summary.Row>
-                                <Table.Summary.Cell index={0} colSpan={3} align="right">
-                                  <Text strong>{t('medical:lineItems.total', 'Total')}:</Text>
-                                </Table.Summary.Cell>
-                                <Table.Summary.Cell index={1} align="right">
-                                  <Text strong style={{ fontSize: '1.1em' }}>{currencySymbol}{finalTotal.toFixed(2)}</Text>
-                                </Table.Summary.Cell>
-                              </Table.Summary.Row>
-                            </Table.Summary>
+                            <InvoiceSummaryRows
+                              lineItems={lineItems}
+                              discountPercent={discount}
+                              currencySymbol={currencySymbol}
+                              labelSpan={hasVat ? 4 : 3}
+                            />
                           )}
                         />
                       </div>

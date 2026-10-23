@@ -81,7 +81,12 @@
     "namePlaceholder": "e.g., Emergency consultation",
     "descriptionPlaceholder": "Optional description",
     "itemName": "Item",
-    "items": "items"
+    "items": "items",
+    "vat": "VAT",
+    "noVat": "No VAT",
+    "vatBase": "base",
+    "vatAmount": "VAT",
+    "vatAdded": "VAT added"
   },
   "form": {
     "createTitle": "Create Medical Record",

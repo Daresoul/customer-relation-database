@@ -14,6 +14,7 @@ import {
   UsbOutlined,
   FileTextOutlined,
   FolderOpenOutlined,
+  ShopOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, Link } from 'react-router-dom';
@@ -26,6 +27,7 @@ import styles from './Settings.module.css';
 // Import category components
 import GeneralSettings from './components/GeneralSettings';
 import BusinessSettings from './components/BusinessSettings';
+import ClinicSettings from './components/ClinicSettings';
 import AppointmentsSettings from './components/AppointmentsSettings';
 import RoomsSettings from './components/RoomsSettings';
 import SpeciesSettings from './components/SpeciesSettings';
@@ -40,7 +42,7 @@ import { UpdateSettings } from './UpdateSettings';
 
 const { Content, Sider } = Layout;
 
-type SettingsCategory = 'general' | 'business' | 'appointments' | 'rooms' | 'species' | 'devices' | 'managedScanners' | 'deviceFiles' | 'templates' | 'lineItems' | 'diagnoses' | 'backups' | 'updates';
+type SettingsCategory = 'general' | 'clinic' | 'business' | 'appointments' | 'rooms' | 'species' | 'devices' | 'managedScanners' | 'deviceFiles' | 'templates' | 'lineItems' | 'diagnoses' | 'backups' | 'updates';
 
 interface MenuItem {
   key: SettingsCategory;
@@ -69,6 +71,12 @@ const SettingsLayout: React.FC = () => {
       icon: <GlobalOutlined />,
       label: t('settings:sections.general'),
       component: GeneralSettings,
+    },
+    {
+      key: 'clinic',
+      icon: <ShopOutlined />,
+      label: t('settings:sections.clinic'),
+      component: ClinicSettings,
     },
     {
       key: 'business',
@@ -248,7 +256,7 @@ const SettingsLayout: React.FC = () => {
             {/* Content Area */}
             <Content className={styles.settingsContent}>
               {/* Rooms, Species, Devices, Templates, LineItems and Updates tabs don't need the parent form - they manage their own state */}
-              {selectedCategory === 'rooms' || selectedCategory === 'species' || selectedCategory === 'devices' || selectedCategory === 'deviceFiles' || selectedCategory === 'templates' || selectedCategory === 'lineItems' || selectedCategory === 'backups' || selectedCategory === 'updates' ? (
+              {selectedCategory === 'clinic' || selectedCategory === 'rooms' || selectedCategory === 'species' || selectedCategory === 'devices' || selectedCategory === 'deviceFiles' || selectedCategory === 'templates' || selectedCategory === 'lineItems' || selectedCategory === 'backups' || selectedCategory === 'updates' ? (
                 <CurrentComponent isUpdating={isUpdating} />
               ) : (
                 <Form
