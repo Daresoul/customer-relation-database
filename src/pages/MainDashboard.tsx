@@ -212,21 +212,23 @@ export const MainDashboard: React.FC = () => {
                     Seed DB
                   </Button>
                 )}
-                <Button
-                  variant="primary"
-                  iconType="plus"
-                  onClick={() => {
-                    if (activeView === 'patients') {
-                      setShowPatientForm(true);
-                    } else if (activeView === 'households') {
-                      setShowHouseholdForm(true);
-                    }
-                  }}
-                  className={activeView === 'appointments' ? styles.viewToggleHidden : styles.viewToggle}
-                  data-testid={activeView === 'patients' ? 'add-patient-btn' : 'add-household-btn'}
-                >
-                  {activeView === 'patients' ? t('patients:addPatient') : t('patients:addHousehold')}
-                </Button>
+                {(activeTab === 'patients' || activeTab === 'households') && (
+                  <Button
+                    variant="primary"
+                    iconType="plus"
+                    onClick={() => {
+                      if (activeTab === 'patients') {
+                        setShowPatientForm(true);
+                      } else {
+                        setShowHouseholdForm(true);
+                      }
+                    }}
+                    className={styles.viewToggle}
+                    data-testid={activeTab === 'patients' ? 'add-patient-btn' : 'add-household-btn'}
+                  >
+                    {activeTab === 'patients' ? t('patients:addPatient') : t('patients:addHousehold')}
+                  </Button>
+                )}
               </Space>
             }
             items={[

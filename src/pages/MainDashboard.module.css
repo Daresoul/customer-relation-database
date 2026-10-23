@@ -12,10 +12,6 @@
   display: inline-flex;
 }
 
-.viewToggleHidden {
-  display: none;
-}
-
 .searchControls {
   display: flex;
   align-items: center;
