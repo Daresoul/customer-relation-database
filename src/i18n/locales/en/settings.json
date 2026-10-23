@@ -116,7 +116,14 @@
       "upToDateDescription": "You are running the latest version!",
       "checkFailedDescription": "Error: {{error}}"
     },
-    "newVersionAvailable": "A new version is available"
+    "newVersionAvailable": "A new version is available",
+    "updateAvailableVersion": "Update available: version {{version}}",
+    "progress": {
+      "downloading": "Downloading the update…",
+      "installing": "Installing the update. The app restarts by itself when it is done."
+    },
+    "lastCheckFailed": "The last automatic update check failed",
+    "lastCheckFailedDescription": "Tried at {{time}}. The app tries again later, or use Check for Updates now."
   },
   "googleCalendar": {
     "title": "Google Calendar Integration",

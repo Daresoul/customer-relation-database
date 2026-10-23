@@ -2,7 +2,7 @@
  * Main App component with React Router setup and Ant Design theme
  */
 
-import React, { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { App as AntApp, Spin, ConfigProvider } from 'antd';
@@ -68,7 +68,7 @@ function AppContent() {
       <ThemeProvider>
         <ViewProvider>
           <DeviceImportProvider>
-            <AntApp notification={{ maxCount: 1, placement: 'bottomRight' }}>
+            <AntApp notification={{ maxCount: 3, placement: 'bottomRight' }}>
               <DeviceDataHandler />
               <RouterProvider router={router} />
             </AntApp>

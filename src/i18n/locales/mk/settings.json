@@ -116,7 +116,14 @@
       "upToDateDescription": "Ја користите најновата верзија!",
       "checkFailedDescription": "Грешка: {{error}}"
     },
-    "newVersionAvailable": "Достапна е нова верзија"
+    "newVersionAvailable": "Достапна е нова верзија",
+    "updateAvailableVersion": "Достапна е нова верзија: {{version}}",
+    "progress": {
+      "downloading": "Се презема ажурирањето…",
+      "installing": "Се инсталира ажурирањето. Апликацијата сама ќе се рестартира кога ќе заврши."
+    },
+    "lastCheckFailed": "Последната автоматска проверка за ажурирања не успеа",
+    "lastCheckFailedDescription": "Обид во {{time}}. Апликацијата ќе се обиде повторно подоцна, или кликнете Провери за ажурирања сега."
   },
   "googleCalendar": {
     "title": "Интеграција со Google Calendar",
