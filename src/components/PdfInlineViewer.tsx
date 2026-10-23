@@ -25,6 +25,9 @@ interface PdfInlineViewerProps {
 // Falls back to a helpful message if the lib is not installed.
 const PdfInlineViewer: React.FC<PdfInlineViewerProps> = ({ blob, fileName, attachmentId }) => {
   const { t } = useTranslation(['medical', 'common']);
+  // Async work reads the current t without re-running when the language changes.
+  const tRef = useRef(t);
+  tRef.current = t;
   const { notification } = App.useApp();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -92,6 +95,7 @@ const PdfInlineViewer: React.FC<PdfInlineViewerProps> = ({ blob, fileName, attac
           if (active && !rendered) {
             console.warn('[PDF Viewer] Render timeout after', Date.now() - start, 'ms, falling back to embed');
             try { renderTaskRef.current?.cancel?.(); } catch { /* already finished */ }
+            const t = tRef.current;
             setError(t('medical:pdfPreview.inlineTimedOut'));
           }
         }, 10000);
@@ -105,6 +109,7 @@ const PdfInlineViewer: React.FC<PdfInlineViewerProps> = ({ blob, fileName, attac
           return; // don't show an error for expected cancellations
         }
         console.error('PDF inline viewer error:', e);
+        const t = tRef.current;
         setError(t('medical:pdfPreview.inlineFailed', { error: e?.message || '' }).trim());
       } finally {
         if (active) setLoading(false);
@@ -122,18 +127,15 @@ const PdfInlineViewer: React.FC<PdfInlineViewerProps> = ({ blob, fileName, attac
   // Create and manage a fallback object URL if we hit the error path
   useEffect(() => {
     if (!error) {
-      if (fallbackUrl) {
-        URL.revokeObjectURL(fallbackUrl);
-        setFallbackUrl(null);
-      }
+      setFallbackUrl(null);
       return;
     }
     const url = URL.createObjectURL(blob);
     setFallbackUrl(url);
+    // Revoking here also covers the error clearing: the cleanup of the error run goes first.
     return () => {
       URL.revokeObjectURL(url);
     };
-    // Only re-run when blob or error changes
   }, [error, blob]);
 
   // Print function - open native print dialog if attachmentId is available

@@ -4,7 +4,7 @@
  * Displays update preferences and manual update check in Settings page
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Form, Switch, Button, Typography, Space, App, Alert } from 'antd';
 import { getVersion } from '@tauri-apps/api/app';
 import { useTranslation } from 'react-i18next';
@@ -17,6 +17,9 @@ const { Text } = Typography;
 
 export function UpdateSettings() {
   const { t } = useTranslation('settings');
+  // Async work reads the current t without re-running when the language changes.
+  const tRef = useRef(t);
+  tRef.current = t;
   const { notification, modal } = App.useApp();
   const [autoCheckEnabled, setAutoCheckEnabled] = useState(true);
   const [lastCheck, setLastCheck] = useState<Date | null>(null);
@@ -37,6 +40,7 @@ export function UpdateSettings() {
         }
       } catch (error) {
         console.error('Failed to load update preferences:', error);
+        const t = tRef.current;
         notification.error({
         message: t('common:error'),
         description: t('updates.messages.loadSettingsFailed'),

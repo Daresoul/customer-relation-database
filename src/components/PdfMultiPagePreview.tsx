@@ -20,6 +20,9 @@ interface Props {
 // Renders page 1 immediately, loads subsequent pages on demand with infinite scroll.
 const PdfMultiPagePreview: React.FC<Props> = ({ attachmentId, initialPageUrl }) => {
   const { t } = useTranslation(['medical', 'common']);
+  // Async work reads the current t without re-running when the language changes.
+  const tRef = useRef(t);
+  tRef.current = t;
   const { notification } = App.useApp();
   const [pageCount, setPageCount] = useState<number | null>(null);
   const [pages, setPages] = useState<Array<{ page: number; url: string }>>(
@@ -62,6 +65,7 @@ const PdfMultiPagePreview: React.FC<Props> = ({ attachmentId, initialPageUrl }) 
       } catch (e: any) {
         if (!active) return;
         console.warn('[PdfMultiPagePreview] Failed to init page count / first page:', e);
+        const t = tRef.current;
         setError(e?.message || t('medical:pdfPreview.loadFailed'));
       }
     })();
@@ -112,7 +116,7 @@ const PdfMultiPagePreview: React.FC<Props> = ({ attachmentId, initialPageUrl }) 
       setLoadingMore(false);
       loadingRef.current = false;
     }
-  }, [pageCount, pages, attachmentId, toImageUrl, notification]);
+  }, [pageCount, pages, attachmentId, toImageUrl, notification, t]);
 
   // Regenerate all loaded pages
   const regenerateAll = useCallback(async () => {
@@ -138,7 +142,7 @@ const PdfMultiPagePreview: React.FC<Props> = ({ attachmentId, initialPageUrl }) 
     } finally {
       setRegenerating(false);
     }
-  }, [pages, attachmentId, toImageUrl, notification]);
+  }, [pages, attachmentId, toImageUrl, notification, t]);
 
   // Handle scroll for infinite loading
   const handleScroll = useCallback(() => {
@@ -176,7 +180,7 @@ const PdfMultiPagePreview: React.FC<Props> = ({ attachmentId, initialPageUrl }) 
         duration: 5,
       });
     }
-  }, [attachmentId, notification]);
+  }, [attachmentId, notification, t]);
 
   if (!pages.length && !error) {
     return (

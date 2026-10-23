@@ -67,6 +67,9 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
   mode = 'create',
 }) => {
   const { t } = useTranslation(['households', 'patients', 'forms', 'common', 'entities']);
+  // Async work reads the current t without re-running when the language changes.
+  const tRef = useRef(t);
+  tRef.current = t;
   const [form] = Form.useForm();
   const [duplicateCount, setDuplicateCount] = useState(0);
   const watchedName = Form.useWatch('lastName', form) as string | undefined;
@@ -110,6 +113,7 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
       setHouseholdPatients(pets || []);
     } catch (err) {
       console.error('Failed to load household patients:', err);
+      const t = tRef.current;
       message.error(t('form.loadPatientsFailed'));
     } finally {
       setLoadingPatients(false);
