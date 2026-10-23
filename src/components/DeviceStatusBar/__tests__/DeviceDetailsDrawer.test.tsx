@@ -60,6 +60,7 @@ const details = {
   log: [
     { at: at(9, 12), label: 'Error', errorKind: 'port_missing', isError: true },
     { at: at(10, 31), label: 'cut_off', errorKind: null, isError: true },
+    { at: at(10, 40), label: 'unrecognized_data', errorKind: null, isError: false },
   ],
 };
 
@@ -142,6 +143,12 @@ describe('device details drawer', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'drawer.usePort {"port":"COM5"}' }));
     await waitFor(() => expect(updateIntegration).toHaveBeenCalledWith({ id: 1, data: { serialPortName: 'COM5' } }));
+  });
+
+  // Serial test on the Mac: a machine sending data that is never a result.
+  it('says when data arrives that is not a result', async () => {
+    await renderDrawer();
+    expect(await screen.findByText(/drawer\.log\.unrecognized_data/)).toBeInTheDocument();
   });
 
   it('copies the diagnostics text', async () => {
