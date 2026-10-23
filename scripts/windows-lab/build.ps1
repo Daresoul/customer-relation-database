@@ -1,7 +1,8 @@
 <#
   Builds the Windows installer on the lab machine from C:\ArkivetLab\src
   (the branch arrives as a git bundle; see `appctl build`). A normal release
-  build, except the updater is off: the lab has no signing key.
+  build. Its update files are signed with a throwaway lab key, so they never
+  verify against the real public key; the real key never leaves CI.
   Output: the NSIS setup.exe path on the last line.
 #>
 $ErrorActionPreference = 'Stop'
@@ -28,7 +29,10 @@ New-Item -ItemType Directory -Force src-tauri\resources | Out-Null
 Copy-Item pdf-generator-cli\build\libs\pdf-generator-cli-*.jar src-tauri\resources\ -Force
 
 Write-Host '==> Tauri build (NSIS)'
-$env:TAURI_CONFIG = '{"tauri":{"updater":{"active":false}}}'
+$labKey = 'C:\ArkivetLab\state\lab-updater.key'
+if (-not (Test-Path $labKey)) { & npx.cmd tauri signer generate -w $labKey -p 'lab' --ci | Out-Null }
+$env:TAURI_PRIVATE_KEY = Get-Content $labKey -Raw
+$env:TAURI_KEY_PASSWORD = 'lab'
 & npm.cmd run tauri build -- --bundles nsis
 if ($LASTEXITCODE -ne 0) { throw 'tauri build failed' }
 
