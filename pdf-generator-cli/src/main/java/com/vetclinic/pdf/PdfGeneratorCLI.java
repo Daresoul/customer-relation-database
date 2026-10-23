@@ -110,6 +110,7 @@ public class PdfGeneratorCLI {
         }
 
         PDFReportService service = PDFReportService.getInstance();
+        service.setClinic(com.vetclinic.pdf.models.ClinicProfile.fromJson(json));
         String outputPath = json.get("output_path").getAsString();
 
         if ("invoice".equals(reportType)) {
@@ -129,12 +130,13 @@ public class PdfGeneratorCLI {
                     String name = itemObj.has("name") ? itemObj.get("name").getAsString() : "";
                     int quantity = itemObj.has("quantity") ? itemObj.get("quantity").getAsInt() : 1;
                     double unitPrice = itemObj.has("unit_price") ? itemObj.get("unit_price").getAsDouble() : 0;
-                    lineItems.add(new PDFReportService.InvoiceLineItem(name, quantity, unitPrice));
+                    String vatLabel = getStr(itemObj, "vat_label", null);
+                    lineItems.add(new PDFReportService.InvoiceLineItem(name, quantity, unitPrice, vatLabel));
                 }
             }
 
             File pdfFile = service.createInvoice(invoiceDate, invoiceNumber, recipient,
-                lineItems, discountPercent, currency, outputPath);
+                lineItems, discountPercent, currency, parseInvoiceTotals(json), outputPath);
             System.out.println("Invoice PDF generated successfully: " + outputPath);
 
         } else if ("pharmacy_note".equals(reportType)) {
@@ -204,6 +206,30 @@ public class PdfGeneratorCLI {
             System.out.println("Device report PDF generated successfully: " + outputPath);
         }
 
+    }
+
+    /** The optional `totals` object of an invoice; null when the app did not send it. */
+    static PDFReportService.InvoiceTotals parseInvoiceTotals(JsonObject json) {
+        if (!json.has("totals") || !json.get("totals").isJsonObject()) {
+            return null;
+        }
+        JsonObject t = json.getAsJsonObject("totals");
+        List<PDFReportService.VatGroup> groups = new ArrayList<>();
+        if (t.has("vat_groups") && t.get("vat_groups").isJsonArray()) {
+            for (JsonElement el : t.getAsJsonArray("vat_groups")) {
+                JsonObject g = el.getAsJsonObject();
+                groups.add(new PDFReportService.VatGroup(getStr(g, "label", ""),
+                        num(g, "net"), num(g, "vat"), num(g, "gross")));
+            }
+        }
+        boolean pricesIncludeVat = !t.has("prices_include_vat") || t.get("prices_include_vat").isJsonNull()
+                || t.get("prices_include_vat").getAsBoolean();
+        return new PDFReportService.InvoiceTotals(num(t, "subtotal"), num(t, "discount_amount"),
+                num(t, "total"), num(t, "vat_total"), pricesIncludeVat, groups);
+    }
+
+    private static double num(JsonObject o, String key) {
+        return o.has(key) && !o.get(key).isJsonNull() ? o.get(key).getAsDouble() : 0;
     }
 
     static Patient parsePatient(JsonObject json) {

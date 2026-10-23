@@ -47,6 +47,13 @@ public class PDFReportService {
     private static final int SMALL_INFO_FONT_SIZE = 10;
     private static Logger logger;
 
+    private com.vetclinic.pdf.models.ClinicProfile clinic = com.vetclinic.pdf.models.ClinicProfile.empty();
+
+    /** The clinic details drawn on the next documents' letterhead. */
+    public void setClinic(com.vetclinic.pdf.models.ClinicProfile clinic) {
+        this.clinic = clinic == null ? com.vetclinic.pdf.models.ClinicProfile.empty() : clinic;
+    }
+
     static {
         try {
             logger = Logger.getLogger(PDFReportService.class.getName());
@@ -1079,7 +1086,10 @@ public class PDFReportService {
             Paragraph leftHeader = new Paragraph();
 
             // left header - logo
-            Image logo = Image.getInstance(Util.getAbsolutePath(Constants.LOGO));
+            Image logo = Letterhead.logoImage(clinic);
+            if (logo == null) {
+                logo = Image.getInstance(Util.getAbsolutePath(Constants.LOGO));
+            }
             logo.scaleToFit(80, 80);
             leftHeader.add(new Chunk(logo, 0, 0, true));
             leftHeader.setIndentationLeft(20);
@@ -1092,7 +1102,8 @@ public class PDFReportService {
             vetClinic.setWordSpacing(2);
             vetClinic.setLineHeight(15);
 
-            Chunk nameOfClinic = new Chunk(Content.CLINIC_NAME, FontUtil.getMacedonianFont(25));
+            Chunk nameOfClinic = new Chunk(com.vetclinic.pdf.models.ClinicProfile.or(clinic.name, Content.CLINIC_NAME),
+                    FontUtil.getMacedonianFont(25));
             nameOfClinic.setWordSpacing(2);
             nameOfClinic.setLineHeight(20);
 
@@ -1108,16 +1119,16 @@ public class PDFReportService {
             Chunk contact = new Chunk(Content.CONTACT, macedonianFont);
             contact.setWordSpacing(2);
 
-            Chunk address1 = new Chunk(Content.ADDRESS1, FontUtil.getMacedonianFont(SMALL_INFO_FONT_SIZE));
+            Chunk address1 = new Chunk(com.vetclinic.pdf.models.ClinicProfile.or(clinic.address, Content.ADDRESS1), FontUtil.getMacedonianFont(SMALL_INFO_FONT_SIZE));
             address1.setWordSpacing(2);
 
-            Chunk address2 = new Chunk(Content.ADDRESS2, FontUtil.getMacedonianFont(SMALL_INFO_FONT_SIZE));
+            Chunk address2 = new Chunk(com.vetclinic.pdf.models.ClinicProfile.or(clinic.city, Content.ADDRESS2), FontUtil.getMacedonianFont(SMALL_INFO_FONT_SIZE));
             address2.setWordSpacing(2);
 
-            Chunk mobile = new Chunk(Content.MOBILE, FontUtil.getMacedonianFont(SMALL_INFO_FONT_SIZE));
+            Chunk mobile = new Chunk(clinic.phone != null ? "мобилен: " + clinic.phone : Content.MOBILE, FontUtil.getMacedonianFont(SMALL_INFO_FONT_SIZE));
             mobile.setWordSpacing(2);
 
-            Chunk email = new Chunk(Content.EMAIL, FontUtil.getMacedonianFont(SMALL_INFO_FONT_SIZE));
+            Chunk email = new Chunk(com.vetclinic.pdf.models.ClinicProfile.or(clinic.email, Content.EMAIL), FontUtil.getMacedonianFont(SMALL_INFO_FONT_SIZE));
             email.setWordSpacing(2);
 
             int spaceBetweenLines = 11;
@@ -1680,6 +1691,7 @@ public class PDFReportService {
 
         // Get the content layer to write on top of the template
         PdfContentByte canvas = stamper.getOverContent(1);
+        Letterhead.stampReport(canvas, clinic);
 
         // Get page dimensions
         Rectangle pageSize = reader.getPageSize(1);
@@ -1776,6 +1788,7 @@ public class PDFReportService {
 
         // Get the content layer to write on top of the template
         PdfContentByte canvas = stamper.getOverContent(1);
+        Letterhead.stampPharmacyNote(canvas, clinic);
 
         // Get page dimensions
         Rectangle pageSize = reader.getPageSize(1);
@@ -1846,6 +1859,7 @@ public class PDFReportService {
         PdfStamper stamper = new PdfStamper(reader, new FileOutputStream(pdfFile));
 
         PdfContentByte canvas = stamper.getOverContent(1);
+        Letterhead.stampReport(canvas, clinic);
 
         Rectangle pageSize = reader.getPageSize(1);
         float pageWidth = pageSize.getWidth();
@@ -1980,16 +1994,82 @@ public class PDFReportService {
         public String name;
         public int quantity;
         public double unitPrice;
+        /** The line's VAT rate label (e.g. "ДДВ 18%"); null for a line without a rate. */
+        public String vatLabel;
 
         public InvoiceLineItem(String name, int quantity, double unitPrice) {
+            this(name, quantity, unitPrice, null);
+        }
+
+        public InvoiceLineItem(String name, int quantity, double unitPrice, String vatLabel) {
             this.name = name;
             this.quantity = quantity;
             this.unitPrice = unitPrice;
+            this.vatLabel = vatLabel;
         }
 
         public double getTotal() {
             return quantity * unitPrice;
         }
+    }
+
+    /** One VAT rate's share of the invoice, as the app computed it. */
+    public static class VatGroup {
+        public final String label;
+        public final double net;
+        public final double vat;
+        public final double gross;
+
+        public VatGroup(String label, double net, double vat, double gross) {
+            this.label = label;
+            this.net = net;
+            this.vat = vat;
+            this.gross = gross;
+        }
+    }
+
+    /**
+     * The invoice's money figures. The app computes them; Java only prints
+     * them, so the screen and the PDF show the same numbers.
+     */
+    public static class InvoiceTotals {
+        public final double subtotal;
+        public final double discountAmount;
+        public final double total;
+        public final double vatTotal;
+        public final boolean pricesIncludeVat;
+        public final List<VatGroup> vatGroups;
+
+        public InvoiceTotals(double subtotal, double discountAmount, double total, double vatTotal,
+                             boolean pricesIncludeVat, List<VatGroup> vatGroups) {
+            this.subtotal = subtotal;
+            this.discountAmount = discountAmount;
+            this.total = total;
+            this.vatTotal = vatTotal;
+            this.pricesIncludeVat = pricesIncludeVat;
+            this.vatGroups = vatGroups == null ? new ArrayList<>() : vatGroups;
+        }
+
+        /** Totals for input from an app that does not send them. */
+        static InvoiceTotals computed(List<InvoiceLineItem> lineItems, double discountPercent) {
+            double subtotal = 0;
+            for (InvoiceLineItem item : lineItems) {
+                subtotal += item.getTotal();
+            }
+            double discount = subtotal * discountPercent / 100.0;
+            return new InvoiceTotals(subtotal, discount, subtotal - discount, 0, true, null);
+        }
+
+        boolean hasVat() {
+            return !vatGroups.isEmpty();
+        }
+    }
+
+    public File createInvoice(String date, String invoiceNumber, String recipient,
+                              List<InvoiceLineItem> lineItems, double discountPercent,
+                              String currency, String outputPath)
+            throws IOException, DocumentException, CreatingDirectoryException {
+        return createInvoice(date, invoiceNumber, recipient, lineItems, discountPercent, currency, null, outputPath);
     }
 
     /**
@@ -2002,13 +2082,19 @@ public class PDFReportService {
      * @param lineItems List of line items
      * @param discountPercent Discount percentage (0 if no discount)
      * @param currency Currency label (e.g., "ден")
+     * @param totals The app's totals, or null to compute them here
      * @param outputPath The output file path
      * @return The generated PDF file
      */
     public File createInvoice(String date, String invoiceNumber, String recipient,
                               List<InvoiceLineItem> lineItems, double discountPercent,
-                              String currency, String outputPath)
+                              String currency, InvoiceTotals totals, String outputPath)
             throws IOException, DocumentException, CreatingDirectoryException {
+
+        if (totals == null) {
+            totals = InvoiceTotals.computed(lineItems, discountPercent);
+        }
+        boolean hasVat = totals.hasVat();
 
         // Create parent directory if it doesn't exist
         File pdfFile = new File(outputPath);
@@ -2051,32 +2137,34 @@ public class PDFReportService {
         // The letterhead's footer (clinic address) ends at y≈42.
         float bottomLimit = 60f;
 
-        // Column widths (proportional)
+        // Column widths (proportional). The VAT column only exists on an invoice with VAT.
         float colNum = 55;       // РЕД. БРОЈ
         float colTotal = 80;     // ВКУПНО
         float colPrice = 80;     // ЕД. ЦЕНА
         float colQty = 75;       // КОЛИЧИНА
-        float colDesc = tableWidth - colNum - colTotal - colPrice - colQty;  // ОПИС (remainder)
+        float colVat = hasVat ? 60 : 0;  // ДДВ
+        float colDesc = tableWidth - colNum - colTotal - colPrice - colQty - colVat;  // ОПИС (remainder)
 
+        // x of: number, description, VAT, quantity, unit price, line total
         float[] colX = {
             tableLeft,
             tableLeft + colNum,
             tableLeft + colNum + colDesc,
-            tableLeft + colNum + colDesc + colQty,
-            tableLeft + colNum + colDesc + colQty + colPrice
+            tableLeft + colNum + colDesc + colVat,
+            tableLeft + colNum + colDesc + colVat + colQty,
+            tableLeft + colNum + colDesc + colVat + colQty + colPrice
         };
 
         int pageNumber = 1;
         PdfContentByte canvas = stamper.getOverContent(pageNumber);
+        Letterhead.stampInvoice(canvas, clinic);
         drawInvoiceFields(canvas, fieldFont, date, invoiceNumber, recipient);
-        float currentY = drawInvoiceHeaderRow(canvas, headerFont, colX, tableStartY, tableLeft, tableRight, minRowHeight);
+        float currentY = drawInvoiceHeaderRow(canvas, headerFont, colX, hasVat, tableStartY, tableLeft, tableRight, minRowHeight);
 
         // --- Line item rows: a row that doesn't fit starts a new letterhead page ---
-        double subtotal = 0;
         for (int i = 0; i < lineItems.size(); i++) {
             InvoiceLineItem item = lineItems.get(i);
             double rowTotal = item.getTotal();
-            subtotal += rowTotal;
 
             Paragraph nameP = new Paragraph(item.name, cellFont);
             float rowHeight = Math.max(minRowHeight, measureHeight(nameP, colDesc - 8) + 8);
@@ -2086,7 +2174,7 @@ public class PDFReportService {
                 pageNumber++;
                 canvas = newLetterheadPage(stamper, letterhead, pageNumber, pageSize);
                 drawInvoiceFields(canvas, fieldFont, date, invoiceNumber, recipient);
-                currentY = drawInvoiceHeaderRow(canvas, headerFont, colX, tableStartY, tableLeft, tableRight, minRowHeight);
+                currentY = drawInvoiceHeaderRow(canvas, headerFont, colX, hasVat, tableStartY, tableLeft, tableRight, minRowHeight);
             }
 
             // Alternating row background
@@ -2103,12 +2191,16 @@ public class PDFReportService {
                     colX[0] + 4, rowBottom, colX[0] + colNum, currentY);
             drawCell(canvas, nameP, Element.ALIGN_LEFT,
                     colX[1] + 4, rowBottom, colX[1] + colDesc - 4, currentY);
+            if (hasVat) {
+                drawCell(canvas, new Paragraph(item.vatLabel == null ? "" : item.vatLabel, cellFont), Element.ALIGN_CENTER,
+                        colX[2], rowBottom, colX[2] + colVat, currentY);
+            }
             drawCell(canvas, new Paragraph(String.valueOf(item.quantity), cellFont), Element.ALIGN_CENTER,
-                    colX[2], rowBottom, colX[2] + colQty, currentY);
+                    colX[3], rowBottom, colX[3] + colQty, currentY);
             drawCell(canvas, new Paragraph(formatAmount(item.unitPrice), cellFont), Element.ALIGN_CENTER,
-                    colX[3], rowBottom, colX[3] + colPrice, currentY);
+                    colX[4], rowBottom, colX[4] + colPrice, currentY);
             drawCell(canvas, new Paragraph(formatAmount(rowTotal), cellFont), Element.ALIGN_CENTER,
-                    colX[4], rowBottom, colX[4] + colTotal, currentY);
+                    colX[5], rowBottom, colX[5] + colTotal, currentY);
 
             currentY = rowBottom;
         }
@@ -2116,7 +2208,14 @@ public class PDFReportService {
         drawInvoiceRule(canvas, tableLeft, tableRight, currentY);
 
         // --- Totals section: kept whole, on a new page if it doesn't fit ---
-        float totalsHeight = discountPercent > 0 ? 90f : 40f;
+        boolean showDiscount = discountPercent > 0;
+        boolean addVatToNet = hasVat && !totals.pricesIncludeVat;
+        boolean showAmountDue = showDiscount || hasVat;
+        float totalsHeight = showDiscount && !hasVat ? 90f : 40f
+                + (showDiscount ? 20f : 0f)
+                + (addVatToNet ? 20f : 0f)
+                + (showAmountDue ? 30f : 0f)
+                + (hasVat ? 30f + 16f * (totals.vatGroups.size() + 1) : 0f);
         if (currentY - totalsHeight < bottomLimit) {
             pageNumber++;
             canvas = newLetterheadPage(stamper, letterhead, pageNumber, pageSize);
@@ -2124,50 +2223,33 @@ public class PDFReportService {
             currentY = tableStartY;
         }
 
-        float totalsLabelRight = colX[3] + colPrice;
-        float totalsValueLeft = colX[4];
-        float totalsValueRight = colX[4] + colTotal;
+        float totalsLabelRight = colX[4] + colPrice;
+        float totalsValueLeft = colX[5];
+        float totalsValueRight = colX[5] + colTotal;
         float totalsY = currentY - 10;
 
-        // Subtotal row
-        ColumnText subtotalLabelCol = new ColumnText(canvas);
-        subtotalLabelCol.setSimpleColumn(totalsLabelRight - 120, totalsY - 18, totalsLabelRight, totalsY);
-        Paragraph subtotalLabelP = new Paragraph("Вкупно:", totalLabelFont);
-        subtotalLabelP.setAlignment(Element.ALIGN_RIGHT);
-        subtotalLabelCol.addElement(subtotalLabelP);
-        subtotalLabelCol.go();
-
-        ColumnText subtotalValCol = new ColumnText(canvas);
-        subtotalValCol.setSimpleColumn(totalsValueLeft, totalsY - 18, totalsValueRight, totalsY);
-        Paragraph subtotalValP = new Paragraph(formatAmount(subtotal) + " " + currency, totalValueFont);
-        subtotalValP.setAlignment(Element.ALIGN_CENTER);
-        subtotalValCol.addElement(subtotalValP);
-        subtotalValCol.go();
-
+        drawTotalsRow(canvas, "Вкупно:", formatAmount(totals.subtotal) + " " + currency,
+                totalLabelFont, totalValueFont, totalsLabelRight - 120, totalsLabelRight,
+                totalsValueLeft, totalsValueRight, totalsY, 18);
         totalsY -= 20;
 
-        // Discount row (only if discount > 0)
-        if (discountPercent > 0) {
-            double discountAmount = subtotal * discountPercent / 100.0;
+        if (showDiscount) {
+            drawTotalsRow(canvas, "Попуст (" + formatAmount(discountPercent) + "%):",
+                    "-" + formatAmount(totals.discountAmount) + " " + currency,
+                    totalLabelFont, totalValueFont, totalsLabelRight - 160, totalsLabelRight,
+                    totalsValueLeft, totalsValueRight, totalsY, 18);
+            totalsY -= 20;
+        }
 
-            ColumnText discLabelCol = new ColumnText(canvas);
-            discLabelCol.setSimpleColumn(totalsLabelRight - 160, totalsY - 18, totalsLabelRight, totalsY);
-            Paragraph discLabelP = new Paragraph("Попуст (" + formatAmount(discountPercent) + "%):", totalLabelFont);
-            discLabelP.setAlignment(Element.ALIGN_RIGHT);
-            discLabelCol.addElement(discLabelP);
-            discLabelCol.go();
+        if (addVatToNet) {
+            drawTotalsRow(canvas, "ДДВ:", "+" + formatAmount(totals.vatTotal) + " " + currency,
+                    totalLabelFont, totalValueFont, totalsLabelRight - 160, totalsLabelRight,
+                    totalsValueLeft, totalsValueRight, totalsY, 18);
+            totalsY -= 20;
+        }
 
-            ColumnText discValCol = new ColumnText(canvas);
-            discValCol.setSimpleColumn(totalsValueLeft, totalsY - 18, totalsValueRight, totalsY);
-            Paragraph discValP = new Paragraph("-" + formatAmount(discountAmount) + " " + currency, totalValueFont);
-            discValP.setAlignment(Element.ALIGN_CENTER);
-            discValCol.addElement(discValP);
-            discValCol.go();
-
-            totalsY -= 30;
-
-            // Grand total with discount
-            double grandTotal = subtotal - discountAmount;
+        if (showAmountDue) {
+            totalsY -= 10;
 
             // Draw line above grand total
             canvas.saveState();
@@ -2183,25 +2265,76 @@ public class PDFReportService {
             Font grandTotalValueFont = FontUtil.getMacedonianFont(12, FontUtil.DEFAULT_FONT_COLOR);
             grandTotalValueFont.setStyle(Font.BOLD);
 
-            ColumnText grandLabelCol = new ColumnText(canvas);
-            grandLabelCol.setSimpleColumn(totalsLabelRight - 160, totalsY - 20, totalsLabelRight, totalsY);
-            Paragraph grandLabelP = new Paragraph("За наплата:", grandTotalLabelFont);
-            grandLabelP.setAlignment(Element.ALIGN_RIGHT);
-            grandLabelCol.addElement(grandLabelP);
-            grandLabelCol.go();
+            drawTotalsRow(canvas, "За наплата:", formatAmount(totals.total) + " " + currency,
+                    grandTotalLabelFont, grandTotalValueFont, totalsLabelRight - 160, totalsLabelRight,
+                    totalsValueLeft, totalsValueRight, totalsY, 20);
+            totalsY -= 30;
+        }
 
-            ColumnText grandValCol = new ColumnText(canvas);
-            grandValCol.setSimpleColumn(totalsValueLeft, totalsY - 20, totalsValueRight, totalsY);
-            Paragraph grandValP = new Paragraph(formatAmount(grandTotal) + " " + currency, grandTotalValueFont);
-            grandValP.setAlignment(Element.ALIGN_CENTER);
-            grandValCol.addElement(grandValP);
-            grandValCol.go();
+        if (hasVat) {
+            drawVatTable(canvas, totals, currency, headerFont, cellFont, colX[2], tableRight, totalsY - 10);
         }
 
         stamper.close();
         reader.close();
 
         return pdfFile;
+    }
+
+    /** A label (right-aligned) and its amount (centred in the line-total column). */
+    private void drawTotalsRow(PdfContentByte canvas, String label, String value, Font labelFont, Font valueFont,
+                               float labelLeft, float labelRight, float valueLeft, float valueRight,
+                               float top, float height) throws DocumentException {
+        ColumnText labelCol = new ColumnText(canvas);
+        labelCol.setSimpleColumn(labelLeft, top - height, labelRight, top);
+        Paragraph labelP = new Paragraph(label, labelFont);
+        labelP.setAlignment(Element.ALIGN_RIGHT);
+        labelCol.addElement(labelP);
+        labelCol.go();
+
+        ColumnText valueCol = new ColumnText(canvas);
+        valueCol.setSimpleColumn(valueLeft, top - height, valueRight, top);
+        Paragraph valueP = new Paragraph(value, valueFont);
+        valueP.setAlignment(Element.ALIGN_CENTER);
+        valueCol.addElement(valueP);
+        valueCol.go();
+    }
+
+    /** Net, VAT and gross per rate, with a total row when there is more than one rate. */
+    private void drawVatTable(PdfContentByte canvas, InvoiceTotals totals, String currency,
+                              Font headerFont, Font cellFont, float left, float right, float top)
+            throws DocumentException {
+        float rowHeight = 16f;
+        float width = (right - left) / 4f;
+        String[] headers = {"Стапка", "Основица", "ДДВ", "Вкупно"};
+        for (int c = 0; c < 4; c++) {
+            drawCell(canvas, new Paragraph(headers[c], headerFont), c == 0 ? Element.ALIGN_LEFT : Element.ALIGN_RIGHT,
+                    left + c * width + 2, top - rowHeight, left + (c + 1) * width - 2, top);
+        }
+        top -= rowHeight;
+        drawInvoiceRule(canvas, left, right, top);
+
+        List<VatGroup> rows = new ArrayList<>(totals.vatGroups);
+        if (rows.size() > 1) {
+            double net = 0;
+            for (VatGroup g : totals.vatGroups) {
+                net += g.net;
+            }
+            rows.add(new VatGroup("Вкупно", net, totals.vatTotal, totals.total));
+        }
+        for (VatGroup g : rows) {
+            String[] cells = {
+                    g.label,
+                    formatAmount(g.net) + " " + currency,
+                    formatAmount(g.vat) + " " + currency,
+                    formatAmount(g.gross) + " " + currency,
+            };
+            for (int c = 0; c < 4; c++) {
+                drawCell(canvas, new Paragraph(cells[c], cellFont), c == 0 ? Element.ALIGN_LEFT : Element.ALIGN_RIGHT,
+                        left + c * width + 2, top - rowHeight, left + (c + 1) * width - 2, top);
+            }
+            top -= rowHeight;
+        }
     }
 
     /** Date, invoice number and recipient, written onto one letterhead page. */
@@ -2220,16 +2353,19 @@ public class PDFReportService {
     }
 
     /** The column headings and the rule under them; returns the y below them. */
-    private float drawInvoiceHeaderRow(PdfContentByte canvas, Font headerFont, float[] colX,
+    private float drawInvoiceHeaderRow(PdfContentByte canvas, Font headerFont, float[] colX, boolean hasVat,
                                        float topY, float tableLeft, float tableRight, float rowHeight)
             throws DocumentException {
         drawInvoiceRule(canvas, tableLeft, tableRight, topY - rowHeight);
 
-        String[] headers = {"РЕД. БРОЈ", "ОПИС", "КОЛИЧИНА", "ЕД. ЦЕНА", "ВКУПНО"};
-        int[] aligns = {Element.ALIGN_LEFT, Element.ALIGN_LEFT, Element.ALIGN_CENTER, Element.ALIGN_CENTER, Element.ALIGN_CENTER};
-        float[] left = {colX[0] + 4, colX[1] + 4, colX[2], colX[3], colX[4]};
-        float[] right = {colX[1], colX[2], colX[3], colX[4], tableRight};
+        String[] headers = {"РЕД. БРОЈ", "ОПИС", "ДДВ", "КОЛИЧИНА", "ЕД. ЦЕНА", "ВКУПНО"};
+        int[] aligns = {Element.ALIGN_LEFT, Element.ALIGN_LEFT, Element.ALIGN_CENTER, Element.ALIGN_CENTER, Element.ALIGN_CENTER, Element.ALIGN_CENTER};
+        float[] left = {colX[0] + 4, colX[1] + 4, colX[2], colX[3], colX[4], colX[5]};
+        float[] right = {colX[1], colX[2], colX[3], colX[4], colX[5], tableRight};
         for (int i = 0; i < headers.length; i++) {
+            if (i == 2 && !hasVat) {
+                continue;
+            }
             drawCell(canvas, new Paragraph(headers[i], headerFont), aligns[i],
                     left[i], topY - rowHeight, right[i], topY);
         }
@@ -2271,6 +2407,7 @@ public class PDFReportService {
         stamper.insertPage(pageNumber, pageSize);
         PdfContentByte canvas = stamper.getOverContent(pageNumber);
         canvas.addTemplate(letterhead, 0, 0);
+        Letterhead.stampInvoice(canvas, clinic);
         return canvas;
     }
 
