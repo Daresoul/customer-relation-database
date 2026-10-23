@@ -52,7 +52,9 @@ describe('backupHealth', () => {
 });
 
 describe('BackupHealthLight', () => {
-  beforeEach(() => invokeMock.mockReset());
+  beforeEach(() => {
+    invokeMock.mockReset();
+  });
   afterEach(cleanup);
 
   function renderLight() {
