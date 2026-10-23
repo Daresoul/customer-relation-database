@@ -52,7 +52,16 @@
   neuter status (`neutered`: true, false or NULL for not recorded), age (days
   under a week, weeks under 8 weeks, then months, then years; frozen at the
   date of death), last weight with its date and a trend line, the owner with
-  a copyable phone, and alert chips.
+  a copyable phone, and alert chips. The banner has New record (the record
+  modal) and Book (the appointment form with the patient picked; not for a
+  deceased patient).
+- The Overview tab shows the next and the last appointment with Book, and the
+  medical notes (`patients.medical_notes`), edited in place.
+- Patient fields save quietly (no success toast); a failed save shows one
+  error. An inline edit still pending when the page closes is saved.
+- Back on the patient and household pages returns to the previous page, or
+  home when the page was opened first (`hooks/useGoBack.ts`). The patient
+  breadcrumb includes the household.
 - Alerts (`patient_alerts`) are typed: `allergy`, `aggressive`, `chronic`,
   `other`, each with a note of at most 200 characters. Allergy and aggressive
   show red. The patient table shows them next to the name.

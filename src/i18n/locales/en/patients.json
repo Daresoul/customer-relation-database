@@ -285,7 +285,9 @@
       "markDeceased": "Mark as deceased",
       "markInactive": "Mark inactive",
       "reactivate": "Reactivate",
-      "deleteHint": "Only a patient with no records or appointments can be deleted"
+      "deleteHint": "Only a patient with no records or appointments can be deleted",
+      "newRecord": "New record",
+      "book": "Book"
     },
     "alerts": {
       "title": "Alerts for {{name}}",
@@ -369,6 +371,21 @@
       "patientDeceased": "This patient is deceased and can't be booked.",
       "invalidWeight": "Enter a weight above 0 kg.",
       "alertNoteTooLong": "An alert note can be at most 200 characters."
+    }
+  },
+  "overview": {
+    "appointments": {
+      "title": "Appointments",
+      "book": "Book",
+      "next": "Next",
+      "last": "Last",
+      "none": "None",
+      "loadFailed": "Could not load the appointments"
+    },
+    "notes": {
+      "title": "Medical notes",
+      "edit": "Edit",
+      "empty": "No medical notes yet"
     }
   }
 }
