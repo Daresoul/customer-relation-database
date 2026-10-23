@@ -154,7 +154,7 @@ export const TabbedMedicalRecordFields: React.FC<TabbedMedicalRecordFieldsProps>
       setActiveTab(first);
       onTabChange?.(first);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- switch tabs when the error set changes, not when the user picks a tab
   }, [errorKey]);
 
   const handleTabChange = (key: string) => {

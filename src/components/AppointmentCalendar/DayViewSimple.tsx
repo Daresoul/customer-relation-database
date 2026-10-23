@@ -55,7 +55,7 @@ const DayViewSimple: React.FC<DayViewSimpleProps> = ({
     if (!showsToday || !containerRef.current) return;
     containerRef.current.scrollTop = Math.max(0, dayjs().hour() - 1) * 80;
     // Only when the day shown changes, not every minute.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the shown day; showsToday follows from it
   }, [selectedDate.format('YYYY-MM-DD')]);
 
   // Generate hourly slots from 00:00 to 23:59 (24 hours) - same as WeekView

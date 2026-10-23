@@ -283,7 +283,7 @@ const DeviceImportDialog: React.FC = () => {
     );
     appliedDefaultsRef.current = { ...appliedDefaultsRef.current, ...updates };
     form.setFieldsValue(updates);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- defaults follow a new patient or file, not every render
   }, [suggestedPatientId, pendingFiles.length]);
 
   const handleRecordTypeChange = (value: RecordType) => {

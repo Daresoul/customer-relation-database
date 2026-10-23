@@ -131,7 +131,7 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
     if (!hideHouseholdPicker) searchHouseholdsRaw('');
     // Intentionally empty deps — fire once on mount. Subsequent searches
     // happen via the Select's onSearch event.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load the recent households once on open
   }, []);
 
   // Search households with debouncing.

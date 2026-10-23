@@ -89,7 +89,7 @@ export const CreatePatientSection: React.FC<CreatePatientSectionProps> = ({
     appliedPrefillRef.current = prefillKey;
     const untouched = Object.entries(prefillValues()).filter(([field]) => !form.isFieldTouched(field));
     form.setFieldsValue(Object.fromEntries(untouched));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- prefill once per distinct device data (prefillKey), not per render
   }, [fillMode, hasDeviceData, isLoadingSpecies, prefillKey]);
 
   const handleFillModeChange = (mode: FillMode) => {

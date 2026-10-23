@@ -8,7 +8,7 @@
  * error if the diagnosis is still referenced by any medical record.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Card,
   Form,
@@ -68,6 +68,9 @@ const DEFAULT_TAG_COLOR = '#2f54eb';
 const DiagnosesSettings: React.FC = () => {
   const { t } = useTranslation(['settings', 'common']);
   const { notification } = App.useApp();
+  // Async work reads the current t without re-running when the language changes.
+  const tRef = useRef(t);
+  tRef.current = t;
   const [rows, setRows] = useState<Diagnosis[]>([]);
   const [loading, setLoading] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
@@ -75,7 +78,7 @@ const DiagnosesSettings: React.FC = () => {
   const [editing, setEditing] = useState<Diagnosis | null>(null);
   const [form] = Form.useForm();
 
-  const reload = async () => {
+  const reload = useCallback(async () => {
     setLoading(true);
     try {
       const data = await invoke<Diagnosis[]>('get_diagnoses', {
@@ -83,6 +86,7 @@ const DiagnosesSettings: React.FC = () => {
       });
       setRows(data || []);
     } catch (e) {
+      const t = tRef.current;
       notification.error({
         message: t('common:error', 'Error'),
         description: errorText(e, t),
@@ -91,13 +95,12 @@ const DiagnosesSettings: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showInactive, notification]);
 
+  // showInactive change re-fetches so the table reflects the current filter.
   useEffect(() => {
     reload();
-    // showInactive change re-fetches so the table reflects the current filter.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showInactive]);
+  }, [reload]);
 
   const handleAddClick = () => {
     setEditing(null);

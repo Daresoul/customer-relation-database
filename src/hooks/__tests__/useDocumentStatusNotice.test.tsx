@@ -17,7 +17,7 @@ function Notice({ saved }: { saved: SavedRecordDocuments }) {
   const report = useDocumentStatusNotice();
   useEffect(() => {
     report(saved, 'saved');
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- report once on mount, like a page after a save
   return null;
 }
 
