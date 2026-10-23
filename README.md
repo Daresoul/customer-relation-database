@@ -205,6 +205,39 @@
 - Deleting a lab attachment on the record page puts its result back in
   `waiting`.
 
+### Lab results history (`services/lab_results.rs`, patient page Labs tab)
+- Every lab attachment's values are stored one per row in `lab_results`
+  (migration `05x_lab_results`): patient, record, attachment, the inbox
+  result (`source_file_id`), device type, sample time, analyte code and
+  name, the value as sent (`value_text`) and as a number (`value_num`; "1,5"
+  is 1.5, "<0.5" is 0.5, "---" none), unit, reference low/high and a flag
+  `H`, `L`, `N` or `U` (unknown).
+- Sample time is the machine's own clock (local wall time) when the result
+  has one, else when it was received, else when it was attached.
+- Ranges: the machine's own range when it sends one ("0-0" counts as none),
+  else the same table the lab PDF uses (`services/lab_reference.rs`, copied
+  from `PdfGeneratorCLI.java` and `HealvetParameterEnum.java`; Healvet ranges
+  follow the species like the PDF: cat when the species reads cat/мачка,
+  else dog). A change to a range in Java must be made there too. The flag
+  follows the PDF: the machine's own flag wins, then the range; a value with
+  `<`/`>` is only flagged when it is past the range, and text is `U`.
+- Rows are written whenever a lab result lands on a record (import, inbox
+  Attach, adding to an existing record, the record form's recent files).
+  Moving a result hands its rows to the new attachment and patient. A
+  deleted attachment's rows stay but are not shown, so clearing
+  `deleted_at` brings them back.
+- `lab_result_imports` notes each attachment read (`ok` with its count, or
+  `failed` with the error), so each is read once. At start the app reads
+  every live lab attachment not noted yet, in the background; a file that
+  can't be read is logged and skipped.
+- The patient page's Labs tab shows analytes as rows and samples as columns,
+  newest left, with unit, range and a red H / blue L. Samples from one day
+  share a column unless they repeat an analyte. It filters by panel (blood
+  count, chemistry, hormones and markers, PCR) and a click on an analyte
+  shows its trend with the newest reference range shaded. The record page
+  lists the record's lab values with ↑/↓ against the patient's previous
+  value of the same analyte from the same kind of machine.
+
 ## Medical records and invoices
 - A record, its line items and its history row are saved in one transaction
   (`MedicalRecordService::save_new_record` / `save_record_changes`). An edit
