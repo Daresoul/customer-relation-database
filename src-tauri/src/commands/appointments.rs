@@ -96,7 +96,16 @@ pub async fn delete_appointment(
     pool: State<'_, SeaOrmPool>,
     id: i64,
 ) -> Result<(), String> {
-    AppointmentService::delete_appointment(&pool, id).await
+    AppointmentService::delete_appointment(&pool, id).await?;
+
+    // The mapping outlives the soft delete, so the Google event can still go.
+    let db = pool.inner().clone();
+    tokio::spawn(async move {
+        if let Err(e) = trigger_sync_after_cancel(db, id).await {
+            log::error!("Failed to remove the deleted appointment from Google Calendar: {}", e);
+        }
+    });
+    Ok(())
 }
 
 #[tauri::command]
@@ -114,7 +123,17 @@ pub async fn duplicate_appointment(
     created_by: Option<String>,
 ) -> Result<Appointment, String> {
     let created_by = created_by.unwrap_or_else(|| "system".to_string());
-    AppointmentService::duplicate_appointment(&pool, input, created_by).await
+    let appointment = AppointmentService::duplicate_appointment(&pool, input, created_by).await?;
+
+    let appointment_id = appointment.id;
+    let db = pool.inner().clone();
+    tokio::spawn(async move {
+        if let Err(e) = trigger_sync_after_create(db, appointment_id).await {
+            log::error!("Failed to sync the duplicated appointment to Google Calendar: {}", e);
+        }
+    });
+
+    Ok(appointment)
 }
 
 // ===== Google Calendar Sync Helpers (using SeaORM) =====
@@ -401,109 +420,11 @@ async fn trigger_sync_after_cancel(
     Ok(())
 }
 
-// Helper to fetch appointment detail using SeaORM
+/// The appointment as Google gets it: the same read the app uses, so the
+/// arrival statuses come out right.
 async fn fetch_appointment_detail_seaorm(
     db: &DatabaseConnection,
     appointment_id: i64,
 ) -> Result<AppointmentDetail, String> {
-    use crate::models::{Appointment, PatientInfo, Room};
-
-    let row = db.query_one(Statement::from_sql_and_values(
-        DbBackend::Sqlite,
-        r#"SELECT a.id, a.patient_id, a.title, a.description, a.start_time, a.end_time,
-                  a.room_id, a.status, a.created_at, a.updated_at, a.deleted_at,
-                  a.created_by, p.microchip_id, p.name as patient_name, s.name as species, b.name as breed
-           FROM appointments a
-           LEFT JOIN patients p ON a.patient_id = p.id
-           LEFT JOIN species s ON p.species_id = s.id
-           LEFT JOIN breeds b ON p.breed_id = b.id
-           WHERE a.id = ? AND a.deleted_at IS NULL"#,
-        [appointment_id.into()]
-    ))
-    .await
-    .map_err(|e| format!("Failed to fetch appointment: {}", e))?
-    .ok_or("Appointment not found")?;
-
-    let patient_id: i64 = row.try_get("", "patient_id").unwrap_or(0);
-    let room_id: Option<i64> = row.try_get("", "room_id").ok();
-    let status_str: String = row.try_get("", "status").unwrap_or_else(|_| "scheduled".to_string());
-
-    let appointment = Appointment {
-        id: row.try_get("", "id").unwrap_or(0),
-        patient_id,
-        title: row.try_get("", "title").unwrap_or_default(),
-        description: row.try_get("", "description").ok(),
-        start_time: row.try_get("", "start_time").unwrap_or_default(),
-        end_time: row.try_get("", "end_time").unwrap_or_default(),
-        room_id,
-        status: match status_str.as_str() {
-            "scheduled" => AppointmentStatus::Scheduled,
-            "in_progress" => AppointmentStatus::InProgress,
-            "completed" => AppointmentStatus::Completed,
-            "cancelled" => AppointmentStatus::Cancelled,
-            _ => AppointmentStatus::Scheduled,
-        },
-        created_at: row.try_get("", "created_at").unwrap_or_default(),
-        updated_at: row.try_get("", "updated_at").unwrap_or_default(),
-        deleted_at: row.try_get("", "deleted_at").ok(),
-        created_by: row.try_get("", "created_by").unwrap_or_else(|_| "system".to_string()),
-        patient_name: row.try_get("", "patient_name").ok(),
-        species: row.try_get("", "species").ok(),
-        breed: row.try_get("", "breed").ok(),
-        microchip_id: row.try_get("", "microchip_id").ok(),
-        checked_in_at: None,
-        medical_record_id: None,
-    };
-
-    // Get patient info
-    let patient: Option<PatientInfo> = if patient_id > 0 {
-        let patient_row = db.query_one(Statement::from_sql_and_values(
-            DbBackend::Sqlite,
-            "SELECT p.id, p.name, s.name as species, b.name as breed FROM patients p LEFT JOIN species s ON p.species_id = s.id LEFT JOIN breeds b ON p.breed_id = b.id WHERE p.id = ?",
-            [patient_id.into()]
-        ))
-        .await
-        .map_err(|e| format!("Failed to fetch patient: {}", e))?;
-
-        patient_row.map(|r| PatientInfo {
-            id: r.try_get("", "id").unwrap_or(0),
-            name: r.try_get("", "name").unwrap_or_default(),
-            species: r.try_get("", "species").ok(),
-            breed: r.try_get("", "breed").ok(),
-        })
-    } else {
-        None
-    };
-
-    // Get room info
-    let room: Option<Room> = if let Some(rid) = room_id {
-        let room_row = db.query_one(Statement::from_sql_and_values(
-            DbBackend::Sqlite,
-            "SELECT * FROM rooms WHERE id = ?",
-            [rid.into()]
-        ))
-        .await
-        .map_err(|e| format!("Failed to fetch room: {}", e))?;
-
-        room_row.map(|r| Room {
-            id: r.try_get("", "id").unwrap_or(0),
-            name: r.try_get("", "name").unwrap_or_default(),
-            description: r.try_get("", "description").ok(),
-            capacity: r.try_get("", "capacity").unwrap_or(1),
-            color: r.try_get("", "color").unwrap_or_else(|_| "#1890ff".to_string()),
-            is_active: r.try_get("", "is_active").unwrap_or(true),
-            created_at: r.try_get("", "created_at").unwrap_or_default(),
-            updated_at: r.try_get("", "updated_at").unwrap_or_default(),
-        })
-    } else {
-        None
-    };
-
-    Ok(AppointmentDetail {
-        appointment,
-        patient,
-        room,
-        google_sync_state: String::new(),
-        google_synced_at: None,
-    })
+    AppointmentService::get_appointment_by_id(db, appointment_id).await
 }

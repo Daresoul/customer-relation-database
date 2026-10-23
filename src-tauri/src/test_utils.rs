@@ -155,7 +155,10 @@ async fn create_test_schema(db: &DatabaseConnection) {
             created_by TEXT NOT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            deleted_at DATETIME
+            deleted_at DATETIME,
+            checked_in_at DATETIME,
+            no_show_at DATETIME,
+            medical_record_id INTEGER
         )
         "#,
     )
