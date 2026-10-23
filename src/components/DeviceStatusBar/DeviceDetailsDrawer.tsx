@@ -17,6 +17,7 @@ import { describeFolderStatus, describeSerialStatus, folderLevel, formatDownSinc
 import { errorText } from '@/utils/notifyError';
 import { formatDayMonth } from '@/utils/dateFormatter';
 import styles from './DeviceOverview.module.css';
+import { PortMovedHint } from './PortMovedHint';
 
 const { Text, Title } = Typography;
 
@@ -245,6 +246,10 @@ export const DeviceDetailsDrawer: React.FC<DeviceDetailsDrawerProps> = ({ open, 
               </div>
             </Space>
           </div>
+
+          {isSerial && serialStatus?.error_kind === 'port_missing' && device.serialPortName && (
+            <PortMovedHint integrationId={device.id} missingPort={device.serialPortName} />
+          )}
 
           <Descriptions column={1} size="small" bordered>
             <Descriptions.Item label={t('drawer.lastResultLabel')}>{lastResult ?? t('drawer.noResultYet')}</Descriptions.Item>
