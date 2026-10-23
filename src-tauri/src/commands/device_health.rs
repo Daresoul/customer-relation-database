@@ -18,6 +18,18 @@ pub fn get_device_details(integration_id: i64) -> DeviceDetails {
     device_health::device_details(integration_id, chrono::Local::now().fixed_offset())
 }
 
+/// Readable results per machine since local midnight, for the overview.
+#[tauri::command]
+pub async fn get_results_today(pool: State<'_, SeaOrmPool>) -> Result<std::collections::HashMap<i64, i64>, String> {
+    let now = chrono::Local::now();
+    let midnight = now
+        .date_naive()
+        .and_hms_opt(0, 0, 0)
+        .and_then(|m| m.and_local_timezone(chrono::Local).earliest())
+        .unwrap_or(now);
+    DeviceIntegrationService::results_since(&pool, midnight.with_timezone(&chrono::Utc)).await
+}
+
 /// The "Copy diagnostics" text. Holds settings, states and times only; no
 /// message contents, so no patient names.
 #[tauri::command]

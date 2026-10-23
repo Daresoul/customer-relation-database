@@ -720,6 +720,7 @@ fn main() {
             commands::get_file_watcher_statuses,
             // Device health: details drawer, diagnostics, notification settings
             commands::get_device_details,
+            commands::get_results_today,
             commands::get_device_diagnostics,
             commands::open_device_log_folder,
             commands::get_device_alert_settings,

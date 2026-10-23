@@ -271,11 +271,25 @@ impl DeviceIntegrationService {
     }
 
     /// How many readable results each machine has sent since `since`.
+    /// Matched by the machine's type and name, as results are stored.
     pub async fn results_since(
-        _db: &DatabaseConnection,
-        _since: chrono::DateTime<chrono::Utc>,
+        db: &DatabaseConnection,
+        since: chrono::DateTime<chrono::Utc>,
     ) -> Result<std::collections::HashMap<i64, i64>, String> {
-        Ok(std::collections::HashMap::new())
+        let rows = db
+            .query_all(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "SELECT di.id AS id, COUNT(f.id) AS n FROM device_integrations di \
+                 JOIN file_access_history f ON f.device_type = di.device_type AND f.device_name = di.name \
+                 WHERE f.received_at >= ? AND f.error IS NULL GROUP BY di.id",
+                [since.format("%Y-%m-%d %H:%M:%S").to_string().into()],
+            ))
+            .await
+            .map_err(|e| format!("Failed to count today's results: {}", e))?;
+        Ok(rows
+            .iter()
+            .filter_map(|row| Some((row.try_get::<i64>("", "id").ok()?, row.try_get::<i64>("", "n").ok()?)))
+            .collect())
     }
 
     /// Update last_connected_at timestamp
