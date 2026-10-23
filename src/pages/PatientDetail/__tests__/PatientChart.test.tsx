@@ -122,7 +122,7 @@ describe('patient banner', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /patients:chart.banner.addWeight/ }));
     const dialog = await screen.findByRole('dialog');
-    fireEvent.change(within(dialog).getByRole('spinbutton'), { target: { value: '12,5' } });
+    fireEvent.change(within(dialog).getByRole('spinbutton', { name: 'patients:chart.weights.weight' }), { target: { value: '12,5' } });
     fireEvent.click(within(dialog).getByRole('button', { name: /common:save/ }));
 
     await waitFor(() =>
