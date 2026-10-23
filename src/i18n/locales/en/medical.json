@@ -334,7 +334,12 @@
       "device_report": "Lab report"
     },
     "valuesNotOnPdf": "Values not on the lab report ({{count}}): {{codes}}",
-    "valuesNotOnPdfHint": "The machine sent them but the report has no row for them. They stay with the result in the Lab inbox and on the patient's Labs tab."
+    "valuesNotOnPdfHint": "The machine sent them but the report has no row for them. They stay with the result in the Lab inbox and on the patient's Labs tab.",
+    "reasons": {
+      "toolMissing": "the PDF tool is missing from this installation. Install Arkivet again from the latest download.",
+      "javaMissing": "Java is not installed on this computer, and Arkivet needs it to make PDFs. Install Java, then press Retry on the record page.",
+      "timedOut": "making it took too long. Try again."
+    }
   },
   "unsaved": {
     "title": "Discard your changes?",

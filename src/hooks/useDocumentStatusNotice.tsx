@@ -16,6 +16,17 @@ function shortError(error: string | null): string {
   return firstLine.length > 160 ? `${firstLine.slice(0, 157)}…` : firstLine;
 }
 
+/** Known causes, in plain words; `retry` is false when trying again can't help. */
+const REASONS: Array<{ match: RegExp; key: string; retry: boolean }> = [
+  { match: /not found at resolved path|JAR not found/i, key: 'toolMissing', retry: false },
+  { match: /Failed to execute Java/i, key: 'javaMissing', retry: false },
+  { match: /timed out/i, key: 'timedOut', retry: true },
+];
+
+function reasonFor(error: string | null) {
+  return REASONS.find((r) => r.match.test(error ?? ''));
+}
+
 /**
  * After a save: a plain success when every document was made, otherwise a
  * warning per failed document with a Retry that remakes only that one.
@@ -54,13 +65,14 @@ export function useDocumentStatusNotice() {
   };
 
   const warn = (recordId: number, status: PdfStatus) => {
+    const reason = reasonFor(status.error);
     notification.warning({
       key: `record-${recordId}-document-${status.kind}`,
       message: t('medical:documents.someFailed'),
-      description: `${kindLabel(status.kind)}: ${shortError(status.error)}`,
+      description: `${kindLabel(status.kind)}: ${reason ? t(`medical:documents.reasons.${reason.key}`) : shortError(status.error)}`,
       placement: 'bottomRight',
       duration: 0,
-      actions: (
+      actions: reason && !reason.retry ? undefined : (
         <Button size="small" type="primary" onClick={() => retry(recordId, status.kind)}>
           {t('medical:actions.retry')}
         </Button>
