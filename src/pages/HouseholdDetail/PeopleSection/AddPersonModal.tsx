@@ -61,7 +61,7 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({
   };
 
   const validatePhone = (_: any, value: string) => {
-    const phoneRegex = /^[\d\s\-\+\(\)]+$/;
+    const phoneRegex = /^[\d\s\-+()]+$/;
     if (value && !phoneRegex.test(value)) {
       return Promise.reject(t('detail.people.modal.validation.invalidPhone'));
     }

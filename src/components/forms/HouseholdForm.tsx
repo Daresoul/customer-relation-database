@@ -313,7 +313,7 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
                         name={[name, 'phone']}
                         label={t('entities:contactTypes.phone')}
                         rules={[
-                          { pattern: /^[\d\s\-\+\(\)]+$/, message: t('form.invalidPhone') },
+                          { pattern: /^[\d\s\-+()]+$/, message: t('form.invalidPhone') },
                         ]}
                       >
                         <Input placeholder={t('form.phonePlaceholder')} prefix={<PhoneOutlined />} />

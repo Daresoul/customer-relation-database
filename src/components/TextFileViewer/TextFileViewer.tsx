@@ -88,7 +88,7 @@ const TextFileViewer: React.FC<TextFileViewerProps> = ({
     xml.split(/>\s*</).forEach((node) => {
       if (node.match(/^\/\w/)) indent--; // Closing tag
       formatted += tab.repeat(indent) + '<' + node + '>\n';
-      if (node.match(/^<?\w[^>]*[^\/]$/)) indent++; // Opening tag
+      if (node.match(/^<?\w[^>]*[^/]$/)) indent++; // Opening tag
     });
 
     return formatted.substring(1, formatted.length - 2);
