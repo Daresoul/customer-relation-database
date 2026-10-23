@@ -3,7 +3,7 @@
  */
 
 import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
-import { ViewType, ViewPreference, SearchState, PatientWithOwners, HouseholdSearchResult } from '../types';
+import { ViewType, ViewPreference, SearchState, Patient, HouseholdSearchResult } from '../types';
 import { invoke } from '@/services/invoke';
 
 interface ViewContextType {
@@ -20,7 +20,7 @@ interface ViewContextType {
   switchToAnimalView: () => Promise<void>;
   switchToHouseholdView: () => Promise<void>;
   switchToAppointmentsView: () => Promise<void>;
-  updateAnimalSearch: (query: string, results: PatientWithOwners[], loading: boolean) => void;
+  updateAnimalSearch: (query: string, results: Patient[], loading: boolean) => void;
   updateHouseholdSearch: (query: string, results: HouseholdSearchResult[], loading: boolean) => void;
   clearAnimalSearch: () => void;
   clearHouseholdSearch: () => void;
@@ -118,7 +118,7 @@ export const ViewProvider: React.FC<ViewProviderProps> = ({ children }) => {
     await setCurrentView('appointments');
   }, [setCurrentView]);
 
-  const updateAnimalSearch = useCallback((query: string, results: PatientWithOwners[], loading: boolean) => {
+  const updateAnimalSearch = useCallback((query: string, results: Patient[], loading: boolean) => {
     setAnimalSearchState({
       query,
       results,

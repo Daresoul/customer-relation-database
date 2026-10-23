@@ -659,6 +659,12 @@
 - Log lines carry ids, never a patient's or owner's name, phone, email or
   chip number; `tests/log_privacy_tests.rs` scans every `log::` call.
 
+## Type check
+
+`npx tsc --noEmit` must be clean. `npm run build` runs it before `vite build`
+(so `tauri build` does too, through `beforeBuildCommand`), and the release
+workflow runs it as its own step before the tests.
+
 ## Release build secrets
 
 The release workflow (`.github/workflows/release.yml`) reads these GitHub

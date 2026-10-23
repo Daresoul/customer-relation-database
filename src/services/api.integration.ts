@@ -111,8 +111,7 @@ export const householdApi = {
             email: primaryPerson?.contacts?.find((c: any) => c.contact_type === 'email')?.contact_value || null,
             address: r.household.address,
             petCount: r.pet_count || 0,
-            lastActivity: r.household.updated_at || r.household.created_at,
-            status: 'active'
+            lastActivity: r.household.updated_at || r.household.created_at
           };
         }
         return r; // Return as-is if not nested
@@ -141,8 +140,7 @@ export const householdApi = {
             email: primaryPerson?.contacts?.find((c: any) => c.contact_type === 'email')?.contact_value || null,
             address: household.address,
             petCount: item.pet_count || 0,
-            lastActivity: household.updated_at || household.created_at,
-            status: 'active'
+            lastActivity: household.updated_at || household.created_at
           };
         });
       }
@@ -219,7 +217,6 @@ export const householdApi = {
           address: result.household.address,
           petCount: result.pet_count || 0,
           lastActivity: result.household.updated_at || result.household.created_at,
-          status: 'active',
           contacts: result.people?.map((p: any) => ({
             firstName: p.first_name,
             lastName: p.last_name,

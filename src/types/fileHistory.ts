@@ -39,14 +39,3 @@ export interface FileAccessHistoryWithRecord {
   patientName?: string;
   recordName?: string;
 }
-
-export interface RecordDeviceFileAccessInput {
-  fileId: string;
-  originalName: string;
-  filePath: string;
-  fileSize?: number;
-  mimeType?: string;
-  deviceType: string;
-  deviceName: string;
-  connectionMethod?: string;
-}

@@ -6,7 +6,7 @@ import { useMedicalRecords } from '@/hooks/useMedicalRecords';
 import MedicalRecordCards from './MedicalRecordCards';
 import MedicalRecordModal from '@/components/MedicalRecordModal/MedicalRecordModal';
 import { LoadError } from '@/components/common/LoadError';
-import type { MedicalRecordFilter } from '@/types/medical';
+import type { MedicalRecordFilter, RecordType } from '@/types/medical';
 import styles from './MedicalHistory.module.css';
 
 const { Search } = Input;
@@ -65,7 +65,7 @@ const MedicalHistorySection: React.FC<MedicalHistorySectionProps> = ({
     }));
   };
 
-  const handleTypeFilter = (value: string) => {
+  const handleTypeFilter = (value: RecordType | 'all') => {
     setFilter(prev => ({
       ...prev,
       recordType: value === 'all' ? undefined : value,

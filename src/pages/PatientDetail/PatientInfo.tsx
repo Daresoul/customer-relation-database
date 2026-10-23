@@ -244,7 +244,6 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
             disabled={isSaving || isLoadingSpecies}
             loading={isLoadingSpecies}
             allowClear
-            showSearch
             onCreateNew={(name) => {
               setNewSpeciesName(name);
               setShowCreateSpeciesModal(true);
@@ -277,7 +276,6 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
             disabled={isSaving || isLoadingBreeds || !selectedSpeciesName}
             loading={isLoadingBreeds}
             allowClear
-            showSearch
             onCreateNew={(name) => {
               setNewBreedName(name);
               setShowCreateBreedModal(true);

@@ -120,7 +120,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
     return {
       name: patientDetail.name || '',
       owner: ownerName,
-      species: patientDetail.speciesName || patientDetail.species || '',
+      species: patientDetail.species || '',
       gender: patientDetail.gender || '',
       dateOfBirth: patientDetail.dateOfBirth,
       microchipId: patientDetail.microchipId,

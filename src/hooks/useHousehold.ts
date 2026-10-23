@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { invoke } from '@/services/invoke';
 import { invalidateHouseholdData } from './invalidation';
 import {
-  HouseholdDetailView,
+  HouseholdWithPeople,
   Household,
   PersonWithContacts,
   CreatePersonWithContactsDto,
@@ -22,7 +22,7 @@ export function useHouseholdDetail(householdId: number) {
 
 
       // Transform the response to match our expected format
-      const transformed: HouseholdDetailView = {
+      const transformed: HouseholdWithPeople = {
         household: {
           id: result.household?.id || result.id,
           householdName: result.household?.household_name || result.household?.householdName || '',
@@ -47,7 +47,7 @@ export function useHouseholdDetail(householdId: number) {
             createdAt: contact.created_at || contact.createdAt
           })) || []
         })) || [],
-        patients: [] // Empty for now - will add separate fetch later
+        petCount: result.pet_count ?? result.petCount ?? 0
       };
 
       return transformed;
@@ -84,11 +84,11 @@ export function useUpdateHousehold() {
       await queryClient.cancelQueries({ queryKey: ['household', householdId] });
 
       // Snapshot previous value
-      const previousHousehold = queryClient.getQueryData<HouseholdDetailView>(['household', householdId]);
+      const previousHousehold = queryClient.getQueryData<HouseholdWithPeople>(['household', householdId]);
 
       // Optimistically update
       if (previousHousehold) {
-        queryClient.setQueryData<HouseholdDetailView>(['household', householdId], {
+        queryClient.setQueryData<HouseholdWithPeople>(['household', householdId], {
           ...previousHousehold,
           household: {
             ...previousHousehold.household,
@@ -156,7 +156,7 @@ export function useUpdatePerson() {
     onMutate: async ({ personId, householdId, updates }) => {
       await queryClient.cancelQueries({ queryKey: ['household', householdId] });
 
-      const previousHousehold = queryClient.getQueryData<HouseholdDetailView>(['household', householdId]);
+      const previousHousehold = queryClient.getQueryData<HouseholdWithPeople>(['household', householdId]);
 
       if (previousHousehold) {
         const updatedPeople = previousHousehold.people.map(person =>
@@ -165,7 +165,7 @@ export function useUpdatePerson() {
             : person
         );
 
-        queryClient.setQueryData<HouseholdDetailView>(['household', householdId], {
+        queryClient.setQueryData<HouseholdWithPeople>(['household', householdId], {
           ...previousHousehold,
           people: updatedPeople
         });

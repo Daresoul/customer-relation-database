@@ -1,8 +1,5 @@
 import { invoke } from '@/services/invoke';
-import type {
-  FileAccessHistoryWithRecord,
-  RecordDeviceFileAccessInput,
-} from '../types/fileHistory';
+import type { FileAccessHistoryWithRecord } from '../types/fileHistory';
 
 /** Raw device file pulled back from history (bytes + device metadata). */
 export interface DeviceFileDownload {
@@ -28,13 +25,6 @@ export const fileHistoryService = {
    */
   async getFileHistory(fileId: string): Promise<FileAccessHistoryWithRecord | null> {
     return await invoke('get_file_history', { fileId });
-  },
-
-  /**
-   * Record device file access when data is received
-   */
-  async recordDeviceFileAccess(input: RecordDeviceFileAccessInput): Promise<void> {
-    return await invoke('record_device_file_access', input);
   },
 
   /**
