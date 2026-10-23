@@ -53,17 +53,7 @@ pub async fn update_device_integration(
     id: i64,
     input: UpdateDeviceIntegrationInput,
 ) -> Result<DeviceIntegration, String> {
-    // Get old integration to check if we need to stop old listener
-    let old_integration = DeviceIntegrationService::get_by_id(&pool, id).await?;
-
-    // Stop old listener if it was a serial port integration
-    if old_integration.connection_type == ConnectionType::SerialPort {
-        if let Some(ref port_name) = old_integration.serial_port_name {
-            stop_listen(port_name, &old_integration.device_type.to_db_string());
-        }
-    }
-
-    let integration = DeviceIntegrationService::update(&pool, id, input).await?;
+    let integration = save_then_stop_old_listener(&pool, id, input, stop_serial_listener).await?;
 
     // Start new listener if enabled and it's a serial port integration
     if integration.enabled && integration.connection_type == ConnectionType::SerialPort {
@@ -79,6 +69,26 @@ pub async fn update_device_integration(
 
     reload_file_watchers().await;
     Ok(integration)
+}
+
+fn stop_serial_listener(integration: &DeviceIntegration) {
+    if integration.connection_type == ConnectionType::SerialPort {
+        if let Some(ref port_name) = integration.serial_port_name {
+            stop_listen(port_name, &integration.device_type.to_db_string());
+        }
+    }
+}
+
+/// Save an integration's new settings and stop the listener of its old ones.
+pub(crate) async fn save_then_stop_old_listener(
+    db: &sea_orm::DatabaseConnection,
+    id: i64,
+    input: UpdateDeviceIntegrationInput,
+    stop: impl FnOnce(&DeviceIntegration),
+) -> Result<DeviceIntegration, String> {
+    let old_integration = DeviceIntegrationService::get_by_id(db, id).await?;
+    stop(&old_integration);
+    DeviceIntegrationService::update(db, id, input).await
 }
 
 #[tauri::command]
