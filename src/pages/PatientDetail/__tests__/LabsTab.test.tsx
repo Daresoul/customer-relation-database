@@ -71,7 +71,7 @@ describe('Labs tab', () => {
     expect(await screen.findByText('WBC')).toBeInTheDocument();
     expect(invokeMock).toHaveBeenCalledWith('get_patient_lab_results', { patientId: 3 });
     const headers = screen.getAllByRole('columnheader').map((h) => h.textContent);
-    expect(headers.findIndex((h) => h?.includes('17.07.2026'))).toBeLessThan(headers.findIndex((h) => h?.includes('10.07.2026')));
+    expect(headers.findIndex((h) => h?.includes('17/07/2026'))).toBeLessThan(headers.findIndex((h) => h?.includes('10/07/2026')));
     expect(screen.getByText('18.0')).toBeInTheDocument();
     expect(screen.getByText('10.4')).toBeInTheDocument();
     expect(screen.getAllByLabelText('devices:labs.flags.H')).toHaveLength(2);

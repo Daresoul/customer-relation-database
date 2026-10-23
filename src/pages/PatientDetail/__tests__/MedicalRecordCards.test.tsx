@@ -59,8 +59,8 @@ describe('MedicalRecordCards', () => {
 
   it('shows created and updated times in the app date format', () => {
     renderCards();
-    expect(screen.getByText('03.03.2026 10:05')).toBeInTheDocument();
-    expect(screen.getByText('04.03.2026 11:30')).toBeInTheDocument();
+    expect(screen.getByText('03/03/2026 10:05')).toBeInTheDocument();
+    expect(screen.getByText('04/03/2026 11:30')).toBeInTheDocument();
   });
 
   it('opens a PDF with one navigation that names the attachment', async () => {

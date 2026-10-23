@@ -91,7 +91,7 @@ describe('patient banner', () => {
     expect(screen.getByText(/Beagle/)).toBeInTheDocument();
     expect(screen.getByText('patients:chart.sex.femaleSpayed')).toBeInTheDocument();
     expect(screen.getByText('patients:chart.age.weeks|5')).toBeInTheDocument();
-    expect(screen.getByText('patients:chart.banner.weightOn|12.4|03.03.2026')).toBeInTheDocument();
+    expect(screen.getByText('patients:chart.banner.weightOn|12.4|03/03/2026')).toBeInTheDocument();
     expect(screen.getByText('Ana Petrovska')).toBeInTheDocument();
     expect(screen.getByText('070 123 456')).toBeInTheDocument();
     expect(screen.getByText(/patients:chart.alerts.short.allergy/)).toBeInTheDocument();
@@ -112,7 +112,7 @@ describe('patient banner', () => {
       { wrapper },
     );
 
-    expect(screen.getByText('patients:chart.status.deceasedOn|05.01.2026')).toBeInTheDocument();
+    expect(screen.getByText('patients:chart.status.deceasedOn|05/01/2026')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /patients:chart.banner.addWeight/ })).not.toBeInTheDocument();
   });
 
@@ -216,9 +216,9 @@ describe('weight log', () => {
     answer({ get_patient_weights: log });
     const { container } = render(<WeightLogCard patientId={3} />, { wrapper });
 
-    await screen.findByText('03.03.2026');
-    const dates = screen.getAllByText(/\.20(25|26)$/).map((el) => el.textContent);
-    expect(dates).toEqual(['03.03.2026', '10.01.2026', '01.11.2025']);
+    await screen.findByText('03/03/2026');
+    const dates = screen.getAllByText(/\/20(25|26)$/).map((el) => el.textContent);
+    expect(dates).toEqual(['03/03/2026', '10/01/2026', '01/11/2025']);
     const line = container.querySelector('svg polyline');
     expect(line?.getAttribute('points')?.trim().split(/\s+/)).toHaveLength(3);
   });
@@ -227,7 +227,7 @@ describe('weight log', () => {
     answer({ get_patient_weights: log, delete_patient_weight: true });
     render(<WeightLogCard patientId={3} />, { wrapper });
 
-    await screen.findByText('03.03.2026');
+    await screen.findByText('03/03/2026');
     fireEvent.click(screen.getAllByRole('button', { name: /patients:chart.weights.remove/ })[0]);
     fireEvent.click(await screen.findByRole('button', { name: /common:delete/ }));
 

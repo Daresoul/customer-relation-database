@@ -44,7 +44,7 @@ describe('dateFormatter Utility', () => {
 
   describe('getUserDateFormat', () => {
     it('returns default format when no settings exist', () => {
-      expect(getUserDateFormat()).toBe('DD.MM.YYYY');
+      expect(getUserDateFormat()).toBe('DD/MM/YYYY');
     });
 
     it('returns format from settings', () => {
@@ -56,14 +56,14 @@ describe('dateFormatter Utility', () => {
 
     it('returns default when settings is invalid JSON', () => {
       localStorageMock['veterinary-clinic-settings'] = 'invalid json';
-      expect(getUserDateFormat()).toBe('DD.MM.YYYY');
+      expect(getUserDateFormat()).toBe('DD/MM/YYYY');
     });
 
     it('returns default when dateFormat not in settings', () => {
       localStorageMock['veterinary-clinic-settings'] = JSON.stringify({
         someOtherSetting: 'value',
       });
-      expect(getUserDateFormat()).toBe('DD.MM.YYYY');
+      expect(getUserDateFormat()).toBe('DD/MM/YYYY');
     });
 
     it('supports various date formats', () => {

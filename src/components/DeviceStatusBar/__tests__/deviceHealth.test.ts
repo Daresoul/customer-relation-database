@@ -31,7 +31,7 @@ describe('formatLastResult', () => {
   it('adds the date for an older result', () => {
     const at = new Date(2026, 9, 21, 8, 5).toISOString();
     expect(formatLastResult(at, new Date(2026, 9, 23, 15, 0), t)).toBe(
-      'health.lastResultOn {"date":"21.10","time":"08:05"}',
+      'health.lastResultOn {"date":"21/10","time":"08:05"}',
     );
   });
 
