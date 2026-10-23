@@ -9,35 +9,11 @@ import type { HouseholdTableRecord } from '../types/ui.types';
 import i18n from 'i18next';
 import { errorText } from '@/utils/notifyError';
 import type { App } from 'antd';
+import type { HouseholdWithPeople } from '@/types/generated/HouseholdWithPeople';
+import type { HouseholdSearchResult } from '@/types/generated/HouseholdSearchResult';
+import type { PersonWithContacts } from '@/types/generated/PersonWithContacts';
 
 type AppApi = ReturnType<typeof App.useApp>;
-
-// Household rows as the backend sends them (snake_case).
-interface RawContact {
-  contact_type: string;
-  contact_value: string;
-  is_primary?: boolean;
-}
-interface RawPerson {
-  first_name: string;
-  last_name: string;
-  is_primary?: boolean;
-  contacts?: RawContact[];
-}
-interface RawHousehold {
-  id: number;
-  household_name?: string | null;
-  name?: string;
-  last_name?: string;
-  address?: string;
-  updated_at?: string;
-  created_at?: string;
-}
-interface RawHouseholdWithPeople {
-  household?: RawHousehold;
-  people?: RawPerson[];
-  pet_count?: number;
-}
 
 // Create a holder for the App instance
 let appInstance: AppApi | null = null;
@@ -108,12 +84,8 @@ export const patientApi = {
 
 const PHONE_TYPES = ['phone', 'mobile', 'work_phone'];
 
-interface ListedPerson {
-  contacts?: Array<{ contact_type: string; contact_value: string }>;
-}
-
 /** Every phone of every person, for the household list search. */
-function allPhones(people: ListedPerson[] | undefined): string[] {
+function allPhones(people: PersonWithContacts[] | undefined): string[] {
   return (people ?? []).flatMap((p) =>
     (p.contacts ?? []).filter((c) => PHONE_TYPES.includes(c.contact_type)).map((c) => c.contact_value),
   );
@@ -125,7 +97,7 @@ export const householdApi = {
     // Empty query: list every household (no limit unless the caller pages).
     // A failure is a page-load error the caller shows inline, so no toast here.
     if (!query || query.trim().length === 0) {
-      const results = await invoke<Array<RawHouseholdWithPeople | HouseholdTableRecord>>('get_all_households', { limit });
+      const results = await invoke<Array<HouseholdWithPeople | HouseholdTableRecord>>('get_all_households', { limit });
       // Transform nested household data to flat structure
       return results.map((r): HouseholdTableRecord => {
         if ('household' in r && r.household) {
@@ -133,7 +105,7 @@ export const householdApi = {
 
           return {
             id: r.household.id,
-            lastName: r.household.household_name || r.household.name,
+            lastName: r.household.household_name,
             primaryContact: primaryPerson ? `${primaryPerson.first_name} ${primaryPerson.last_name}` : null,
             phone: primaryPerson?.contacts?.find((c) => c.contact_type === 'phone')?.contact_value || null,
             phones: allPhones(r.people),
@@ -153,23 +125,21 @@ export const householdApi = {
         return [];
       }
 
-      const result = await invoke<{ results?: RawHouseholdWithPeople[] } | HouseholdTableRecord[]>('search_households', { query, limit });
+      const result = await invoke<{ results?: HouseholdSearchResult[] } | HouseholdTableRecord[]>('search_households', { query, limit });
 
       // Transform the response similar to get_all_households
       if (!Array.isArray(result) && result?.results && Array.isArray(result.results)) {
         return result.results.map((item) => {
-          const household: Partial<RawHousehold> = item.household || {};
           const primaryPerson = item.people?.find((p) => p.is_primary) || item.people?.[0];
 
           return {
-            id: household.id,
-            lastName: household.household_name || household.name || household.last_name || i18n.t('common:api.unnamed'),
+            id: item.id,
+            lastName: item.household_name || i18n.t('common:api.unnamed'),
             primaryContact: primaryPerson ? `${primaryPerson.first_name} ${primaryPerson.last_name}` : null,
             phone: primaryPerson?.contacts?.find((c) => c.contact_type === 'phone')?.contact_value || null,
             email: primaryPerson?.contacts?.find((c) => c.contact_type === 'email')?.contact_value || null,
-            address: household.address,
+            address: item.address,
             petCount: item.pet_count || 0,
-            lastActivity: household.updated_at || household.created_at
           };
         });
       }
@@ -228,7 +198,7 @@ export const householdApi = {
         })) || []
       };
 
-      const result = await invoke<RawHouseholdWithPeople>('create_household_with_people', { dto });
+      const result = await invoke<HouseholdWithPeople>('create_household_with_people', { dto });
       hide();
       showSuccess(i18n.t('common:api.success.householdCreated'), i18n.t('common:api.success.householdCreatedDesc', { name: household.lastName }));
 
@@ -239,7 +209,7 @@ export const householdApi = {
 
         return {
           id: result.household.id,
-          lastName: result.household.household_name || result.household.name,
+          lastName: result.household.household_name,
           primaryContact: primaryPerson ? `${primaryPerson.first_name} ${primaryPerson.last_name}` : null,
           phone: primaryContact?.contact_type === 'phone' ? primaryContact.contact_value : null,
           email: primaryContact?.contact_type === 'email' ? primaryContact.contact_value : null,
