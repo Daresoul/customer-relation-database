@@ -505,13 +505,14 @@ pub async fn get_person_with_contacts(
     }))
 }
 
-/// Add a person and their contacts to a household.
+/// Add a person and their contacts to a household, in one transaction.
 pub async fn add_person_with_contacts(
     db: &DatabaseConnection,
     household_id: i32,
     person: &CreatePersonWithContactsDto,
 ) -> Result<i32, String> {
-    let person_result = db.execute(Statement::from_sql_and_values(
+    let txn = db.begin().await.map_err(|e| format!("Failed to begin transaction: {}", e))?;
+    let person_result = txn.execute(Statement::from_sql_and_values(
         DbBackend::Sqlite,
         "INSERT INTO people (household_id, first_name, last_name, is_primary) VALUES (?, ?, ?, ?)",
         [
@@ -525,24 +526,27 @@ pub async fn add_person_with_contacts(
     .map_err(|e| format!("Failed to create person: {}", e))?;
 
     let person_id = person_result.last_insert_id() as i32;
-    insert_contacts(db, person_id, &person.contacts).await?;
+    insert_contacts(&txn, person_id, &person.contacts).await?;
+    txn.commit().await.map_err(|e| format!("Failed to commit: {}", e))?;
     Ok(person_id)
 }
 
-/// Replace all of a person's contacts with the given list.
+/// Replace all of a person's contacts with the given list, in one transaction.
 pub async fn replace_person_contacts(
     db: &DatabaseConnection,
     person_id: i32,
     contacts: &[CreateContactDto],
 ) -> Result<(), String> {
-    db.execute(Statement::from_sql_and_values(
+    let txn = db.begin().await.map_err(|e| format!("Failed to begin transaction: {}", e))?;
+    txn.execute(Statement::from_sql_and_values(
         DbBackend::Sqlite,
         "DELETE FROM person_contacts WHERE person_id = ?",
         [person_id.into()]
     ))
     .await
     .map_err(|e| format!("Failed to delete existing contacts: {}", e))?;
-    insert_contacts(db, person_id, contacts).await
+    insert_contacts(&txn, person_id, contacts).await?;
+    txn.commit().await.map_err(|e| format!("Failed to commit: {}", e))
 }
 
 async fn insert_contacts<C: ConnectionTrait>(
