@@ -107,7 +107,7 @@ export const CreatePatientSection: React.FC<CreatePatientSectionProps> = ({
     if (prefillMicrochipId) {
       form.setFieldValue('microchipId', prefillMicrochipId);
     }
-  }, [prefillMicrochipId]);
+  }, [prefillMicrochipId, form]);
 
   // Handle form submission
   const handleSubmit = async (values: any) => {

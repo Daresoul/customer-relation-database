@@ -37,7 +37,7 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
   // Clear stale breed cache on mount to prevent showing wrong breeds
   useEffect(() => {
     queryClient.invalidateQueries({ queryKey: ['breeds'] });
-  }, []); // Only run once on mount
+  }, [queryClient]);
 
   // Update selected species when patient data changes
   useEffect(() => {

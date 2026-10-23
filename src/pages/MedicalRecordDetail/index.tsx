@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useRef } from 'react';
+import React, { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Layout, Card, Typography, Space, Button, Alert, Spin, Table, Tag, Descriptions, App, Switch, Breadcrumb, Drawer, Popconfirm } from 'antd';
 import { invoke } from '@/services/invoke';
@@ -21,7 +21,7 @@ import { DIAGNOSES_KEYS } from '@/hooks/useDiagnoses';
 import { useQueryClient } from '@tanstack/react-query';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 // Inline PDF viewer handled by PdfInlineViewer with reliable fallbacks
-import type { MedicalRecord, MedicalRecordHistory, UpdateMedicalRecordInput } from '@/types/medical';
+import type { MedicalRecord, UpdateMedicalRecordInput } from '@/types/medical';
 import type { MedicalRecordLineItem } from '@/types/lineItem';
 import MoveLabResultModal from '@/components/LabInbox/MoveLabResultModal';
 import RecordLabValues from '@/components/LabResults/RecordLabValues';
@@ -67,8 +67,8 @@ export const MedicalRecordDetailPage: React.FC = () => {
   const [printReportModalOpen, setPrintReportModalOpen] = useState(false);
 
   const record = data?.record;
-  const history = (data?.history || []) as MedicalRecordHistory[];
-  const attachments = (data as any)?.attachments || [];
+  const history = useMemo(() => data?.history || [], [data?.history]);
+  const attachments = useMemo(() => data?.attachments || [], [data?.attachments]);
 
   // Split attachments into two groups so the user can find documents
   // and raw device data separately:
@@ -152,14 +152,15 @@ export const MedicalRecordDetailPage: React.FC = () => {
     return null;
   }
 
-  const buildSnapshotForVersion = (targetVersion: number | null) => {
+  const currentTargetVersion = selectedVersion ?? record?.version ?? null;
+  const snapshot = useMemo(() => {
     if (!record) return null;
-    if (!targetVersion) return record;
+    if (!currentTargetVersion) return record;
     const snap: any = { ...record };
     const withDiffs = sortedHistory.filter(h => (h as any).oldValues || (h as any).newValues);
     if (withDiffs.length === 0) return snap;
     for (const h of withDiffs) {
-      if (h.version > targetVersion) {
+      if (h.version > currentTargetVersion) {
         const oldVals = parseMaybeJson((h as any).oldValues);
         if (oldVals) {
           Object.keys(oldVals).forEach(k => {
@@ -169,10 +170,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
       }
     }
     return snap as MedicalRecord;
-  };
-
-  const currentTargetVersion = selectedVersion ?? record?.version ?? null;
-  const snapshot = useMemo(() => buildSnapshotForVersion(currentTargetVersion), [currentTargetVersion, sortedHistory]);
+  }, [record, currentTargetVersion, sortedHistory]);
   // When the record's version increases (= an update just happened and
   // refetch brought back a new version), clear the manual version selection
   // so the auto-select effect below re-picks the new latest. Without this,
@@ -180,13 +178,14 @@ export const MedicalRecordDetailPage: React.FC = () => {
   // the rendered description would not reflect the just-saved value until
   // the user reloads. Track via ref to detect monotonic increases.
   const lastSeenVersion = useRef<number | null>(null);
+  const recordVersion = record?.version;
   useEffect(() => {
-    if (!record) return;
-    if (lastSeenVersion.current !== null && record.version > lastSeenVersion.current) {
+    if (recordVersion == null) return;
+    if (lastSeenVersion.current !== null && recordVersion > lastSeenVersion.current) {
       setSelectedVersion(null);
     }
-    lastSeenVersion.current = record.version;
-  }, [record?.version]);
+    lastSeenVersion.current = recordVersion;
+  }, [recordVersion]);
 
   // Auto-select the latest version on first load (or after a reset above)
   useEffect(() => {
@@ -378,7 +377,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
     }
   };
 
-  const onExpand = async (expanded: boolean, row: any) => {
+  const onExpand = useCallback(async (expanded: boolean, row: any) => {
     const key = String(row.id);
     if (expanded) {
       if (!isPreviewable(row.mimeType, row.originalName)) {
@@ -448,7 +447,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
         });
       }
     }
-  };
+  }, [previewUrls, previewBlobs, previewKinds, notification, t]);
 
   // Auto-expand attachment if specified in URL
   useEffect(() => {
@@ -466,7 +465,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
         setShouldAutoExpand(false);
       }
     }
-  }, [attachmentIdToExpand, attachments, shouldAutoExpand]);
+  }, [attachmentIdToExpand, attachments, shouldAutoExpand, onExpand]);
 
   if (!id || isNaN(recordId)) {
     return (

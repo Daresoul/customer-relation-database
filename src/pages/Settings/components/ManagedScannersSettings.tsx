@@ -9,7 +9,7 @@
  * cross-platform parity.
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Card,
   Button,
@@ -97,6 +97,9 @@ const detectRowKey = (d: HidDeviceInfo) =>
 
 const ManagedScannersSettings: React.FC = () => {
   const { t } = useTranslation(['settings', 'common']);
+  // Async work reads the current t without re-running when the language changes.
+  const tRef = useRef(t);
+  tRef.current = t;
   const { notification } = App.useApp();
   const [rows, setRows] = useState<ManagedHidScanner[]>([]);
   const [loading, setLoading] = useState(false);
@@ -108,12 +111,13 @@ const ManagedScannersSettings: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [form] = Form.useForm();
 
-  const reload = async () => {
+  const reload = useCallback(async () => {
     setLoading(true);
     try {
       const data = await invoke<ManagedHidScanner[]>('get_managed_hid_scanners');
       setRows(data || []);
     } catch (e: any) {
+      const t = tRef.current;
       notification.error({
         message: t('common:error'),
         description: errorText(e, t),
@@ -122,11 +126,11 @@ const ManagedScannersSettings: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [notification]);
 
   useEffect(() => {
     reload();
-  }, []);
+  }, [reload]);
 
   // --- Detection table state ---
   // The detection table is collapsed by default so the settings page stays

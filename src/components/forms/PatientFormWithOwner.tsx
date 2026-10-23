@@ -143,7 +143,7 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
   //
   // The backend caps results at `limit: 20` regardless, so empty-query is
   // bounded.
-  const searchHouseholdsRaw = async (query: string) => {
+  const searchHouseholdsRaw = useCallback(async (query: string) => {
     setSearchingHouseholds(true);
     setHouseholdSearchFailed(false);
     try {
@@ -184,7 +184,7 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
     } finally {
       setSearchingHouseholds(false);
     }
-  };
+  }, [t]);
 
   const searchHouseholds = useCallback((query: string) => {
     if (searchTimeoutRef.current) {
@@ -194,7 +194,7 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
     searchTimeoutRef.current = setTimeout(() => {
       searchHouseholdsRaw(query);
     }, 300);
-  }, []);
+  }, [searchHouseholdsRaw]);
 
   // Handle form submission
   const handleSubmit = async () => {
