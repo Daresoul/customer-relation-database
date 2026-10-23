@@ -8,8 +8,7 @@ const mocks = vi.hoisted(() => ({
   patients: [] as Array<Record<string, unknown>>,
   createRecord: vi.fn(),
   upload: vi.fn(),
-  saveForLater: vi.fn(),
-  markProcessed: vi.fn(),
+  regenerateLabReport: vi.fn(),
   downloadDeviceFile: vi.fn(),
   generateReport: vi.fn(),
 }));
@@ -33,6 +32,21 @@ vi.mock('@/hooks/usePatients', () => ({
 vi.mock('@/hooks/useMedicalRecords', () => ({
   useCreateMedicalRecord: () => ({ mutateAsync: mocks.createRecord }),
   useUploadAttachment: () => ({ mutateAsync: mocks.upload }),
+  useMedicalRecords: (patientId: number) => ({
+    data: patientId === 1
+      ? {
+          records: [
+            { id: 60, name: 'Vaccination', recordType: 'procedure', createdAt: '2020-01-01T10:00:00Z', isArchived: false },
+            { id: 61, name: 'Consult', recordType: 'procedure', createdAt: new Date().toISOString(), isArchived: false },
+          ],
+        }
+      : { records: [] },
+    isLoading: false,
+    isError: false,
+  }),
+}));
+vi.mock('@/services/labInboxService', () => ({
+  labInboxService: { regenerateLabReport: mocks.regenerateLabReport },
 }));
 vi.mock('@/hooks/useRecordTemplates', () => ({
   useSearchRecordTemplates: () => ({ data: [], isLoading: false }),
@@ -40,8 +54,6 @@ vi.mock('@/hooks/useRecordTemplates', () => ({
 vi.mock('@/hooks/useAppSettings', () => ({ useAppSettings: () => ({ settings: {} }) }));
 vi.mock('@/services/fileHistoryService', () => ({
   fileHistoryService: {
-    saveDeviceFilesForLater: mocks.saveForLater,
-    markPendingEntryProcessed: mocks.markProcessed,
     downloadDeviceFile: mocks.downloadDeviceFile,
   },
 }));
@@ -137,8 +149,7 @@ beforeEach(() => {
   mocks.patients = [MAX, BELLA];
   mocks.createRecord.mockReset().mockResolvedValue({ id: 99 });
   mocks.upload.mockReset().mockResolvedValue({ id: 500 });
-  mocks.saveForLater.mockReset().mockResolvedValue(1);
-  mocks.markProcessed.mockReset().mockResolvedValue(undefined);
+  mocks.regenerateLabReport.mockReset().mockResolvedValue({ id: 700 });
   mocks.generateReport.mockReset().mockResolvedValue({ id: 600 });
 });
 
@@ -181,25 +192,6 @@ describe('DeviceImportModal — save', () => {
     expect(await screen.findByText('record page 99')).toBeInTheDocument();
     expect(window.location.href).toBe(hrefBefore);
     expect(mocks.createRecord).toHaveBeenCalledWith(expect.objectContaining({ patientId: 1 }));
-  });
-
-  it('marks only the saved-for-later entries whose file uploaded', async () => {
-    const user = userEvent.setup();
-    renderModal();
-    act(() => {
-      ctx.addDeviceFile(result({ fileName: 'ok.xml', pendingEntryId: 5, patientId: 1 }));
-      ctx.addDeviceFile(result({ fileName: 'broken.xml', fileData: [7], pendingEntryId: 6 }));
-    });
-    mocks.upload.mockImplementation(async ({ file }: { file: File }) => {
-      if (file.name === 'broken.xml') throw new Error('disk full');
-      return { id: 501 };
-    });
-
-    await user.click(await screen.findByTestId('device-import-submit-btn'));
-
-    await screen.findByText('record page 99');
-    expect(mocks.markProcessed).toHaveBeenCalledTimes(1);
-    expect(mocks.markProcessed).toHaveBeenCalledWith(5);
   });
 });
 
@@ -267,47 +259,75 @@ describe('DeviceImportModal — recent files', () => {
   });
 });
 
-describe('DeviceImportModal — save for later', () => {
-  it('parks a result under its own machine ID, and the next result gets its own', async () => {
+describe('DeviceImportModal — not now', () => {
+  it('has no typed serial: the result waits in the lab inbox', async () => {
+    renderModal();
+    receive(result({ fileName: 'a.xml', patientIdentifier: 'REX' }));
+
+    await screen.findByText('a.xml');
+    expect(screen.queryByPlaceholderText('medical:deviceImport.serialPlaceholder')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'medical:deviceImport.saveForLater' })).not.toBeInTheDocument();
+  });
+
+  it('Not now closes this result without saving and opens the next one', async () => {
     const user = userEvent.setup();
     renderModal();
     receive(result({ fileName: 'a.xml', patientIdentifier: 'REX' }));
     receive(result({ fileName: 'b.xml', fileData: [8], patientIdentifier: 'LUNA' }));
 
-    const serial = await screen.findByPlaceholderText('medical:deviceImport.serialPlaceholder');
-    expect(serial).toHaveValue('REX');
-    await user.click(dialog().getByRole('button', { name: 'medical:deviceImport.saveForLater' }));
-
-    expect(mocks.saveForLater).toHaveBeenCalledWith('REX', expect.any(Array), 'REX');
-    await waitFor(() => expect(dialog().getByText('b.xml')).toBeInTheDocument());
-    expect(screen.getByPlaceholderText('medical:deviceImport.serialPlaceholder')).toHaveValue('LUNA');
-  });
-
-  it('a cancelled result does not leave its serial for the next one', async () => {
-    const user = userEvent.setup();
-    renderModal();
-    receive(result({ fileName: 'a.xml', patientIdentifier: 'REX' }));
-    receive(result({ fileName: 'b.xml', fileData: [8], patientIdentifier: 'LUNA' }));
-    const serial = await screen.findByPlaceholderText('medical:deviceImport.serialPlaceholder');
-    await user.clear(serial);
-    await user.type(serial, 'typed by hand');
-
-    await confirmCancel(user);
+    await user.click(await screen.findByRole('button', { name: /medical:deviceImport.notNow/ }));
 
     await waitFor(() => expect(dialog().getByText('b.xml')).toBeInTheDocument());
-    expect(screen.getByPlaceholderText('medical:deviceImport.serialPlaceholder')).toHaveValue('LUNA');
+    expect(await screen.findByText('medical:deviceImport.keptInInbox')).toBeInTheDocument();
+    expect(mocks.createRecord).not.toHaveBeenCalled();
+    expect(mocks.upload).not.toHaveBeenCalled();
+  });
+});
+
+describe('DeviceImportModal — attach to an existing record', () => {
+  async function chooseExisting(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(await screen.findByLabelText('medical:deviceImport.target.existing'));
+    const select = await screen.findByTestId('record-select');
+    await waitFor(() => expect(within(select).getByText(/Consult/)).toBeInTheDocument());
+  }
+
+  it("defaults to the patient's record from today and adds the result to it", async () => {
+    const user = userEvent.setup();
+    renderModal();
+    receive({ ...maxResult(), sourceFileId: 'hist-1' });
+
+    await chooseExisting(user);
+    await user.click(screen.getByTestId('device-import-submit-btn'));
+
+    expect(await screen.findByText('record page 61')).toBeInTheDocument();
+    expect(mocks.createRecord).not.toHaveBeenCalled();
+    expect(mocks.upload).toHaveBeenCalledWith(
+      expect.objectContaining({ medicalRecordId: 61, attachmentType: 'test_result', deviceType: 'exigo_eos_vet', sourceFileId: 'hist-1' }),
+    );
+    expect(mocks.regenerateLabReport).toHaveBeenCalledWith(61);
+    expect(mocks.generateReport).not.toHaveBeenCalled();
   });
 
-  it('treats "saved 0 files" as an error and keeps the result open', async () => {
+  it('does not ask for the record form when adding to an existing record', async () => {
     const user = userEvent.setup();
-    mocks.saveForLater.mockResolvedValue(0);
     renderModal();
-    receive(result({ fileName: 'a.xml', patientIdentifier: 'REX' }));
+    receive(maxResult());
 
-    await user.click(await screen.findByRole('button', { name: 'medical:deviceImport.saveForLater' }));
+    await chooseExisting(user);
 
-    expect(await screen.findByText('medical:deviceImport.savedNone')).toBeInTheDocument();
-    expect(dialog().getByText('a.xml')).toBeInTheDocument();
+    expect(screen.queryByLabelText('record-name')).not.toBeInTheDocument();
+  });
+
+  it('still asks before adding a result the machine said is another patient', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    receive(result({ patientId: 1, patientIdentifier: 'BELLA', matchMethod: 'name', testResults: { ID2: 'Bella' } }));
+
+    await chooseExisting(user);
+    await user.click(screen.getByTestId('device-import-submit-btn'));
+    await user.click(await screen.findByRole('button', { name: 'medical:deviceImport.goBack' }));
+
+    expect(mocks.upload).not.toHaveBeenCalled();
   });
 });
 
