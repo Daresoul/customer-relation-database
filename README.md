@@ -152,8 +152,9 @@
 - The saved settings (language, theme, date format) are applied at start by
   `AppSettingsSync`; localStorage `themeMode` only paints the first frame.
 - Clearing the currency sends `currencyId: null`; the backend tells null
-  (clear) from a missing field (keep). New settings rows default to
-  `DD.MM.YYYY`; the "default" row seeded by migration 017 keeps `DD/MM/YYYY`.
+  (clear) from a missing field (keep). Dates default to `DD/MM/YYYY` (as the
+  PDFs print them); every date on screen goes through `utils/dateFormatter`
+  so it follows the chosen format (a guard test rejects written-in formats).
 - Species, breeds, rooms and price list items refuse a blank name and a name
   another one has in any case or spacing (`services/names.rs`, Unicode
   lower-case). People names are trimmed and required. Required text fields
