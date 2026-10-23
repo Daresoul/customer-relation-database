@@ -468,3 +468,36 @@ fn backup_is_due_once_the_last_success_is_a_day_old() {
 fn backup_is_due_when_the_last_time_is_unreadable() {
     assert!(is_backup_due(&cfg_with(Some("/b"), Some("garbage".into())), Utc::now()));
 }
+
+// settings.md #6: the rerun deleted today's snapshot before writing the new
+// one, so a failed write left no snapshot for today at all.
+#[tokio::test]
+async fn a_rerun_that_cannot_write_keeps_todays_earlier_snapshot() {
+    let fx = setup().await;
+    BackupService::set_directory(fx.app_dir.path(), fx.dest_dir.path().to_str().unwrap()).unwrap();
+    let name = snapshot_file_name(&SnapshotKind::Daily, Utc::now());
+    let snapshot = fx.dest_dir.path().join("db").join(&name);
+    write(&snapshot, "EARLIER SNAPSHOT");
+    // Something in the way of the new copy: a folder where the temporary
+    // file has to go.
+    fs::create_dir_all(fx.dest_dir.path().join("db").join(format!("{name}.part")).join("x")).unwrap();
+
+    let result = BackupService::run_backup(fx.app_dir.path(), &fx.test_db).await;
+
+    assert!(result.is_err(), "the run must report the failed write");
+    assert_eq!(fs::read_to_string(&snapshot).unwrap(), "EARLIER SNAPSHOT");
+}
+
+#[tokio::test]
+async fn a_rerun_replaces_todays_snapshot_and_leaves_no_temporary_file() {
+    let fx = setup().await;
+    BackupService::set_directory(fx.app_dir.path(), fx.dest_dir.path().to_str().unwrap()).unwrap();
+    let name = snapshot_file_name(&SnapshotKind::Daily, Utc::now());
+    let snapshot = fx.dest_dir.path().join("db").join(&name);
+    write(&snapshot, "EARLIER SNAPSHOT");
+
+    BackupService::run_backup(fx.app_dir.path(), &fx.test_db).await.unwrap();
+
+    assert_ne!(fs::read(&snapshot).unwrap(), b"EARLIER SNAPSHOT");
+    assert!(!fx.dest_dir.path().join("db").join(format!("{name}.part")).exists());
+}
