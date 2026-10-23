@@ -32,7 +32,7 @@
 /* Contact cards within forms */
 .contactCard {
   margin-bottom: 16px;
-  background: #262626;
+  background: var(--bg-elevated);
 }
 
 /* Household search */
@@ -63,7 +63,7 @@
   margin-bottom: 16px;
 }
 
-.tabbedFields :global(.ant-tabs-nav) {
+.tabbedFields:global(.ant-tabs-nav) {
   margin-bottom: 16px;
 }
 

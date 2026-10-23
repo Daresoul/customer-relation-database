@@ -19,10 +19,10 @@
 .scrollContainer {
   max-height: 600px;
   overflow: auto;
-  border: 1px solid #303030;
+  border: 1px solid var(--border-base);
   padding: 8px;
   border-radius: 4px;
-  background: #141414;
+  background: var(--bg-layout);
 }
 
 .pageContainer {

@@ -169,17 +169,17 @@
 /* Content layout styles */
 .contentPadding {
   padding: 24px;
-  background: #141414;
+  background: var(--bg-layout);
 }
 
 .contentCenter {
   padding: 24px;
   text-align: center;
-  background: #141414;
+  background: var(--bg-layout);
 }
 
 .mainContainer {
-  background: #1f1f1f;
+  background: var(--bg-container);
   padding: 24px;
   border-radius: 8px;
 }
@@ -227,8 +227,8 @@
 /* PersonCard styles */
 .personCardStyle {
   margin-bottom: 16px;
-  background: #262626;
-  border-color: #303030;
+  background: var(--bg-elevated);
+  border-color: var(--border-base);
 }
 
 .contactRow {

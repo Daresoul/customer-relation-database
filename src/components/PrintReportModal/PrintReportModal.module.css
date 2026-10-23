@@ -7,7 +7,7 @@
 .sectionTitle {
   font-weight: 600;
   margin-bottom: 16px;
-  color: #E6E6E6;
+  color: var(--text-primary);
 }
 
 .sectionDivider {
@@ -52,7 +52,7 @@
 
 .fileName {
   font-weight: 500;
-  color: #E6E6E6;
+  color: var(--text-primary);
 }
 
 .deviceMeta {

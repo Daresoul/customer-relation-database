@@ -89,12 +89,12 @@
 
 /* List item */
 .listItem {
-  border-bottom: 1px solid #303030;
+  border-bottom: 1px solid var(--border-base);
 }
 
 /* Detail card */
 .detailCard {
-  background: #262626;
+  background: var(--bg-elevated);
   padding: 16px;
   border-radius: 8px;
 }

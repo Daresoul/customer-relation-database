@@ -1,10 +1,10 @@
 .codePreview {
   padding: 16px;
-  background: #1f1f1f;
+  background: var(--bg-container);
   border-radius: 4px;
   overflow: auto;
   max-height: 500px;
-  border: 1px solid #303030;
+  border: 1px solid var(--border-base);
 }
 
 .codeBlock {
@@ -14,7 +14,7 @@
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
-  color: #E6E6E6;
+  color: var(--text-primary);
   font-feature-settings: 'liga' 0;
   letter-spacing: 0.02em;
 }

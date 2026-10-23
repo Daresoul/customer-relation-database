@@ -1,25 +1,25 @@
 /* MedicalRecordDetail Page styles */
 .contentPadding {
   padding: 24px;
-  background: #141414;
+  background: var(--bg-layout);
 }
 
 .contentCenter {
   padding: 24px;
   text-align: center;
-  background: #141414;
+  background: var(--bg-layout);
   min-height: 100vh;
 }
 
 .contentMinHeight {
   padding: 24px;
-  background: #141414;
+  background: var(--bg-layout);
   min-height: 100vh;
 }
 
 .loadingText {
   margin-top: 16px;
-  color: #E6E6E6;
+  color: var(--text-primary);
 }
 
 .breadcrumbContainer {
@@ -38,12 +38,12 @@
 }
 
 .breadcrumbText {
-  color: #E6E6E6;
+  color: var(--text-primary);
 }
 
 .titleZeroMargin {
   margin: 0;
-  color: #E6E6E6;
+  color: var(--text-primary);
 }
 
 .versionControls {
@@ -65,7 +65,7 @@
 .descriptionText {
   margin: 0;
   white-space: pre-wrap;
-  color: #E6E6E6;
+  color: var(--text-primary);
 }
 
 .cardMarginTop {
@@ -84,16 +84,16 @@
 }
 
 .attachmentLink {
-  color: #E6E6E6;
+  color: var(--text-primary);
 }
 
 .codePreview {
   padding: 16px;
-  background: #1f1f1f;
+  background: var(--bg-container);
   border-radius: 4px;
   overflow: auto;
   max-height: 500px;
-  border: 1px solid #303030;
+  border: 1px solid var(--border-base);
 }
 
 .codeBlock {
@@ -103,7 +103,7 @@
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
-  color: #E6E6E6;
+  color: var(--text-primary);
   font-feature-settings: 'liga' 0;
   letter-spacing: 0.02em;
 }
