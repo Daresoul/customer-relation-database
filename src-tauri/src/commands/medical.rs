@@ -3,6 +3,7 @@ use crate::database::SeaOrmPool;
 use crate::models::medical::*;
 use crate::services::medical_record::{MedicalRecordService, PdfEnv, PdfStatus, SavedMedicalRecord};
 use crate::services::file_storage::FileStorageService;
+use crate::services::record_template::RecordTemplateService;
 use crate::services::pdf_render::PdfRenderService;
 use crate::services::device_parser::DeviceParserService;
 use crate::services::device_pdf_service::{DevicePdfService, PatientData, DeviceTestData};
@@ -195,7 +196,7 @@ pub async fn delete_medical_attachment(
     pool: State<'_, SeaOrmPool>,
     attachment_id: i64,
 ) -> Result<(), String> {
-    crate::services::lab_inbox::delete_attachment(&pool, attachment_id).await
+    FileStorageService::delete_user_attachment(&pool, attachment_id).await
 }
 
 // Get attachment content for text file viewer
@@ -884,45 +885,12 @@ pub(crate) async fn retire_generated_pdfs(db: &sea_orm::DatabaseConnection, medi
 // Record Template Commands
 // ============================================================================
 
-// Helper function to map SeaORM row to RecordTemplate
-fn row_to_record_template(row: &sea_orm::QueryResult) -> Result<RecordTemplate, String> {
-    Ok(RecordTemplate {
-        id: row.try_get("", "id").map_err(|e| format!("Failed to get id: {}", e))?,
-        record_type: row.try_get("", "record_type").map_err(|e| format!("Failed to get record_type: {}", e))?,
-        title: row.try_get("", "title").map_err(|e| format!("Failed to get title: {}", e))?,
-        description: row.try_get("", "description").map_err(|e| format!("Failed to get description: {}", e))?,
-        price: row.try_get("", "price").ok(),
-        currency_id: row.try_get("", "currency_id").ok(),
-        created_at: row.try_get("", "created_at").map_err(|e| format!("Failed to get created_at: {}", e))?,
-        updated_at: row.try_get("", "updated_at").map_err(|e| format!("Failed to get updated_at: {}", e))?,
-    })
-}
-
 #[tauri::command]
 pub async fn get_record_templates(
     pool: State<'_, SeaOrmPool>,
     record_type: Option<String>,
 ) -> Result<Vec<RecordTemplate>, String> {
-    let rows = if let Some(ref rt) = record_type {
-        pool.query_all(Statement::from_sql_and_values(
-            DbBackend::Sqlite,
-            "SELECT * FROM record_templates WHERE record_type = ? ORDER BY title ASC",
-            [rt.clone().into()]
-        ))
-        .await
-        .map_err(|e| format!("Failed to fetch record templates: {}", e))?
-    } else {
-        pool.query_all(Statement::from_sql_and_values(
-            DbBackend::Sqlite,
-            "SELECT * FROM record_templates ORDER BY record_type, title ASC",
-            []
-        ))
-        .await
-        .map_err(|e| format!("Failed to fetch record templates: {}", e))?
-    };
-
-    let templates: Result<Vec<_>, _> = rows.iter().map(row_to_record_template).collect();
-    templates
+    RecordTemplateService::list(&pool, record_type.as_deref()).await
 }
 
 #[tauri::command]
@@ -931,42 +899,7 @@ pub async fn search_record_templates(
     search_term: String,
     record_type: Option<String>,
 ) -> Result<Vec<RecordTemplate>, String> {
-    // SQLite LIKE only case-folds ASCII, so a Cyrillic search term wouldn't
-    // match Cyrillic template titles/descriptions differing in case. Filter
-    // by record_type (exact match, Cyrillic-safe) in SQL, then match the
-    // search term in Rust with Unicode-aware to_lowercase(). The template
-    // table is small (a clinic configures a handful), so this is cheap.
-    let needle = search_term.trim().to_lowercase();
-
-    let rows = if let Some(ref rt) = record_type {
-        pool.query_all(Statement::from_sql_and_values(
-            DbBackend::Sqlite,
-            "SELECT * FROM record_templates WHERE record_type = ? ORDER BY title ASC",
-            [rt.clone().into()]
-        ))
-        .await
-        .map_err(|e| format!("Failed to search record templates: {}", e))?
-    } else {
-        pool.query_all(Statement::from_string(
-            DbBackend::Sqlite,
-            "SELECT * FROM record_templates ORDER BY record_type, title ASC".to_string(),
-        ))
-        .await
-        .map_err(|e| format!("Failed to search record templates: {}", e))?
-    };
-
-    let templates: Vec<RecordTemplate> = rows
-        .iter()
-        .filter_map(|r| row_to_record_template(r).ok())
-        .filter(|t| {
-            if needle.is_empty() {
-                return true;
-            }
-            t.title.to_lowercase().contains(&needle)
-                || t.description.to_lowercase().contains(&needle)
-        })
-        .collect();
-    Ok(templates)
+    RecordTemplateService::search(&pool, &search_term, record_type.as_deref()).await
 }
 
 #[tauri::command]
@@ -974,38 +907,7 @@ pub async fn create_record_template(
     pool: State<'_, SeaOrmPool>,
     input: CreateRecordTemplateInput,
 ) -> Result<RecordTemplate, String> {
-    // Validate record type
-    if input.record_type != "procedure" && input.record_type != "note" && input.record_type != "test_result" {
-        return Err(format!("Invalid record type: {}. Must be 'procedure', 'note', or 'test_result'", input.record_type));
-    }
-
-    use sea_orm::Value;
-    let result = pool.execute(Statement::from_sql_and_values(
-        DbBackend::Sqlite,
-        "INSERT INTO record_templates (record_type, title, description, price, currency_id) VALUES (?, ?, ?, ?, ?)",
-        [
-            input.record_type.clone().into(),
-            input.title.clone().into(),
-            input.description.clone().into(),
-            input.price.map(|p| Value::Double(Some(p))).unwrap_or(Value::Double(None)),
-            input.currency_id.map(|c| Value::BigInt(Some(c))).unwrap_or(Value::BigInt(None)),
-        ]
-    ))
-    .await
-    .map_err(|e| format!("Failed to create record template: {}", e))?;
-
-    let template_id = result.last_insert_id() as i64;
-
-    let row = pool.query_one(Statement::from_sql_and_values(
-        DbBackend::Sqlite,
-        "SELECT * FROM record_templates WHERE id = ?",
-        [template_id.into()]
-    ))
-    .await
-    .map_err(|e| format!("Failed to fetch created template: {}", e))?
-    .ok_or("Template not found".to_string())?;
-
-    row_to_record_template(&row)
+    RecordTemplateService::create(&pool, input).await
 }
 
 #[tauri::command]
@@ -1014,50 +916,7 @@ pub async fn update_record_template(
     template_id: i64,
     input: UpdateRecordTemplateInput,
 ) -> Result<RecordTemplate, String> {
-    use sea_orm::Value;
-
-    // Build dynamic UPDATE query for efficiency
-    let mut set_clauses = Vec::new();
-    let mut params: Vec<Value> = Vec::new();
-
-    if let Some(ref title) = input.title {
-        set_clauses.push("title = ?");
-        params.push(title.clone().into());
-    }
-    if let Some(ref description) = input.description {
-        set_clauses.push("description = ?");
-        params.push(description.clone().into());
-    }
-    if let Some(price) = input.price {
-        set_clauses.push("price = ?");
-        params.push(Value::Double(Some(price)));
-    }
-    if let Some(currency_id) = input.currency_id {
-        set_clauses.push("currency_id = ?");
-        params.push(Value::BigInt(Some(currency_id)));
-    }
-
-    if !set_clauses.is_empty() {
-        let mut query_str = "UPDATE record_templates SET ".to_string();
-        query_str.push_str(&set_clauses.join(", "));
-        query_str.push_str(" WHERE id = ?");
-        params.push(template_id.into());
-
-        pool.execute(Statement::from_sql_and_values(DbBackend::Sqlite, &query_str, params))
-            .await
-            .map_err(|e| format!("Failed to update template: {}", e))?;
-    }
-
-    let row = pool.query_one(Statement::from_sql_and_values(
-        DbBackend::Sqlite,
-        "SELECT * FROM record_templates WHERE id = ?",
-        [template_id.into()]
-    ))
-    .await
-    .map_err(|e| format!("Failed to fetch updated template: {}", e))?
-    .ok_or("Template not found".to_string())?;
-
-    row_to_record_template(&row)
+    RecordTemplateService::update(&pool, template_id, input).await
 }
 
 #[tauri::command]
@@ -1065,15 +924,16 @@ pub async fn delete_record_template(
     pool: State<'_, SeaOrmPool>,
     template_id: i64,
 ) -> Result<(), String> {
-    pool.execute(Statement::from_sql_and_values(
-        DbBackend::Sqlite,
-        "DELETE FROM record_templates WHERE id = ?",
-        [template_id.into()]
-    ))
-    .await
-    .map_err(|e| format!("Failed to delete template: {}", e))?;
+    RecordTemplateService::delete(&pool, template_id).await
+}
 
-    Ok(())
+/// "Copy from last record": the patient's latest consult, or null.
+#[tauri::command]
+pub async fn get_last_record_for_copy(
+    pool: State<'_, SeaOrmPool>,
+    patient_id: i64,
+) -> Result<Option<LastRecordCopy>, String> {
+    RecordTemplateService::last_record_copy(&pool, patient_id).await
 }
 
 /// The name printed as "owner" on PDFs for a patient: the household's primary

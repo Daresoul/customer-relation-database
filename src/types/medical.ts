@@ -30,7 +30,7 @@ export interface MedicalRecord {
 }
 
 // Attachment types: 'file' (manual uploads), 'test_result' (device data like Exigo XML), 'generated_pdf'
-export type AttachmentType = 'file' | 'test_result' | 'generated_pdf';
+export type AttachmentType = 'file' | 'test_result' | 'generated_pdf' | 'simple_report' | 'pharmacy_note' | 'invoice';
 
 export interface MedicalAttachment {
   id: number;
@@ -175,8 +175,31 @@ export interface RecordTemplate {
   price?: number;
   /** @deprecated Pricing moved to Factura line items. */
   currencyId?: number;
+  prescriptionNotes?: string | null;
+  lineItems?: RecordTemplateLineItem[];
+  diagnosisIds?: number[];
   createdAt: string;
   updatedAt: string;
+}
+
+/** A price-list line on a template, with the item's current name, price and VAT rate. */
+export interface RecordTemplateLineItem {
+  lineItemTemplateId: number;
+  quantity: number;
+  name: string;
+  description?: string | null;
+  unitPrice: number;
+  currencyId: number;
+  taxRateId?: number | null;
+  vatName?: string | null;
+  vatPercent?: number | null;
+  /** False once the price-list item was removed. */
+  isActive: boolean;
+}
+
+export interface RecordTemplateLineItemInput {
+  lineItemTemplateId: number;
+  quantity: number;
 }
 
 export interface CreateRecordTemplateInput {
@@ -187,13 +210,33 @@ export interface CreateRecordTemplateInput {
   price?: number;
   /** @deprecated Omit — pricing moved to Factura line items. */
   currencyId?: number;
+  prescriptionNotes?: string;
+  lineItems?: RecordTemplateLineItemInput[];
+  diagnosisIds?: number[];
 }
 
+/** A missing field stays as it is; a blank prescription clears it. */
 export interface UpdateRecordTemplateInput {
+  recordType?: RecordType;
   title?: string;
   description?: string;
   /** @deprecated Omit — pricing moved to Factura line items. */
   price?: number;
   /** @deprecated Omit — pricing moved to Factura line items. */
   currencyId?: number;
+  prescriptionNotes?: string;
+  lineItems?: RecordTemplateLineItemInput[];
+  diagnosisIds?: number[];
+}
+
+/** What "Copy from last record" fills in; never the invoice number, date or files. */
+export interface LastRecordCopy {
+  recordId: number;
+  recordType: RecordType;
+  name: string;
+  createdAt: string;
+  description: string;
+  prescriptionNotes?: string | null;
+  diagnosisIds: number[];
+  lineItems: MedicalRecordLineItem[];
 }

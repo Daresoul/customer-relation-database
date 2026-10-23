@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Card, Table, Button, Space, Modal, Form, Input, Select, Tag, Popconfirm } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, FileTextOutlined } from '@ant-design/icons';
+import { Card, Table, Button, Space, Modal, Form, Input, Select, Tag, Popconfirm, InputNumber, Typography } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined, FileTextOutlined, MinusCircleOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import {
   useRecordTemplates,
@@ -8,35 +8,52 @@ import {
   useUpdateRecordTemplate,
   useDeleteRecordTemplate,
 } from '@/hooks/useRecordTemplates';
-import type { RecordTemplate, RecordType } from '@/types/medical';
+import { useLineItemTemplates } from '@/hooks/useLineItemTemplates';
+import { useDiagnoses } from '@/hooks/useDiagnoses';
+import type { RecordTemplate, RecordTemplateLineItemInput, RecordType } from '@/types/medical';
 import type { ColumnsType } from 'antd/es/table';
 
-// NOTE: Record templates used to carry a price + currency, but pricing
-// has moved entirely to Factura (per-medical-record line items, each
-// with its own price + currency). The Rust model still has nullable
-// `price` / `currency_id` columns on `record_templates` — we leave
-// them in place for backwards compatibility with existing rows, but
-// the UI no longer reads or writes them. New templates are created
-// with price/currency omitted (the backend stores NULL).
+// Pricing lives on the template's price-list lines; the old `price` and
+// `currency_id` columns stay in the table for existing rows but are unused.
 
 const { TextArea } = Input;
 const { Option } = Select;
+const { Text } = Typography;
+
+interface TemplateFormValues {
+  recordType: RecordType;
+  title: string;
+  description: string;
+  prescriptionNotes?: string;
+  lineItems?: Array<{ lineItemTemplateId?: number; quantity?: number }>;
+  diagnosisIds?: number[];
+}
 
 const RecordTemplatesSettings: React.FC = () => {
   const { t } = useTranslation(['settings', 'medical', 'common', 'forms']);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<RecordTemplate | null>(null);
-  const [form] = Form.useForm();
+  const [form] = Form.useForm<TemplateFormValues>();
 
   const { data: templates, isLoading } = useRecordTemplates();
+  const { data: priceList = [] } = useLineItemTemplates(true);
+  const { data: diagnoses = [] } = useDiagnoses(true);
   const createMutation = useCreateRecordTemplate();
   const updateMutation = useUpdateRecordTemplate();
   const deleteMutation = useDeleteRecordTemplate();
 
+  // Active price-list items, plus removed ones the open template still has.
+  const priceOptions = [
+    ...priceList.map((p) => ({ value: p.id, label: p.name })),
+    ...(editingTemplate?.lineItems ?? [])
+      .filter((l) => !priceList.some((p) => p.id === l.lineItemTemplateId))
+      .map((l) => ({ value: l.lineItemTemplateId, label: `${l.name} (${t('settings:templates.removedItem')})` })),
+  ];
+
   const handleCreate = () => {
     setEditingTemplate(null);
     form.resetFields();
-    form.setFieldsValue({ recordType: 'note' });
+    form.setFieldsValue({ recordType: 'note', lineItems: [], diagnosisIds: [] });
     setIsModalOpen(true);
   };
 
@@ -46,6 +63,9 @@ const RecordTemplatesSettings: React.FC = () => {
       recordType: template.recordType,
       title: template.title,
       description: template.description,
+      prescriptionNotes: template.prescriptionNotes ?? '',
+      lineItems: (template.lineItems ?? []).map((l) => ({ lineItemTemplateId: l.lineItemTemplateId, quantity: l.quantity })),
+      diagnosisIds: template.diagnosisIds ?? [],
     });
     setIsModalOpen(true);
   };
@@ -61,30 +81,28 @@ const RecordTemplatesSettings: React.FC = () => {
   const handleModalOk = async () => {
     try {
       const values = await form.validateFields();
+      const input = {
+        recordType: values.recordType,
+        title: values.title,
+        description: values.description,
+        prescriptionNotes: values.prescriptionNotes ?? '',
+        lineItems: (values.lineItems ?? [])
+          .filter((l): l is RecordTemplateLineItemInput => l.lineItemTemplateId != null)
+          .map((l) => ({ lineItemTemplateId: l.lineItemTemplateId, quantity: l.quantity ?? 1 })),
+        diagnosisIds: values.diagnosisIds ?? [],
+      };
 
       if (editingTemplate) {
-        // Update existing template. price + currencyId are intentionally
-        // omitted — pricing is owned by Factura now.
-        await updateMutation.mutateAsync({
-          templateId: editingTemplate.id,
-          input: {
-            title: values.title,
-            description: values.description,
-          },
-        });
+        await updateMutation.mutateAsync({ templateId: editingTemplate.id, input });
       } else {
-        // Create new template (price/currency NULL — see Factura).
-        await createMutation.mutateAsync({
-          recordType: values.recordType,
-          title: values.title,
-          description: values.description,
-        });
+        await createMutation.mutateAsync(input);
       }
 
       setIsModalOpen(false);
       form.resetFields();
+      setEditingTemplate(null);
     } catch (error) {
-      console.error('Form validation failed:', error);
+      console.error('Saving the template failed:', error);
     }
   };
 
@@ -128,6 +146,23 @@ const RecordTemplatesSettings: React.FC = () => {
       dataIndex: 'description',
       key: 'description',
       ellipsis: true,
+    },
+    {
+      title: t('settings:templates.fills'),
+      key: 'fills',
+      render: (_, record) => (
+        <Space size={4} wrap>
+          {record.prescriptionNotes && <Tag>{t('medical:fields.prescriptionNotes')}</Tag>}
+          {(record.lineItems ?? []).map((l) => (
+            <Tag key={l.lineItemTemplateId} color={l.isActive ? 'gold' : 'default'}>
+              {l.quantity > 1 ? `${l.quantity} × ${l.name}` : l.name}
+            </Tag>
+          ))}
+          {(record.diagnosisIds ?? []).length > 0 && (
+            <Tag color="cyan">{t('settings:templates.diagnosesCount', { count: record.diagnosisIds!.length })}</Tag>
+          )}
+        </Space>
+      ),
     },
     {
       title: t('common:actionsLabel'),
@@ -179,6 +214,9 @@ const RecordTemplatesSettings: React.FC = () => {
         </Button>
       }
     >
+      <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
+        {t('settings:templates.hint')}
+      </Text>
       <Table
         columns={columns}
         dataSource={templates}
@@ -199,20 +237,20 @@ const RecordTemplatesSettings: React.FC = () => {
         onCancel={handleModalCancel}
         okText={editingTemplate ? t('common:buttons.update') : t('common:buttons.create')}
         cancelText={t('common:buttons.cancel')}
-        width={600}
+        width={680}
         confirmLoading={createMutation.isPending || updateMutation.isPending}
       >
         <Form
           form={form}
           layout="vertical"
-          initialValues={{ recordType: 'note' }}
+          initialValues={{ recordType: 'note', lineItems: [], diagnosisIds: [] }}
         >
           <Form.Item
             name="recordType"
             label={t('medical:fields.recordType')}
             rules={[{ required: true, message: t('forms:validation.required') }]}
           >
-            <Select disabled={!!editingTemplate}>
+            <Select data-testid="template-record-type" virtual={false}>
               <Option value="note">{t('medical:recordTypes.note')}</Option>
               <Option value="procedure">{t('medical:recordTypes.procedure')}</Option>
               <Option value="test_result">{t('medical:recordTypes.testResult')}</Option>
@@ -240,6 +278,60 @@ const RecordTemplatesSettings: React.FC = () => {
               placeholder={t('settings:templates.descriptionPlaceholder')}
               showCount
               maxLength={5000}
+            />
+          </Form.Item>
+
+          <Form.Item name="prescriptionNotes" label={t('medical:fields.prescriptionNotes')}>
+            <TextArea rows={3} placeholder={t('settings:templates.prescriptionPlaceholder')} showCount maxLength={5000} />
+          </Form.Item>
+
+          <Form.Item label={t('settings:templates.lines')} extra={t('settings:templates.linesHint')}>
+            <Form.List name="lineItems">
+              {(fields, { add, remove }) => (
+                <>
+                  {fields.map((field, index) => (
+                    <Space key={field.key} align="baseline" data-testid={`template-line-${index}`} style={{ display: 'flex' }}>
+                      <Form.Item
+                        name={[field.name, 'lineItemTemplateId']}
+                        rules={[{ required: true, message: t('forms:validation.required') }]}
+                        style={{ marginBottom: 8 }}
+                      >
+                        <Select
+                          showSearch
+                          virtual={false}
+                          optionFilterProp="label"
+                          options={priceOptions}
+                          style={{ width: 360 }}
+                          placeholder={t('settings:templates.lineItem')}
+                          aria-label={t('settings:templates.lineItem')}
+                        />
+                      </Form.Item>
+                      <Form.Item name={[field.name, 'quantity']} initialValue={1} style={{ marginBottom: 8 }}>
+                        <InputNumber min={1} precision={0} aria-label={t('settings:templates.quantity')} />
+                      </Form.Item>
+                      <MinusCircleOutlined
+                        aria-label={t('settings:templates.removeLine')}
+                        onClick={() => remove(field.name)}
+                      />
+                    </Space>
+                  ))}
+                  <Button type="dashed" icon={<PlusOutlined />} onClick={() => add({ quantity: 1 })}>
+                    {t('settings:templates.addLine')}
+                  </Button>
+                </>
+              )}
+            </Form.List>
+          </Form.Item>
+
+          <Form.Item name="diagnosisIds" label={t('medical:fields.diagnoses')}>
+            <Select
+              mode="multiple"
+              allowClear
+              virtual={false}
+              data-testid="template-diagnoses"
+              optionFilterProp="label"
+              options={diagnoses.map((d) => ({ value: d.id, label: d.name }))}
+              placeholder={t('medical:placeholders.selectDiagnoses')}
             />
           </Form.Item>
         </Form>

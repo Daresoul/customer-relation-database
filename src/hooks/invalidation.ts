@@ -55,3 +55,14 @@ export function invalidateLabResultRecords(queryClient: QueryClient): void {
     queryClient.invalidateQueries({ queryKey: [key] }),
   );
 }
+
+/**
+ * A file uploaded to or deleted from a saved record.
+ *
+ *   medical-record(s), medical-records-search
+ *                                record page Documents card and the
+ *                                record cards' file links
+ */
+export function invalidateRecordFiles(queryClient: QueryClient): void {
+  LAB_RECORD_READERS.forEach((key) => queryClient.invalidateQueries({ queryKey: [key] }));
+}

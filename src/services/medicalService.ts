@@ -87,25 +87,17 @@ export class MedicalService {
     sourceFileId?: string
   ): Promise<MedicalAttachment> {
     const arrayBuffer = await file.arrayBuffer();
-    const fileData = new Uint8Array(arrayBuffer);
-
+    // Tauri reads camelCase argument names only; the bytes go over IPC as one
+    // JSON number array, so sending a second copy doubled the transfer.
     return ApiService.invokeRaw('upload_medical_attachment', {
       medicalRecordId,
-      medical_record_id: medicalRecordId,
       fileName: file.name,
-      file_name: file.name,
-      fileData: Array.from(fileData),
-      file_data: Array.from(fileData),
+      fileData: Array.from(new Uint8Array(arrayBuffer)),
       mimeType: file.type,
-      mime_type: file.type,
       deviceType,
-      device_type: deviceType,
       deviceName,
-      device_name: deviceName,
       connectionMethod,
-      connection_method: connectionMethod,
       attachmentType,
-      attachment_type: attachmentType,
       sourceFileId
     });
   }

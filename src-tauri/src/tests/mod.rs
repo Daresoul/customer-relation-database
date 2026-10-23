@@ -117,3 +117,6 @@ pub mod clinic_vat_tests;
 
 #[cfg(test)]
 pub mod lab_results_tests;
+
+#[cfg(test)]
+pub mod record_template_tests;

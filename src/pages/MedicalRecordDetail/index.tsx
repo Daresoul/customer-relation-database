@@ -30,6 +30,8 @@ import { labInboxService } from '@/services/labInboxService';
 import { invalidateLabInboxData } from '@/hooks/invalidation';
 import { InvoiceSummaryRows } from '@/components/InvoiceSummaryRows';
 import styles from './MedicalRecordDetailPage.module.css';
+import DocumentUpload from './DocumentUpload';
+import { invalidateRecordFiles } from '@/hooks/invalidation';
 
 const { Content } = Layout;
 const { Title, Text, Paragraph } = Typography;
@@ -504,6 +506,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
     setDeletingAttachmentId(row.id);
     try {
       await MedicalService.deleteAttachment(row.id);
+      invalidateRecordFiles(queryClient);
       // Collapse the row if its preview was expanded — the id no longer exists.
       setExpandedRowKeys(prev => prev.filter(k => k !== String(row.id)));
       notification.success({
@@ -527,6 +530,10 @@ export const MedicalRecordDetailPage: React.FC = () => {
       setDeletingAttachmentId(null);
     }
   };
+
+  // Generated documents (report, pharmacy note, invoice, lab PDF) are regenerated, never deleted.
+  const isUserFile = (att: MedicalAttachment) =>
+    !att.attachmentType || att.attachmentType === 'file' || att.attachmentType === 'test_result';
 
   // A raw device result (not a generated PDF) that can be moved to another patient
   const isLabResult = (att: MedicalAttachment) =>
@@ -651,7 +658,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
                   {t('devices:inbox.move')}
                 </Button>
               )}
-              <Popconfirm
+              {isUserFile(row) && <Popconfirm
                 title={t('medical:detail.deleteAttachmentConfirm', 'Delete this file?')}
                 description={t(
                   'medical:detail.deleteAttachmentDesc',
@@ -671,7 +678,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
                 >
                   {t('common:buttons.delete', 'Delete')}
                 </Button>
-              </Popconfirm>
+              </Popconfirm>}
             </Space>
           )
         }
@@ -1002,6 +1009,13 @@ export const MedicalRecordDetailPage: React.FC = () => {
           documentAttachments,
           t('medical:detail.noDocuments', 'No documents yet'),
         )}
+        <DocumentUpload
+          recordId={record.id}
+          onUploaded={() => {
+            invalidateRecordFiles(queryClient);
+            refetch();
+          }}
+        />
       </Card>
 
       <Card

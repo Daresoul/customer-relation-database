@@ -175,6 +175,31 @@ impl FileStorageService {
         Ok(())
     }
 
+    /// The record page's Delete: a user's file or a lab result only. Generated
+    /// documents (report, pharmacy note, invoice, lab PDF) are regenerated,
+    /// never deleted by hand.
+    pub async fn delete_user_attachment(
+        db: &DatabaseConnection,
+        attachment_id: i64,
+    ) -> Result<(), String> {
+        let row = db
+            .query_one(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "SELECT attachment_type FROM medical_attachments WHERE id = ? AND deleted_at IS NULL",
+                [attachment_id.into()],
+            ))
+            .await
+            .map_err(|e| format!("Failed to read the attachment: {}", e))?
+            .ok_or_else(|| "Attachment not found".to_string())?;
+        let kind: Option<String> = row.try_get("", "attachment_type").ok().flatten();
+        match kind.as_deref() {
+            None | Some("file") | Some("test_result") => {
+                crate::services::lab_inbox::delete_attachment(db, attachment_id).await
+            }
+            Some(_) => Err("A generated document can't be deleted; regenerate it instead.".to_string()),
+        }
+    }
+
     /// Clean up orphaned files (files in storage but not in database)
     pub async fn cleanup_orphaned_files(
         _app_handle: &AppHandle,
