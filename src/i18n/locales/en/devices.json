@@ -344,6 +344,11 @@
       "working": "All lab machines are working. Click for details.",
       "waiting": "Waiting for a lab machine. Click for details.",
       "down": "{{count}} lab machine(s) not working. Click for details."
+    },
+    "state": {
+      "working": "OK",
+      "waiting": "Waiting",
+      "down": "Not working"
     }
   },
   "drawer": {

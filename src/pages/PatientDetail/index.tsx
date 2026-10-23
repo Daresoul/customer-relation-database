@@ -23,7 +23,6 @@ import MedicalHistorySection from './MedicalHistory/MedicalHistorySection';
 import { LabsTab } from './LabsTab';
 import { Link } from 'react-router-dom';
 import { useThemeColors } from '../../utils/themeStyles';
-import { DeviceStatusInline } from '../../components/DeviceStatusBar';
 import styles from './PatientDetail.module.css';
 
 const { Content } = Layout;
@@ -244,7 +243,6 @@ export const PatientDetail: React.FC = () => {
               },
             ]}
           />
-          <DeviceStatusInline />
         </div>
       </div>
 

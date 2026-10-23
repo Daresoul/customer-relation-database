@@ -11,7 +11,6 @@ import { PeopleSection } from './PeopleSection';
 import { AnimalsSection } from './AnimalsSection';
 import { MergeHouseholdModal } from './MergeHouseholdModal';
 import { Link } from 'react-router-dom';
-import { DeviceStatusInline } from '../../components/DeviceStatusBar';
 import styles from './HouseholdDetail.module.css';
 
 const { Content } = Layout;
@@ -144,7 +143,6 @@ export const HouseholdDetail: React.FC = () => {
               },
             ]}
           />
-          <DeviceStatusInline />
         </div>
       </div>
 

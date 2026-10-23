@@ -30,7 +30,7 @@ export const DeviceHealthChip: React.FC = () => {
     <>
       <Tooltip title={t(`chip.tooltip.${level}`, { count })}>
         <Button data-level={level} icon={<HealthIcon level={level} />} onClick={() => setOpenId(focusId)}>
-          {t('chip.label')}
+          {t('chip.label')}: {t(`chip.state.${level}`)}
           {count > 0 && ` · ${count}`}
         </Button>
       </Tooltip>

@@ -23,7 +23,6 @@ import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 // Inline PDF viewer handled by PdfInlineViewer with reliable fallbacks
 import type { MedicalRecord, MedicalRecordHistory, UpdateMedicalRecordInput } from '@/types/medical';
 import type { MedicalRecordLineItem } from '@/types/lineItem';
-import { DeviceStatusInline } from '@/components/DeviceStatusBar';
 import MoveLabResultModal from '@/components/LabInbox/MoveLabResultModal';
 import RecordLabValues from '@/components/LabResults/RecordLabValues';
 import { labInboxService } from '@/services/labInboxService';
@@ -748,7 +747,6 @@ export const MedicalRecordDetailPage: React.FC = () => {
               },
             ]}
           />
-          <DeviceStatusInline />
         </div>
       </div>
       <div className={styles.breadcrumbContainer}>
