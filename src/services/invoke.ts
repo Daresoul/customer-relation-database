@@ -56,6 +56,16 @@ export async function invoke<T = unknown>(
   }
 }
 
+/** Sends one line to the app log (and Loki); never throws. */
+export function logEvent(input: {
+  level: 'error' | 'warn' | 'info';
+  subsystem: string;
+  message: string;
+  extras?: Record<string, unknown>;
+}): void {
+  tauriInvoke('log_event', { input }).catch(() => {});
+}
+
 // Pass-through re-export so callers that also import convertFileSrc don't need
 // to keep two separate imports.
 export { convertFileSrc } from '@tauri-apps/api/tauri';

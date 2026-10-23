@@ -4,7 +4,7 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { App as AntApp, Spin, ConfigProvider } from 'antd';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
@@ -19,22 +19,16 @@ import { useDeviceDataListener } from './hooks/useDeviceDataListener';
 import { useDeviceEvents } from './hooks/useDeviceEvents';
 import { appRoutes } from './layouts/routes';
 import { useLabInboxLiveUpdates } from './hooks/useLabInbox';
-import { invoke } from '@/services/invoke';
+import { invoke, logEvent } from '@/services/invoke';
+import { createQueryClient } from './utils/queryClient';
 import { applyAutostartDefault } from './utils/autostart';
 
 // Import global styles
 import './styles/globals.css';
 import styles from './App.module.css';
 
-// Create a client
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 5 * 60 * 1000, // 5 minutes
-      gcTime: 10 * 60 * 1000, // 10 minutes
-    },
-  },
-});
+// One retry; failed queries go to the log.
+const queryClient = createQueryClient(logEvent);
 
 // Component to listen for device data events
 function DeviceDataHandler() {
