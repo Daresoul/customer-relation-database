@@ -439,14 +439,6 @@ pub fn push_log(log: &mut VecDeque<LogEntry>, entry: LogEntry) {
     }
 }
 
-pub fn errors_today(log: &VecDeque<LogEntry>, now: DateTime<FixedOffset>) -> usize {
-    log.iter()
-        .filter(|e| e.is_error)
-        .filter_map(|e| DateTime::parse_from_rfc3339(&e.at).ok())
-        .filter(|at| at.with_timezone(now.offset()).date_naive() == now.date_naive())
-        .count()
-}
-
 /// The device's settings that are safe to paste into a support chat.
 #[derive(Clone, Debug, Default)]
 pub struct DeviceConfigSummary {
@@ -627,6 +619,72 @@ struct DeviceRuntime {
     last_raw: Option<RawMessage>,
     log: VecDeque<LogEntry>,
     last_health: Option<Health>,
+    day: OutageDay,
+}
+
+/// Today's outages of one machine, by the clinic's local day.
+#[derive(Default)]
+struct OutageDay {
+    day: Option<chrono::NaiveDate>,
+    outages: u32,
+    events: u32,
+    down_secs: i64,
+    down_since: Option<DateTime<Utc>>,
+}
+
+fn local_day(at: DateTime<Utc>) -> chrono::NaiveDate {
+    at.with_timezone(&chrono::Local).date_naive()
+}
+
+fn local_midnight(at: DateTime<Utc>) -> DateTime<Utc> {
+    local_day(at)
+        .and_hms_opt(0, 0, 0)
+        .and_then(|m| m.and_local_timezone(chrono::Local).earliest())
+        .map(|m| m.with_timezone(&Utc))
+        .unwrap_or(at)
+}
+
+impl OutageDay {
+    fn roll(&mut self, at: DateTime<Utc>) {
+        let today = local_day(at);
+        if self.day != Some(today) {
+            self.day = Some(today);
+            // An outage still going on at midnight is today's too.
+            self.outages = u32::from(self.down_since.is_some());
+            self.events = 0;
+            self.down_secs = 0;
+        }
+    }
+
+    fn went_down(&mut self, at: DateTime<Utc>) {
+        self.roll(at);
+        if self.down_since.is_none() {
+            self.down_since = Some(at);
+            self.outages += 1;
+        }
+    }
+
+    fn came_back(&mut self, at: DateTime<Utc>) {
+        self.roll(at);
+        if let Some(since) = self.down_since.take() {
+            self.down_secs += (at - since.max(local_midnight(at))).num_seconds().max(0);
+        }
+    }
+
+    fn event(&mut self, at: DateTime<Utc>) {
+        self.roll(at);
+        self.events += 1;
+    }
+
+    /// (outages, problem events, seconds without connection) for the day of `now`.
+    fn today(&self, now: DateTime<Utc>) -> (u32, u32, i64) {
+        let ongoing = self.down_since.map_or(0, |since| (now - since.max(local_midnight(now))).num_seconds().max(0));
+        if self.day == Some(local_day(now)) {
+            (self.outages, self.events, self.down_secs + ongoing)
+        } else {
+            (u32::from(self.down_since.is_some()), 0, ongoing)
+        }
+    }
 }
 
 static RUNTIME: OnceLock<Mutex<HashMap<i64, DeviceRuntime>>> = OnceLock::new();
@@ -663,22 +721,27 @@ pub(crate) fn record_status_at(
     label: &str,
     error_kind: Option<DeviceErrorKind>,
     health: Health,
-    _at: DateTime<Utc>,
+    at: DateTime<Utc>,
 ) {
     with_runtime(integration_id, |rt| {
+        let was_down = rt.day.down_since.is_some();
         let is_error = health == Health::Down && rt.last_health != Some(Health::Down);
         if health != Health::Starting {
             rt.last_health = Some(health);
         }
-        push_log(
-            &mut rt.log,
-            LogEntry {
-                at: Utc::now().to_rfc3339(),
-                label: label.to_string(),
-                error_kind: error_kind.as_ref().and_then(snake_case),
-                is_error,
-            },
-        );
+        match health {
+            Health::Down => rt.day.went_down(at),
+            Health::Working | Health::Off => rt.day.came_back(at),
+            Health::Starting => {}
+        }
+        let kind = error_kind.as_ref().and_then(snake_case);
+        // While down, the retries ("Connecting", the same error again) are not news;
+        // a different cause is.
+        let repeat = was_down && health == Health::Down
+            && (kind.is_none() || rt.log.back().and_then(|e| e.error_kind.as_ref()) == kind.as_ref());
+        if !repeat {
+            push_log(&mut rt.log, LogEntry { at: at.to_rfc3339(), label: label.to_string(), error_kind: kind, is_error });
+        }
     });
     kick_monitor();
 }
@@ -686,19 +749,24 @@ pub(crate) fn record_status_at(
 pub fn record_event(integration_id: i64, kind: DeviceEventKind) {
     let label = snake_case(&kind).unwrap_or_else(|| format!("{kind:?}"));
     with_runtime(integration_id, |rt| {
-        push_log(&mut rt.log, LogEntry { at: Utc::now().to_rfc3339(), label, error_kind: None, is_error: true });
+        let at = Utc::now();
+        rt.day.event(at);
+        push_log(&mut rt.log, LogEntry { at: at.to_rfc3339(), label, error_kind: None, is_error: true });
     });
 }
 
 pub fn device_details(integration_id: i64, now: DateTime<FixedOffset>) -> DeviceDetails {
-    with_runtime(integration_id, |rt| DeviceDetails {
-        bytes_last_minute: rt.bytes.in_last_minute(Utc::now()),
-        errors_today: errors_today(&rt.log, now),
-        last_raw: rt.last_raw.clone(),
-        log: rt.log.iter().cloned().collect(),
-        down_since: None,
-        outages_today: 0,
-        down_minutes_today: 0,
+    with_runtime(integration_id, |rt| {
+        let (outages, events, down_secs) = rt.day.today(now.with_timezone(&Utc));
+        DeviceDetails {
+            bytes_last_minute: rt.bytes.in_last_minute(Utc::now()),
+            errors_today: (outages + events) as usize,
+            last_raw: rt.last_raw.clone(),
+            log: rt.log.iter().cloned().collect(),
+            down_since: rt.day.down_since.map(|at| at.to_rfc3339()),
+            outages_today: outages,
+            down_minutes_today: down_secs / 60,
+        }
     })
 }
 
@@ -1198,19 +1266,12 @@ mod tests {
     }
 
     #[test]
-    fn the_log_keeps_the_latest_entries_and_counts_todays_errors() {
+    fn the_log_keeps_the_latest_entries() {
         let mut log = VecDeque::new();
         for i in 0..(LOG_KEEP + 5) {
             push_log(&mut log, entry(&format!("2026-10-19T0{}:00:00+02:00", i % 9), "Connected", false));
         }
         assert_eq!(log.len(), LOG_KEEP);
-
-        let mut log = VecDeque::new();
-        push_log(&mut log, entry("2026-10-18T19:00:00+02:00", "Error", true));
-        push_log(&mut log, entry("2026-10-19T09:12:00+02:00", "Error", true));
-        push_log(&mut log, entry("2026-10-19T09:13:00+02:00", "Connected", false));
-        push_log(&mut log, entry("2026-10-19T08:31:00Z", "cut_off", true));
-        assert_eq!(errors_today(&log, monday(11, 0)), 2);
     }
 
     #[test]
