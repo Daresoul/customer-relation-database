@@ -187,6 +187,17 @@ describe('DeviceImportModal — one result at a time', () => {
   });
 });
 
+describe('DeviceImportModal — woken from the tray', () => {
+  it('a result that arrives while the window is open but empty becomes the current one, not a waiting one', async () => {
+    renderModal();
+    act(() => ctx.openModal());
+    receive(maxResult());
+
+    expect(await screen.findByText('max.xml')).toBeInTheDocument();
+    expect(screen.queryByText(/medical:deviceImport.moreWaiting/)).not.toBeInTheDocument();
+  });
+});
+
 describe('DeviceImportModal — save', () => {
   it('opens the new record inside the app', async () => {
     const user = userEvent.setup();
