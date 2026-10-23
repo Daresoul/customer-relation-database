@@ -248,7 +248,7 @@ describe('Appointment panel', () => {
     const dialog = await screen.findByRole('dialog', { name: /appointments:messages.duplicateTitle/ });
     const input = within(dialog).getByRole('textbox');
     fireEvent.mouseDown(input);
-    fireEvent.change(input, { target: { value: '2030-02-14' } });
+    fireEvent.change(input, { target: { value: '14.02.2030' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     fireEvent.click(within(dialog).getByRole('button', { name: /appointments:actions.duplicate/ }));
 
@@ -266,7 +266,7 @@ describe('Appointment panel', () => {
     const dialog = await screen.findByRole('dialog', { name: /appointments:reschedule.title/ });
     const [dateInput, timeInput] = within(dialog).getAllByRole('textbox');
     fireEvent.mouseDown(dateInput);
-    fireEvent.change(dateInput, { target: { value: '2030-01-11' } });
+    fireEvent.change(dateInput, { target: { value: '11.01.2030' } });
     fireEvent.keyDown(dateInput, { key: 'Enter' });
     fireEvent.mouseDown(timeInput);
     fireEvent.change(timeInput, { target: { value: '14:15' } });
