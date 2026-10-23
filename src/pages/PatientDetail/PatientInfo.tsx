@@ -14,6 +14,7 @@ import dayjs from 'dayjs';
 import { formatDateTime, getDatePickerFormat } from '../../utils/dateFormatter';
 import { useThemeColors } from '../../utils/themeStyles';
 import styles from './PatientDetail.module.css';
+import { speciesLabel } from '../../utils/species';
 
 const { Text } = Typography;
 
@@ -62,7 +63,7 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
   // Create options for species dropdown from database
   const speciesOptions = speciesData.map(species => ({
     value: species.name,
-    label: species.name,
+    label: speciesLabel(t, species.name),
   }));
 
   const translatedGenderOptions = GENDER_OPTIONS.map(option => ({

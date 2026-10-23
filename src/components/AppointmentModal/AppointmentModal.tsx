@@ -40,6 +40,7 @@ import { statusLabelKey } from '../../utils/appointmentStatus';
 import type { AppointmentStatus } from '../../types/appointments';
 import { useTranslation } from 'react-i18next';
 import styles from './AppointmentModal.module.css';
+import { speciesLabel } from '../../utils/species';
 
 const { TextArea } = Input;
 const { Text } = Typography;
@@ -128,7 +129,7 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
         const chip = patient.microchipId
           ? t('appointments:picker.chip', { digits: String(patient.microchipId).slice(-4) })
           : undefined;
-        const who = [patient.name, patient.species].filter(Boolean).join(' · ');
+        const who = [patient.name, speciesLabel(t, patient.species)].filter(Boolean).join(' · ');
         const extra = [owner, chip].filter(Boolean).join(' · ');
         return { value: patient.id, label: extra ? `${who} — ${extra}` : who };
       }),

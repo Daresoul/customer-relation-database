@@ -15,6 +15,7 @@ import styles from './HouseholdDetail.module.css';
 import { formatDate } from '../../utils/dateFormatter';
 import { formatPatientAge } from '../../utils/patientChart';
 import dayjs from 'dayjs';
+import { speciesLabel } from '../../utils/species';
 
 const { Title } = Typography;
 
@@ -80,10 +81,7 @@ export const AnimalsSection: React.FC<AnimalsSectionProps> = ({
       title: t('detail.animals.columns.species'),
       dataIndex: 'species',
       key: 'species',
-      render: (text: string) => {
-        const speciesKey = text ? text.toLowerCase() : null;
-        return speciesKey ? t(`entities:species.${speciesKey}`, { defaultValue: text }) : '-';
-      },
+      render: (text: string) => speciesLabel(t, text) || '-',
     },
     {
       title: t('detail.animals.columns.breed'),

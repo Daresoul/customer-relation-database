@@ -21,6 +21,7 @@ import type { ExtractedPatientData, PatientDataConflict } from '../../types/devi
 import type { Patient, CreatePatientInput } from '../../types';
 import { findSpeciesIdByName, hasExtractedData } from '../../utils/deviceDataExtraction';
 import { localeNumberParser } from '@/utils/localeNumber';
+import { speciesLabel } from '../../utils/species';
 
 interface CreatePatientSectionProps {
   extractedData: ExtractedPatientData;
@@ -229,7 +230,7 @@ export const CreatePatientSection: React.FC<CreatePatientSectionProps> = ({
                   <span>
                     {t('medical:deviceImport.detectedFromFiles', 'Detected from files')}: {' '}
                     {extractedData.name && <Tag color="blue">{extractedData.name}</Tag>}
-                    {extractedData.species && <Tag color="green">{extractedData.species}</Tag>}
+                    {extractedData.species && <Tag color="green">{speciesLabel(t, extractedData.species)}</Tag>}
                     {extractedData.gender && <Tag>{extractedData.gender}</Tag>}
                   </span>
                 }
@@ -295,7 +296,7 @@ export const CreatePatientSection: React.FC<CreatePatientSectionProps> = ({
               >
                 {speciesData.map((species) => (
                   <Select.Option key={species.id} value={species.id}>
-                    {species.name}
+                    {speciesLabel(t, species.name)}
                   </Select.Option>
                 ))}
               </Select>

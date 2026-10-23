@@ -60,6 +60,7 @@ import { messageOf } from '@/utils/errors';
 import { validatePatientSelection, getMatchStrength } from '@/utils/deviceDataValidation';
 import type { MatchStrength } from '@/utils/deviceDataValidation';
 import type { ValidationWarning } from '@/types/deviceImport';
+import { speciesLabel } from '../../utils/species';
 
 const { Option } = Select;
 const { Text } = Typography;
@@ -742,7 +743,7 @@ const DeviceImportDialog: React.FC = () => {
             data-testid="device-import-patient-select"
           >
             {patients?.map((patient) => {
-              const main = `${patient.name} - ${patient.species}`;
+              const main = `${patient.name} - ${speciesLabel(t, patient.species)}`;
               const hints = patientHints(patient, t);
               return (
                 <Option key={patient.id} value={patient.id} label={[main, ...hints, patient.microchipId ?? ''].join(' ')}>

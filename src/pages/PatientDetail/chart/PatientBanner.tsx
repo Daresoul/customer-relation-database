@@ -27,6 +27,7 @@ import { AlertsModal } from './AlertsModal';
 import { MarkDeceasedModal } from './MarkDeceasedModal';
 import { MarkInactiveModal } from './MarkInactiveModal';
 import styles from './PatientChart.module.css';
+import { speciesLabel } from '../../../utils/species';
 
 const { Text } = Typography;
 
@@ -60,9 +61,7 @@ export const PatientBanner: React.FC<PatientBannerProps> = ({ patient, onDelete,
   const deceased = status === 'deceased';
   const alerts = patient.alerts ?? [];
 
-  const species = patient.species
-    ? t(`entities:species.${patient.species.toLowerCase()}`, { defaultValue: patient.species })
-    : null;
+  const species = speciesLabel(t, patient.species);
   const signalment = [species, patient.breed].filter(Boolean).join(' · ');
   const sex = sexLabel(patient.gender, patient.neutered, t);
   const age = formatPatientAge(patient.dateOfBirth, t, deceased ? dayjs(patient.deceasedAt) : undefined);

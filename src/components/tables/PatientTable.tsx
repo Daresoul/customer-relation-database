@@ -30,6 +30,7 @@ import { formatDate } from '../../utils/dateFormatter';
 import styles from './Tables.module.css';
 import { AlertChips } from '../patient/AlertChips';
 import { patientStatus, visiblePatients } from '../../utils/patientChart';
+import { speciesLabel } from '../../utils/species';
 
 const { Text } = Typography;
 
@@ -58,25 +59,9 @@ export const PatientTable: React.FC<PatientTableProps> = ({
   };
 
 
-  // A species' name in the app language; species the app has no word for
-  // keep their own name.
-  const speciesLabel = (species: string): string => {
-    let speciesKey = species.toLowerCase();
-    if (species.includes(' ')) {
-      const underscoreKey = species.toLowerCase().replace(/\s+/g, '_');
-      const camelKey = species === 'Guinea Pig' ? 'guineaPig' : speciesKey;
-      if (t(`entities:species.${underscoreKey}`, { defaultValue: '' }) !== '') {
-        speciesKey = underscoreKey;
-      } else if (t(`entities:species.${camelKey}`, { defaultValue: '' }) !== '') {
-        speciesKey = camelKey;
-      }
-    }
-    return t(`entities:species.${speciesKey}`, { defaultValue: species });
-  };
-
   // Filter choices: the species these patients actually have.
   const speciesFilters = Array.from(new Set(patients.map((p) => p.species).filter((s): s is string => !!s)))
-    .map((species) => ({ text: speciesLabel(species), value: species }))
+    .map((species) => ({ text: speciesLabel(t, species), value: species }))
     .sort((a, b) => a.text.localeCompare(b.text));
 
   // Filter data based on search
@@ -138,7 +123,7 @@ export const PatientTable: React.FC<PatientTableProps> = ({
       render: (species) => {
         if (!species) return null;
 
-        return <Text>{speciesLabel(species)}</Text>;
+        return <Text>{speciesLabel(t, species)}</Text>;
       },
       filters: speciesFilters,
       onFilter: (value, record) => record.species === value,

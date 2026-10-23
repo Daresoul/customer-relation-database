@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useSpecies } from '../../hooks/useSpecies';
 import { toTitleCase } from '../../utils/stringUtils';
 import type { Breed } from '../../types/breed';
+import { speciesLabel } from '../../utils/species';
 
 interface CreateBreedModalProps {
   open: boolean;
@@ -97,7 +98,7 @@ export const CreateBreedModal: React.FC<CreateBreedModalProps> = ({
             loading={isLoadingSpecies}
             options={speciesList.map(species => ({
               value: species.id,
-              label: species.name,
+              label: speciesLabel(t, species.name),
             }))}
           />
         </Form.Item>

@@ -38,6 +38,7 @@ import { invoke } from '@/services/invoke';
 import { DuplicateHouseholdWarning } from './DuplicateHouseholdWarning';
 import { messageOf } from '../../utils/errors';
 import styles from './Forms.module.css';
+import { speciesLabel } from '../../utils/species';
 
 /** Subset of the Patient model that's enough to render the
  *  patient-association list inside the household form. */
@@ -473,7 +474,7 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
                     title={p.name}
                     description={
                       <Space size={6} wrap>
-                        {p.species && <Tag>{p.species}</Tag>}
+                        {p.species && <Tag>{speciesLabel(t, p.species)}</Tag>}
                         {p.breed && (
                           <Text type="secondary" style={{ fontSize: 12 }}>
                             {p.breed}
@@ -524,7 +525,7 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
                       <span>{p.name}</span>
                       {p.species && (
                         <Text type="secondary" style={{ fontSize: 12 }}>
-                          ({p.species}
+                          ({speciesLabel(t, p.species)}
                           {p.breed ? ` — ${p.breed}` : ''})
                         </Text>
                       )}

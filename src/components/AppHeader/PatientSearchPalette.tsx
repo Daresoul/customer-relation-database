@@ -7,6 +7,7 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { MIN_QUERY_LENGTH, usePatientSearch } from './usePatientSearch';
 import { loadRecentPatients, rememberPatient, RECENT_PATIENTS_EVENT, type RecentPatient } from './recentPatients';
 import styles from './AppHeader.module.css';
+import { speciesLabel } from '../../utils/species';
 
 const { Text } = Typography;
 
@@ -127,7 +128,7 @@ export function PatientSearchPalette({ initialQuery, onClose }: Props) {
               >
                 <div>
                   <Text strong>{row.name || t('shell:search.noName')}</Text>
-                  {row.species && <Text type="secondary"> · {row.species}</Text>}
+                  {row.species && <Text type="secondary"> · {speciesLabel(t, row.species)}</Text>}
                   {row.inactive && <Tag className={styles.inactiveTag}>{t('shell:search.inactive')}</Tag>}
                 </div>
                 <Text type="secondary" className={styles.resultMeta}>

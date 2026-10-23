@@ -24,6 +24,7 @@ import { getDatePickerFormat } from '../../../utils/dateFormatter';
 import { SearchableSelect } from '../../SearchableSelect';
 import styles from '../Forms.module.css';
 import { localeNumberParser } from '@/utils/localeNumber';
+import { speciesLabel } from '../../../utils/species';
 
 export interface Species {
   id: number;
@@ -108,7 +109,7 @@ export const PatientFieldGroup: React.FC<PatientFieldGroupProps> = ({
   // Prepare options based on useIds setting
   const speciesOptions = species.map(s => ({
     value: useIds ? String(s.id) : s.name,
-    label: s.name,
+    label: speciesLabel(t, s.name),
   }));
 
   const breedOptions = breeds.map(b => ({

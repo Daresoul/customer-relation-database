@@ -8,6 +8,7 @@ import { knownErrorMessage } from '@/utils/errors';
 import type { HouseholdSearchResult } from '../../types/household';
 import type { Patient } from '../../types/models';
 import { HouseholdPicker } from './HouseholdPicker';
+import { speciesLabel } from '../../utils/species';
 
 const { Text, Paragraph } = Typography;
 
@@ -177,7 +178,7 @@ export const LinkPetModal: React.FC<LinkPetModalProps> = ({ open, householdId, o
           <Select.Option key={p.id} value={p.id}>
             <Space size={6}>
               <Text strong>{p.name}</Text>
-              {p.species && <Text type="secondary">{p.species}</Text>}
+              {p.species && <Text type="secondary">{speciesLabel(t, p.species)}</Text>}
               {p.microchipId && <Text type="secondary">{p.microchipId}</Text>}
             </Space>
           </Select.Option>

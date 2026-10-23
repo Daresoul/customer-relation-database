@@ -31,6 +31,7 @@ import {
   waitingMinutes,
 } from '@/utils/appointmentStatus';
 import styles from './AppointmentDrawer.module.css';
+import { speciesLabel } from '../../utils/species';
 
 const { Text } = Typography;
 
@@ -204,7 +205,7 @@ export const AppointmentDrawer: React.FC<AppointmentDrawerProps> = ({ appointmen
             <Space direction="vertical" size={4}>
               <Text strong>
                 {patientName}
-                {apt.species ? ` · ${apt.species}` : ''}
+                {apt.species ? ` · ${speciesLabel(t, apt.species)}` : ''}
               </Text>
               {patient?.alerts && patient.alerts.length > 0 && (
                 <div>
