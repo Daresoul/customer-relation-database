@@ -359,12 +359,17 @@
 
 ### Device health in the tray and the details drawer (`services/device_health.rs`)
 - The app starts hidden at login, so health also shows in the system tray. The tray
-  tooltip reads "Arkivet — All devices OK" or names each problem ("Blood
-  analyzer: no connection since 10:42"), and the icon switches to
-  `icons/tray-warning.png`. Text follows the app language (en/mk) and is cut
-  to 127 characters (the Windows limit). A machine counts as a problem only
-  after it has been down for 60 s; a port retrying after an outage stays the
-  same outage.
+  tooltip reads "Arkivet — All devices OK", names a single problem ("Arkivet —
+  Blood analyzer: no connection since 10:42"), or starts with a count ("Arkivet
+  — 3 machines need attention") followed by one line per machine; Windows 11
+  shows only the first ~64 characters, so the summary comes first. The icon
+  switches to `icons/tray-warning.png`; the tray menu and text follow the app
+  language (en/mk); the whole text is cut to 127 characters. A machine counts
+  as a problem only after it has been down for 60 s; a port retrying after an
+  outage stays the same outage.
+- Serial retries stay at about every 10 s (a reconnected machine is found
+  quickly), but only the first failure and every 60th retry (~10 min) are
+  logged at info/warn; the rest go to debug.
 - A background monitor checks at start, 2 s after a status change and every
   30 s. It sends an OS notification (Tauri `notification` Cargo feature; the
   webview allowlist is unchanged) when a machine has been down longer than N
@@ -375,17 +380,26 @@
   `device_alert_settings` and `device_quiet_alerts`): on/off, N minutes
   (default 10), clinic hours (default 07:00–20:00, Mon–Sat), and the quiet
   alert per machine (default off, 4 h when switched on).
-- The header shows a "Lab machines" chip on every page with the worst state,
-  as a shape and a word (it is the only device status; the dashboard bar and
-  the compact page chips are gone). A serial port that has failed for less
-  than 60 s shows as waiting, like the tray. Dev builds put the device
-  simulator button next to it. A click on the chip opens the details drawer: state with
-  what to do, last result, last data, problems today, a live byte counter
-  (serial), recent status changes, the last raw message (first 2 KB, text or
-  hex), and Reconnect, Copy diagnostics and Open log folder. Diagnostics hold
+- The header shows a lab machines chip on every page with the worst state, as
+  a shape and words that name the machine when only one needs attention
+  ("PointCare не работи", else "3 апарати не работат"). A serial port that has
+  failed for less than 60 s shows as waiting, like the tray. Dev builds put the
+  device simulator button next to it. A click on the chip opens the details
+  drawer: a list of every machine (state, last result, results today from
+  `get_results_today`), then for the chosen one its state with what to do,
+  "without connection since 14:03 · 182 attempts · next try", today's minutes
+  without connection and breaks, last result, last data, a live byte counter
+  (serial), status changes (retries are not repeated), the last raw message
+  (first 2 KB, text or hex), and Reconnect, Copy diagnostics and Open log
+  folder. A port that is gone lists the serial ports present now with "Use
+  COM5" (saving restarts the connection). A connected port that has received
+  nothing for 30 min since connecting says so, with what to check. Diagnostics hold
   app version, OS, the device settings, states and times; never message
-  contents, so no patient names. The bytes, last message and status log live
-  in memory for this session only.
+  contents, so no patient names. The bytes, last message, status log and
+  today's outage figures live in memory for this session only.
+- Healvet reference ranges exist for dogs and cats only; any other species
+  shows its Healvet values with name and unit but no range or H/L flag, on the
+  lab PDF and in the app (`lab_reference::Species::Other`).
 
 ### Lab inbox (`services/lab_inbox.rs`, page `/lab-inbox`, dashboard tab)
 - The header shows the lab inbox badge (waiting count) on every page.
