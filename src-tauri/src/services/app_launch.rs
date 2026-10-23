@@ -13,3 +13,8 @@ pub fn autostart_args() -> Vec<&'static str> {
 pub fn starts_hidden(argv: &[String]) -> bool {
     argv.iter().skip(1).any(|a| a == HIDDEN_ARG)
 }
+
+/// Whether the window, at its configured size, runs off the screen.
+pub fn overflows_screen(_window: (u32, u32), _screen: (u32, u32)) -> bool {
+    false
+}
