@@ -31,14 +31,24 @@ const { Text, Link } = Typography;
 interface HouseholdTableProps {
   households: HouseholdTableRecord[];
   loading?: boolean;
+  /** Controlled search text (the dashboard keeps it in the URL). */
+  searchText?: string;
+  onSearchTextChange?: (text: string) => void;
 }
 
 export const HouseholdTable: React.FC<HouseholdTableProps> = ({
   households,
   loading = false,
+  searchText: controlledSearch,
+  onSearchTextChange,
 }) => {
   const { t } = useTranslation(['patients', 'entities', 'common']);
-  const [searchText, setSearchText] = useState('');
+  const [localSearch, setLocalSearch] = useState('');
+  const searchText = controlledSearch ?? localSearch;
+  const setSearchText = (text: string) => {
+    setLocalSearch(text);
+    onSearchTextChange?.(text);
+  };
 
   // Filter data based on search
   const filteredData = useMemo(() => {

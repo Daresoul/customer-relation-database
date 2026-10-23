@@ -39,7 +39,12 @@
     "notConfigured": "Backups are not set up. Choose a backup folder.",
     "failed": "The last backup failed: {{error}}",
     "unknown": "Backup status could not be read.",
-    "open": "Open backup settings"
+    "open": "Open backup settings",
+    "dashboard": {
+      "notConfigured": "Backups are not set up. If this computer fails, the clinic's records are lost.",
+      "failed": "The last backup failed.",
+      "openSettings": "Set up backups"
+    }
   },
   "today": {
     "title": "Today",

@@ -2,10 +2,10 @@
  * Example main dashboard using all Ant Design components
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, Space, Tabs, App, InputNumber, Modal, Badge } from 'antd';
 import { TeamOutlined, HeartOutlined, CalendarOutlined, FileTextOutlined } from '@ant-design/icons';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 // Removed AppLayout - using simpler layout
 import { PatientTable } from '../components/tables/PatientTable';
@@ -17,8 +17,8 @@ import { invoke } from '@/services/invoke';
 import { FormModal } from '../components/common/Modal';
 import { PatientFormWithOwner } from '../components/forms/PatientFormWithOwner';
 import { HouseholdForm } from '../components/forms/HouseholdForm';
-import { Loading, PageLoader } from '../components/common/Loading';
-import { NoData } from '../components/common/EmptyState';
+import { PageLoader } from '../components/common/Loading';
+import { NoPatientsFound, NoHouseholdsFound } from '../components/common/EmptyState';
 import { LoadError } from '../components/common/LoadError';
 import AppointmentsTab from './Appointments/AppointmentsTab';
 import { useViewContext } from '../contexts/ViewContext';
@@ -26,36 +26,55 @@ import { useQueryClient } from '@tanstack/react-query';
 import { invalidatePatientData, invalidateHouseholdData } from '../hooks/invalidation';
 import api, { setAppInstance } from '../services/api.integration';
 import { PatientService } from '../services';
-import type { Patient, PatientWithHousehold } from '../types';
+import type { PatientWithHousehold } from '../types';
 import type { HouseholdTableRecord } from '../types/ui.types';
-import { useThemeColors } from '../utils/themeStyles';
 import { normalizeMicrochip } from '@/hooks/useBarcodeScanner';
-import { listen } from '@tauri-apps/api/event';
+import { useTauriEvent } from '../hooks/useTauriEvent';
+import { BackupWarning } from '../components/BackupWarning';
 import { TodayStrip } from '../components/TodayStrip';
 import type { NewPatientFromScan } from '../layouts/ChipScanHandler';
 import styles from './MainDashboard.module.css';
 
 // Removed TabPane - using items prop instead
 
+const DASHBOARD_TABS = ['patients', 'households', 'appointments', 'labInbox'];
+
 export const MainDashboard: React.FC = () => {
   const queryClient = useQueryClient();
   const { t } = useTranslation(['patients', 'common', 'navigation']);
   const { currentView, setCurrentView } = useViewContext();
   const app = App.useApp();
-  const themeColors = useThemeColors();
   const activeView = currentView === 'animal' ? 'patients' : currentView === 'household' ? 'households' : 'appointments';
-  // Local tab state so we can include custom tabs (like the lab inbox)
-  const [activeTab, setActiveTab] = useState<string>(activeView);
-  useEffect(() => setActiveTab(activeView), [activeView]);
+  // Tab and search live in the URL, so Back and reopening the dashboard keep them.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlTab = searchParams.get('tab');
+  const activeTab = urlTab && DASHBOARD_TABS.includes(urlTab) ? urlTab : activeView;
+  const searchText = searchParams.get('q') ?? '';
+  const updateParams = useCallback(
+    (changes: Record<string, string | null>) =>
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          for (const [key, value] of Object.entries(changes)) {
+            if (value) next.set(key, value);
+            else next.delete(key);
+          }
+          return next;
+        },
+        { replace: true },
+      ),
+    [setSearchParams],
+  );
+  const setActiveTab = (tab: string) => updateParams({ tab, q: null });
 
   // Lab results waiting in the inbox, shown as a badge on its tab
   const { data: labWaiting } = useLabInboxCount();
+  // The full-page loader is for the first load only; later reloads update in place.
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<unknown>(null);
   const [patients, setPatients] = useState<PatientWithHousehold[]>([]);
   const [households, setHouseholds] = useState<HouseholdTableRecord[]>([]);
   const [filteredPatients, setFilteredPatients] = useState<PatientWithHousehold[]>([]);
-  const [patientSearchText, setPatientSearchText] = useState('');
   const [filteredHouseholds, setFilteredHouseholds] = useState<HouseholdTableRecord[]>([]);
   const [showPatientForm, setShowPatientForm] = useState(false);
   const [showHouseholdForm, setShowHouseholdForm] = useState(false);
@@ -76,21 +95,16 @@ export const MainDashboard: React.FC = () => {
   const scannedChip = (location.state as NewPatientFromScan | null)?.newPatientChip;
   useEffect(() => {
     if (!scannedChip) return;
-    setActiveTab('patients');
     setCurrentView('animal');
     setScannedChipForNewPatient(scannedChip);
     setShowPatientForm(true);
-    navigate('.', { replace: true, state: null });
+    navigate('?tab=patients', { replace: true, state: null });
   }, [scannedChip, navigate, setCurrentView]);
 
-  // Load initial data from database and set app instance
-  useEffect(() => {
-    setAppInstance(app);
-    loadData();
-  }, [app]);
-
-  const loadData = async () => {
-    setLoading(true);
+  const tRef = useRef(t);
+  tRef.current = t;
+  const loadData = useCallback(async () => {
+    const t = tRef.current;
     try {
       // Every patient and household; the tables page on the client
       const [patientsResults, householdsResults] = await Promise.all([
@@ -124,7 +138,13 @@ export const MainDashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  // Load initial data from database and set app instance
+  useEffect(() => {
+    setAppInstance(app);
+    loadData();
+  }, [app, loadData]);
 
   const handleSeed = async () => {
     setSeeding(true);
@@ -145,25 +165,22 @@ export const MainDashboard: React.FC = () => {
   };
 
   // Refresh dashboard list when a patient is created anywhere
-  useEffect(() => {
-    let unlistenCreated: (() => void) | undefined;
-    const setup = async () => {
-      unlistenCreated = await listen('patient-created', async () => {
-        await loadData();
-      });
-    };
-    setup();
-    return () => { if (unlistenCreated) unlistenCreated(); };
-  }, []);
+  useTauriEvent('patient-created', () => {
+    loadData();
+  });
 
   // The dashboard only adds; editing happens on the patient and household pages.
   const handleSavePatient = async (values: any) => {
-    await api.patient.create(values);
+    const created = await api.patient.create(values);
     invalidatePatientData(queryClient);
     setShowPatientForm(false);
     // Clear any scan-prefill so subsequent "Add patient" clicks start blank.
     setScannedChipForNewPatient(null);
-    loadData();
+    if (created?.id) {
+      navigate(`/patients/${created.id}`);
+    } else {
+      loadData();
+    }
   };
 
   const handleSaveHousehold = async (values: any) => {
@@ -186,6 +203,7 @@ export const MainDashboard: React.FC = () => {
     <div className={styles.dashboard}>
       <Space direction="vertical" size="large" className={styles.contentWrapper}>
         {loadErrorAlert}
+        <BackupWarning />
         <TodayStrip
           waitingLabCount={labWaiting ?? 0}
           onOpenLabResults={() => setActiveTab('labInbox')}
@@ -243,13 +261,13 @@ export const MainDashboard: React.FC = () => {
                 children: !hasLoaded ? null : filteredPatients.length > 0 || patients.length > 0 ? (
                   <PatientTable
                     patients={filteredPatients}
-                    searchText={patientSearchText}
+                    searchText={searchText}
                     onSearchTextChange={(text) => {
                       // Normalize FDX-B hex reads to the 15-digit passport form.
                       // Catches the case where the scanner types into the search box
                       // directly (hook bails early when an input is focused).
                       const normalized = normalizeMicrochip(text);
-                      setPatientSearchText(normalized);
+                      updateParams({ q: normalized || null });
                       // When the user clears the search after a scan, restore the full list
                       // (scans narrow filteredPatients via the backend; clearing must undo that).
                       if (normalized === '') {
@@ -258,7 +276,7 @@ export const MainDashboard: React.FC = () => {
                     }}
                   />
                 ) : (
-                  <NoData />
+                  <NoPatientsFound onAction={() => setShowPatientForm(true)} />
                 ),
               },
               {
@@ -272,9 +290,11 @@ export const MainDashboard: React.FC = () => {
                 children: !hasLoaded ? null : filteredHouseholds.length > 0 || households.length > 0 ? (
                   <HouseholdTable
                     households={filteredHouseholds}
+                    searchText={searchText}
+                    onSearchTextChange={(text) => updateParams({ q: text || null })}
                   />
                 ) : (
-                  <NoData />
+                  <NoHouseholdsFound onAction={() => setShowHouseholdForm(true)} />
                 ),
               },
               {
