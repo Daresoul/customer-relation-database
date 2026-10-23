@@ -1,0 +1,6 @@
+/* Header and device bar stay on top while the page scrolls. */
+.shellTop {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}

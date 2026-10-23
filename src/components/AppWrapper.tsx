@@ -3,8 +3,9 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useUpdater } from '../hooks/useUpdater';
 import { updateService } from '../services/updateService';
 import { DeviceStatusBar } from './DeviceStatusBar';
+import styles from './AppWrapper.module.css';
 
-export const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const AppWrapper: React.FC<{ header?: React.ReactNode; children: React.ReactNode }> = ({ header, children }) => {
   const { themeMode } = useTheme();
   const backgroundColor = themeMode === 'light' ? '#f5f5f5' : '#141414';
   const { checkForUpdates } = useUpdater();
@@ -55,7 +56,10 @@ export const AppWrapper: React.FC<{ children: React.ReactNode }> = ({ children }
         transition: 'background-color 0.3s ease'
       }}
     >
-      <DeviceStatusBar />
+      <div className={styles.shellTop}>
+        {header}
+        <DeviceStatusBar />
+      </div>
       {children}
     </div>
   );

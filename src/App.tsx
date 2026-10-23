@@ -3,7 +3,7 @@
  */
 
 import React, { Suspense, useEffect, useState } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { App as AntApp, Spin, ConfigProvider } from 'antd';
 import { useTranslation } from 'react-i18next';
@@ -12,24 +12,13 @@ import 'dayjs/locale/mk';
 import 'dayjs/locale/en';
 import enUS from 'antd/locale/en_US';
 import mkMK from 'antd/locale/mk_MK';
-import { MainDashboard } from './pages/MainDashboard';
-import { HouseholdDetail } from './pages/HouseholdDetail';
-import { PatientDetail } from './pages/PatientDetail';
-import { MedicalRecordDetailPage } from './pages/MedicalRecordDetail';
-import Settings from './pages/Settings';
-import Appointments from './pages/Appointments/Appointments';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ViewProvider } from './contexts';
 import { DeviceImportProvider } from './contexts/DeviceImportContext';
-import { AppWrapper } from './components/AppWrapper';
-import { RouteErrorBoundary } from './components/common/ErrorBoundary';
-import DeviceImportModal from './components/DeviceImportModal/DeviceImportModal';
 import { useDeviceDataListener } from './hooks/useDeviceDataListener';
 import { useDeviceEvents } from './hooks/useDeviceEvents';
-import { listen } from '@tauri-apps/api/event';
+import { appRoutes } from './layouts/routes';
 import { invoke } from '@/services/invoke';
-import { useDeviceImport } from './contexts/DeviceImportContext';
-import { useViewContext } from './contexts';
 
 // Import global styles
 import './styles/globals.css';
@@ -52,44 +41,8 @@ function DeviceDataHandler() {
   return null;
 }
 
-// Listen for wake-from-tray events to open UI appropriately
-function WakeFromTrayHandler() {
-  const { openModal } = useDeviceImport();
-  const { setCurrentView } = useViewContext();
-  useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    const setup = async () => {
-      unlisten = await listen<any>('wake-from-tray', (event) => {
-        const payload = event.payload || {};
-        if (payload.cause === 'file') {
-          // Ensure the import modal is visible
-          openModal();
-          // Navigate to main (normal page) and ensure patients view
-          setCurrentView('animal');
-          try { window.history.pushState({}, '', '/'); } catch {}
-        }
-        if (payload.cause === 'manual') {
-          // Reset to default "new" state: patients view on main dashboard
-          setCurrentView('animal');
-          // Navigate to root without carrying prior state
-          try {
-            window.history.pushState({}, '', '/');
-          } catch {}
-        }
-        if (payload.cause === 'scan' && payload.code) {
-          // Navigate to main so dashboard handler can search
-          setCurrentView('animal');
-          try { window.history.pushState({}, '', '/'); } catch {}
-        }
-        // 'scan' is handled by page-level listeners and DeviceImport modal
-        // 'manual' can be used to reset view if desired
-      });
-    };
-    setup();
-    return () => { if (unlisten) unlisten(); };
-  }, [openModal, setCurrentView]);
-  return null;
-}
+// Data router: `useBlocker` (unsaved-changes guard) only works with one.
+const router = createBrowserRouter(appRoutes);
 
 // Inner component to use hooks for locale
 function AppContent() {
@@ -125,22 +78,7 @@ function AppContent() {
           <DeviceImportProvider>
             <AntApp notification={{ maxCount: 1, placement: 'bottomRight' }}>
               <DeviceDataHandler />
-              <WakeFromTrayHandler />
-              <Router>
-                <DeviceImportModal />
-                <AppWrapper>
-                  <RouteErrorBoundary>
-                    <Routes>
-                      <Route path="/" element={<MainDashboard />} />
-                      <Route path="/households/:id" element={<HouseholdDetail />} />
-                      <Route path="/patients/:id" element={<PatientDetail />} />
-                      <Route path="/medical-records/:id" element={<MedicalRecordDetailPage />} />
-                      <Route path="/appointments" element={<Appointments />} />
-                      <Route path="/settings" element={<Settings />} />
-                    </Routes>
-                  </RouteErrorBoundary>
-                </AppWrapper>
-              </Router>
+              <RouterProvider router={router} />
             </AntApp>
           </DeviceImportProvider>
         </ViewProvider>
