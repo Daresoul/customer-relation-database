@@ -1,6 +1,5 @@
 use chrono::{DateTime, Utc};
 use serde_json::Value;
-use crate::services::java_pdf_service::JavaPdfService;
 
 /// Patient information for PDF generation
 #[derive(Debug, Clone)]
@@ -21,30 +20,4 @@ pub struct DeviceTestData {
     pub test_results: Value,
     pub detected_at: DateTime<Utc>,
     pub patient_identifier: Option<String>,
-}
-
-/// Centralized PDF generation service
-/// Now exclusively uses Java JAR for all PDF generation
-pub struct DevicePdfService;
-
-impl DevicePdfService {
-    /// Generate a PDF report from device data using Java iText 5
-    /// This is the single source of truth for PDF generation
-    pub fn generate_pdf(
-        app_handle: &tauri::AppHandle,
-        output_path: &str,
-        patient: PatientData,
-        device_data: DeviceTestData,
-    ) -> Result<(), String> {
-        log::debug!("Generating PDF using Java JAR (iText 5) for device type: {}", device_data.device_type);
-
-        // All PDF generation now goes through Java JAR
-        // This provides:
-        // - 100% identical output to original print-app
-        // - Font subsetting (small file sizes ~183KB)
-        // - Macedonian translations
-        // - Logo and social icons
-        // - Professional styling with colors
-        JavaPdfService::generate_pdf(app_handle, output_path, &patient, &device_data)
-    }
 }

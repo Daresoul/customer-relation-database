@@ -195,13 +195,6 @@ export function useUpdatePatient() {
       });
 
       invalidatePatientData(queryClient);
-
-      notification.success({
-        message: t('patients:messages.updatedTitle'),
-        description: t('patients:messages.updatedDesc'),
-        placement: 'bottomRight',
-        duration: 3,
-      });
     }
   });
 }

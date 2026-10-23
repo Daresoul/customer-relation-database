@@ -1,5 +1,6 @@
 {
   "failedTo": "Failed to {{operation}}",
+  "commandTimeout": "Arkivet did not finish this within {{seconds}} seconds. Try again. If it keeps happening, restart Arkivet.",
 
   "network": {
     "error": "Unable to connect to the server. Please check your internet connection.",
@@ -26,7 +27,8 @@
     "validation": "Please check your input and try again.",
     "requiredFieldMissing": "Please fill in all required fields.",
     "invalidFormat": "The data format is invalid. Please check your input.",
-    "unexpected": "An unexpected error occurred."
+    "unexpected": "An unexpected error occurred.",
+    "nameTaken": "This name is already used. Choose another name."
   },
 
   "patient": {

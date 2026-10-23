@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { App } from 'antd';
 
 vi.mock('react-i18next', () => ({
@@ -24,6 +24,7 @@ vi.mock('../../../contexts/ThemeContext', () => ({
 
 vi.mock('../../../components/DeviceStatusBar', () => ({ DeviceStatusInline: () => null }));
 vi.mock('../components/GeneralSettings', () => ({ default: () => <div>general</div> }));
+vi.mock('../components/ClinicSettings', () => ({ default: () => <div>clinic section</div> }));
 vi.mock('../components/BusinessSettings', () => ({ default: () => null }));
 vi.mock('../components/AppointmentsSettings', () => ({ default: () => null }));
 vi.mock('../components/RoomsSettings', () => ({ default: () => null }));
@@ -39,11 +40,16 @@ vi.mock('../UpdateSettings', () => ({ UpdateSettings: () => null }));
 
 import SettingsLayout from '../SettingsLayout';
 
+function LocationProbe() {
+  return <div data-testid="location">{useLocation().search}</div>;
+}
+
 function renderAt(url: string) {
   return render(
     <MemoryRouter initialEntries={[url]}>
       <App>
         <SettingsLayout />
+        <LocationProbe />
       </App>
     </MemoryRouter>,
   );
@@ -64,5 +70,17 @@ describe('SettingsLayout opening section', () => {
   it('opens General without a section, or with an unknown one', () => {
     renderAt('/settings?section=nope');
     expect(screen.getByText('general')).toBeInTheDocument();
+  });
+
+  it('opens the clinic profile from a link', () => {
+    renderAt('/settings?section=clinic');
+    expect(screen.getByText('clinic section')).toBeInTheDocument();
+  });
+
+  it('puts the section picked in the menu into the URL, so Back and links return to it', () => {
+    renderAt('/settings');
+    fireEvent.click(screen.getByText('settings:sections.backups'));
+    expect(screen.getByText('backup section')).toBeInTheDocument();
+    expect(screen.getByTestId('location').textContent).toBe('?section=backups');
   });
 });

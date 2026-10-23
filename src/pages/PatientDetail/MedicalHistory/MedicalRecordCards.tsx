@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { Card, Typography, Tag, Button, Space, Dropdown, Row, Col, Descriptions, Modal, App } from 'antd';
+import { Card, Typography, Tag, Button, Space, Dropdown, Descriptions, Modal, App } from 'antd';
 import {
   DeleteOutlined,
+  EditOutlined,
   MoreOutlined,
   CalendarOutlined,
-  DollarOutlined,
   FileTextOutlined,
   MedicineBoxOutlined,
   PaperClipOutlined,
@@ -13,10 +13,9 @@ import {
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import type { MedicalRecord } from '@/types/medical';
-import { useArchiveMedicalRecord, useDownloadAttachment, useCurrencies } from '@/hooks/useMedicalRecords';
+import { useArchiveMedicalRecord, useDownloadAttachment } from '@/hooks/useMedicalRecords';
 import { Link, useNavigate } from 'react-router-dom';
-import { formatDate } from '@/utils/dateFormatter';
-import MedicalRecordDetailDrawer from '@/components/MedicalRecordDetail/MedicalRecordDetailDrawer';
+import { formatDate, formatDateTime } from '@/utils/dateFormatter';
 import DiagnosisTagList from '@/components/DiagnosisTagList';
 import styles from './MedicalHistory.module.css';
 
@@ -26,7 +25,8 @@ interface MedicalRecordCardsProps {
   records: MedicalRecord[];
   onRefresh: () => void;
   patientId: number;
-  onNavigateToRecord?: (recordId: number) => void;
+  /** Opens the record page; `attachmentId` opens that document there. */
+  onNavigateToRecord?: (recordId: number, attachmentId?: number) => void;
 }
 
 const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
@@ -40,9 +40,7 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
   const [selectedRecord, setSelectedRecord] = useState<MedicalRecord | null>(null);
   const archiveMutation = useArchiveMedicalRecord();
   const downloadMutation = useDownloadAttachment();
-  const [detailId, setDetailId] = useState<number | null>(null);
   const navigate = useNavigate();
-  const { data: currencies } = useCurrencies();
   const { notification } = App.useApp();
 
   const handleArchiveClick = (record: MedicalRecord) => {
@@ -83,17 +81,17 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
     }
   };
 
-  const getCurrencySymbol = (currencyId?: number) => {
-    if (!currencyId || !currencies) return '';
-    const currency = currencies.find(c => c.id === currencyId);
-    return currency?.symbol || currency?.code || '';
-  };
-
   const renderRecordCard = (record: MedicalRecord) => {
     const isProcedure = record.recordType === 'procedure';
     const isTestResult = record.recordType === 'test_result';
 
     const menuItems = [
+      {
+        key: 'edit',
+        label: t('actions.edit'),
+        icon: <EditOutlined />,
+        onClick: () => navigate(`/medical-records/${record.id}?edit=1`),
+      },
       {
         key: 'archive',
         label: record.isArchived ? t('actions.restore') : t('actions.archive'),
@@ -163,50 +161,6 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
         }
       >
         <Descriptions column={1} size="small">
-          {isProcedure && (
-            <>
-              <Descriptions.Item label={t('fields.procedureName')}>
-                <Link
-                  to={`/medical-records/${record.id}`}
-                  className={styles.inheritColor}
-                  onClick={(e) => {
-                    if (onNavigateToRecord) {
-                      e.preventDefault();
-                      onNavigateToRecord(record.id);
-                    }
-                  }}
-                >
-                  {record.name}
-                </Link>
-              </Descriptions.Item>
-              {/* Show line items total if available */}
-              {record.lineItems && record.lineItems.length > 0 && (() => {
-                const subtotal = record.lineItems.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
-                const discountMultiplier = record.discountPercent ? (100 - record.discountPercent) / 100 : 1;
-                const calculatedTotal = subtotal * discountMultiplier;
-                const finalTotal = record.manualTotal ?? calculatedTotal;
-                const currencyId = record.lineItems[0]?.currencyId;
-                return (
-                  <Descriptions.Item label={
-                    <Space>
-                      <DollarOutlined />
-                      <span>{t('fields.total', 'Total')}</span>
-                    </Space>
-                  }>
-                    <Text strong>
-                      {getCurrencySymbol(currencyId)} {finalTotal.toFixed(2)}
-                      {record.lineItems.length > 1 && (
-                        <Text type="secondary" style={{ marginLeft: 8 }}>
-                          ({record.lineItems.length} {t('lineItems.items', 'items')})
-                        </Text>
-                      )}
-                    </Text>
-                  </Descriptions.Item>
-                );
-              })()}
-            </>
-          )}
-
           <Descriptions.Item label={t('fields.description')}>
             <Paragraph className={styles.descriptionParagraph} ellipsis={{ rows: 4, expandable: true }}>
               {record.description}
@@ -214,7 +168,7 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
           </Descriptions.Item>
 
           <Descriptions.Item label={t('fields.createdAt')}>
-            <Text type="secondary">{new Date(record.createdAt).toLocaleString()}</Text>
+            <Text type="secondary">{formatDateTime(record.createdAt)}</Text>
             {record.createdBy && (
               <Text type="secondary"> {t('history.by', { name: record.createdBy })}</Text>
             )}
@@ -251,13 +205,9 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
                       icon={isPdf ? <FileTextOutlined /> : <DownloadOutlined />}
                       onClick={() => {
                         if (isPdf) {
-                          // Navigate to detail page with attachment ID to auto-expand
+                          // The record page opens this document when the URL names it.
                           if (onNavigateToRecord) {
-                            onNavigateToRecord(record.id);
-                            // Add a small delay to ensure navigation happens before query params are set
-                            setTimeout(() => {
-                              navigate(`/medical-records/${record.id}?attachmentId=${attachment.id}`);
-                            }, 50);
+                            onNavigateToRecord(record.id, attachment.id);
                           } else {
                             navigate(`/medical-records/${record.id}?attachmentId=${attachment.id}`);
                           }
@@ -282,7 +232,7 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
           })()}
 
           <Descriptions.Item label={t('fields.updatedAt')}>
-            <Text type="secondary">{new Date(record.updatedAt).toLocaleString()}</Text>
+            <Text type="secondary">{formatDateTime(record.updatedAt)}</Text>
             {record.updatedBy && (
               <Text type="secondary"> {t('history.by', { name: record.updatedBy })}</Text>
             )}
@@ -342,14 +292,6 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
         )}
       </Modal>
 
-      {detailId && (
-        <MedicalRecordDetailDrawer
-          recordId={detailId}
-          open={!!detailId}
-          onClose={() => setDetailId(null)}
-          onChanged={onRefresh}
-        />
-      )}
     </>
   );
 };

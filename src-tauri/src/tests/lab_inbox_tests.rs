@@ -563,3 +563,127 @@ async fn deleting_another_file_leaves_the_inbox_alone() {
 
     assert_eq!(lab_inbox::waiting_count(&db).await.unwrap(), 0);
 }
+
+async fn live_lab_reports(db: &DatabaseConnection, record: i64) -> Vec<i64> {
+    db.query_all(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "SELECT id FROM medical_attachments WHERE medical_record_id = ? AND attachment_type = 'generated_pdf' AND deleted_at IS NULL",
+        [record.into()],
+    ))
+    .await
+    .unwrap()
+    .iter()
+    .map(|r| r.try_get::<i64>("", "id").unwrap())
+    .collect()
+}
+
+#[tokio::test]
+async fn deleting_the_last_lab_result_retires_the_lab_report_built_from_it() {
+    let db = create_test_db_with_migrations().await;
+    let dir = tempfile::tempdir().unwrap();
+    let patient = seed_patient(&db, "Rex", None).await;
+    let record = seed_record(&db, patient, "Consult").await;
+    receive(&db, dir.path(), "r1", &koko_xml(), "ok", "2026-10-23T08:00:00+00:00").await;
+    let attachment = lab_inbox::attach_to_record(&db, dir.path(), "r1", record).await.unwrap();
+    db.execute(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "INSERT INTO medical_attachments (medical_record_id, file_id, original_name, mime_type, attachment_type) \
+         VALUES (?, 'lab-pdf', 'Device Report.pdf', 'application/pdf', 'generated_pdf')",
+        [record.into()],
+    ))
+    .await
+    .unwrap();
+
+    let pdf = lab_inbox::delete_and_refresh_lab_report(Ok(&broken_env(&dir)), &db, attachment).await.unwrap();
+
+    assert!(pdf.is_none());
+    assert!(live_lab_reports(&db, record).await.is_empty());
+}
+
+#[tokio::test]
+async fn deleting_one_of_two_lab_results_rebuilds_the_lab_report_from_the_other() {
+    let db = create_test_db_with_migrations().await;
+    let dir = tempfile::tempdir().unwrap();
+    let Some(env) = jar_env(&dir) else { return };
+    let patient = seed_patient(&db, "Bella", None).await;
+    let record = seed_record(&db, patient, "Consult").await;
+    receive(&db, dir.path(), "r1", &koko_xml(), "ok", "2026-10-23T08:00:00+00:00").await;
+    receive_chemistry(&db, dir.path(), "r2").await;
+    let first = lab_inbox::attach_to_record(&db, dir.path(), "r1", record).await.unwrap();
+    lab_inbox::attach_to_record(&db, dir.path(), "r2", record).await.unwrap();
+    let old_report = lab_inbox::regenerate_lab_report(&env, &db, record).await.unwrap();
+
+    let pdf = lab_inbox::delete_and_refresh_lab_report(Ok(&env), &db, first).await.unwrap();
+
+    assert!(pdf.as_ref().is_some_and(|p| p.ok), "{:?}", pdf);
+    let live = live_lab_reports(&db, record).await;
+    assert_eq!(live.len(), 1);
+    assert_ne!(live[0], old_report);
+}
+
+#[tokio::test]
+async fn deleting_a_plain_file_leaves_the_lab_report_alone() {
+    let db = create_test_db_with_migrations().await;
+    let dir = tempfile::tempdir().unwrap();
+    let patient = seed_patient(&db, "Rex", None).await;
+    let record = seed_record(&db, patient, "Consult").await;
+    let insert = |file_id: &'static str, name: &'static str, mime: &'static str, kind: &'static str| {
+        Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "INSERT INTO medical_attachments (medical_record_id, file_id, original_name, mime_type, attachment_type) VALUES (?, ?, ?, ?, ?)",
+            [record.into(), file_id.into(), name.into(), mime.into(), kind.into()],
+        )
+    };
+    db.execute(insert("lab-pdf", "Device Report.pdf", "application/pdf", "generated_pdf")).await.unwrap();
+    let photo = db.execute(insert("photo", "xray.png", "image/png", "file")).await.unwrap().last_insert_id() as i64;
+
+    let pdf = lab_inbox::delete_and_refresh_lab_report(Ok(&broken_env(&dir)), &db, photo).await.unwrap();
+
+    assert!(pdf.is_none());
+    assert_eq!(live_lab_reports(&db, record).await.len(), 1);
+}
+
+// device-import #7: the import showed only the file name; it shows the
+// values the same way the inbox does.
+#[test]
+fn the_import_previews_a_results_values_like_the_inbox() {
+    let values = crate::commands::lab_inbox::preview_lab_values(
+        "mnchip_pointcare_chemistry".to_string(),
+        serde_json::json!({ "GLU": "200", "GLU_unit": "mg/dL", "GLU_range": "70-142", "sample_id": "S1" }),
+    );
+    assert_eq!(values.len(), 1);
+    assert_eq!(values[0].code, "GLU");
+    assert_eq!(values[0].value, "200");
+    assert_eq!(values[0].unit.as_deref(), Some("mg/dL"));
+    assert_eq!(values[0].flag.as_deref(), Some("H"));
+}
+
+// device-import #10: how a result was matched is stored when it is attached.
+async fn stored_match_method(db: &DatabaseConnection, file_id: &str) -> Option<String> {
+    db.query_one(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "SELECT match_method FROM file_access_history WHERE file_id = ?",
+        [file_id.into()],
+    ))
+    .await
+    .unwrap()
+    .unwrap()
+    .try_get::<Option<String>>("", "match_method")
+    .unwrap()
+}
+
+#[tokio::test]
+async fn attaching_stores_how_the_result_was_matched() {
+    let db = create_test_db_with_migrations().await;
+    let dir = tempfile::tempdir().unwrap();
+    let koko = seed_patient(&db, "Koko", None).await;
+    let rex = seed_patient(&db, "Rex", None).await;
+    receive(&db, dir.path(), "r1", &koko_xml(), "ok", "2026-10-23T08:00:00+00:00").await;
+    receive(&db, dir.path(), "r2", &koko_xml(), "ok", "2026-10-23T08:05:00+00:00").await;
+
+    lab_inbox::attach_to_record(&db, dir.path(), "r1", seed_record(&db, koko, "Consult").await).await.unwrap();
+    lab_inbox::attach_to_record(&db, dir.path(), "r2", seed_record(&db, rex, "Consult").await).await.unwrap();
+
+    assert_eq!(stored_match_method(&db, "r1").await.as_deref(), Some("name"));
+    assert_eq!(stored_match_method(&db, "r2").await.as_deref(), Some("manual"));
+}

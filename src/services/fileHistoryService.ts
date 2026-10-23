@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api';
+import { invoke } from '@/services/invoke';
 import type { FileAccessHistoryWithRecord } from '../types/fileHistory';
 
 /** Raw device file pulled back from history (bytes + device metadata). */

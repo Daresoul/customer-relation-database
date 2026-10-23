@@ -1,5 +1,6 @@
 /**
- * The update notification shows the first line of the release notes.
+ * The update offer (the banner under the header) shows the first line of the
+ * release notes.
  * Tauri's updater hands them over as `manifest.body`.
  */
 
@@ -24,6 +25,7 @@ vi.mock('@/services/invoke', () => ({ invoke: mocks.invoke }));
 
 import { useUpdater } from '../useUpdater';
 import { UpdateSettings } from '../../pages/Settings/UpdateSettings';
+import { UpdateBanner } from '../../components/UpdateBanner';
 
 beforeEach(() => {
   mocks.checkUpdate.mockReset();
@@ -40,11 +42,16 @@ beforeEach(() => {
 });
 
 function StartupCheck() {
-  const { checkForUpdates } = useUpdater();
-  return <Button onClick={() => checkForUpdates()}>check</Button>;
+  const { checkForUpdates, status, manifest, installUpdate } = useUpdater();
+  return (
+    <>
+      <Button onClick={() => checkForUpdates()}>check</Button>
+      <UpdateBanner status={status} manifest={manifest} onInstall={installUpdate} />
+    </>
+  );
 }
 
-describe('update notes in the update notification', () => {
+describe('update notes in the update offer', () => {
   it('the startup check shows the first line of the release notes', async () => {
     render(
       <App>

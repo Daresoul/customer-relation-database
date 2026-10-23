@@ -17,7 +17,7 @@ const PAGE_SIZE = 50;
 interface MedicalHistorySectionProps {
   patientId: number;
   patientName: string;
-  onNavigateToRecord?: (recordId: number) => void;
+  onNavigateToRecord?: (recordId: number, attachmentId?: number) => void;
 }
 
 const MedicalHistorySection: React.FC<MedicalHistorySectionProps> = ({

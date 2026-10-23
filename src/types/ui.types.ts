@@ -174,6 +174,8 @@ export interface HouseholdTableRecord {
   lastName: string;
   primaryContact: string;
   phone: string;
+  /** Every phone of every person in the household, for search. */
+  phones?: string[];
   email?: string;
   petCount: number;
   address?: string;

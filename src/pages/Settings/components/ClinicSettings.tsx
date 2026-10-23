@@ -181,7 +181,7 @@ const ClinicSettings: React.FC<{ isUpdating?: boolean }> = () => {
 
   return (
     <div>
-      <Form form={form} layout="vertical" onFinish={saveProfile}>
+      <Form scrollToFirstError={{ focus: true }} form={form} layout="vertical" onFinish={saveProfile}>
         <Card
           className={styles.roomsCard}
           title={
@@ -321,7 +321,7 @@ const ClinicSettings: React.FC<{ isUpdating?: boolean }> = () => {
         onOk={() => rateForm.submit()}
         confirmLoading={createRate.isPending || updateRate.isPending}
       >
-        <Form form={rateForm} layout="vertical" onFinish={saveRate}>
+        <Form scrollToFirstError={{ focus: true }} form={rateForm} layout="vertical" onFinish={saveRate}>
           <Form.Item
             name="name"
             label={t('settings:vat.name')}

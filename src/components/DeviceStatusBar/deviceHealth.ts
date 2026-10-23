@@ -36,9 +36,7 @@ export function describeSerialStatus(status: DeviceConnectionStatus | undefined,
     case 'Connected':
       return { text: t('status.connected') };
     case 'Connecting':
-      return {
-        text: status.retry_count ? t('status.connectingAttempt', { count: status.retry_count + 1 }) : t('status.connecting'),
-      };
+      return { text: t('status.connecting') };
     case 'Disconnected':
     case 'Error':
       return problem(status.error_kind ?? 'unknown', params, status.last_error, t);
@@ -52,11 +50,43 @@ export type HealthLevel = 'working' | 'waiting' | 'down';
 
 const LEVEL_RANK: Record<HealthLevel, number> = { working: 0, waiting: 1, down: 2 };
 
-export function serialLevel(status: DeviceConnectionStatus | undefined): HealthLevel {
+/** Same grace as the backend tray (services/device_health.rs): a port counts as down after a minute. */
+export const SERIAL_DOWN_GRACE_MS = 60_000;
+
+function isSerialDown(status: DeviceConnectionStatus): boolean {
+  if (status.status === 'Connected') return false;
+  return !(status.status === 'Connecting' && !status.retry_count && !status.error_kind);
+}
+
+/**
+ * `downSince` is when the port stopped working (see `serialDownSince`); within
+ * a minute of it the port waits instead of showing down, so one failed retry
+ * doesn't flash red. Without it a failing port is down.
+ */
+export function serialLevel(
+  status: DeviceConnectionStatus | undefined,
+  downSince?: number,
+  now: number = Date.now(),
+): HealthLevel {
   if (!status) return 'waiting';
   if (status.status === 'Connected') return 'working';
-  if (status.status === 'Connecting' && !status.retry_count && !status.error_kind) return 'waiting';
+  if (!isSerialDown(status)) return 'waiting';
+  if (downSince !== undefined && now - downSince < SERIAL_DOWN_GRACE_MS) return 'waiting';
   return 'down';
+}
+
+const serialDownStart = new Map<number, number>();
+
+/** When this port stopped working, remembered across renders until it works again. */
+export function serialDownSince(status: DeviceConnectionStatus | undefined, now: number = Date.now()): number | undefined {
+  if (!status) return undefined;
+  if (!isSerialDown(status)) {
+    serialDownStart.delete(status.integration_id);
+    return undefined;
+  }
+  const since = serialDownStart.get(status.integration_id) ?? now;
+  serialDownStart.set(status.integration_id, since);
+  return since;
 }
 
 export function folderLevel(status: FileWatcherStatus | undefined): HealthLevel {

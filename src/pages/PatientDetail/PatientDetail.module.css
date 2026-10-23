@@ -201,93 +201,19 @@
   font-size: 32px;
 }
 
-/* Medical Section styles */
-.medicalCard {
-  background: #1f1f1f;
-  border-color: #303030;
-}
-
-.medicalTitle {
-  color: #E6E6E6;
-  margin: 0;
-}
-
-.iconButton {
-  cursor: pointer;
-  font-size: 16px;
-}
-
-.editIcon {
-  color: #4A90E2;
-}
-
-.saveIcon {
-  color: #52c41a;
-}
-
-.cancelIcon {
-  color: #ff4d4f;
-}
-
 .loadingContainer {
   text-align: center;
   padding: 20px;
 }
 
-.medicalTextArea {
-  background: #262626;
-  color: #E6E6E6;
-}
-
-.textAreaError {
-  border-color: #ff4d4f;
-}
-
-.textAreaNormal {
-  border-color: #303030;
-}
-
-.characterCountRow {
-  margin-top: 8px;
-  display: flex;
-  justify-content: space-between;
-}
-
-.smallText {
-  font-size: 12px;
-}
-
-.helpText {
-  margin-top: 8px;
-}
-
-.notesDisplay {
-  min-height: 100px;
-  cursor: text;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.notesDisplayEmpty {
-  padding: 16px;
-}
-
-.notesText {
-  color: #E6E6E6;
-}
-
-.emptyNotesText {
-  font-style: italic;
-}
-
 /* Household Section styles */
 .householdCard {
-  background: #1f1f1f;
-  border-color: #303030;
+  background: var(--bg-container);
+  border-color: var(--border-base);
 }
 
 .householdTitle {
-  color: #E6E6E6;
+  color: var(--text-primary);
   margin: 0;
 }
 

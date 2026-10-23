@@ -13,6 +13,8 @@ import { PatientService } from '../../services/patientService';
 import type { CreatePatientInput, UpdatePatientInput } from '../../types';
 import styles from './HouseholdDetail.module.css';
 import { formatDate } from '../../utils/dateFormatter';
+import { formatPatientAge } from '../../utils/patientChart';
+import dayjs from 'dayjs';
 
 const { Title } = Typography;
 
@@ -93,16 +95,9 @@ export const AnimalsSection: React.FC<AnimalsSectionProps> = ({
       title: t('detail.animals.columns.age'),
       key: 'age',
       render: (record: Patient) => {
-        if (!record.dateOfBirth) return '-';
-        const birthDate = new Date(record.dateOfBirth);
-        const today = new Date();
-        const ageInYears = Math.floor((today.getTime() - birthDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
-
-        if (ageInYears < 1) {
-          const ageInMonths = Math.floor((today.getTime() - birthDate.getTime()) / (30 * 24 * 60 * 60 * 1000));
-          return t('detail.animals.age.months', { count: ageInMonths });
-        }
-        return t('detail.animals.age.years', { count: ageInYears });
+        // Frozen at the date of death, like the patient banner.
+        const until = record.deceasedAt ? dayjs(record.deceasedAt) : undefined;
+        return formatPatientAge(record.dateOfBirth, t, until) ?? '-';
       },
     },
     {
@@ -217,6 +212,7 @@ export const AnimalsSection: React.FC<AnimalsSectionProps> = ({
         destroyOnHidden
       >
         <PatientFormWithOwner
+          hideHouseholdPicker
           onSubmit={handleCreatePatient}
           onCancel={() => setIsPatientModalOpen(false)}
           loading={submitting}

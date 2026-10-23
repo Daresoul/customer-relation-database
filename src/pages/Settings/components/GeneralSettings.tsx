@@ -2,7 +2,6 @@ import React from 'react';
 import { App, Card, Form, Select, Switch, Typography } from 'antd';
 import { GlobalOutlined, BgColorsOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { useThemeColors } from '../../../utils/themeStyles';
 import styles from '../Settings.module.css';
 import { invoke } from '@/services/invoke';
 import { markAutostartDefaultApplied } from '../../../utils/autostart';
@@ -16,7 +15,6 @@ interface GeneralSettingsProps {
 
 const GeneralSettings: React.FC<GeneralSettingsProps> = ({ isUpdating }) => {
   const { t } = useTranslation(['common', 'forms']);
-  const themeColors = useThemeColors();
   const { message } = App.useApp();
   const [launchAtLogin, setLaunchAtLogin] = React.useState<boolean>(false);
 
@@ -47,7 +45,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ isUpdating }) => {
       <Card
         title={
           <span className={styles.cardTitle}>
-            <GlobalOutlined /> {t('common:language')}
+            <GlobalOutlined /> {t('settings:general.startupAndLanguage')}
           </span>
         }
         className={styles.settingsCard}
@@ -87,7 +85,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ isUpdating }) => {
       <Card
         title={
           <span className={styles.cardTitle}>
-            <BgColorsOutlined /> {t('common:theme')}
+            <BgColorsOutlined /> {t('settings:general.appearanceAndDates')}
           </span>
         }
         className={styles.settingsCard}
@@ -117,6 +115,7 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ isUpdating }) => {
             className={styles.fullWidth}
             disabled={isUpdating}
           >
+            <Option value="DD.MM.YYYY">DD.MM.YYYY (31.01.2024)</Option>
             <Option value="MM/DD/YYYY">MM/DD/YYYY (01/31/2024)</Option>
             <Option value="DD/MM/YYYY">DD/MM/YYYY (31/01/2024)</Option>
             <Option value="YYYY-MM-DD">YYYY-MM-DD (2024-01-31)</Option>

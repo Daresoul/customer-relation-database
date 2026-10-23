@@ -170,6 +170,40 @@ fn read_loop_hands_over_a_cut_off_frame() {
     assert!(sink.frames.is_empty());
 }
 
+#[test]
+fn read_loop_reports_a_message_cut_by_a_new_start_byte_and_delivers_the_next() {
+    let mut bytes = vec![0x0B];
+    bytes.extend_from_slice(b"MSH|first|OBX|TBIL|0.2");
+    bytes.push(0x0B);
+    bytes.extend_from_slice(b"MSH|second");
+    bytes.push(0x1C);
+    let mut reader = ScriptedReader::new(vec![Ok(bytes), Err(|| io::Error::from_raw_os_error(31))]);
+    let (_tx, rx) = mpsc::channel::<()>();
+    let mut sink = RecordingSink::default();
+
+    let _ = run_read_loop(&mut reader, &pointcare(), &rx, Duration::from_secs(5), &mut sink);
+
+    assert_eq!(sink.frames, vec![b"MSH|second".to_vec()]);
+    assert_eq!(sink.cut_offs, vec![b"MSH|first|OBX|TBIL|0.2".to_vec()]);
+}
+
+#[test]
+fn read_loop_takes_a_healvet_frame_ending_in_bare_ee_once_the_line_goes_quiet() {
+    let mut reader = ScriptedReader::new(vec![Ok(b"#AFS1000&S1&Serum EE".to_vec()), Err(timed_out)]);
+    let (tx, rx) = mpsc::channel::<()>();
+    let mut sink = RecordingSink::default();
+
+    let stopper = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(400));
+        let _ = tx.send(());
+    });
+    let _ = run_read_loop(&mut reader, &healvet(), &rx, Duration::from_millis(100), &mut sink);
+    stopper.join().unwrap();
+
+    assert_eq!(sink.frames, vec![b"#AFS1000&S1&Serum ".to_vec()]);
+    assert!(sink.cut_offs.is_empty());
+}
+
 // ---- G2: retry counter ----
 
 #[test]

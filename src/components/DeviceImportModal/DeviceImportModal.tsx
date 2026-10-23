@@ -38,6 +38,7 @@ import { useDeviceImport } from '@/contexts/DeviceImportContext';
 import type { GroupedDeviceFile } from '@/contexts/DeviceImportContext';
 import { usePatients } from '@/hooks/usePatients';
 import { useCreateMedicalRecord, useUploadAttachment } from '@/hooks/useMedicalRecords';
+import type { SavedRecordDocuments } from '@/hooks/useDocumentStatusNotice';
 import { useSearchRecordTemplates } from '@/hooks/useRecordTemplates';
 import { useAppSettings } from '@/hooks/useAppSettings';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -48,6 +49,9 @@ import { MedicalService } from '@/services/medicalService';
 import { fileHistoryService } from '@/services/fileHistoryService';
 import { labInboxService } from '@/services/labInboxService';
 import PatientRecordSelect from '@/components/LabInbox/PatientRecordSelect';
+import LabValues from '@/components/LabInbox/LabValues';
+import type { LabValue } from '@/types/labInbox';
+import dayjs from 'dayjs';
 import RecentDeviceFiles from '../RecentDeviceFiles';
 import CreatePatientSection from './CreatePatientSection';
 import { TabbedMedicalRecordFields } from '@/components/forms/fieldGroups';
@@ -70,6 +74,44 @@ const MATCH_TAGS: Record<MatchStrength, { color?: string; key: string; fallback:
   manual: { key: 'matchManual', fallback: 'Picked by hand' },
   none: { key: 'matchNone', fallback: 'No automatic match — choose the patient' },
 };
+
+/** A result's values, read the same way as in the lab inbox. */
+const FileValues: React.FC<{ deviceType: string; testResults?: Record<string, unknown> }> = ({ deviceType, testResults }) => {
+  const [values, setValues] = useState<LabValue[] | null>(null);
+  useEffect(() => {
+    if (!testResults || Object.keys(testResults).length === 0) return undefined;
+    let cancelled = false;
+    labInboxService
+      .previewValues(deviceType, testResults)
+      .then((v) => !cancelled && setValues(v))
+      .catch((e) => console.warn('Could not read the values of a lab result:', e));
+    return () => {
+      cancelled = true;
+    };
+  }, [deviceType, testResults]);
+  if (!values || values.length === 0) return null;
+  return <LabValues values={values} />;
+};
+
+/** Chip ending and age, to tell patients with the same name apart. */
+function patientHints(
+  patient: { microchipId?: string | null; dateOfBirth?: string | null },
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string[] {
+  const hints: string[] = [];
+  const chip = patient.microchipId?.trim();
+  if (chip) hints.push(t('medical:deviceImport.optionChip', { last4: chip.slice(-4) }));
+  const born = patient.dateOfBirth ? dayjs(patient.dateOfBirth) : null;
+  if (born?.isValid()) {
+    const years = dayjs().diff(born, 'year');
+    hints.push(
+      years >= 1
+        ? t('medical:deviceImport.optionAgeYears', { years })
+        : t('medical:deviceImport.optionAgeMonths', { months: Math.max(0, dayjs().diff(born, 'month')) }),
+    );
+  }
+  return hints;
+}
 
 // One import per result: remounting on importId starts every result with a fresh form and serial
 const DeviceImportModal: React.FC = () => {
@@ -122,7 +164,7 @@ const DeviceImportDialog: React.FC = () => {
 
   const pendingFiles = getGroupedFiles();
   const extractedPatientData = useMemo(() => getAggregatedPatientData(), [getAggregatedPatientData]);
-  const { patients, refreshPatients, loading: patientsLoading } = usePatients();
+  const { patients, refreshPatients, loading: patientsLoading, error: patientsError } = usePatients();
 
   const pickedPatientId = Form.useWatch('patientId', form);
   const pickedPatient = patients.find((p) => p.id === pickedPatientId);
@@ -563,56 +605,19 @@ const DeviceImportDialog: React.FC = () => {
       const createdRecord = await createMutation.mutateAsync(input);
 
       if (createdRecord && pendingFiles.length > 0) {
-        const successes = await uploadFiles(createdRecord.id);
+        await uploadFiles(createdRecord.id);
 
-        const attachmentIds = successes.map(s => s.value?.id).filter(Boolean);
-        if (printAfterSave && attachmentIds.length > 0) {
-          const autoOpenReport = (typeof window !== 'undefined') && localStorage.getItem('autoOpenGeneratedReport') === 'true';
-          const regenerate = async () => {
-            try {
-              const pdfAttachment = await MedicalService.generateConfiguredReport(createdRecord.id, attachmentIds, {});
-              if (pdfAttachment?.id && autoOpenReport) {
-                await MedicalService.openAttachmentExternally(pdfAttachment.id);
-              }
-            } catch (e) {
-              console.error('Regenerate PDF failed:', e);
-              notification.warning({
-                message: t('medical:deviceImport.pdfGenerationFailed', 'PDF Generation Failed'),
-                description: t('medical:deviceImport.pdfGenerationFailedDesc', 'The record was saved but PDF generation failed. You can regenerate it from the medical record view.'),
-                placement: 'bottomRight',
-              });
-            }
-          };
-
+        // The save already built the lab report (its status, and any values
+        // missing from it, are shown by the create mutation); open that one.
+        const labReport = (createdRecord as SavedRecordDocuments).pdfs?.find(
+          (p) => p.kind === 'device_report' && p.ok,
+        );
+        const autoOpenReport = (typeof window !== 'undefined') && localStorage.getItem('autoOpenGeneratedReport') === 'true';
+        if (printAfterSave && autoOpenReport && labReport?.attachmentId) {
           try {
-            notification.info({
-              message: t('medical:deviceImport.generatingPdf', 'Generating PDF...'),
-              description: t('medical:deviceImport.pleaseWait', 'Please wait while the report is being generated.'),
-              placement: 'bottomRight',
-              duration: 2,
-            });
-            const pdfAttachment = await MedicalService.generateConfiguredReport(createdRecord.id, attachmentIds, {});
-            if (pdfAttachment?.id && autoOpenReport) {
-              await MedicalService.openAttachmentExternally(pdfAttachment.id);
-            }
-            notification.open({
-              message: t('medical:deviceImport.pdfReady', 'PDF Ready'),
-              description: t('medical:deviceImport.pdfReadyDesc', 'Click to regenerate if needed.'),
-              placement: 'bottomRight',
-              btn: (
-                <Button size="small" type="primary" onClick={regenerate}>
-                  {t('medical:deviceImport.regenerate', 'Regenerate PDF')}
-                </Button>
-              ),
-            });
-          } catch (pdfError) {
-            console.error('Failed to generate PDF report:', pdfError);
-            notification.warning({
-              message: t('medical:deviceImport.pdfGenerationFailed', 'PDF Generation Failed'),
-              description: t('medical:deviceImport.pdfGenerationFailedDesc', 'The record was saved but PDF generation failed. You can regenerate it from the medical record view.'),
-              placement: 'bottomRight',
-              duration: 5,
-            });
+            await MedicalService.openAttachmentExternally(labReport.attachmentId);
+          } catch (openError) {
+            console.error('Failed to open the lab report:', openError);
           }
         }
       }
@@ -691,16 +696,6 @@ const DeviceImportDialog: React.FC = () => {
                   <Space>
                     <Text strong>{file.fileName}</Text>
                     <Tag color="green">{file.deviceName}</Tag>
-                    {file.isSession && (
-                      <>
-                        <Tag color="purple">
-                          {t('medical:deviceImport.parameter', { count: file.parameterCount })}
-                        </Tag>
-                        {file.sessionInProgress && (
-                          <Tag color="orange">{t('medical:deviceImport.sessionInProgress')}</Tag>
-                        )}
-                      </>
-                    )}
                     {file.patientId && (
                       <Tag color="blue" icon={<CheckCircleOutlined />}>
                         {t('medical:deviceImport.patientDetected')}
@@ -721,11 +716,7 @@ const DeviceImportDialog: React.FC = () => {
                         {t('medical:deviceImport.identifier')}: {file.patientIdentifier}
                       </Text>
                     )}
-                    {file.isSession && file.testResults && (
-                      <Text type="secondary" style={{ fontSize: '0.85em' }}>
-                        {Object.keys(file.testResults).join(', ')}
-                      </Text>
-                    )}
+                    <FileValues deviceType={file.deviceType} testResults={file.testResults} />
                   </Space>
                 }
               />
@@ -763,18 +754,23 @@ const DeviceImportDialog: React.FC = () => {
           <Select
             placeholder={t('medical:deviceImport.selectPatientPlaceholder')}
             showSearch
-            optionFilterProp="children"
+            optionFilterProp="label"
             suffixIcon={<UserOutlined />}
             size="large"
             loading={patientsLoading}
-            notFoundContent={patientsLoading ? t('medical:deviceImport.loadingPatients') : t('medical:deviceImport.noPatientsFound')}
+            notFoundContent={patientsLoading ? t('medical:deviceImport.loadingPatients') : patientsError ? t('common:pickerLoadFailed') : t('medical:deviceImport.noPatientsFound')}
             data-testid="device-import-patient-select"
           >
-            {patients?.map((patient: any) => (
-              <Option key={patient.id} value={patient.id}>
-                {patient.name} - {patient.species}
-              </Option>
-            ))}
+            {patients?.map((patient: any) => {
+              const main = `${patient.name} - ${patient.species}`;
+              const hints = patientHints(patient, t);
+              return (
+                <Option key={patient.id} value={patient.id} label={[main, ...hints, patient.microchipId ?? ''].join(' ')}>
+                  <span>{main}</span>
+                  {hints.length > 0 && <Text type="secondary">{` · ${hints.join(' · ')}`}</Text>}
+                </Option>
+              );
+            })}
           </Select>
         </Form.Item>
 

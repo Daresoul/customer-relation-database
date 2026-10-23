@@ -4,7 +4,7 @@
 
 import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { ViewType, ViewPreference, SearchState, Patient, HouseholdSearchResult } from '../types';
-import { invoke } from '@tauri-apps/api';
+import { invoke } from '@/services/invoke';
 
 interface ViewContextType {
   // View state

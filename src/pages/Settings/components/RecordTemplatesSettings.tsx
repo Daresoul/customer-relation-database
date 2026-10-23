@@ -240,7 +240,7 @@ const RecordTemplatesSettings: React.FC = () => {
         width={680}
         confirmLoading={createMutation.isPending || updateMutation.isPending}
       >
-        <Form
+        <Form scrollToFirstError={{ focus: true }}
           form={form}
           layout="vertical"
           initialValues={{ recordType: 'note', lineItems: [], diagnosisIds: [] }}
@@ -261,7 +261,7 @@ const RecordTemplatesSettings: React.FC = () => {
             name="title"
             label={t('medical:fields.title')}
             rules={[
-              { required: true, message: t('forms:validation.required') },
+              { required: true, whitespace: true, message: t('forms:validation.required') },
               { max: 200, message: t('forms:validation.maxLength', { max: 200 }) },
             ]}
           >
@@ -271,7 +271,7 @@ const RecordTemplatesSettings: React.FC = () => {
           <Form.Item
             name="description"
             label={t('medical:fields.description')}
-            rules={[{ required: true, message: t('forms:validation.required') }]}
+            rules={[{ required: true, whitespace: true, message: t('forms:validation.required') }]}
           >
             <TextArea
               rows={4}

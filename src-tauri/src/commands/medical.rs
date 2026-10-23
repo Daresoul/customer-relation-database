@@ -6,7 +6,7 @@ use crate::services::file_storage::FileStorageService;
 use crate::services::record_template::RecordTemplateService;
 use crate::services::pdf_render::PdfRenderService;
 use crate::services::device_parser::DeviceParserService;
-use crate::services::device_pdf_service::{DevicePdfService, PatientData, DeviceTestData};
+use crate::services::device_pdf_service::{PatientData, DeviceTestData};
 use sea_orm::{ConnectionTrait, Statement, DbBackend};
 
 // T031: Implement get_medical_records command
@@ -190,13 +190,17 @@ pub async fn download_medical_attachment(
 }
 
 // T038: Implement delete_medical_attachment command (soft delete — the row and
-// the blob on disk are kept; the attachment just stops appearing on the record)
+// the blob on disk are kept; the attachment just stops appearing on the record).
+// Deleting a lab result rebuilds or retires the record's lab report; the
+// status says how that went (null when there was nothing to rebuild).
 #[tauri::command]
 pub async fn delete_medical_attachment(
+    app_handle: AppHandle,
     pool: State<'_, SeaOrmPool>,
     attachment_id: i64,
-) -> Result<(), String> {
-    FileStorageService::delete_user_attachment(&pool, attachment_id).await
+) -> Result<Option<PdfStatus>, String> {
+    let env = PdfEnv::from_app(&app_handle);
+    crate::services::lab_inbox::delete_and_refresh_lab_report(env.as_ref().map_err(|e| e.clone()), &pool, attachment_id).await
 }
 
 // Get attachment content for text file viewer
@@ -243,25 +247,6 @@ pub async fn get_currencies(
     pool: State<'_, SeaOrmPool>,
 ) -> Result<Vec<Currency>, String> {
     MedicalRecordService::get_currencies(&pool).await
-}
-
-// Helper command to clean up orphaned files
-#[tauri::command]
-pub async fn cleanup_orphaned_files(
-    app_handle: AppHandle,
-    pool: State<'_, SeaOrmPool>,
-) -> Result<usize, String> {
-    FileStorageService::cleanup_orphaned_files(&app_handle, &pool).await
-}
-
-// Extra: Materialize attachment to temp and return path
-#[tauri::command]
-pub async fn materialize_medical_attachment(
-    app_handle: AppHandle,
-    pool: State<'_, SeaOrmPool>,
-    attachment_id: i64,
-) -> Result<String, String> {
-    FileStorageService::materialize_attachment(&app_handle, &pool, attachment_id).await
 }
 
 // Extra: Write attachment to a specific path
@@ -346,18 +331,11 @@ async fn render_medical_attachment_pdf_thumbnail_with_options(
     log::debug!("render_medical_attachment_pdf_thumbnail called - attachment_id={}, page={:?}, width={:?}, force={}",
         attachment_id, page, width, force_regenerate);
 
-    // First materialize the attachment to a temp file to get a local path
-    let pdf_path = FileStorageService::materialize_attachment(&app_handle, &pool, attachment_id).await?;
-    log::debug!("PDF materialized at: {}", pdf_path);
-
-    // Build preview output path in a stable temp dir
-    let mut tmp_dir = std::env::temp_dir();
-    tmp_dir.push("vet-clinic-attachments");
-    tmp_dir.push("previews");
+    // The preview is cached per stored file: a cached image needs no copy of the PDF.
+    let file_id = FileStorageService::attachment_file_id(&pool, attachment_id).await?;
     let page_index = page.unwrap_or(1).saturating_sub(1); // 1-based to 0-based
     let target_width = width.unwrap_or(900);
-    let file_name = format!("attachment_{}_p{}_w{}.png", attachment_id, page_index + 1, target_width);
-    let out_path = tmp_dir.join(file_name);
+    let out_path = FileStorageService::preview_png_path(&file_id, page_index + 1, target_width);
 
     // Check if preview exists and is valid (not 0 bytes) unless force regenerate
     if !force_regenerate && out_path.exists() {
@@ -376,7 +354,7 @@ async fn render_medical_attachment_pdf_thumbnail_with_options(
         let _ = std::fs::remove_file(&out_path);
     }
 
-    let pdf_path_clone = pdf_path.clone();
+    let pdf_path_clone = FileStorageService::materialize_attachment(&app_handle, &pool, attachment_id).await?;
 
     // Render in a blocking thread - use bytes method instead for better reliability
     let handle_clone = app_handle.clone();
@@ -396,25 +374,6 @@ async fn render_medical_attachment_pdf_thumbnail_with_options(
     Ok(out_path.display().to_string())
 }
 
-// Render a PDF attachment page to PNG bytes (faster & no FS read needed)
-#[tauri::command]
-pub async fn render_medical_attachment_pdf_page_png(
-    app_handle: AppHandle,
-    pool: State<'_, SeaOrmPool>,
-    attachment_id: i64,
-    page: Option<u32>,
-    width: Option<u32>,
-) -> Result<Vec<u8>, String> {
-    let pdf_path = FileStorageService::materialize_attachment(&app_handle, &pool, attachment_id).await?;
-    let page_index = page.unwrap_or(1).saturating_sub(1);
-    let target_width = width.unwrap_or(900);
-    let handle_clone = app_handle.clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        PdfRenderService::render_page_to_png_bytes(&handle_clone, &pdf_path, page_index, target_width)
-    })
-    .await
-    .map_err(|e| format!("Spawn failed: {}", e))?
-}
 // Get the total page count for a PDF attachment
 #[tauri::command]
 pub async fn get_medical_attachment_pdf_page_count(
@@ -428,16 +387,6 @@ pub async fn get_medical_attachment_pdf_page_count(
         .await
         .map_err(|e| format!("Spawn failed: {}", e))?;
     res
-}
-
-// Revert a medical record one step to previous version
-#[tauri::command]
-pub async fn revert_medical_record(
-    app_handle: AppHandle,
-    pool: State<'_, SeaOrmPool>,
-    record_id: i64,
-) -> Result<SavedMedicalRecord, String> {
-    MedicalRecordService::revert_one_step(&app_handle, &pool, record_id).await
 }
 
 // Get medical record snapshot at a specific version
@@ -454,147 +403,6 @@ pub async fn get_medical_record_at_version(
         Err(e) => log::error!("get_medical_record_at_version failed: {}", e),
     }
     res
-}
-
-// T029: Regenerate PDF from device data attachment
-#[tauri::command]
-pub async fn regenerate_pdf_from_attachment(
-    app_handle: AppHandle,
-    pool: State<'_, SeaOrmPool>,
-    attachment_id: i64,
-) -> Result<MedicalAttachment, String> {
-    log::debug!("regenerate_pdf_from_attachment attachment_id={}", attachment_id);
-
-    // 1. Fetch the attachment with device metadata
-    let attachment_row = pool.query_one(Statement::from_sql_and_values(
-        DbBackend::Sqlite,
-        "SELECT id, medical_record_id, file_id, original_name, mime_type, \
-         file_size, uploaded_at, device_type, device_name, connection_method, attachment_type \
-         FROM medical_attachments WHERE id = ? AND deleted_at IS NULL",
-        [attachment_id.into()]
-    ))
-    .await
-    .map_err(|e| format!("Failed to fetch attachment: {}", e))?
-    .ok_or("Attachment not found".to_string())?;
-
-    let medical_record_id: i64 = attachment_row.try_get("", "medical_record_id")
-        .map_err(|e| format!("Failed to get medical_record_id: {}", e))?;
-    let device_type: Option<String> = attachment_row.try_get("", "device_type").ok();
-    let device_name: Option<String> = attachment_row.try_get("", "device_name").ok();
-    let connection_method: Option<String> = attachment_row.try_get("", "connection_method").ok();
-    let original_name: String = attachment_row.try_get("", "original_name")
-        .map_err(|e| format!("Failed to get original_name: {}", e))?;
-
-    // 2. Validate that this attachment has device metadata
-    let device_type = device_type.ok_or("This attachment does not have device metadata. Cannot regenerate PDF.".to_string())?;
-    let device_name = device_name.ok_or("This attachment is missing device name metadata.".to_string())?;
-    let connection_method = connection_method.unwrap_or_else(|| "unknown".to_string()); // Default for old attachments without this field
-
-    log::debug!("Regenerating PDF for device_type={}, device_name={}, connection_method={}", device_type, device_name, connection_method);
-
-    // 3. Download the XML file data
-    let xml_data = FileStorageService::download_attachment(&app_handle, &pool, attachment_id).await?;
-
-    // 4. Parse the device data
-    let device_data = DeviceParserService::parse_device_data(
-        &device_type,
-        &device_name,
-        &xml_data.file_name,
-        &xml_data.file_data,
-        &connection_method,
-    )?;
-
-    log::debug!("Parsed device data, patient_identifier={:?}", device_data.patient_identifier);
-
-    // 5. Get patient info from the medical record
-    let record_row = pool.query_one(Statement::from_sql_and_values(
-        DbBackend::Sqlite,
-        "SELECT patient_id FROM medical_records WHERE id = ?",
-        [medical_record_id.into()]
-    ))
-    .await
-    .map_err(|e| format!("Failed to fetch medical record: {}", e))?
-    .ok_or("Medical record not found".to_string())?;
-
-    let patient_id: i64 = record_row.try_get("", "patient_id")
-        .map_err(|e| format!("Failed to get patient_id: {}", e))?;
-
-    let patient_row = pool.query_one(Statement::from_sql_and_values(
-        DbBackend::Sqlite,
-        "SELECT p.id, p.name, s.name AS species, p.microchip_id, p.gender, p.date_of_birth \
-         FROM patients p \
-         LEFT JOIN species s ON p.species_id = s.id \
-         WHERE p.id = ?",
-        [patient_id.into()]
-    ))
-    .await
-    .map_err(|e| format!("Failed to fetch patient: {}", e))?
-    .ok_or("Patient not found".to_string())?;
-
-    let owner_name = lookup_owner_name(&pool, patient_id).await.unwrap_or_else(|e| {
-        log::error!("{} (patient {}); the PDF is printed without an owner", e, patient_id);
-        String::new()
-    });
-
-    let patient_data = PatientData {
-        name: patient_row.try_get("", "name").unwrap_or_else(|_| "Непознат Пациент".to_string()),
-        owner: owner_name,
-        species: patient_row.try_get("", "species").unwrap_or_else(|_| "Непознат Вид".to_string()),
-        microchip_id: patient_row.try_get("", "microchip_id").ok(),
-        gender: patient_row.try_get("", "gender").unwrap_or_else(|_| "Непознат".to_string()),
-        date_of_birth: patient_row.try_get("", "date_of_birth").ok(),
-    };
-
-    log::debug!("Patient info: name={}, microchip={:?}", patient_data.name, patient_data.microchip_id);
-
-    // 6. Generate PDF using centralized service (same function as file watcher)
-    let pdf_filename = format!("{}_regenerated.pdf", original_name.trim_end_matches(".xml"));
-    let pdf_path = std::env::temp_dir().join(&pdf_filename);
-
-    let test_data = DeviceTestData {
-        device_type: device_data.device_type.clone(),
-        device_name: device_data.device_name.clone(),
-        test_results: device_data.test_results.clone(),
-        detected_at: device_data.detected_at,
-        patient_identifier: device_data.patient_identifier.clone(),
-    };
-
-    // Generate PDF using centralized service (single source of truth)
-    DevicePdfService::generate_pdf(
-        &app_handle,
-        pdf_path.to_str().ok_or("Invalid PDF path")?,
-        patient_data,
-        test_data,
-    )?;
-
-    log::debug!("PDF generated at {:?}", pdf_path);
-
-    // 8. Read the generated PDF
-    let pdf_bytes = std::fs::read(&pdf_path)
-        .map_err(|e| format!("Failed to read generated PDF: {}", e))?;
-
-    log::debug!("Read {} bytes from PDF", pdf_bytes.len());
-
-    // 9. Upload the PDF as a new attachment to the same medical record
-    let pdf_attachment = FileStorageService::upload_attachment(
-        &app_handle,
-        &pool,
-        medical_record_id,
-        pdf_filename.clone(),
-        pdf_bytes,
-        "application/pdf".to_string(),
-        Some(format!("{}_report", device_type)),
-        Some(format!("{} Report", device_name)),
-        Some("regenerated".to_string()),
-        Some("generated_pdf".to_string()), // Attachment type for regenerated PDFs
-    ).await?;
-
-    log::debug!("PDF attachment uploaded with id={}", pdf_attachment.id);
-
-    // Clean up temp file
-    let _ = std::fs::remove_file(&pdf_path);
-
-    Ok(pdf_attachment)
 }
 
 // T030: Regenerate the lab report from ALL lab results on a record; the
@@ -680,26 +488,22 @@ pub async fn generate_configured_report(
     .map_err(|e| format!("Failed to fetch patient: {}", e))?
     .ok_or("Patient not found".to_string())?;
 
-    let owner_name = lookup_owner_name(&pool, patient_id).await.unwrap_or_else(|e| {
-        log::error!("{} (patient {}); the PDF is printed without an owner", e, patient_id);
-        String::new()
-    });
+    let owner_name = lookup_owner_name(&pool, patient_id).await?;
 
     // 3. Build patient data, applying overrides if provided
     let overrides = patient_overrides.unwrap_or_default();
     let patient_data = PatientData {
         name: overrides.patient_name.unwrap_or_else(||
-            patient_row.try_get("", "name").unwrap_or_else(|_| "Unknown Patient".to_string())),
+            patient_row.try_get("", "name").unwrap_or_else(|_| crate::services::medical_record::UNKNOWN_PATIENT.to_string())),
         owner: overrides.owner.unwrap_or(owner_name),
         species: overrides.species.unwrap_or_else(||
-            patient_row.try_get("", "species_name").unwrap_or_else(|_| "Unknown Species".to_string())),
+            patient_row.try_get("", "species_name").unwrap_or_else(|_| crate::services::medical_record::UNKNOWN_SPECIES.to_string())),
         microchip_id: overrides.microchip_id.or_else(|| patient_row.try_get("", "microchip_id").ok()),
         gender: overrides.gender.unwrap_or_else(||
-            patient_row.try_get("", "gender").unwrap_or_else(|_| "Unknown".to_string())),
+            patient_row.try_get("", "gender").unwrap_or_else(|_| crate::services::medical_record::UNKNOWN_GENDER.to_string())),
         date_of_birth: overrides.date_of_birth.or_else(|| patient_row.try_get("", "date_of_birth").ok()),
     };
 
-    log::debug!("Patient info (with overrides): name={}, owner={}", patient_data.name, patient_data.owner);
 
     // 4. Fetch and parse selected attachments
     let record_time = MedicalRecordService::record_time(&pool, medical_record_id).await?;
@@ -777,43 +581,29 @@ pub async fn generate_configured_report(
     // 5. Generate combined PDF using Java service
     use crate::services::java_pdf_service::JavaPdfService;
 
-    // Build a user-friendly filename — same pattern as the
-    // per-record device report in medical_record.rs:
+    // Same names as the record's own lab report:
     //   "Device Report - <Patient> - <Device> - <YYYY-MM-DD HH-MM>.pdf"
     // (single device), or just patient+date for the combined case.
-    let sanitize = |s: &str| -> String {
-        let cleaned: String = s.chars().map(|c| match c {
-            '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
-            c if c.is_control() => '_',
-            c => c,
-        }).collect();
-        let trimmed = cleaned.trim_matches(|c: char| c == '.' || c.is_whitespace());
-        if trimmed.chars().count() > 60 {
-            trimmed.chars().take(60).collect::<String>().trim_end().to_string()
-        } else {
-            trimmed.to_string()
-        }
-    };
-    let timestamp = chrono::Utc::now().format("%Y-%m-%d %H-%M").to_string();
-    let patient_part = sanitize(&patient_data.name);
+    let timestamp = MedicalRecordService::pdf_timestamp();
+    let patient_part = MedicalRecordService::sanitize_filename_part(&patient_data.name);
     let pdf_filename = if all_device_data.len() == 1 {
-        let device = &all_device_data[0];
-        let device_part = sanitize(&device.device_name);
+        let device_part = MedicalRecordService::sanitize_filename_part(&all_device_data[0].device_name);
         format!("Device Report - {} - {} - {}.pdf", patient_part, device_part, timestamp)
     } else {
         format!("Device Report - {} - {}.pdf", patient_part, timestamp)
     };
 
-    let pdf_path = std::env::temp_dir().join(&pdf_filename);
+    let (_job_folder, pdf_path) = MedicalRecordService::job_output(&pdf_filename)?;
 
     // Generate PDF with all devices
     log::info!("Generating configured PDF report using Java...");
-    JavaPdfService::generate_pdf_multi(
-        &app_handle,
-        pdf_path.to_str().ok_or("Invalid PDF path")?,
-        &patient_data,
-        &all_device_data,
-    )?;
+    let (handle, out, patient, devices) =
+        (app_handle.clone(), pdf_path.clone(), patient_data.clone(), all_device_data.clone());
+    tauri::async_runtime::spawn_blocking(move || {
+        JavaPdfService::generate_pdf_multi(&handle, out.to_str().ok_or("Invalid PDF path")?, &patient, &devices)
+    })
+    .await
+    .map_err(|e| format!("The PDF job stopped: {}", e))??;
 
     log::debug!("PDF generated at {:?}", pdf_path);
 
@@ -853,9 +643,6 @@ pub async fn generate_configured_report(
 
     // Only now that the new PDF is stored: one generated PDF per record.
     retire_generated_pdfs(&pool, medical_record_id, pdf_attachment.id).await;
-
-    // Clean up temp file
-    let _ = std::fs::remove_file(&pdf_path);
 
     Ok(pdf_attachment)
 }

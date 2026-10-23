@@ -7,6 +7,7 @@ import { useThemeColors } from '../../utils/themeStyles';
 import { useRooms } from '../../hooks/useRooms';
 import { isClosedStatus, statusLabelKey } from '../../utils/appointmentStatus';
 import { AppointmentStatusMenu } from './AppointmentStatusMenu';
+import { useNow } from '../../hooks/useNow';
 
 import styles from './DayViewSimple.module.css';
 import cardStyles from './AppointmentCard.module.css';
@@ -31,6 +32,8 @@ const DayViewSimple: React.FC<DayViewSimpleProps> = ({
   const themeColors = useThemeColors();
   const { data: rooms = [] } = useRooms({ activeOnly: true });
   const containerRef = useRef<HTMLDivElement>(null);
+  const now = useNow();
+  const showsToday = selectedDate.isSame(now, 'day');
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState<{ slot: number; y: number } | null>(null);
   const [dragEnd, setDragEnd] = useState<{ slot: number; y: number } | null>(null);
@@ -47,6 +50,14 @@ const DayViewSimple: React.FC<DayViewSimpleProps> = ({
       setDragEnd(null);
     };
   }, []);
+
+  // Open today's grid about an hour before now instead of at midnight.
+  useEffect(() => {
+    if (!showsToday || !containerRef.current) return;
+    containerRef.current.scrollTop = Math.max(0, dayjs().hour() - 1) * 80;
+    // Only when the day shown changes, not every minute.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDate.format('YYYY-MM-DD')]);
 
   // Generate hourly slots from 00:00 to 23:59 (24 hours) - same as WeekView
   const hourSlots = Array.from({ length: 24 }, (_, i) => ({
@@ -498,8 +509,7 @@ const DayViewSimple: React.FC<DayViewSimpleProps> = ({
       </div>
 
       {/* Current time indicator (only for today) */}
-      {selectedDate.isSame(dayjs(), 'day') && (() => {
-        const now = dayjs();
+      {showsToday && (() => {
         const currentSlot = getSlotFromTime(now);
         const slotHeight = 20;
 

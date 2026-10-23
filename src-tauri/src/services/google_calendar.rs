@@ -304,6 +304,21 @@ pub struct GoogleSyncStatus {
 
 /// "Connected" means Google still accepts the stored login, not merely that a
 /// token is stored.
+/// The text of a Google Calendar event. It lands on every phone the Google
+/// account syncs to, so it carries no microchip number.
+pub fn event_description(patient: &str, room: Option<&str>, status: &str, notes: Option<&str>) -> String {
+    let mut parts = vec![format!("Patient: {}", patient)];
+    if let Some(room) = room {
+        parts.push(format!("Room: {}", room));
+    }
+    parts.push(format!("Status: {}", status));
+    if let Some(notes) = notes.filter(|n| !n.is_empty()) {
+        parts.push(String::new());
+        parts.push(notes.to_string());
+    }
+    parts.join("\n")
+}
+
 pub async fn load_sync_status(db: &DatabaseConnection) -> Result<GoogleSyncStatus, String> {
     let row = db
         .query_one(Statement::from_string(
@@ -330,7 +345,8 @@ pub async fn load_sync_status(db: &DatabaseConnection) -> Result<GoogleSyncStatu
     let needs_reauth = row.try_get::<i64>("", "needs_reauth").unwrap_or(0) != 0;
     Ok(GoogleSyncStatus {
         connected: has_token && !needs_reauth,
-        needs_reauth: has_token && needs_reauth,
+        // A backup copy has no token but needs_reauth set: it shows Reconnect.
+        needs_reauth,
         calendar_id: row.try_get::<Option<String>>("", "calendar_id").ok().flatten(),
         sync_enabled: row.try_get::<i64>("", "sync_enabled").unwrap_or(0) != 0,
         last_sync: row.try_get::<Option<String>>("", "last_sync").ok().flatten(),

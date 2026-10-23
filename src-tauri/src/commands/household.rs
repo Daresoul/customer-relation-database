@@ -2,6 +2,7 @@ use tauri::State;
 use serde::Deserialize;
 use crate::database::SeaOrmPool;
 use crate::models::household::*;
+use crate::services::names::required_name;
 use crate::database::queries::{household, household_duplicates, household_merge, household_search};
 use sea_orm::{ConnectionTrait, Statement, DbBackend, Value};
 
@@ -289,12 +290,12 @@ pub async fn update_person(
 
     if let Some(first_name) = updates.get("firstName").and_then(|v| v.as_str()) {
         query_parts.push("first_name = ?");
-        params.push(first_name.to_string().into());
+        params.push(required_name(first_name, "First name")?.into());
     }
 
     if let Some(last_name) = updates.get("lastName").and_then(|v| v.as_str()) {
         query_parts.push("last_name = ?");
-        params.push(last_name.to_string().into());
+        params.push(required_name(last_name, "Last name")?.into());
     }
 
     if !query_parts.is_empty() {
@@ -440,7 +441,7 @@ pub(crate) async fn household_patients_json(
         .map(|row| {
             let patient_id: i64 = row.try_get("", "id").unwrap_or(0);
             let patient_name: String = row.try_get("", "name").unwrap_or_default();
-            log::debug!("  - Processing patient: {} (ID: {})", patient_name, patient_id);
+            log::debug!("  - Processing patient {}", patient_id);
 
             let species: String = row.try_get("", "species").unwrap_or_default();
             let breed: Option<String> = row.try_get("", "breed").ok();

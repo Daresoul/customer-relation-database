@@ -1,5 +1,7 @@
 //! SettingsService CRUD + edge cases.
 
+use crate::commands::settings::UpdateSettingsInput;
+use crate::models::dto::MaybeNull;
 use crate::models::settings::UpdateSettingsRequest;
 use crate::services::settings::SettingsService;
 use crate::test_utils::create_test_db_with_migrations;
@@ -32,7 +34,7 @@ async fn update_settings_persists_language() {
 
     let updated = SettingsService::update_settings(&db, USER, UpdateSettingsRequest {
         language: Some("mk".to_string()),
-        currency_id: None,
+        currency_id: MaybeNull::Undefined,
         theme: None,
         date_format: None,
     }).await.unwrap();
@@ -47,7 +49,7 @@ async fn update_settings_persists_theme() {
 
     let updated = SettingsService::update_settings(&db, USER, UpdateSettingsRequest {
         language: None,
-        currency_id: None,
+        currency_id: MaybeNull::Undefined,
         theme: Some("dark".to_string()),
         date_format: None,
     }).await.unwrap();
@@ -62,7 +64,7 @@ async fn update_settings_persists_date_format() {
 
     let updated = SettingsService::update_settings(&db, USER, UpdateSettingsRequest {
         language: None,
-        currency_id: None,
+        currency_id: MaybeNull::Undefined,
         theme: None,
         date_format: Some("YYYY-MM-DD".to_string()),
     }).await.unwrap();
@@ -77,7 +79,7 @@ async fn update_settings_with_valid_currency_persists() {
 
     let updated = SettingsService::update_settings(&db, USER, UpdateSettingsRequest {
         language: None,
-        currency_id: Some(1),
+        currency_id: MaybeNull::Value(1),
         theme: None,
         date_format: None,
     }).await.unwrap();
@@ -92,7 +94,7 @@ async fn update_settings_with_invalid_currency_id_fails_fk() {
 
     let result = SettingsService::update_settings(&db, USER, UpdateSettingsRequest {
         language: None,
-        currency_id: Some(99999),
+        currency_id: MaybeNull::Value(99999),
         theme: None,
         date_format: None,
     }).await;
@@ -108,7 +110,7 @@ async fn update_settings_partial_keeps_unchanged_fields() {
     // Update only theme
     SettingsService::update_settings(&db, USER, UpdateSettingsRequest {
         language: None,
-        currency_id: None,
+        currency_id: MaybeNull::Undefined,
         theme: Some("dark".to_string()),
         date_format: None,
     }).await.unwrap();
@@ -128,11 +130,11 @@ async fn settings_isolated_per_user_id() {
 
     SettingsService::update_settings(&db, "alice", UpdateSettingsRequest {
         language: Some("en".to_string()),
-        currency_id: None, theme: None, date_format: None,
+        currency_id: MaybeNull::Undefined, theme: None, date_format: None,
     }).await.unwrap();
     SettingsService::update_settings(&db, "bob", UpdateSettingsRequest {
         language: Some("mk".to_string()),
-        currency_id: None, theme: None, date_format: None,
+        currency_id: MaybeNull::Undefined, theme: None, date_format: None,
     }).await.unwrap();
 
     let alice = SettingsService::get_settings(&db, "alice").await.unwrap();
@@ -147,10 +149,60 @@ async fn round_trip_language_change_survives_restart() {
     let _ = SettingsService::get_settings(&db, USER).await.unwrap();
     SettingsService::update_settings(&db, USER, UpdateSettingsRequest {
         language: Some("mk".to_string()),
-        currency_id: None, theme: None, date_format: None,
+        currency_id: MaybeNull::Undefined, theme: None, date_format: None,
     }).await.unwrap();
 
     // Fetch fresh — simulates a process restart
     let fresh = SettingsService::get_settings(&db, USER).await.unwrap();
     assert_eq!(fresh.settings.language, "mk");
+}
+
+fn only_currency(currency_id: MaybeNull<i64>) -> UpdateSettingsRequest {
+    UpdateSettingsRequest { language: None, currency_id, theme: None, date_format: None }
+}
+
+/// settings.md #7d: clearing the currency must save "no currency".
+#[tokio::test]
+async fn update_settings_with_null_currency_clears_it() {
+    let db = create_test_db_with_migrations().await;
+    SettingsService::update_settings(&db, USER, only_currency(MaybeNull::Value(1))).await.unwrap();
+
+    let cleared = SettingsService::update_settings(&db, USER, only_currency(MaybeNull::Null)).await.unwrap();
+
+    assert_eq!(cleared.settings.currency_id, None);
+    assert!(cleared.currency.is_none());
+}
+
+#[tokio::test]
+async fn update_settings_without_currency_keeps_it() {
+    let db = create_test_db_with_migrations().await;
+    SettingsService::update_settings(&db, USER, only_currency(MaybeNull::Value(1))).await.unwrap();
+
+    let kept = SettingsService::update_settings(&db, USER, only_currency(MaybeNull::Undefined)).await.unwrap();
+
+    assert_eq!(kept.settings.currency_id, Some(1));
+}
+
+#[test]
+fn command_input_tells_a_null_currency_from_a_missing_one() {
+    let cleared: UpdateSettingsInput = serde_json::from_str(r#"{"currencyId": null}"#).unwrap();
+    let missing: UpdateSettingsInput = serde_json::from_str(r#"{"language": "mk"}"#).unwrap();
+    let set: UpdateSettingsInput = serde_json::from_str(r#"{"currencyId": 2}"#).unwrap();
+
+    assert!(matches!(cleared.currency_id, MaybeNull::Null));
+    assert!(matches!(missing.currency_id, MaybeNull::Undefined));
+    assert!(matches!(set.currency_id, MaybeNull::Value(2)));
+}
+
+/// settings.md #17: the clinic writes dates day first, with dots. (The
+/// "default" row seeded by migration 017 keeps its DD/MM/YYYY; changing it
+/// needs a migration.)
+#[tokio::test]
+async fn a_new_install_shows_dates_as_day_month_year_with_dots() {
+    let db = create_test_db_with_migrations().await;
+    let fresh = SettingsService::get_settings(&db, "new-user").await.unwrap();
+    assert_eq!(fresh.settings.date_format, "DD.MM.YYYY");
+
+    let other = SettingsService::update_settings(&db, "someone-else", only_currency(MaybeNull::Undefined)).await.unwrap();
+    assert_eq!(other.settings.date_format, "DD.MM.YYYY");
 }

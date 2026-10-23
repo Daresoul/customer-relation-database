@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { Tabs, Button, Space, Select, Drawer, App, Checkbox, Segmented } from 'antd';
+import { Tabs, Button, Space, Select, Drawer, App, Checkbox, Segmented, Alert } from 'antd';
+import { useNavigate } from 'react-router-dom';
 import {
   CalendarOutlined,
   UnorderedListOutlined,
@@ -25,6 +26,8 @@ import {
 } from '../../types/appointments';
 import { useAppointments, useCalendarAppointments } from '../../hooks/useAppointments';
 import { useRooms } from '../../hooks/useRooms';
+import { usePatients } from '../../hooks/usePatients';
+import { useGoogleNeedsReauth } from '../../hooks/useGoogleCalendarStatus';
 import { statusLabelKey } from '../../utils/appointmentStatus';
 import styles from './Appointments.module.css';
 
@@ -38,6 +41,8 @@ type Range = { start: Date; end: Date };
 const AppointmentsTab: React.FC = () => {
   const { t } = useTranslation(['appointments', 'common']);
   const { message } = App.useApp();
+  const navigate = useNavigate();
+  const googleNeedsReauth = useGoogleNeedsReauth();
   const [activeView, setActiveView] = useState<'calendar' | 'list'>('list');
   const [todayLayout, setTodayLayout] = useState<'list' | 'grid'>('list');
   const [calendarView, setCalendarView] = useState<CalendarView>('month');
@@ -84,10 +89,20 @@ const AppointmentsTab: React.FC = () => {
     includeCancelled: filter.includeCancelled,
     status: filter.status,
     roomId: filter.roomId,
+    patientId: filter.patientId,
   });
   const appointments = calendarQuery.data?.appointments ?? [];
 
   const { data: rooms = [] } = useRooms();
+  const { patients } = usePatients();
+  const patientOptions = useMemo(
+    () =>
+      (patients ?? []).map((p) => ({
+        value: p.id,
+        label: [p.name, p.species].filter(Boolean).join(' · '),
+      })),
+    [patients],
+  );
 
   const handleRangeChange = useCallback((start: Date, end: Date) => {
     setCalendarRange((prev) =>
@@ -143,6 +158,19 @@ const AppointmentsTab: React.FC = () => {
 
   return (
     <div className={styles.fullHeightScroll}>
+      {googleNeedsReauth && (
+        <Alert
+          className={styles.googleBanner}
+          type="warning"
+          showIcon
+          message={t('appointments:google.reauthBanner')}
+          action={
+            <Button size="small" onClick={() => navigate('/settings?section=appointments')}>
+              {t('appointments:google.reconnect')}
+            </Button>
+          }
+        />
+      )}
       <Tabs
         activeKey={activeView}
         onChange={(key) => setActiveView(key as 'calendar' | 'list')}
@@ -269,6 +297,20 @@ const AppointmentsTab: React.FC = () => {
                 </Select.Option>
               ))}
             </Select>
+          </div>
+
+          <div data-testid="patient-filter">
+            <div className={styles.filterLabel}>{t('appointments:filters.patient')}</div>
+            <Select
+              className={styles.fullWidth}
+              showSearch
+              allowClear
+              optionFilterProp="label"
+              placeholder={t('appointments:filters.allPatients')}
+              options={patientOptions}
+              value={filter.patientId}
+              onChange={(value) => setFilter({ ...filter, patientId: value ?? undefined })}
+            />
           </div>
 
           <Checkbox

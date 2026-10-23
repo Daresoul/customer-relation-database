@@ -1,3 +1,4 @@
+use crate::models::dto::MaybeNull;
 use crate::models::{SettingsResponse, UpdateSettingsRequest};
 use crate::services::settings::SettingsService;
 use crate::database::SeaOrmPool;
@@ -8,8 +9,9 @@ use serde::Deserialize;
 pub struct UpdateSettingsInput {
     // Accept default snake_case keys from frontend ApiService; allow camelCase as alias
     pub language: Option<String>,
-    #[serde(alias = "currencyId")]
-    pub currency_id: Option<i64>,
+    /// Missing: unchanged; null: no currency.
+    #[serde(alias = "currencyId", default)]
+    pub currency_id: MaybeNull<i64>,
     pub theme: Option<String>,
     #[serde(alias = "dateFormat")]
     pub date_format: Option<String>,

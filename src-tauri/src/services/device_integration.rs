@@ -58,11 +58,40 @@ impl DeviceIntegrationService {
         Self::to_api_model(model)
     }
 
+    /// Only one program can open a serial port, so a second enabled machine
+    /// on the same port would never get a result. Refused with
+    /// `port_in_use:<other machine's name>`, which the settings page shows.
+    async fn ensure_port_free(
+        db: &DatabaseConnection,
+        own_id: Option<i64>,
+        enabled: bool,
+        connection_type: &ConnectionType,
+        port: Option<&str>,
+    ) -> Result<(), String> {
+        if !enabled || *connection_type != ConnectionType::SerialPort {
+            return Ok(());
+        }
+        let Some(port) = port.map(str::trim).filter(|p| !p.is_empty()) else {
+            return Ok(());
+        };
+        let taken_by = Self::get_all(db).await?.into_iter().find(|other| {
+            Some(other.id) != own_id
+                && other.enabled
+                && other.connection_type == ConnectionType::SerialPort
+                && other.serial_port_name.as_deref().is_some_and(|p| p.trim().eq_ignore_ascii_case(port))
+        });
+        match taken_by {
+            Some(other) => Err(format!("port_in_use:{}", other.name)),
+            None => Ok(()),
+        }
+    }
+
     /// Create a new device integration
     pub async fn create(
         db: &DatabaseConnection,
         input: CreateDeviceIntegrationInput,
     ) -> Result<DeviceIntegration, String> {
+        Self::ensure_port_free(db, None, true, &input.connection_type, input.serial_port_name.as_deref()).await?;
         let now = Utc::now();
 
         let new_integration = device_integration::ActiveModel {
@@ -134,6 +163,7 @@ impl DeviceIntegrationService {
             MaybeNull::Value(v) => Some(v),
         };
         let enabled = input.enabled.unwrap_or(current.enabled);
+        Self::ensure_port_free(db, Some(id), enabled, &connection_type, serial_port_name.as_deref()).await?;
 
         // Fetch the entity model for update
         let entity = DeviceIntegrationEntity::find_by_id(id)
@@ -195,6 +225,8 @@ impl DeviceIntegrationService {
             .ok_or_else(|| "Device integration not found".to_string())?;
 
         let new_enabled = !entity.enabled;
+        let connection_type = ConnectionType::from_db_string(&entity.connection_type)?;
+        Self::ensure_port_free(db, Some(id), new_enabled, &connection_type, entity.serial_port_name.as_deref()).await?;
         let now = Utc::now();
 
         let mut model: device_integration::ActiveModel = entity.into();

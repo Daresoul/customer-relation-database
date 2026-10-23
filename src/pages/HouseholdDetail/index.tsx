@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useGoBack } from '../../hooks/useGoBack';
 import { Layout, Spin, Alert, Button, Space, Breadcrumb, Dropdown, Modal, App, Typography } from 'antd';
 import { ArrowLeftOutlined, HomeOutlined, DownOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
@@ -11,7 +12,6 @@ import { PeopleSection } from './PeopleSection';
 import { AnimalsSection } from './AnimalsSection';
 import { MergeHouseholdModal } from './MergeHouseholdModal';
 import { Link } from 'react-router-dom';
-import { DeviceStatusInline } from '../../components/DeviceStatusBar';
 import styles from './HouseholdDetail.module.css';
 
 const { Content } = Layout;
@@ -19,6 +19,7 @@ const { Content } = Layout;
 export const HouseholdDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const goBack = useGoBack();
   const { t } = useTranslation('households');
   const householdId = parseInt(id || '0', 10);
 
@@ -144,14 +145,13 @@ export const HouseholdDetail: React.FC = () => {
               },
             ]}
           />
-          <DeviceStatusInline />
         </div>
       </div>
 
       <div className={`${styles.marginBottom16} ${styles.breadcrumbRow}`}>
         <Button
           icon={<ArrowLeftOutlined />}
-          onClick={() => navigate('/')}
+          onClick={goBack}
         >
           {t('detail.backToHouseholds')}
         </Button>
@@ -222,6 +222,9 @@ export const HouseholdDetail: React.FC = () => {
       )}
 
       <div className={styles.mainContainer}>
+        {data.household.notes?.trim() && (
+          <Alert type="info" showIcon message={t('detail.notes')} description={data.household.notes} />
+        )}
         <HouseholdInfo household={data.household} />
 
         <PeopleSection

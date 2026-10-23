@@ -13,7 +13,8 @@ import { useTranslation } from 'react-i18next';
 import { invoke } from '@/services/invoke';
 import { useDeviceConnectionStatus, useDeviceIntegrations, useFileWatcherStatus } from '../../hooks/useDeviceIntegrations';
 import { DeviceDetails, DeviceType, getDeviceTypeDisplayName } from '../../types/deviceIntegration';
-import { describeFolderStatus, describeSerialStatus, folderLevel, formatLastResult, HealthLevel, serialLevel } from './deviceHealth';
+import { describeFolderStatus, describeSerialStatus, folderLevel, formatLastResult, HealthLevel, serialDownSince, serialLevel } from './deviceHealth';
+import { errorText } from '@/utils/notifyError';
 
 const { Text, Title } = Typography;
 
@@ -101,7 +102,7 @@ export const DeviceDetailsDrawer: React.FC<DeviceDetailsDrawerProps> = ({ open, 
       try {
         await action();
       } catch (e) {
-        message.error(t('drawer.actionFailed', { error: String(e) }));
+        message.error(t('drawer.actionFailed', { error: errorText(e, t) }));
       } finally {
         setBusy(null);
       }
@@ -126,7 +127,7 @@ export const DeviceDetailsDrawer: React.FC<DeviceDetailsDrawerProps> = ({ open, 
   const serialStatus = device && isSerial ? getSerialStatus(device.id) : undefined;
   const folderStatus = device && !isSerial ? getFolderStatus(device.id) : undefined;
   const health = isSerial ? describeSerialStatus(serialStatus, t) : describeFolderStatus(folderStatus, t);
-  const level = isSerial ? serialLevel(serialStatus) : folderLevel(folderStatus);
+  const level = isSerial ? serialLevel(serialStatus, serialDownSince(serialStatus)) : folderLevel(folderStatus);
   const lastResult = formatLastResult(serialStatus?.last_result_at ?? folderStatus?.last_result_at, new Date(), t);
   const lastData = clock(serialStatus?.last_byte_at);
   const raw = details?.lastRaw;

@@ -89,9 +89,9 @@ class InvoiceRenderTest {
         assertTrue(pages(pdf) >= 2, "expected a continuation page");
         assertTrue(text.contains("Услуга 40"), text);
         assertTrue(text.contains("Вкупно"), text);
-        assertTrue(text.contains("4000 ден"), text);
+        assertTrue(text.contains("4.000 ден"), text);
         assertTrue(text.contains("За наплата"), text);
-        assertTrue(text.contains("3600 ден"), text);
+        assertTrue(text.contains("3.600 ден"), text);
     }
 
     @Test

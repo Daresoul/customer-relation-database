@@ -15,8 +15,9 @@ vi.mock('../../../services/patientService', () => ({
 
 const outcome: { error?: unknown; settled?: boolean } = {};
 vi.mock('../../../components/forms/PatientFormWithOwner', () => ({
-  default: ({ onSubmit }: { onSubmit: (d: unknown) => Promise<void> }) => (
+  default: ({ onSubmit, hideHouseholdPicker }: { onSubmit: (d: unknown) => Promise<void>; hideHouseholdPicker?: boolean }) => (
     <button
+      data-hide-household-picker={hideHouseholdPicker ? 'yes' : 'no'}
       onClick={() =>
         onSubmit({ name: 'Bella' }).then(
           () => {
@@ -68,6 +69,15 @@ describe('AnimalsSection add pet', () => {
     expect(outcome.error).toBeInstanceOf(Error);
     expect(document.body.textContent).not.toContain('detail.animals.patientCreated');
     expect(screen.getByText('stub-submit')).toBeInTheDocument();
+  });
+
+  // household #7: on a household page the pet's household is this one.
+  it('registers a new pet without asking for a household', async () => {
+    renderSection();
+
+    fireEvent.click(screen.getAllByText('detail.animals.registerNewPet')[0]);
+
+    expect((await screen.findByText('stub-submit')).getAttribute('data-hide-household-picker')).toBe('yes');
   });
 });
 

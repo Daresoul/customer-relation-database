@@ -36,7 +36,6 @@ export const useAppSettings = () => {
         const theme = newSettings.settings.theme as 'light' | 'dark';
         setThemeMode(theme);
         document.documentElement.setAttribute('data-theme', theme);
-        localStorage.setItem('veterinary-clinic-theme', theme);
       }
 
       // Update date format if changed
@@ -62,7 +61,6 @@ export const useAppSettings = () => {
       const theme = data.settings.theme as 'light' | 'dark';
       setThemeMode(theme);
       document.documentElement.setAttribute('data-theme', theme);
-      localStorage.setItem('veterinary-clinic-theme', theme);
 
       // Apply date format
       updateDateFormatInStorage(data.settings.dateFormat);

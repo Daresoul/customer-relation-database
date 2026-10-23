@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { Card, Form, Input, Button, Table, Space, Modal, Popconfirm, Switch, ColorPicker } from 'antd';
+import { Card, Form, Input, Button, Table, Space, Modal, Popconfirm, Switch } from 'antd';
 import { AppstoreOutlined, PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
-import type { Color } from 'antd/es/color-picker';
 import { useTranslation } from 'react-i18next';
 import styles from '../Settings.module.css';
 import { useSpecies, useCreateSpecies, useUpdateSpecies, useDeleteSpecies } from '../../../hooks/useSpecies';
@@ -53,7 +52,6 @@ const SpeciesSettings: React.FC<SpeciesSettingsProps> = ({ isUpdating }) => {
     setEditingSpecies(species);
     speciesForm.setFieldsValue({
       name: species.name,
-      color: species.color,
       active: species.active,
     });
     setSpeciesModalVisible(true);
@@ -73,14 +71,8 @@ const SpeciesSettings: React.FC<SpeciesSettingsProps> = ({ isUpdating }) => {
 
   const handleSpeciesSubmit = async (values: any) => {
     try {
-      // Convert ColorPicker value to hex string
-      const colorValue = typeof values.color === 'string'
-        ? values.color
-        : values.color?.toHexString?.() || '#1890ff';
-
       const speciesData = {
         name: toTitleCase(values.name.trim()),
-        color: colorValue,
         active: values.active !== undefined ? values.active : true,
       };
 
@@ -246,15 +238,6 @@ const SpeciesSettings: React.FC<SpeciesSettingsProps> = ({ isUpdating }) => {
       key: 'name',
       render: (text: string, record: Species) => (
         <Space>
-          <div
-            style={{
-              width: '16px',
-              height: '16px',
-              borderRadius: '50%',
-              backgroundColor: record.color,
-              display: 'inline-block',
-            }}
-          />
           <span className={record.active ? undefined : styles.roomNameInactive}>
             {text}
             {!record.active && ` (${t('common:inactive')})`}
@@ -405,7 +388,7 @@ const SpeciesSettings: React.FC<SpeciesSettingsProps> = ({ isUpdating }) => {
         onOk={() => speciesForm.submit()}
         confirmLoading={createSpeciesMutation.isPending || updateSpeciesMutation.isPending}
       >
-        <Form
+        <Form scrollToFirstError={{ focus: true }}
           form={speciesForm}
           layout="vertical"
           onFinish={handleSpeciesSubmit}
@@ -414,17 +397,9 @@ const SpeciesSettings: React.FC<SpeciesSettingsProps> = ({ isUpdating }) => {
           <Form.Item
             name="name"
             label={t('patients:fields.species')}
-            rules={[{ required: true, message: t('forms:validation.required') }]}
+            rules={[{ required: true, whitespace: true, message: t('forms:validation.required') }]}
           >
             <Input placeholder={t('settings:species.speciesPlaceholder')} />
-          </Form.Item>
-
-          <Form.Item
-            name="color"
-            label={t('settings:species.color')}
-            rules={[{ required: true, message: t('forms:validation.required') }]}
-          >
-            <ColorPicker showText format="hex" />
           </Form.Item>
         </Form>
       </Modal>
@@ -442,7 +417,7 @@ const SpeciesSettings: React.FC<SpeciesSettingsProps> = ({ isUpdating }) => {
         onOk={() => breedForm.submit()}
         confirmLoading={createBreedMutation.isPending || updateBreedMutation.isPending}
       >
-        <Form
+        <Form scrollToFirstError={{ focus: true }}
           form={breedForm}
           layout="vertical"
           onFinish={handleBreedSubmit}
@@ -466,7 +441,7 @@ const SpeciesSettings: React.FC<SpeciesSettingsProps> = ({ isUpdating }) => {
           <Form.Item
             name="name"
             label={t('patients:fields.breed')}
-            rules={[{ required: true, message: t('forms:validation.required') }]}
+            rules={[{ required: true, whitespace: true, message: t('forms:validation.required') }]}
           >
             <Input placeholder={t('settings:breeds.breedPlaceholder')} />
           </Form.Item>

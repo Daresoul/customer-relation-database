@@ -110,6 +110,26 @@ pub fn rotate_main_log_at_startup(dir: &Path) {
 /// date suffix are ignored (including the live current-day log).
 ///
 /// Silently no-ops if `dir` doesn't exist.
+/// How often the running app prunes old logs. It lives in the tray for
+/// weeks, so a start-only prune never runs on a PC that only sleeps.
+pub const LOG_PRUNE_INTERVAL: std::time::Duration = std::time::Duration::from_secs(24 * 3600);
+
+/// [`prune_old_logs`] over each folder.
+pub fn prune_log_dirs(dirs: &[std::path::PathBuf], days_to_keep: i64) {
+    for dir in dirs {
+        prune_old_logs(dir, days_to_keep);
+    }
+}
+
+/// Prunes once a day while the app runs (the start pass happens in `main`).
+pub async fn run_log_prune_schedule(dirs: Vec<std::path::PathBuf>, days_to_keep: i64) {
+    loop {
+        tokio::time::sleep(LOG_PRUNE_INTERVAL).await;
+        prune_log_dirs(&dirs, days_to_keep);
+        log::info!("Log prune: archives older than {} days removed", days_to_keep);
+    }
+}
+
 pub fn prune_old_logs(dir: &Path, days_to_keep: i64) {
     let entries = match std::fs::read_dir(dir) {
         Ok(e) => e,
@@ -127,9 +147,11 @@ pub fn prune_old_logs(dir: &Path, days_to_keep: i64) {
         if path.extension().and_then(|e| e.to_str()) != Some("log") {
             continue;
         }
-        let date = match parse_date_suffix(stem) {
+        // Raw serial logs from older builds carry no date in their name;
+        // their last change dates them. Other undated logs are live.
+        let date = match parse_date_suffix(stem).or_else(|| undated_raw_log_date(stem, &entry)) {
             Some(d) => d,
-            None => continue, // unarchived or unrecognized — leave alone
+            None => continue,
         };
         if date < cutoff {
             if let Err(e) = std::fs::remove_file(&path) {
@@ -137,6 +159,14 @@ pub fn prune_old_logs(dir: &Path, days_to_keep: i64) {
             }
         }
     }
+}
+
+fn undated_raw_log_date(stem: &str, entry: &std::fs::DirEntry) -> Option<NaiveDate> {
+    if !stem.starts_with("raw_") {
+        return None;
+    }
+    let modified = entry.metadata().ok()?.modified().ok()?;
+    Some(chrono::DateTime::<Local>::from(modified).date_naive())
 }
 
 /// Returns true if `stem` ends with a 10-char `-YYYY-MM-DD` suffix.
@@ -343,6 +373,22 @@ mod tests {
 
         assert!(!tmp.path().join(&old).exists());
         assert!(tmp.path().join(&recent).exists());
+    }
+
+    // Raw serial logs from older builds have no date in their name
+    // (`raw_COM3.log`) and were kept forever.
+    #[test]
+    fn prune_dates_undated_raw_serial_logs_by_their_last_change() {
+        let tmp = tempfile::tempdir().unwrap();
+        touch_days_ago(tmp.path(), "raw_COM3.log", 100);
+        touch_days_ago(tmp.path(), "raw__tmp_ttyV0.log", 5);
+        touch_days_ago(tmp.path(), "Arkivet.log", 100); // the live main log stays
+
+        prune_old_logs(tmp.path(), 30);
+
+        assert!(!tmp.path().join("raw_COM3.log").exists());
+        assert!(tmp.path().join("raw__tmp_ttyV0.log").exists());
+        assert!(tmp.path().join("Arkivet.log").exists());
     }
 
     #[test]

@@ -1,4 +1,5 @@
 {
+  "pickerLoadFailed": "Could not load the list. Close this window and open it again to retry.",
   "save": "Save",
   "cancel": "Cancel",
   "delete": "Delete",

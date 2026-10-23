@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   regenerateLabReport: vi.fn(),
   downloadDeviceFile: vi.fn(),
   generateReport: vi.fn(),
+  openAttachment: vi.fn(),
+  previewValues: vi.fn(),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -46,7 +48,7 @@ vi.mock('@/hooks/useMedicalRecords', () => ({
   }),
 }));
 vi.mock('@/services/labInboxService', () => ({
-  labInboxService: { regenerateLabReport: mocks.regenerateLabReport },
+  labInboxService: { regenerateLabReport: mocks.regenerateLabReport, previewValues: mocks.previewValues },
 }));
 vi.mock('@/hooks/useRecordTemplates', () => ({
   useSearchRecordTemplates: () => ({ data: [], isLoading: false }),
@@ -58,7 +60,7 @@ vi.mock('@/services/fileHistoryService', () => ({
   },
 }));
 vi.mock('@/services/medicalService', () => ({
-  MedicalService: { generateConfiguredReport: mocks.generateReport, openAttachmentExternally: vi.fn() },
+  MedicalService: { generateConfiguredReport: mocks.generateReport, openAttachmentExternally: mocks.openAttachment },
 }));
 vi.mock('@/components/forms/fieldGroups', () => ({
   TabbedMedicalRecordFields: () => (
@@ -151,6 +153,8 @@ beforeEach(() => {
   mocks.upload.mockReset().mockResolvedValue({ id: 500 });
   mocks.regenerateLabReport.mockReset().mockResolvedValue({ id: 700 });
   mocks.generateReport.mockReset().mockResolvedValue({ id: 600 });
+  mocks.openAttachment.mockReset();
+  mocks.previewValues.mockReset().mockResolvedValue([]);
 });
 
 describe('DeviceImportModal — one result at a time', () => {
@@ -192,6 +196,29 @@ describe('DeviceImportModal — save', () => {
     expect(await screen.findByText('record page 99')).toBeInTheDocument();
     expect(window.location.href).toBe(hrefBefore);
     expect(mocks.createRecord).toHaveBeenCalledWith(expect.objectContaining({ patientId: 1 }));
+  });
+
+  // device-import #14: the backend builds the lab report on create; the
+  // import built a second one.
+  it('builds the lab report once and opens the one the save made', async () => {
+    const user = userEvent.setup();
+    localStorage.setItem('autoOpenGeneratedReport', 'true');
+    mocks.createRecord.mockResolvedValue({
+      id: 99,
+      pdfs: [{ kind: 'device_report', ok: true, error: null, attachmentId: 801 }],
+    });
+    try {
+      renderModal();
+      receive(maxResult());
+
+      await user.click(await screen.findByTestId('device-import-submit-btn'));
+
+      expect(await screen.findByText('record page 99')).toBeInTheDocument();
+      expect(mocks.generateReport).not.toHaveBeenCalled();
+      expect(mocks.openAttachment).toHaveBeenCalledWith(801);
+    } finally {
+      localStorage.removeItem('autoOpenGeneratedReport');
+    }
   });
 });
 
@@ -373,6 +400,31 @@ describe('DeviceImportModal — machine said / you picked', () => {
 
     expect(mocks.createRecord).not.toHaveBeenCalled();
     expect(dialog().getByText('exigo.xml')).toBeInTheDocument();
+  });
+});
+
+// device-import #7: the list showed only the file name and tags.
+describe('DeviceImportModal — values per result', () => {
+  it('shows the values of each result', async () => {
+    mocks.previewValues.mockResolvedValue([{ code: 'WBC', value: '12.1', unit: null, range: '6 - 17', flag: null }]);
+    renderModal();
+    receive(maxResult());
+
+    expect(await screen.findByTestId('lab-value-WBC')).toBeInTheDocument();
+    expect(mocks.previewValues).toHaveBeenCalledWith('exigo_eos_vet', { WBC: '12.1' });
+  });
+});
+
+// device-import #5: two dogs called Max looked the same in the picker.
+describe('DeviceImportModal — patient picker', () => {
+  it('tells patients apart by chip ending and age', async () => {
+    mocks.patients = [{ ...MAX, dateOfBirth: '2020-01-15' }, BELLA];
+    renderModal();
+    receive(maxResult());
+
+    expect(await screen.findByText('Max - Dog')).toBeInTheDocument();
+    expect(dialog().getByText(/medical:deviceImport.optionChip last4=0001/)).toBeInTheDocument();
+    expect(dialog().getByText(/medical:deviceImport.optionAgeYears years=\d+/)).toBeInTheDocument();
   });
 });
 

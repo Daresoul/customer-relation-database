@@ -40,7 +40,8 @@
     "selectEndTime": "Please select end time",
     "endTimeAfterStart": "End time must be after start time",
     "fifteenMinuteIntervals": "Times must be on 15-minute intervals",
-    "unableToCheckConflicts": "Unable to check for conflicts. Please verify manually."
+    "conflictCheckFailed": "Could not check this time for clashes. Check the calendar before you save.",
+    "startInPast": "This start time has already passed."
   },
   "conflicts": {
     "roomCapacityExceeded": "Room Capacity Exceeded",
@@ -91,7 +92,9 @@
     "clearFilters": "Clear Filters",
     "filter": "Filter",
     "status": "Status",
-    "room": "Room"
+    "room": "Room",
+    "patient": "Patient",
+    "allPatients": "All patients"
   },
   "messages": {
     "deleteTitle": "Delete Appointment",
@@ -198,5 +201,9 @@
   "picker": {
     "chip": "chip …{{digits}}"
   },
-  "loadFailed": "Could not load the appointments"
+  "loadFailed": "Could not load the appointments",
+  "google": {
+    "reauthBanner": "Google Calendar needs reconnecting. New and changed appointments are not sent until you reconnect.",
+    "reconnect": "Reconnect"
+  }
 }

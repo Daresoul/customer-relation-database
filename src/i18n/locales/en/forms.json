@@ -105,6 +105,7 @@
     "patientCreated": "Patient created successfully",
     "searching": "Searching...",
     "noHouseholdsMatch": "No households match this search. Use \"Create New Household\" below to add one.",
+    "householdSearchFailed": "The household search failed. Type again to retry.",
     "unknownError": "Unknown error"
   },
   "success": {

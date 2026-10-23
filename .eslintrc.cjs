@@ -28,8 +28,22 @@ module.exports = {
     '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
     '@typescript-eslint/explicit-function-return-type': 'off',
     '@typescript-eslint/explicit-module-boundary-types': 'off',
-    '@typescript-eslint/no-explicit-any': 'warn'
+    '@typescript-eslint/no-explicit-any': 'warn',
+    // Tauri commands go through services/invoke, which logs failures.
+    'no-restricted-imports': ['error', {
+      paths: [
+        { name: '@tauri-apps/api', importNames: ['invoke', 'tauri'], message: "Use invoke from '@/services/invoke'." },
+        { name: '@tauri-apps/api/tauri', importNames: ['invoke'], message: "Use invoke from '@/services/invoke'." },
+      ],
+    }],
   },
+  overrides: [
+    {
+      // The wrapper itself, and the two places that log through the raw invoke on purpose.
+      files: ['src/services/invoke.ts', 'src/main.tsx', 'src/components/common/ErrorBoundary.tsx', '**/__tests__/**', 'tests/**'],
+      rules: { 'no-restricted-imports': 'off' },
+    },
+  ],
   settings: {
     react: {
       version: 'detect'

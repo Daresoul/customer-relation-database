@@ -186,10 +186,10 @@ impl CreateHouseholdWithPeopleDto {
 
         // Validate each person
         for person_with_contacts in &self.people {
-            if person_with_contacts.person.first_name.is_empty() {
+            if person_with_contacts.person.first_name.trim().is_empty() {
                 return Err("First name is required for all people".to_string());
             }
-            if person_with_contacts.person.last_name.is_empty() {
+            if person_with_contacts.person.last_name.trim().is_empty() {
                 return Err("Last name is required for all people".to_string());
             }
 

@@ -1,12 +1,32 @@
 use crate::entities::breed::{self, Entity as BreedEntity};
 use crate::entities::patient::{self, Entity as PatientEntity};
 use crate::models::breed::{Breed, CreateBreedInput, UpdateBreedInput};
+use crate::services::names::{name_taken, required_name};
 use chrono::Utc;
 use sea_orm::*;
 
 pub struct BreedService;
 
 impl BreedService {
+    /// Refuses a name another breed of the same species already has, in any case.
+    async fn check_name_free(
+        db: &DatabaseConnection,
+        species_id: i64,
+        name: &str,
+        except_id: Option<i64>,
+    ) -> Result<(), String> {
+        let others = BreedEntity::find()
+            .filter(breed::Column::SpeciesId.eq(species_id))
+            .all(db)
+            .await
+            .map_err(|e| format!("Failed to check breed names: {}", e))?;
+        let names = others.iter().filter(|b| Some(b.id) != except_id).map(|b| b.name.as_str());
+        if name_taken(names, name) {
+            return Err("A breed with this name already exists".to_string());
+        }
+        Ok(())
+    }
+
     /// Convert a SeaORM breed model to the API Breed model
     fn to_api_model(model: breed::Model) -> Breed {
         Breed {
@@ -53,6 +73,8 @@ impl BreedService {
 
     pub async fn create(db: &DatabaseConnection, input: CreateBreedInput) -> Result<Breed, String> {
         let now = Utc::now().naive_utc();
+        let name = required_name(&input.name, "Breed name")?;
+        Self::check_name_free(db, input.species_id, &name, None).await?;
 
         // Get the next display_order by finding the breed with the highest order for this species
         let highest_order_breed = BreedEntity::find()
@@ -67,7 +89,7 @@ impl BreedService {
             .unwrap_or(1);
 
         let new_breed = breed::ActiveModel {
-            name: Set(input.name),
+            name: Set(name),
             species_id: Set(input.species_id),
             active: Set(true),
             display_order: Set(next_order),
@@ -94,9 +116,18 @@ impl BreedService {
             .map_err(|e| format!("Failed to fetch breed: {}", e))?
             .ok_or_else(|| format!("Breed with id {} not found", id))?;
 
+        let species_id = input.species_id.unwrap_or(existing.species_id);
+        let name = match &input.name {
+            Some(name) => required_name(name, "Breed name")?,
+            None => existing.name.clone(),
+        };
+        if input.name.is_some() || input.species_id.is_some() {
+            Self::check_name_free(db, species_id, &name, Some(id)).await?;
+        }
+
         let mut breed_model: breed::ActiveModel = existing.into();
 
-        if let Some(name) = input.name {
+        if input.name.is_some() {
             breed_model.name = Set(name);
         }
         if let Some(species_id) = input.species_id {

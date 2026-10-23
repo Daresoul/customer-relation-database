@@ -20,16 +20,17 @@ describe('stringUtils Utility', () => {
       expect(toTitleCase('the quick brown fox')).toBe('The Quick Brown Fox');
     });
 
-    it('lowercases rest of word', () => {
-      expect(toTitleCase('HELLO')).toBe('Hello');
+    // gaps L11: lowercasing the rest turned "GSD" into "Gsd".
+    it('keeps the rest of a word as typed', () => {
+      expect(toTitleCase('GSD')).toBe('GSD');
     });
 
-    it('lowercases rest of each word', () => {
-      expect(toTitleCase('HELLO WORLD')).toBe('Hello World');
+    it('keeps the rest of each word as typed', () => {
+      expect(toTitleCase('HELLO WORLD')).toBe('HELLO WORLD');
     });
 
     it('handles mixed case input', () => {
-      expect(toTitleCase('hElLo WoRlD')).toBe('Hello World');
+      expect(toTitleCase('hElLo woRlD')).toBe('HElLo WoRlD');
     });
 
     it('handles empty string', () => {
@@ -89,7 +90,7 @@ describe('stringUtils Utility', () => {
 
     it('handles species names', () => {
       expect(toTitleCase('dog')).toBe('Dog');
-      expect(toTitleCase('CAT')).toBe('Cat');
+      expect(toTitleCase('cat')).toBe('Cat');
       expect(toTitleCase('golden retriever')).toBe('Golden Retriever');
     });
   });

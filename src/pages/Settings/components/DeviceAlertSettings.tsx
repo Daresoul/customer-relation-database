@@ -7,6 +7,7 @@ import { invoke } from '@/services/invoke';
 import { useDeviceIntegrations } from '../../../hooks/useDeviceIntegrations';
 import type { DeviceAlertSettings as Settings, DeviceQuietAlert } from '../../../types/deviceIntegration';
 import styles from '../Settings.module.css';
+import { errorText } from '@/utils/notifyError';
 
 const { Text } = Typography;
 
@@ -29,7 +30,7 @@ export const DeviceAlertSettings: React.FC = () => {
   useEffect(() => {
     invoke<Settings>('get_device_alert_settings')
       .then(setSettings)
-      .catch((e) => message.error(t('alerts.loadFailed', { error: String(e) })));
+      .catch((e) => message.error(t('alerts.loadFailed', { error: errorText(e, t) })));
   }, [message, t]);
 
   if (!settings) {
@@ -54,7 +55,7 @@ export const DeviceAlertSettings: React.FC = () => {
       setSettings(saved);
       message.success(t('alerts.saved'));
     } catch (e) {
-      message.error(t('alerts.saveFailed', { error: String(e) }));
+      message.error(t('alerts.saveFailed', { error: errorText(e, t) }));
     } finally {
       setSaving(false);
     }

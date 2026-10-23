@@ -33,6 +33,7 @@ import {
 } from '@ant-design/icons';
 import { invoke } from '@/services/invoke';
 import { useTranslation } from 'react-i18next';
+import { errorText } from '@/utils/notifyError';
 
 const { TextArea } = Input;
 
@@ -84,7 +85,7 @@ const DiagnosesSettings: React.FC = () => {
     } catch (e: any) {
       notification.error({
         message: t('common:error', 'Error'),
-        description: String(e),
+        description: errorText(e, t),
         placement: 'bottomRight',
       });
     } finally {
@@ -157,7 +158,7 @@ const DiagnosesSettings: React.FC = () => {
     } catch (e: any) {
       notification.error({
         message: t('common:error', 'Error'),
-        description: String(e),
+        description: errorText(e, t),
         placement: 'bottomRight',
       });
     }
@@ -170,7 +171,7 @@ const DiagnosesSettings: React.FC = () => {
     } catch (e: any) {
       notification.error({
         message: t('common:error', 'Error'),
-        description: String(e),
+        description: errorText(e, t),
         placement: 'bottomRight',
       });
     }
@@ -186,7 +187,7 @@ const DiagnosesSettings: React.FC = () => {
     } catch (e: any) {
       notification.error({
         message: t('common:error', 'Error'),
-        description: String(e),
+        description: errorText(e, t),
         placement: 'bottomRight',
       });
     }
@@ -325,12 +326,12 @@ const DiagnosesSettings: React.FC = () => {
         onOk={() => form.submit()}
         okText={editing ? t('common:save', 'Save') : t('common:create', 'Create')}
       >
-        <Form form={form} layout="vertical" onFinish={handleSubmit}>
+        <Form scrollToFirstError={{ focus: true }} form={form} layout="vertical" onFinish={handleSubmit}>
           <Form.Item
             name="name"
             label={t('settings:diagnoses.name', 'Name')}
             rules={[
-              { required: true, message: t('forms:validation.required', 'Required') },
+              { required: true, whitespace: true, message: t('forms:validation.required', 'Required') },
               { max: 100, message: t('forms:validation.maxLength', { max: 100 }) },
             ]}
           >

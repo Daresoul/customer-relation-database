@@ -9,21 +9,12 @@ import type { QueryClient } from '@tanstack/react-query';
  *   patient/:id         patient page, including its owner block
  *   household/:id       household page (people, pet count)
  *   household-patients  household pets list
- *   households, all-households, household-search, household-quick-search
- *                       household lists and pickers
+ *   all-households      household pickers (patient page owner block, appointments)
  *   appointments        calendar (patient names; removed with a deleted patient)
  *   patient-weights     weight log and trend on the patient page
  */
 const PATIENT_READERS = ['patients', 'patient', 'household-patients', 'household', 'appointments', 'patient-weights'];
-const HOUSEHOLD_READERS = [
-  'household',
-  'households',
-  'all-households',
-  'household-search',
-  'household-quick-search',
-  'patient',
-  'patients',
-];
+const HOUSEHOLD_READERS = ['household', 'all-households', 'patient', 'patients'];
 
 export function invalidatePatientData(queryClient: QueryClient): void {
   PATIENT_READERS.forEach((key) => queryClient.invalidateQueries({ queryKey: [key] }));

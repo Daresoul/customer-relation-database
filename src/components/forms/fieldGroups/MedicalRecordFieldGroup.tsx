@@ -161,6 +161,10 @@ export const MedicalRecordFieldGroup: React.FC<MedicalRecordFieldGroupProps> = (
           placeholder={getFieldPlaceholder()}
           filterOption={false}
           disabled={disabled}
+          // Enter picks a suggestion; it must not save the record.
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') e.preventDefault();
+          }}
           notFoundContent={
             isSearchingTemplates ? (
               <Spin size="small" />

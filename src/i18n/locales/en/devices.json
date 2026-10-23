@@ -51,7 +51,8 @@
       "serialPort": "Serial Port",
       "tcpHost": "TCP Host",
       "tcpPort": "TCP Port",
-      "enabled": "Enabled"
+      "enabled": "Enabled",
+      "baudRate": "Baud rate"
     },
     "placeholders": {
       "integrationName": "e.g., Lab Analyzer 1",
@@ -61,7 +62,8 @@
       "filePattern": "*.xml",
       "serialPort": "Select or type a port name",
       "tcpHost": "localhost or 192.168.1.100",
-      "tcpPort": "2575"
+      "tcpPort": "2575",
+      "baudRate": "Machine default"
     },
     "validation": {
       "nameRequired": "Please enter integration name",
@@ -71,6 +73,9 @@
       "serialPortRequired": "Please select or enter serial port name",
       "tcpHostRequired": "Please enter TCP host",
       "tcpPortRequired": "Please enter TCP port"
+    },
+    "help": {
+      "baudRate": "Leave empty to use the machine's usual speed. Change it only if the analyzer's own settings use another one."
     }
   },
   "table": {
@@ -128,7 +133,8 @@
     "updateSuccess": "Device integration updated successfully",
     "deleteSuccess": "Device integration deleted successfully",
     "operationFailed": "Operation failed",
-    "autoOpenReport": "Open generated report automatically after save"
+    "autoOpenReport": "Open generated report automatically after save",
+    "portInUse": "This port is already used by {{device}}. Only one enabled machine can listen on a port: switch that one off or pick another port."
   },
   "labels": {
     "devices": "Devices:"
@@ -169,6 +175,10 @@
       "unknown": {
         "title": "Can't reach the device",
         "action": "Press Reconnect. If it keeps happening, send the details below to support."
+      },
+      "listener_stopped": {
+        "title": "Stopped listening on {{port}}",
+        "action": "Press Reconnect. If it happens again, send the details below to support."
       }
     }
   },
@@ -334,6 +344,11 @@
       "working": "All lab machines are working. Click for details.",
       "waiting": "Waiting for a lab machine. Click for details.",
       "down": "{{count}} lab machine(s) not working. Click for details."
+    },
+    "state": {
+      "working": "OK",
+      "waiting": "Waiting",
+      "down": "Not working"
     }
   },
   "drawer": {

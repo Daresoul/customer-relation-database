@@ -25,20 +25,31 @@ import {
 } from '@ant-design/icons';
 import type { HouseholdTableRecord } from '../../types/ui.types';
 import styles from './Tables.module.css';
+import { phoneMatches } from '../../utils/phone';
 
 const { Text, Link } = Typography;
 
 interface HouseholdTableProps {
   households: HouseholdTableRecord[];
   loading?: boolean;
+  /** Controlled search text (the dashboard keeps it in the URL). */
+  searchText?: string;
+  onSearchTextChange?: (text: string) => void;
 }
 
 export const HouseholdTable: React.FC<HouseholdTableProps> = ({
   households,
   loading = false,
+  searchText: controlledSearch,
+  onSearchTextChange,
 }) => {
   const { t } = useTranslation(['patients', 'entities', 'common']);
-  const [searchText, setSearchText] = useState('');
+  const [localSearch, setLocalSearch] = useState('');
+  const searchText = controlledSearch ?? localSearch;
+  const setSearchText = (text: string) => {
+    setLocalSearch(text);
+    onSearchTextChange?.(text);
+  };
 
   // Filter data based on search
   const filteredData = useMemo(() => {
@@ -48,7 +59,7 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
     return households.filter(household =>
       household.lastName?.toLowerCase().includes(searchLower) ||
       household.primaryContact?.toLowerCase().includes(searchLower) ||
-      household.phone?.toLowerCase().includes(searchLower) ||
+      phoneMatches(searchText, household.phones ?? [household.phone]) ||
       household.email?.toLowerCase().includes(searchLower) ||
       household.address?.toLowerCase().includes(searchLower)
     );

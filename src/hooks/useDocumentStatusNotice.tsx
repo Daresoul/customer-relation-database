@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { invoke } from '@/services/invoke';
 import type { PdfStatus } from '@/types/generated/PdfStatus';
+import { errorText } from '@/utils/notifyError';
 
 /** What create/update return: the record plus how each document fared. */
 export interface SavedRecordDocuments {
@@ -38,7 +39,7 @@ export function useDocumentStatusNotice() {
         status = await invoke<PdfStatus>('regenerate_record_document', { recordId, kind });
       }
     } catch (e) {
-      status = { kind, ok: false, error: String(e) };
+      status = { kind, ok: false, error: errorText(e, t) };
     }
     await queryClient.invalidateQueries({ queryKey: ['medical-record', recordId] });
     if (status.ok) {
@@ -67,10 +68,43 @@ export function useDocumentStatusNotice() {
     });
   };
 
-  return (saved: SavedRecordDocuments, successMessage: string) => {
-    const failed = (saved.pdfs ?? []).filter((p) => !p.ok);
+  // The lab report was made, but the machine sent values it has no row for.
+  const warnMissingValues = (recordId: number, status: PdfStatus) => {
+    const codes = status.missingValues ?? [];
+    notification.warning({
+      key: `record-${recordId}-document-${status.kind}-missing`,
+      message: t('medical:documents.valuesNotOnPdf', { count: codes.length, codes: codes.join(', ') }),
+      description: t('medical:documents.valuesNotOnPdfHint'),
+      placement: 'bottomRight',
+      duration: 0,
+    });
+  };
+
+  return (saved: SavedRecordDocuments, successMessage: string, onOpenRecord?: (recordId: number) => void) => {
+    const pdfs = saved.pdfs ?? [];
+    const failed = pdfs.filter((p) => !p.ok);
+    pdfs
+      .filter((p) => p.ok && (p.missingValues?.length ?? 0) > 0)
+      .forEach((status) => warnMissingValues(saved.id, status));
     if (failed.length === 0) {
-      notification.success({ message: successMessage, placement: 'bottomRight', duration: 3 });
+      const key = `record-${saved.id}-saved`;
+      notification.success({
+        key,
+        message: successMessage,
+        placement: 'bottomRight',
+        duration: onOpenRecord ? 6 : 3,
+        actions: onOpenRecord ? (
+          <Button
+            size="small"
+            onClick={() => {
+              notification.destroy(key);
+              onOpenRecord(saved.id);
+            }}
+          >
+            {t('medical:actions.openRecord')}
+          </Button>
+        ) : undefined,
+      });
       return;
     }
     failed.forEach((status) => warn(saved.id, status));

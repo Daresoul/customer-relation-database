@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor, act } from '@testing-library/react';
 import { App } from 'antd';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import type { Appointment } from '../../../types/appointments';
 
 vi.mock('react-i18next', () => ({
@@ -31,6 +33,14 @@ vi.mock('../../../hooks/useAppointments', () => ({
 const bella = { id: 4, patientId: 20, patientName: 'Bella', status: 'scheduled' } as Appointment;
 
 vi.mock('../../../hooks/useRooms', () => ({ useRooms: () => ({ data: [] }) }));
+vi.mock('../../../hooks/usePatients', () => ({
+  usePatients: () => ({ patients: [{ id: 20, name: 'Bella', species: 'Cat', isActive: true }] }),
+}));
+const googleSettings: { needs_reauth: boolean } = { needs_reauth: false };
+vi.mock('@/services/invoke', () => ({
+  invoke: (cmd: string) =>
+    cmd === 'get_google_calendar_settings' ? Promise.resolve({ ...googleSettings }) : Promise.resolve([]),
+}));
 vi.mock('../../../components/AppointmentCalendar/AppointmentCalendar', () => ({
   default: ({
     onSelectAppointment,
@@ -92,11 +102,21 @@ vi.mock('../../../components/AppointmentModal/AppointmentModal', () => ({
 import AppointmentsTab from '../AppointmentsTab';
 
 function renderTab() {
-  return render(
-    <App>
-      <AppointmentsTab />
-    </App>,
+  const router = createMemoryRouter(
+    [
+      { path: '/', element: <AppointmentsTab /> },
+      { path: '/settings', element: <div>stub-settings</div> },
+    ],
+    { initialEntries: ['/'] },
   );
+  const utils = render(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <App>
+        <RouterProvider router={router} />
+      </App>
+    </QueryClientProvider>,
+  );
+  return { ...utils, router };
 }
 
 describe('AppointmentsTab save', () => {
@@ -223,5 +243,44 @@ describe('AppointmentsTab panel, Today list and data range', () => {
     fireEvent.click(screen.getByText('appointments:calendar.refresh'));
 
     expect(refetchCalendar).toHaveBeenCalled();
+  });
+});
+
+describe('AppointmentsTab Google banner and patient filter', () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+    calendarCalls.length = 0;
+    googleSettings.needs_reauth = false;
+    document.body.innerHTML = '';
+  });
+
+  it('says so when Google needs reconnecting, with a way to Settings', async () => {
+    googleSettings.needs_reauth = true;
+    const { router } = renderTab();
+
+    expect(await screen.findByText('appointments:google.reauthBanner')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('appointments:google.reconnect'));
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/settings'));
+    expect(router.state.location.search).toBe('?section=appointments');
+  });
+
+  it('shows no Google banner while the connection is fine', async () => {
+    renderTab();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.queryByText('appointments:google.reauthBanner')).not.toBeInTheDocument();
+  });
+
+  it('filters by patient', async () => {
+    const { container } = renderTab();
+    fireEvent.click(screen.getByText('appointments:filters.filter'));
+    await screen.findByText('appointments:filters.patient');
+
+    const patientSelect = container.ownerDocument.querySelector('[data-testid="patient-filter"] .ant-select-selector')!;
+    fireEvent.mouseDown(patientSelect);
+    fireEvent.click(await screen.findByText('Bella · Cat'));
+
+    await waitFor(() => expect(calendarCalls.at(-1)!.filter).toEqual(expect.objectContaining({ patientId: 20 })));
   });
 });

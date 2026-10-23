@@ -301,3 +301,131 @@ async fn device_health_migration_adds_status_columns_and_sample_table() {
         assert_eq!(c, 1, "{table}.{column} missing");
     }
 }
+
+async fn history_device_name(db: &DatabaseConnection, file_id: &str) -> String {
+    let row = db
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "SELECT device_name FROM file_access_history WHERE file_id = ?",
+            [file_id.into()],
+        ))
+        .await
+        .unwrap()
+        .expect("history row must exist");
+    row.try_get("", "device_name").unwrap()
+}
+
+#[tokio::test]
+async fn a_serial_result_is_named_by_its_machine_not_its_port() {
+    let db = create_test_db_with_migrations().await;
+    let dir = tempfile::tempdir().unwrap();
+    let id = chem_integration(&db).await;
+    let sink = RecordingSink::new(dir.path());
+
+    let delivery = deliver_result(&db, dir.path(), &sink, &serial_source(id), "chem.hl7", &chem_frame()).await;
+
+    let results = sink.results.lock().unwrap().clone();
+    assert_eq!(results[0]["deviceName"], "Chemistry");
+    assert_eq!(history_device_name(&db, &delivery.file_id.unwrap()).await, "Chemistry");
+}
+
+#[tokio::test]
+async fn a_cut_off_serial_frame_is_named_by_its_machine() {
+    let db = create_test_db_with_migrations().await;
+    let dir = tempfile::tempdir().unwrap();
+    let id = chem_integration(&db).await;
+    let sink = RecordingSink::new(dir.path());
+
+    let file_id = report_cut_off(&db, dir.path(), &sink, &serial_source(id), b"MSH|^~\\&|1|Pointc")
+        .await
+        .unwrap();
+
+    assert_eq!(history_device_name(&db, &file_id).await, "Chemistry");
+}
+
+#[tokio::test]
+async fn a_result_from_a_removed_integration_keeps_the_port_name() {
+    let db = create_test_db_with_migrations().await;
+    let dir = tempfile::tempdir().unwrap();
+    let sink = RecordingSink::new(dir.path());
+
+    deliver_result(&db, dir.path(), &sink, &serial_source(9999), "chem.hl7", &chem_frame()).await;
+
+    let results = sink.results.lock().unwrap().clone();
+    assert_eq!(results[0]["deviceName"], "COM3");
+}
+
+fn healvet_source(integration_id: i64) -> ResultSource {
+    ResultSource {
+        integration_id,
+        device_name: "COM4".to_string(),
+        device_type: "healvet_hv_fia_3000".to_string(),
+        connection_method: "serial_port".to_string(),
+    }
+}
+
+// parsers M3: a Healvet stream holding two samples became one blended result.
+#[tokio::test]
+async fn a_healvet_stream_with_two_samples_is_delivered_as_two_results() {
+    let db = create_test_db_with_migrations().await;
+    let dir = tempfile::tempdir().unwrap();
+    let sink = RecordingSink::new(dir.path());
+    let wire = b"#AFS1000&S1&12.5&06-04-2026 11:00:00&&cCRP&REX&&M&Serum&#AFS1000&S2&3.1&06-04-2026 11:20:00&&T4-1&LUNA&&F&Serum&EE";
+
+    let delivery = deliver_result(&db, dir.path(), &sink, &healvet_source(77), "healvet.txt", wire).await;
+
+    assert!(delivery.parsed);
+    let results = sink.results.lock().unwrap().clone();
+    assert_eq!(results.len(), 2, "{results:?}");
+    assert_eq!(results[0]["patientIdentifier"], "REX");
+    assert_eq!(results[1]["patientIdentifier"], "LUNA");
+    assert!(results[1]["testResults"].get("cCRP").is_none());
+    assert!(results.iter().all(|r| r["fileId"].is_string()));
+}
+
+// connection-followup #7: a machine that resends the same frame must not
+// make a second result.
+#[tokio::test]
+async fn the_same_serial_frame_again_within_ten_minutes_is_dropped() {
+    let db = create_test_db_with_migrations().await;
+    let dir = tempfile::tempdir().unwrap();
+    let id = chem_integration(&db).await;
+    let sink = RecordingSink::new(dir.path());
+
+    deliver_result(&db, dir.path(), &sink, &serial_source(id), "chem.hl7", &chem_frame()).await;
+    deliver_result(&db, dir.path(), &sink, &serial_source(id), "chem.hl7", &chem_frame()).await;
+
+    assert_eq!(sink.results.lock().unwrap().len(), 1);
+    let row = db
+        .query_one(Statement::from_string(DbBackend::Sqlite, "SELECT COUNT(*) AS c FROM file_access_history".to_string()))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(row.try_get::<i64>("", "c").unwrap(), 1);
+}
+
+#[tokio::test]
+async fn the_same_frame_from_another_machine_is_still_delivered() {
+    let db = create_test_db_with_migrations().await;
+    let dir = tempfile::tempdir().unwrap();
+    let id = chem_integration(&db).await;
+    let sink = RecordingSink::new(dir.path());
+
+    deliver_result(&db, dir.path(), &sink, &serial_source(id), "chem.hl7", &chem_frame()).await;
+    deliver_result(&db, dir.path(), &sink, &serial_source(id + 1000), "chem.hl7", &chem_frame()).await;
+
+    assert_eq!(sink.results.lock().unwrap().len(), 2);
+}
+
+#[test]
+fn frame_repeats_are_remembered_for_ten_minutes() {
+    use crate::services::device_events::FrameMemory;
+    use std::time::{Duration, Instant};
+    let mut memory = FrameMemory::default();
+    let t0 = Instant::now();
+    assert!(!memory.seen_recently(1, b"abc", t0));
+    assert!(memory.seen_recently(1, b"abc", t0 + Duration::from_secs(9 * 60)));
+    assert!(!memory.seen_recently(2, b"abc", t0 + Duration::from_secs(9 * 60)));
+    assert!(!memory.seen_recently(1, b"abd", t0 + Duration::from_secs(9 * 60)));
+    assert!(!memory.seen_recently(1, b"abc", t0 + Duration::from_secs(30 * 60)));
+}

@@ -86,6 +86,9 @@ struct JavaSample {
     test_results: HashMap<String, String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     test_type: Option<String>,
+    /// PointCare's OBR-15 ("Whole blood"); the JAR prints serum without it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    sample_type: Option<String>,
 }
 
 impl JavaPdfService {
@@ -107,18 +110,19 @@ impl JavaPdfService {
         patient: &crate::services::device_pdf_service::PatientData,
         device_data_list: &[crate::services::device_pdf_service::DeviceTestData],
     ) -> Result<(), String> {
-        Self::generate_pdf_multi_with_clinic(jar_path, output_path, patient, device_data_list, None)
+        Self::generate_pdf_multi_with_clinic(jar_path, output_path, patient, device_data_list, None).map(|_| ())
     }
 
     /// `generate_pdf_multi_with_jar` with the clinic profile for the
-    /// letterhead; without one the current letterhead is used.
+    /// letterhead; without one the current letterhead is used. Returns the
+    /// analyte codes that have no row on the report.
     pub fn generate_pdf_multi_with_clinic(
         jar_path: &Path,
         output_path: &str,
         patient: &crate::services::device_pdf_service::PatientData,
         device_data_list: &[crate::services::device_pdf_service::DeviceTestData],
         clinic: Option<&ClinicProfile>,
-    ) -> Result<(), String> {
+    ) -> Result<Vec<String>, String> {
         log::info!("☕ Generating PDF using Java JAR (iText 5) with {} samples...", device_data_list.len());
 
         // A sample with no test results must never reach the renderer: Java
@@ -142,10 +146,10 @@ impl JavaPdfService {
         let input = serde_json::to_value(&java_input)
             .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
         let input = Self::attach_clinic(input, clinic);
-        Self::run_jar_job(jar_path, input, output_path, JAVA_TIMEOUT)?;
+        let stderr = Self::run_jar_job(jar_path, input, output_path, JAVA_TIMEOUT)?;
 
         log::info!("✅ Java PDF generated successfully");
-        Ok(())
+        Ok(Self::unmapped_codes(&stderr))
     }
 
     /// Builds the JSON contract sent to the JAR. Pure (no I/O), so the
@@ -165,7 +169,7 @@ impl JavaPdfService {
                 "exigo_eos_vet" => 0,              // Exigo first
                 "mnchip_pointcare_chemistry" => 1, // Pointcare chemistry second
                 "healvet_hv_fia_3000" => 2,        // Healvet third
-                "mnchip_pcr_analyzer" => 3,        // PCR last (separate page)
+                "mnchip_pcr_analyzer" | "mnchip_pointcare_pcr_v1" => 3, // PCR last (separate page)
                 _ => 99,                            // Unknown devices last
             }
         });
@@ -186,6 +190,10 @@ impl JavaPdfService {
                 .unwrap_or_else(|| "N/A".to_string());
 
             let java_device_type = Self::map_device_type(&device_data.device_type);
+            let sample_type = (java_device_type == "pointcare")
+                .then(|| test_results.get("sample_type").cloned())
+                .flatten()
+                .filter(|s| !s.trim().is_empty());
 
             JavaSample {
                 device_type: java_device_type,
@@ -193,6 +201,7 @@ impl JavaPdfService {
                 patient_id,
                 detected_at: device_data.detected_at.to_rfc3339(),
                 analysis_datetime: Self::analysis_datetime(device_data, tz),
+                sample_type,
                 test_results,
                 test_type: None,
             }
@@ -360,13 +369,14 @@ impl JavaPdfService {
 
     /// One JAR run in its own job folder: Java writes the PDF there, and only
     /// a finished, non-empty PDF is moved to `output_path`. Java's stderr is
-    /// logged even when it succeeds, so its warnings reach the log.
+    /// logged even when it succeeds, so its warnings reach the log, and
+    /// returned so callers can read its `PDF_WARN` lines.
     pub(crate) fn run_jar_job(
         jar_path: &Path,
         mut input: Value,
         output_path: &str,
         timeout: Duration,
-    ) -> Result<(), String> {
+    ) -> Result<String, String> {
         let job_dir = Self::new_job_dir()?;
         let input_json_path = job_dir.path().join("input.json");
         let job_pdf = job_dir.path().join("out.pdf");
@@ -386,19 +396,25 @@ impl JavaPdfService {
         )?;
 
         if !output.success {
-            return Err(format!(
-                "Java JAR failed:\nSTDOUT: {}\nSTDERR: {}",
-                output.stdout, output.stderr
-            ));
+            return Err(Self::jar_failure_message(&output.stdout, &output.stderr));
         }
         log::info!("   ✅ Java output: {}", output.stdout);
-        for line in output.stderr.lines().filter(|l| !l.trim().is_empty()) {
+        for warning in Self::pdf_warnings(&output.stderr) {
+            crate::services::telemetry::event(
+                log::Level::Warn,
+                "pdf",
+                "The PDF generator could not print a value as sent",
+                serde_json::json!({ "warning": warning }),
+            );
+        }
+        for line in output.stderr.lines().filter(|l| !l.trim().is_empty() && !l.trim().starts_with("PDF_WARN")) {
             log::warn!("   ☕ Java stderr: {}", line);
         }
 
-        match fs::metadata(&job_pdf) {
-            Ok(m) if m.len() > 0 => {}
-            _ => return Err(format!("PDF was not created at: {}", output_path)),
+        match fs::read(&job_pdf) {
+            Ok(bytes) if Self::pdf_is_complete(&bytes) => {}
+            Ok(_) => return Err("The PDF generator wrote an incomplete PDF".to_string()),
+            Err(_) => return Err(format!("PDF was not created at: {}", output_path)),
         }
         let dest = Path::new(output_path);
         if let Some(parent) = dest.parent() {
@@ -406,10 +422,48 @@ impl JavaPdfService {
                 .map_err(|e| format!("Failed to create folder for {}: {}", output_path, e))?;
         }
         if fs::rename(&job_pdf, dest).is_err() {
-            fs::copy(&job_pdf, dest)
-                .map_err(|e| format!("Failed to move PDF to {}: {}", output_path, e))?;
+            Self::copy_into_place(&job_pdf, dest)?;
         }
-        Ok(())
+        Ok(output.stderr)
+    }
+
+    /// A failed run's error. Its first line is the cause (the CLI's "Error
+    /// generating PDF" line, else Java's first message), so the record page's
+    /// warning shows why; the full output follows.
+    pub(crate) fn jar_failure_message(stdout: &str, stderr: &str) -> String {
+        let lines = || stderr.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with("PDF_WARN"));
+        let cause = lines()
+            .find(|l| l.starts_with("Error generating PDF:"))
+            .or_else(|| lines().next())
+            .or_else(|| stdout.lines().map(str::trim).find(|l| !l.is_empty()))
+            .unwrap_or("The PDF generator stopped without saying why");
+        format!("{}\nJava JAR failed.\nSTDOUT: {}\nSTDERR: {}", cause, stdout, stderr)
+    }
+
+    /// The JAR's `PDF_WARN ...` lines (a value it could not print as sent).
+    pub(crate) fn pdf_warnings(stderr: &str) -> Vec<&str> {
+        stderr.lines().map(str::trim).filter(|l| l.starts_with("PDF_WARN")).collect()
+    }
+
+    /// A PDF the JAR finished: it ends with the `%%EOF` marker.
+    pub(crate) fn pdf_is_complete(bytes: &[u8]) -> bool {
+        let tail = &bytes[bytes.len().saturating_sub(1024)..];
+        tail.windows(5).any(|w| w == b"%%EOF")
+    }
+
+    /// Copy `src` next to `dest` as `<dest>.part`, then rename it over
+    /// `dest`, so `dest` is never a half-written file.
+    pub(crate) fn copy_into_place(src: &Path, dest: &Path) -> Result<(), String> {
+        let mut part = dest.as_os_str().to_owned();
+        part.push(".part");
+        let part = PathBuf::from(part);
+        let result = fs::copy(src, &part)
+            .map_err(|e| format!("Failed to copy the PDF into place: {}", e))
+            .and_then(|_| fs::rename(&part, dest).map_err(|e| format!("Failed to move the PDF into place: {}", e)));
+        if result.is_err() {
+            let _ = fs::remove_file(&part);
+        }
+        result
     }
 
     /// Ask the bundled JAR which app version it was built for (`java -jar … --version`,
@@ -653,17 +707,6 @@ impl JavaPdfService {
         }
     }
 
-    /// Generate a PDF using the Java JAR (iText 5) with a single device sample
-    /// Convenience wrapper for generate_pdf_multi
-    pub fn generate_pdf(
-        app_handle: &tauri::AppHandle,
-        output_path: &str,
-        patient: &crate::services::device_pdf_service::PatientData,
-        device_data: &crate::services::device_pdf_service::DeviceTestData,
-    ) -> Result<(), String> {
-        Self::generate_pdf_multi(app_handle, output_path, patient, &[device_data.clone()])
-    }
-
     /// The sample number printed on a lab report.
     /// Exigo's SNO is the analyzer's serial, the same on every sample of the
     /// day; its run number is SEQ.
@@ -681,14 +724,28 @@ impl JavaPdfService {
             .to_string()
     }
 
+    /// The analyte codes the JAR said have no row on the report
+    /// (`PDF_WARN code=unmapped_analytes ... codes=A,B`).
+    pub fn unmapped_codes(stderr: &str) -> Vec<String> {
+        let mut codes: Vec<String> = stderr
+            .lines()
+            .filter(|l| l.starts_with("PDF_WARN code=unmapped_analytes"))
+            .filter_map(|l| l.split_once(" codes=").map(|(_, c)| c.trim()))
+            .flat_map(|c| c.split(',').map(str::trim).filter(|s| !s.is_empty()).map(String::from))
+            .collect();
+        codes.sort();
+        codes.dedup();
+        codes
+    }
+
     /// Map detailed device type names to Java-expected format
     /// Java expects: "exigo_eos_vet", "healvet", "pointcare", or "pcr"
     /// We use: "exigo_eos_vet", "healvet_hv_fia_3000", "mnchip_pointcare_chemistry", "mnchip_pcr_analyzer"
-    fn map_device_type(device_type: &str) -> String {
+    pub(crate) fn map_device_type(device_type: &str) -> String {
         match device_type {
             "healvet_hv_fia_3000" => "healvet".to_string(),
             "mnchip_pointcare_chemistry" => "pointcare".to_string(),
-            "mnchip_pcr_analyzer" => "pcr".to_string(),
+            "mnchip_pcr_analyzer" | "mnchip_pointcare_pcr_v1" => "pcr".to_string(),
             "exigo_eos_vet" => "exigo_eos_vet".to_string(),
             _ => device_type.to_string(), // Pass through unknown types
         }
@@ -696,26 +753,21 @@ impl JavaPdfService {
 
     /// Generate a simple PDF report using the template (Rapport.pdf)
     /// This creates a report with title and description overlaid on the clinic letterhead
-    pub fn generate_simple_report(
-        jar_path: &Path,
-        output_path: &str,
+    /// The JSON job for a record's report; `date` (dd/MM/yyyy) is the visit's.
+    pub fn simple_report_json(
         title: &str,
         description: &str,
         patient_data: Option<&crate::services::device_pdf_service::PatientData>,
+        date: Option<&str>,
         clinic: &ClinicProfile,
-    ) -> Result<(), String> {
-        log::info!("☕ Generating simple PDF report using Java JAR...");
-
-        // Build JSON input for simple report mode
+    ) -> Value {
         let mut json_obj = serde_json::json!({
             "report_type": "simple",
             "title": title,
             "description": description,
-            "output_path": output_path,
+            "date": date,
             "clinic": Self::clinic_json(clinic),
         });
-
-        // Add patient info if provided
         if let Some(patient) = patient_data {
             json_obj["patient"] = serde_json::json!({
                 "name": patient.name,
@@ -726,44 +778,22 @@ impl JavaPdfService {
                 "date_of_birth": patient.date_of_birth
             });
         }
-
-        Self::run_jar_job(jar_path, json_obj, output_path, JAVA_TIMEOUT)?;
-
-        log::info!("✅ Simple report PDF generated successfully");
-        Ok(())
+        json_obj
     }
 
-    /// Generate an invoice PDF using the invoice.pdf template, from a job
-    /// built by `invoice_json`.
-    pub fn generate_invoice(jar_path: &Path, output_path: &str, job: Value) -> Result<(), String> {
-        log::info!("☕ Generating invoice PDF using Java JAR...");
-        Self::run_jar_job(jar_path, job, output_path, JAVA_TIMEOUT)?;
-        log::info!("✅ Invoice PDF generated successfully");
-        Ok(())
-    }
-
-    /// Generate a pharmacy note PDF using the pharmacy_note.pdf template
-    /// Overlays prescription text onto the pre-designed template
-    pub fn generate_pharmacy_note(
-        jar_path: &Path,
-        output_path: &str,
-        prescription_text: &str,
-        clinic: &ClinicProfile,
-    ) -> Result<(), String> {
-        log::info!("☕ Generating pharmacy note PDF using Java JAR...");
-
-        let json_obj = serde_json::json!({
+    pub fn pharmacy_note_json(prescription_text: &str, clinic: &ClinicProfile) -> Value {
+        serde_json::json!({
             "report_type": "pharmacy_note",
             "prescription_text": prescription_text,
-            "output_path": output_path,
             "clinic": Self::clinic_json(clinic),
-        });
-
-        Self::run_jar_job(jar_path, json_obj, output_path, JAVA_TIMEOUT)?;
-
-        log::info!("✅ Pharmacy note PDF generated successfully");
-        Ok(())
+        })
     }
+
+    /// Render a prepared JSON job (report, pharmacy note, invoice) to `output_path`.
+    pub fn generate_from_job(jar_path: &Path, output_path: &str, job: Value) -> Result<(), String> {
+        Self::run_jar_job(jar_path, job, output_path, JAVA_TIMEOUT).map(|_| ())
+    }
+
 }
 
 /// The clinic profile for jobs whose caller has no database at hand (lab
@@ -825,6 +855,7 @@ impl JavaPdfService {
             .map(|item| {
                 serde_json::json!({
                     "name": item.name,
+                    "description": item.description,
                     "quantity": item.quantity,
                     "unit_price": item.unit_price,
                     "vat_label": item.vat_name,
@@ -980,6 +1011,31 @@ mod tests {
             analysis_datetime("healvet_hv_fia_3000", serde_json::json!({"cCRP": "12.5", "test_datetime": "06-04-2026 11:49:53"})),
             "2026-04-06T11:49:53"
         );
+    }
+
+    // parsers M6: the PointCare report always said "serum".
+    #[test]
+    fn pointcare_sample_type_reaches_the_jar() {
+        let chem = sample("mnchip_pointcare_chemistry", serde_json::json!({"GLU": "95", "sample_type": "Whole blood"}));
+        let json = contract_json(&patient_with_dob(None), &[chem]);
+        assert_eq!(json["samples"][0]["sample_type"], "Whole blood");
+
+        let exigo = sample("exigo_eos_vet", serde_json::json!({"WBC": "10.4"}));
+        let json = contract_json(&patient_with_dob(None), &[exigo]);
+        assert!(json["samples"][0].get("sample_type").is_none());
+    }
+
+    #[test]
+    fn legacy_pcr_samples_sort_with_pcr() {
+        let json = contract_json(
+            &patient_with_dob(None),
+            &[
+                sample("mnchip_pointcare_pcr_v1", serde_json::json!({"IC": "32.03"})),
+                sample("exigo_eos_vet", serde_json::json!({"WBC": "10.4"})),
+            ],
+        );
+        assert_eq!(json["samples"][0]["device_type"], "exigo_eos_vet");
+        assert_eq!(json["samples"][1]["device_type"], "pcr");
     }
 
     #[test]
@@ -1160,5 +1216,53 @@ mod tests {
             JavaPdfService::classify_jar_version("0.7.2", "dev"),
             JarVersionVerdict::SkipDev { .. }
         ));
+    }
+
+    #[test]
+    fn a_jar_failure_names_its_cause_on_the_first_line() {
+        let stderr = "PDF_WARN code=bad_detected_at value='x'\n\
+                      Error generating PDF: Template not found: invoice.pdf\n\
+                      java.io.IOException: Template not found: invoice.pdf\n\tat Foo.bar(Foo.java:1)\n";
+        let msg = JavaPdfService::jar_failure_message("starting", stderr);
+        assert_eq!(msg.lines().next(), Some("Error generating PDF: Template not found: invoice.pdf"));
+        assert!(msg.contains("Java JAR failed"), "{}", msg);
+
+        let bare = JavaPdfService::jar_failure_message("", "PDF_WARN code=x\nException in thread main: boom\n");
+        assert_eq!(bare.lines().next(), Some("Exception in thread main: boom"));
+
+        let silent = JavaPdfService::jar_failure_message("", "");
+        assert!(!silent.lines().next().unwrap_or("").trim().is_empty(), "{:?}", silent);
+    }
+
+    #[test]
+    fn pdf_warnings_are_picked_out_of_stderr() {
+        let warnings = JavaPdfService::pdf_warnings("noise\nPDF_WARN code=a\n  PDF_WARN code=b value='1'\nmore");
+        assert_eq!(warnings, ["PDF_WARN code=a", "PDF_WARN code=b value='1'"]);
+    }
+
+    #[test]
+    fn a_pdf_counts_only_with_its_end_of_file_marker() {
+        assert!(JavaPdfService::pdf_is_complete(b"%PDF-1.4\n1 0 obj\n%%EOF\n"));
+        assert!(JavaPdfService::pdf_is_complete(b"%PDF-1.4\n%%EOF"));
+        assert!(!JavaPdfService::pdf_is_complete(b"%PDF-1.4\n1 0 obj\n<< /Type"));
+        assert!(!JavaPdfService::pdf_is_complete(b""));
+    }
+
+    #[test]
+    fn a_copied_pdf_lands_whole_and_leaves_no_part_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("out.pdf");
+        let dest = dir.path().join("Invoice.pdf");
+        fs::write(&src, b"%PDF-new\n%%EOF").unwrap();
+        fs::write(&dest, b"%PDF-old\n%%EOF").unwrap();
+
+        JavaPdfService::copy_into_place(&src, &dest).unwrap();
+
+        assert_eq!(fs::read(&dest).unwrap(), b"%PDF-new\n%%EOF");
+        let names: Vec<String> = fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
+            .collect();
+        assert!(!names.iter().any(|n| n.ends_with(".part")), "{:?}", names);
     }
 }

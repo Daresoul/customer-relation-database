@@ -1,24 +1,26 @@
 import React, { useEffect, useState } from 'react';
-import { App, Spin, Alert, Button, Divider, List, Typography, Space, Modal } from 'antd';
+import { App, Modal } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import MedicalRecordForm from './MedicalRecordForm';
-import { useMedicalRecord, useCreateMedicalRecord, useUpdateMedicalRecord, useUploadAttachment } from '@/hooks/useMedicalRecords';
-import type { CreateMedicalRecordInput, UpdateMedicalRecordInput, MedicalRecordHistory, DeviceDataInput } from '@/types/medical';
+import { useCreateMedicalRecord, useUploadAttachment } from '@/hooks/useMedicalRecords';
+import type { CreateMedicalRecordInput, UpdateMedicalRecordInput, DeviceDataInput } from '@/types/medical';
 import { invoke } from '@/services/invoke';
 import { useQueryClient } from '@tanstack/react-query';
 import { DIAGNOSES_KEYS } from '@/hooks/useDiagnoses';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
-import styles from './MedicalRecordModal.module.css';
 import dayjs from 'dayjs';
 import { PatientService } from '@/services/patientService';
-import { invalidatePatientData } from '@/hooks/invalidation';
+import { labInboxService } from '@/services/labInboxService';
+import { invalidatePatientData, invalidateLabInboxData } from '@/hooks/invalidation';
 
 interface MedicalRecordModalProps {
   open: boolean;
   onClose: () => void;
   patientId: number;
   patientName: string;
-  recordId: number | null;
+  /** Always null: the modal only creates records; edits happen on the record page. */
+  recordId?: number | null;
   /** New records only: a starting title, e.g. the appointment's reason. */
   defaultTitle?: string;
 }
@@ -28,7 +30,6 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
   onClose,
   patientId,
   patientName,
-  recordId,
   defaultTitle,
 }) => {
   const { t } = useTranslation('medical');
@@ -47,36 +48,55 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
       setDirty(false);
       onClose();
     });
-  const { data: recordDetail, isLoading: isLoadingRecord, isError, error, refetch } = useMedicalRecord(
-    recordId || 0,
-    true // include history when editing
-  );
-  const createMutation = useCreateMedicalRecord();
-  const updateMutation = useUpdateMedicalRecord();
+  const navigate = useNavigate();
+  const createMutation = useCreateMedicalRecord({
+    onOpenRecord: (id) => navigate(`/medical-records/${id}`),
+  });
   const uploadMutation = useUploadAttachment();
   const queryClient = useQueryClient();
 
-  const isEdit = !!recordId;
-  const title = isEdit
-    ? `${t('form.editTitle')} - ${patientName}`
-    : `${t('form.createTitle')} - ${patientName}`;
+  const title = `${t('form.createTitle')} - ${patientName}`;
 
-  // Debugging: log modal state and fetch status
-  useEffect(() => {
-    if (isEdit) {
+  /**
+   * A recent device file goes on as a lab result with its device type, the
+   * way the record page's Recent files Add does it; one that can't (a result
+   * that could not be read) and any other file is uploaded as a plain file.
+   * Every file is tried; the ones that failed are named.
+   */
+  const addFiles = async (recordId: number, files: File[], fileSourceIds?: Map<string, string>) => {
+    const results = await Promise.allSettled(
+      files.map(async (file) => {
+        const sourceFileId = fileSourceIds?.get(file.name);
+        if (sourceFileId) {
+          try {
+            await labInboxService.attach(sourceFileId, recordId);
+            return;
+          } catch (labError) {
+            console.warn('Not attached as a lab result, uploading as a file:', labError);
+          }
+        }
+        await uploadMutation.mutateAsync({ medicalRecordId: recordId, file, sourceFileId });
+      }),
+    );
+    if (fileSourceIds && fileSourceIds.size > 0) invalidateLabInboxData(queryClient);
+    const failed = files.filter((_, i) => results[i].status === 'rejected');
+    if (failed.length > 0) {
+      results.forEach((r) => r.status === 'rejected' && console.error('Upload error:', r.reason));
+      notification.error({
+        message: t('common:error'),
+        description: t('messages.uploadFailedFiles', { names: failed.map((f) => f.name).join(', ') }),
+        placement: 'bottomRight',
+        duration: 0,
+      });
     } else {
+      notification.success({
+        message: t('common:success'),
+        description: t('messages.uploadSuccess'),
+        placement: 'bottomRight',
+        duration: 3,
+      });
     }
-  }, [isEdit, recordId, patientId]);
-
-  useEffect(() => {
-    if (isEdit) {
-      if (isError) {
-        console.error('[MedicalRecordModal] Load error:', error);
-      }
-      if (recordDetail) {
-      }
-    }
-  }, [isEdit, isLoadingRecord, isError, error, recordDetail]);
+  };
 
   const handleSubmit = async (
     values: CreateMedicalRecordInput | UpdateMedicalRecordInput,
@@ -88,53 +108,16 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
   ) => {
     setLoading(true);
     try {
-      // Track which record we're saving against so the diagnosis-tag
-      // step below can target it for both edit (known id) and create
-      // (id from the mutation result) paths.
-      let savedRecordId: number | null = recordId;
+      // Create the medical record first (include deviceDataList for PDF generation)
+      const result = await createMutation.mutateAsync({
+        ...values as CreateMedicalRecordInput,
+        patientId,
+        deviceDataList: deviceDataList,
+      });
+      const savedRecordId: number | null = result ? result.id : null;
 
-      if (isEdit && recordId) {
-        await updateMutation.mutateAsync({
-          recordId,
-          updates: values as UpdateMedicalRecordInput,
-        });
-      } else {
-        // Create the medical record first (include deviceDataList for PDF generation)
-        const result = await createMutation.mutateAsync({
-          ...values as CreateMedicalRecordInput,
-          patientId,
-          deviceDataList: deviceDataList,
-        });
-        if (result) savedRecordId = result.id;
-
-        // Upload files if any were selected
-        if (files && files.length > 0 && result) {
-          const uploadPromises = files.map(file =>
-            uploadMutation.mutateAsync({
-              medicalRecordId: result.id,
-              file,
-              sourceFileId: fileSourceIds?.get(file.name), // Pass the source file ID if it exists
-            })
-          );
-
-          try {
-            await Promise.all(uploadPromises);
-            notification.success({
-              message: t('common:success'),
-              description: t('messages.uploadSuccess'),
-              placement: "bottomRight",
-              duration: 3
-            });
-          } catch (uploadError) {
-            notification.error({
-              message: t('common:error'),
-              description: t('messages.uploadFailed'),
-              placement: "bottomRight",
-              duration: 5
-            });
-            console.error('Upload error:', uploadError);
-          }
-        }
+      if (files && files.length > 0 && savedRecordId != null) {
+        await addFiles(savedRecordId, files, fileSourceIds);
       }
 
       // Persist the diagnosis tag set as a separate step. set_diagnoses_for_record
@@ -182,7 +165,7 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
           });
         }
       }
-      if (!isEdit && savedRecordId != null && visitWeight) {
+      if (savedRecordId != null && visitWeight) {
         try {
           await PatientService.addWeight(patientId, visitWeight, dayjs().format('YYYY-MM-DD'), savedRecordId);
           invalidatePatientData(queryClient);
@@ -214,137 +197,17 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
       width={800}
       destroyOnHidden
     >
-      {isEdit && isLoadingRecord ? (
-        <div className={styles.loadingContainer}>
-          <Spin size="large" />
-        </div>
-      ) : isEdit && isError ? (
-        <div className={styles.contentContainer}>
-          <Alert
-            type="error"
-            showIcon
-            message={t('messages.loadError')}
-            description={
-              typeof error === 'string'
-                ? error
-                : (error && (error as any).message)
-                  ? String((error as any).message)
-                  : t('messages.loadErrorDetail')
-            }
-            action={
-              <Button size="small" onClick={() => refetch()}>
-                {t('actions.retry')}
-              </Button>
-            }
-          />
-        </div>
-      ) : (
-        <div>
-          <MedicalRecordForm
-            initialValues={isEdit && recordDetail ? recordDetail.record : undefined}
-            onSubmit={handleSubmit}
-            onCancel={requestClose}
-            onDirtyChange={setDirty}
-            loading={loading}
-            isEdit={isEdit}
-            patientId={patientId}
-            recordId={recordId}
-            defaultTitle={isEdit ? undefined : defaultTitle}
-          />
-
-          {isEdit && recordDetail?.history && recordDetail.history.length > 0 && (
-            <>
-              <Divider className={styles.divider} />
-              <HistoryList history={recordDetail.history} />
-            </>
-          )}
-        </div>
-      )}
-    </Modal>
-  );
-};
-
-const { Text } = Typography;
-
-const HistoryList: React.FC<{ history: MedicalRecordHistory[] }> = ({ history }) => {
-  const { t } = useTranslation('medical');
-  // Deduplicate obvious duplicates (same version and timestamp)
-  const seen = new Set<string>();
-  // Normalize and sort by changedAt desc (fallback to version desc)
-  const items = history.filter(h => {
-    const key = `${h.version}|${h.changedAt}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  }).sort((a, b) => {
-    const ad = new Date(a.changedAt).getTime();
-    const bd = new Date(b.changedAt).getTime();
-    if (!isNaN(ad) && !isNaN(bd) && bd !== ad) return bd - ad;
-    return (b.version || 0) - (a.version || 0);
-  });
-
-  return (
-    <div>
-      <Text strong className={styles.changeHistoryTitle}>{t('history.title')}</Text>
-      <List
-        size="small"
-        dataSource={items}
-        renderItem={(item) => (
-          <List.Item>
-            <Space direction="vertical" size={0} className={styles.fullWidth}>
-              <div className={styles.flexBetween}>
-                <Text>{t('versionLabel', { version: item.version })}</Text>
-                <Text type="secondary">{new Date(item.changedAt).toLocaleString()}</Text>
-              </div>
-              {item.changedBy && (
-                <Text type="secondary">{t('history.by', { name: item.changedBy })}</Text>
-              )}
-              {(() => {
-                // Prefer showing exact diffs if available
-                const oldRaw: any = (item as any).oldValues;
-                const newRaw: any = (item as any).newValues;
-                const parseMaybeJson = (v: any) => {
-                  if (!v) return null;
-                  if (typeof v === 'string') { try { return JSON.parse(v); } catch { return null; } }
-                  if (typeof v === 'object') return v;
-                  return null;
-                };
-                const oldVals = parseMaybeJson(oldRaw);
-                const newVals = parseMaybeJson(newRaw);
-                if (oldVals && newVals) {
-                  const keys = Object.keys(newVals);
-                  if (keys.length > 0) {
-                    return (
-                      <div>
-                        {keys.map(k => (
-                          <Text key={k} type="secondary" className={styles.changeDetail}>
-                            {k}: {String(oldVals[k])} 	→ {String(newVals[k])}
-                          </Text>
-                        ))}
-                      </div>
-                    );
-                  }
-                }
-                // Fallback to changedFields list
-                const cf: any = (item as any).changedFields;
-                let fields: string[] | null = null;
-                if (Array.isArray(cf)) {
-                  fields = cf as string[];
-                } else if (typeof cf === 'string' && cf.trim().length > 0) {
-                  fields = cf.split(',').map((s: string) => s.trim()).filter(Boolean);
-                }
-                return fields && fields.length > 0 ? (
-                  <Text type="secondary">{t('history.changed', { fields: fields.join(', ') })}</Text>
-                ) : (
-                  <Text type="secondary">{t('history.noFieldDetails')}</Text>
-                );
-              })()}
-            </Space>
-          </List.Item>
-        )}
-        className={styles.timelineItem}
+      <MedicalRecordForm
+        onSubmit={handleSubmit}
+        onCancel={requestClose}
+        onDirtyChange={setDirty}
+        loading={loading}
+        isEdit={false}
+        patientId={patientId}
+        recordId={null}
+        defaultTitle={defaultTitle}
       />
-    </div>
+    </Modal>
   );
 };
 

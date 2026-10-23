@@ -71,11 +71,11 @@ describe('LineItemsFieldGroup VAT', () => {
   it('shows the total and the VAT per rate from the backend', () => {
     renderGroup();
     const card = screen.getByTestId('line-items-totals');
-    expect(card.textContent).toContain('1062.00');
-    expect(card.textContent).toContain('-118.00');
+    expect(card.textContent).toContain('1.062 ден');
+    expect(card.textContent).toContain('-118 ден');
     const vatRow = within(card).getByTestId('vat-group-ДДВ 18%');
-    expect(vatRow.textContent).toContain('900.00');
-    expect(vatRow.textContent).toContain('162.00');
+    expect(vatRow.textContent).toContain('900 ден');
+    expect(vatRow.textContent).toContain('162 ден');
   });
 
   it("shows each line's VAT rate", () => {

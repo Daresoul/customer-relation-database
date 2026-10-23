@@ -19,7 +19,7 @@ import { CreateHouseholdModal } from '../forms/CreateHouseholdModal';
 import type { CreatedHousehold } from '../forms/CreateHouseholdInline';
 import type { ExtractedPatientData, PatientDataConflict } from '../../types/deviceImport';
 import type { Patient, CreatePatientInput } from '../../types';
-import { hasExtractedData } from '../../utils/deviceDataExtraction';
+import { findSpeciesIdByName, hasExtractedData } from '../../utils/deviceDataExtraction';
 import { localeNumberParser } from '@/utils/localeNumber';
 
 interface CreatePatientSectionProps {
@@ -72,19 +72,9 @@ export const CreatePatientSection: React.FC<CreatePatientSectionProps> = ({
   // Check if we have extracted data to show prefill option
   const hasDeviceData = hasExtractedData(extractedData);
 
-  // Find species ID by name
-  const findSpeciesIdByName = (name?: string): number | undefined => {
-    if (!name) return undefined;
-    const normalizedName = name.toLowerCase();
-    const species = speciesData.find(
-      s => s.name.toLowerCase() === normalizedName
-    );
-    return species?.id;
-  };
-
   const prefillValues = () => ({
     name: extractedData.name || '',
-    speciesId: findSpeciesIdByName(extractedData.species),
+    speciesId: findSpeciesIdByName(speciesData, extractedData.species),
     gender: extractedData.gender,
     dateOfBirth: extractedData.dateOfBirth ? dayjs(extractedData.dateOfBirth) : undefined,
   });

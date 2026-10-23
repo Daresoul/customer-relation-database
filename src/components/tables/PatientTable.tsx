@@ -32,8 +32,8 @@ import {
 import { Patient, PatientWithHousehold } from '../../types';
 import type { BaseTableProps } from '../../types/ui.types';
 import dayjs from 'dayjs';
+import { formatPatientAge } from '../../utils/patientChart';
 import { formatDate } from '../../utils/dateFormatter';
-import { useSpecies } from '../../hooks/useSpecies';
 import styles from './Tables.module.css';
 import { AlertChips } from '../patient/AlertChips';
 import { patientStatus, visiblePatients } from '../../utils/patientChart';
@@ -64,17 +64,6 @@ export const PatientTable: React.FC<PatientTableProps> = ({
     onSearchTextChange?.(text);
   };
 
-  // Fetch species to get colors
-  const { data: speciesList = [] } = useSpecies(true);
-
-  // Create species color lookup map
-  const speciesColorMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    speciesList.forEach(species => {
-      map[species.name] = species.color || '#1890ff';
-    });
-    return map;
-  }, [speciesList]);
 
   // A species' name in the app language; species the app has no word for
   // keep their own name.
@@ -116,17 +105,8 @@ export const PatientTable: React.FC<PatientTableProps> = ({
     return isActive !== false ? 'success' : 'default';
   };
 
-  // Calculate age from date of birth
-  const calculateAge = (dateOfBirth: string | undefined) => {
-    if (!dateOfBirth) return t('patients:unknownAge');
-    const years = dayjs().diff(dayjs(dateOfBirth), 'year');
-    const months = dayjs().diff(dayjs(dateOfBirth), 'month') % 12;
-
-    if (years > 0) {
-      return t('households:detail.animals.age.years', { count: years });
-    }
-    return t('households:detail.animals.age.months', { count: months });
-  };
+  const calculateAge = (dateOfBirth: string | undefined) =>
+    formatPatientAge(dateOfBirth, t) ?? t('patients:unknownAge');
 
   const columns: ColumnsType<PatientWithHousehold> = [
     {
@@ -170,25 +150,7 @@ export const PatientTable: React.FC<PatientTableProps> = ({
       render: (species) => {
         if (!species) return null;
 
-        const translatedSpecies = speciesLabel(species);
-
-        // Get color from database or use default
-        const speciesColor = speciesColorMap[species] || '#1890ff';
-
-        return (
-          <Space>
-            <div
-              style={{
-                width: '12px',
-                height: '12px',
-                borderRadius: '50%',
-                backgroundColor: speciesColor,
-                display: 'inline-block',
-              }}
-            />
-            <Text>{translatedSpecies}</Text>
-          </Space>
-        );
+        return <Text>{speciesLabel(species)}</Text>;
       },
       filters: speciesFilters,
       onFilter: (value, record) => record.species === value,

@@ -398,8 +398,8 @@ impl PatientService {
             return Err("Patient must have either a name or a microchip ID".to_string());
         }
 
-        log::info!("🐾 Creating patient: name={:?}, species_id={:?}, breed_id={:?}, gender={:?}",
-            name, dto.species_id, dto.breed_id, dto.gender);
+        log::info!("🐾 Creating patient: species_id={:?}, breed_id={:?}, gender={:?}",
+            dto.species_id, dto.breed_id, dto.gender);
 
         let now = Utc::now();
 
@@ -702,9 +702,23 @@ impl PatientService {
             .await
             .map_err(|e| format!("Failed to search patients: {}", e))?;
 
-        let mut matched: Vec<Patient> = rows
+        let mut unreadable = 0usize;
+        let readable: Vec<Patient> = rows
             .iter()
-            .filter_map(|r| Self::row_to_patient(r).ok())
+            .filter_map(|r| {
+                Self::row_to_patient(r)
+                    .map_err(|e| {
+                        unreadable += 1;
+                        log::warn!("A patient row can't be read and is left out of the search: {}", e);
+                    })
+                    .ok()
+            })
+            .collect();
+        if unreadable > 0 {
+            log::warn!("{} of {} patient rows left out of the search", unreadable, rows.len());
+        }
+        let mut matched: Vec<Patient> = readable
+            .into_iter()
             .filter(|p| include_inactive || p.is_active)
             .filter(|p| {
                 if needle.is_empty() {

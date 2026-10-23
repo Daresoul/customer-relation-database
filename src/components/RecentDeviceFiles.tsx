@@ -3,9 +3,12 @@ import { Table, Button, Tag, Space, Typography, Tooltip, App, Modal } from 'antd
 import { ClockCircleOutlined, CheckCircleOutlined, WarningOutlined, EyeOutlined, PlusOutlined, FileSearchOutlined } from '@ant-design/icons';
 import { fileHistoryService } from '../services/fileHistoryService';
 import type { FileAccessHistoryWithRecord } from '../types/fileHistory';
+import { getDeviceTypeDisplayName } from '../types/deviceIntegration';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
+import { errorText } from '@/utils/notifyError';
+import { formatDateTime } from '../utils/dateFormatter';
 
 dayjs.extend(relativeTime);
 
@@ -70,7 +73,7 @@ const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, da
     } catch (error) {
       hide();
       console.error('[RecentDeviceFiles] Failed to open device file:', error);
-      message.error(t('medical:recentFiles.openFailed', { error: String(error) }));
+      message.error(t('medical:recentFiles.openFailed', { error: errorText(error, t) }));
     }
   };
 
@@ -83,13 +86,13 @@ const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, da
           <p><strong>{t('medical:recentFiles.fileName')}:</strong> {file.originalName}</p>
           <p><strong>{t('medical:recentFiles.device')}:</strong> {file.deviceName} ({file.deviceType})</p>
           <p><strong>{t('medical:recentFiles.connection')}:</strong> {file.connectionMethod || t('medical:recentFiles.unknown')}</p>
-          <p><strong>{t('medical:recentFiles.received')}:</strong> {new Date(file.receivedAt).toLocaleString()}</p>
+          <p><strong>{t('medical:recentFiles.received')}:</strong> {formatDateTime(file.receivedAt)}</p>
           <p><strong>{t('medical:recentFiles.fileSize')}:</strong> {file.fileSize ? `${(file.fileSize / 1024).toFixed(2)} KB` : t('medical:recentFiles.unknown')}</p>
           <p><strong>{t('medical:recentFiles.mimeType')}:</strong> {file.mimeType || t('medical:recentFiles.unknown')}</p>
           {file.firstAttachedToRecordId && (
             <>
               <p><strong>{t('medical:recentFiles.attachedTo')}:</strong> {file.patientName} - {file.recordName}</p>
-              <p><strong>{t('medical:recentFiles.attachedAt')}:</strong> {file.firstAttachedAt ? new Date(file.firstAttachedAt).toLocaleString() : t('medical:recentFiles.unknown')}</p>
+              <p><strong>{t('medical:recentFiles.attachedAt')}:</strong> {file.firstAttachedAt ? formatDateTime(file.firstAttachedAt) : t('medical:recentFiles.unknown')}</p>
             </>
           )}
           <p><strong>{t('medical:recentFiles.attachmentCount')}:</strong> {file.attachmentCount}</p>
@@ -107,25 +110,15 @@ const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, da
     switch (deviceType.toLowerCase()) {
       case 'exigo_eos_vet':
         return 'blue';
-      case 'healvet_hv_fia3000':
+      case 'healvet_hv_fia_3000':
         return 'green';
+      case 'mnchip_pointcare_chemistry':
+        return 'cyan';
+      case 'mnchip_pcr_analyzer':
       case 'mnchip_pointcare_pcr_v1':
         return 'purple';
       default:
         return 'default';
-    }
-  };
-
-  const getDeviceTypeDisplay = (deviceType: string): string => {
-    switch (deviceType) {
-      case 'exigo_eos_vet':
-        return 'Exigo Eos Vet';
-      case 'healvet_hv_fia3000':
-        return 'Healvet HV-FIA 3000';
-      case 'mnchip_pointcare_pcr_v1':
-        return 'MNCHIP PointCare PCR';
-      default:
-        return deviceType;
     }
   };
 
@@ -156,7 +149,7 @@ const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, da
       render: (deviceType: string, record: FileAccessHistoryWithRecord) => (
         <Tooltip title={t('medical:recentFiles.via', { device: record.deviceName, connection: record.connectionMethod || t('medical:recentFiles.unknown') })}>
           <Tag color={getDeviceTypeColor(deviceType)}>
-            {getDeviceTypeDisplay(deviceType)}
+            {getDeviceTypeDisplayName(deviceType)}
           </Tag>
         </Tooltip>
       ),

@@ -5,12 +5,26 @@ use crate::models::{
     RoomAvailability, RoomAppointmentSlot
 };
 use crate::models::dto::MaybeNull;
+use crate::services::names::{name_taken, required_name};
 use chrono::{DateTime, Utc};
 use sea_orm::*;
 
 pub struct RoomService;
 
 impl RoomService {
+    /// Refuses a name another room already has, in any case or spacing.
+    async fn check_name_free(db: &DatabaseConnection, name: &str, except_id: Option<i64>) -> Result<(), String> {
+        let rooms = RoomEntity::find()
+            .all(db)
+            .await
+            .map_err(|e| format!("Failed to check room name: {}", e))?;
+        let names = rooms.iter().filter(|r| Some(r.id) != except_id).map(|r| r.name.as_str());
+        if name_taken(names, name) {
+            return Err("Room with this name already exists".to_string());
+        }
+        Ok(())
+    }
+
     /// Convert a SeaORM room model to the API Room model
     fn to_api_model(model: room::Model) -> Room {
         Room {
@@ -64,22 +78,14 @@ impl RoomService {
         // Validate input
         input.validate()?;
 
-        // Check for duplicate name
-        let existing = RoomEntity::find()
-            .filter(room::Column::Name.eq(&input.name))
-            .one(db)
-            .await
-            .map_err(|e| format!("Failed to check room name: {}", e))?;
-
-        if existing.is_some() {
-            return Err("Room with this name already exists".to_string());
-        }
+        let name = required_name(&input.name, "Room name")?;
+        Self::check_name_free(db, &name, None).await?;
 
         let now = Utc::now();
 
         // Insert room
         let new_room = room::ActiveModel {
-            name: Set(input.name),
+            name: Set(name),
             description: Set(input.description),
             capacity: Set(input.capacity.unwrap_or(1)),
             color: Set(input.color.unwrap_or_else(|| "#1890ff".to_string())),
@@ -113,18 +119,14 @@ impl RoomService {
             .ok_or_else(|| "Room not found".to_string())?;
 
         // Check for duplicate name if name is being updated
-        if let Some(ref name) = input.name {
-            let duplicate = RoomEntity::find()
-                .filter(room::Column::Name.eq(name))
-                .filter(room::Column::Id.ne(id))
-                .one(db)
-                .await
-                .map_err(|e| format!("Failed to check room name: {}", e))?;
-
-            if duplicate.is_some() {
-                return Err("Room with this name already exists".to_string());
+        let name = match &input.name {
+            Some(name) => {
+                let name = required_name(name, "Room name")?;
+                Self::check_name_free(db, &name, Some(id)).await?;
+                Some(name)
             }
-        }
+            None => None,
+        };
 
         if !input.has_updates() {
             return Ok(Self::to_api_model(existing));
@@ -133,7 +135,7 @@ impl RoomService {
         let now = Utc::now();
         let mut room_model: room::ActiveModel = existing.into();
 
-        if let Some(name) = input.name {
+        if let Some(name) = name {
             room_model.name = Set(name);
         }
         if let Some(description) = input.description {

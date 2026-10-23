@@ -259,7 +259,7 @@ const LineItemsSettings: React.FC<LineItemsSettingsProps> = ({ isUpdating }) => 
         onOk={() => form.submit()}
         confirmLoading={createMutation.isPending || updateMutation.isPending}
       >
-        <Form
+        <Form scrollToFirstError={{ focus: true }}
           form={form}
           layout="vertical"
           onFinish={handleSubmit}
@@ -268,7 +268,7 @@ const LineItemsSettings: React.FC<LineItemsSettingsProps> = ({ isUpdating }) => 
           <Form.Item
             name="name"
             label={t('settings:lineItems.name', 'Name')}
-            rules={[{ required: true, message: t('forms:validation.required', 'This field is required') }]}
+            rules={[{ required: true, whitespace: true, message: t('forms:validation.required', 'This field is required') }]}
           >
             <Input placeholder={t('settings:lineItems.namePlaceholder', 'e.g., Consultation, X-Ray, Blood Test')} />
           </Form.Item>

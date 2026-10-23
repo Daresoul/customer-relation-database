@@ -14,6 +14,7 @@ import type {
   SearchMedicalRecordsResponse,
   Currency
 } from '@/types/medical';
+import type { PdfStatus } from '@/types/generated/PdfStatus';
 import type { PatientOverrides } from '@/types/report';
 
 /**
@@ -147,9 +148,10 @@ export class MedicalService {
     });
   }
 
+  /** Deletes a user file; for a lab result, how rebuilding the lab report went (null: nothing to rebuild). */
   static async deleteAttachment(
     attachmentId: number
-  ): Promise<void> {
+  ): Promise<PdfStatus | null> {
     return ApiService.invokeRaw('delete_medical_attachment', { attachmentId });
   }
 
@@ -178,10 +180,6 @@ export class MedicalService {
       record_id: recordId,
       version
     });
-  }
-
-  static async revertMedicalRecord(recordId: number): Promise<MedicalRecord> {
-    return ApiService.invokeRaw('revert_medical_record', { recordId, record_id: recordId });
   }
 
   static async downloadAndOpenAttachment(

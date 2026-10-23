@@ -360,7 +360,51 @@ pub async fn mark_attached(
     record_id: i64,
     attachment_id: Option<i64>,
 ) -> Result<(), String> {
-    set_attached(db, file_id, record_id, attachment_id).await
+    let method = match_method_for(db, file_id, record_id).await;
+    set_attached(db, file_id, record_id, attachment_id, &method).await
+}
+
+/// How the result reached the record's patient: the matcher's `microchip` or
+/// `name` when it matched that patient, else `manual` (a person picked them).
+async fn match_method_for(db: &DatabaseConnection, file_id: &str, record_id: i64) -> String {
+    const MANUAL: &str = "manual";
+    let row = match db
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "SELECT h.file_path, h.device_type, h.device_name, h.original_name, h.connection_method, h.status, \
+                    r.patient_id AS record_patient_id \
+             FROM file_access_history h, medical_records r WHERE h.file_id = ? AND r.id = ?",
+            [file_id.into(), record_id.into()],
+        ))
+        .await
+    {
+        Ok(Some(row)) => row,
+        _ => return MANUAL.to_string(),
+    };
+    let text = |c: &str| row.try_get::<Option<String>>("", c).ok().flatten().unwrap_or_default();
+    let record_patient = row.try_get::<Option<i64>>("", "record_patient_id").ok().flatten();
+    if text("status") == "failed" {
+        return MANUAL.to_string();
+    }
+    let Some(parsed) = std::fs::read(text("file_path")).ok().and_then(|bytes| {
+        DeviceParserService::parse_device_data(
+            &text("device_type"),
+            &text("device_name"),
+            &text("original_name"),
+            &bytes,
+            &text("connection_method"),
+        )
+        .ok()
+    }) else {
+        return MANUAL.to_string();
+    };
+    let Some(machine_id) = machine_patient_id(parsed.patient_identifier.clone(), &parsed.test_results) else {
+        return MANUAL.to_string();
+    };
+    match resolve_patient(db, machine_id).await {
+        Ok(m) if !m.ambiguous && m.patient.as_ref().map(|p| p.id) == record_patient && record_patient.is_some() => m.method,
+        _ => MANUAL.to_string(),
+    }
 }
 
 async fn set_attached<C: ConnectionTrait>(
@@ -368,13 +412,14 @@ async fn set_attached<C: ConnectionTrait>(
     file_id: &str,
     record_id: i64,
     attachment_id: Option<i64>,
+    match_method: &str,
 ) -> Result<(), String> {
     db.execute(Statement::from_sql_and_values(
         DbBackend::Sqlite,
         "UPDATE file_access_history SET inbox_state = 'attached', attached_record_id = ?, attached_at = ?, \
-             discard_reason = NULL, discard_note = NULL, discarded_at = NULL \
+             discard_reason = NULL, discard_note = NULL, discarded_at = NULL, match_method = ? \
          WHERE file_id = ?",
-        [record_id.into(), now().into(), file_id.into()],
+        [record_id.into(), now().into(), match_method.into(), file_id.into()],
     ))
     .await
     .map_err(|e| format!("Failed to mark the lab result attached: {}", e))?;
@@ -473,6 +518,7 @@ pub async fn attach_to_record(
     }
     let bytes = std::fs::read(text("file_path").unwrap_or_default())
         .map_err(|e| format!("Failed to read the stored lab result: {}", e))?;
+    let match_method = match_method_for(db, file_id, record_id).await;
     let stored_id = copy_into_storage(storage_dir, &bytes)?;
 
     let txn = db.begin().await.map_err(|e| format!("Failed to start attaching: {}", e))?;
@@ -489,7 +535,7 @@ pub async fn attach_to_record(
         Some(file_id.to_string()),
     )
     .await?;
-    set_attached(&txn, file_id, record_id, Some(attachment_id)).await?;
+    set_attached(&txn, file_id, record_id, Some(attachment_id), &match_method).await?;
     txn.execute(Statement::from_sql_and_values(
         DbBackend::Sqlite,
         "UPDATE file_access_history SET first_attached_to_record_id = COALESCE(first_attached_to_record_id, ?), \
@@ -593,8 +639,8 @@ async fn retire_lab_reports<C: ConnectionTrait>(db: &C, record_id: i64, keep: Op
 
 fn pdf_status(kind: &str, result: Result<i64, String>) -> PdfStatus {
     match result {
-        Ok(_) => PdfStatus { kind: kind.to_string(), ok: true, error: None },
-        Err(e) => PdfStatus { kind: kind.to_string(), ok: false, error: Some(e) },
+        Ok(_) => PdfStatus::ok(kind),
+        Err(e) => PdfStatus::failed(kind, e),
     }
 }
 
@@ -683,7 +729,7 @@ pub async fn move_result(
     .await
     .map_err(|e| format!("Failed to log the move: {}", e))?;
     if let Some(file_id) = &source_file_id {
-        set_attached(&txn, file_id, target_record_id, Some(new_id)).await?;
+        set_attached(&txn, file_id, target_record_id, Some(new_id), "manual").await?;
     }
     txn.commit().await.map_err(|e| format!("Failed to move the lab result: {}", e))?;
     if let Err(e) = crate::services::lab_results::index_attachment(db, &env.storage_dir, new_id).await {
@@ -701,6 +747,54 @@ pub async fn move_result(
     }
 
     Ok(MoveOutcome { attachment_id: new_id, from_record_id, to_record_id: target_record_id, pdfs })
+}
+
+/// The record page's Delete. When the file was a lab result, the record's lab
+/// report is rebuilt from the lab results left, or retired when none are
+/// left; the returned status says how the rebuild went (None: nothing to build).
+pub async fn delete_and_refresh_lab_report(
+    env: Result<&PdfEnv, String>,
+    db: &DatabaseConnection,
+    attachment_id: i64,
+) -> Result<Option<PdfStatus>, String> {
+    let row = db
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "SELECT medical_record_id, device_type, device_name, attachment_type, mime_type \
+             FROM medical_attachments WHERE id = ? AND deleted_at IS NULL",
+            [attachment_id.into()],
+        ))
+        .await
+        .map_err(|e| format!("Failed to read the attachment: {}", e))?
+        .ok_or_else(|| "Attachment not found".to_string())?;
+    let text = |c: &str| row.try_get::<Option<String>>("", c).ok().flatten();
+    let record_id: i64 = row.try_get("", "medical_record_id").map_err(|e| e.to_string())?;
+    let was_lab = text("device_type").is_some()
+        && text("device_name").is_some()
+        && (text("attachment_type").as_deref() == Some("test_result")
+            || (text("attachment_type").as_deref() != Some("generated_pdf")
+                && text("mime_type").as_deref() != Some("application/pdf")));
+
+    crate::services::file_storage::FileStorageService::delete_user_attachment(db, attachment_id).await?;
+    if !was_lab {
+        return Ok(None);
+    }
+    let left = db
+        .query_all(Statement::from_sql_and_values(DbBackend::Sqlite, LAB_ATTACHMENTS_SQL, [record_id.into()]))
+        .await
+        .map_err(|e| format!("Failed to read the record's lab results: {}", e))?;
+    if left.is_empty() {
+        retire_lab_reports(db, record_id, None).await?;
+        return Ok(None);
+    }
+    let rebuilt = match env {
+        Ok(env) => regenerate_lab_report(env, db, record_id).await,
+        Err(e) => Err(e),
+    };
+    if let Err(e) = &rebuilt {
+        log::warn!("Lab report of record {} not rebuilt after a delete: {}", record_id, e);
+    }
+    Ok(Some(pdf_status("device_report", rebuilt)))
 }
 
 /// Soft-delete an attachment (see `FileStorageService::delete_attachment`).

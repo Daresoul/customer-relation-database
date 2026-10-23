@@ -36,6 +36,12 @@ lazy_static::lazy_static! {
 
 pub struct OAuthService;
 
+#[derive(Debug, PartialEq)]
+pub(crate) struct BrowserOpenRequest {
+    pub verb: &'static str,
+    pub target: String,
+}
+
 impl OAuthService {
     /// Start OAuth flow with loopback server
     pub async fn start_oauth_flow() -> Result<OAuthFlowState, String> {
@@ -200,10 +206,12 @@ impl OAuthService {
     /// Uses subprocess isolation (process group, Stdio::null) to prevent
     /// the spawned browser from stealing focus from the main window.
     fn open_browser(url: &str) -> Result<(), String> {
+        let request = Self::browser_open_request(url)?;
+
         #[cfg(target_os = "macos")]
         {
             let mut cmd = std::process::Command::new("open");
-            cmd.arg(url)
+            cmd.arg(&request.target)
                 .stdin(std::process::Stdio::null())
                 .stdout(std::process::Stdio::null())
                 .stderr(std::process::Stdio::null());
@@ -218,7 +226,7 @@ impl OAuthService {
         #[cfg(target_os = "linux")]
         {
             let mut cmd = std::process::Command::new("xdg-open");
-            cmd.arg(url)
+            cmd.arg(&request.target)
                 .stdin(std::process::Stdio::null())
                 .stdout(std::process::Stdio::null())
                 .stderr(std::process::Stdio::null());
@@ -230,23 +238,32 @@ impl OAuthService {
                 .map_err(|e| format!("Failed to open browser: {}", e))?;
         }
 
+        // ShellExecuteW, not `cmd /C start <url>`: cmd.exe reads `&` as a
+        // command separator, so the sign-in page got only the first parameter.
         #[cfg(target_os = "windows")]
         {
-            let mut cmd = std::process::Command::new("cmd");
-            cmd.args(&["/C", "start", url])
-                .stdin(std::process::Stdio::null())
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null());
-            {
-                use std::os::windows::process::CommandExt;
-                const CREATE_NO_WINDOW: u32 = 0x08000000;
-                cmd.creation_flags(CREATE_NO_WINDOW);
+            let code = crate::services::file_storage::windows_shell_execute(
+                &request.target,
+                request.verb,
+            );
+            if code <= 32 {
+                return Err(format!("Failed to open browser (ShellExecute code {})", code));
             }
-            cmd.spawn()
-                .map_err(|e| format!("Failed to open browser: {}", e))?;
         }
 
         Ok(())
+    }
+
+    /// What the Windows shell is asked to open for the sign-in page: the URL
+    /// as one string. Only http(s) addresses without quotes or spaces pass, so
+    /// nothing else can be launched through it.
+    pub(crate) fn browser_open_request(url: &str) -> Result<BrowserOpenRequest, String> {
+        let lower = url.to_ascii_lowercase();
+        let is_web = lower.starts_with("https://") || lower.starts_with("http://");
+        if !is_web || url.chars().any(|c| c.is_whitespace() || c == '"' || c.is_control()) {
+            return Err("Refusing to open a sign-in address that is not a web URL".to_string());
+        }
+        Ok(BrowserOpenRequest { verb: "open", target: url.to_string() })
     }
 
     /// Exchange authorization code for tokens
@@ -444,4 +461,26 @@ pub async fn get_valid_access_token(
     log::info!("Access token refreshed successfully");
 
     Ok(new_access_token)
+}
+
+#[cfg(test)]
+mod browser_open_tests {
+    use super::*;
+
+    const SIGN_IN_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id=abc.apps.googleusercontent.com&state=xyz&code_challenge=q%2Fw&redirect_uri=http%3A%2F%2F127.0.0.1%3A8000%2Fcallback";
+
+    #[test]
+    fn the_sign_in_url_goes_to_the_shell_whole_with_every_ampersand() {
+        let request = OAuthService::browser_open_request(SIGN_IN_URL).unwrap();
+        assert_eq!(request.verb, "open");
+        assert_eq!(request.target, SIGN_IN_URL);
+        assert_eq!(request.target.matches('&').count(), 4);
+    }
+
+    #[test]
+    fn only_web_addresses_are_opened() {
+        assert!(OAuthService::browser_open_request("C:\\Windows\\System32\\calc.exe").is_err());
+        assert!(OAuthService::browser_open_request("file:///etc/passwd").is_err());
+        assert!(OAuthService::browser_open_request("https://accounts.google.com/x\" & calc").is_err());
+    }
 }

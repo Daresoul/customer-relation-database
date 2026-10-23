@@ -480,7 +480,8 @@ mod windows_impl {
     /// merge their chip IDs. Stale-reset matters: a half-finished scan must
     /// not splice into the next scan. The 1-second threshold is heuristic
     /// (much longer than any realistic inter-character gap, much shorter
-    /// than any user noticing).
+    /// than any user noticing). A stale buffer that is a whole microchip
+    /// (its Enter was lost) is returned instead of dropped.
     fn accumulate_scan_char(
         buffers: &mut HashMap<isize, ScanBuffer>,
         h_device: isize,
@@ -494,7 +495,9 @@ mod windows_impl {
             chars: String::new(),
             last_ts: now,
         });
+        let mut stale = None;
         if now.duration_since(buf.last_ts) > Duration::from_secs(1) {
+            stale = super::stale_scan(&buf.chars);
             buf.chars.clear();
         }
         buf.last_ts = now;
@@ -502,13 +505,13 @@ mod windows_impl {
         if ch == '\r' || ch == '\n' {
             let code = std::mem::take(&mut buf.chars);
             if code.is_empty() {
-                None
+                stale
             } else {
                 Some(code)
             }
         } else {
             buf.chars.push(ch);
-            None
+            stale
         }
     }
 
@@ -885,8 +888,16 @@ mod windows_impl {
         None
     }
 
+    /// Called on the Raw Input message-loop thread: the emit and the window
+    /// wake run on their own thread so a slow webview never stalls keyboard
+    /// input.
     fn emit_scan(code: &str) {
-        log::info!("raw_input_capture: scan from managed device: {}", code);
+        let code = code.to_string();
+        std::thread::spawn(move || emit_scan_now(&code));
+    }
+
+    fn emit_scan_now(code: &str) {
+        log::info!("raw_input_capture: scan from managed device ({} characters)", code.chars().count());
         if let Some(app) = APP_HANDLE.get() {
             let normalized = crate::services::device_capture::normalize_microchip_public(code);
             let _ = app.emit_all(
@@ -2199,4 +2210,30 @@ pub async fn reload_managed_ids(pool: &crate::database::SeaOrmPool) {
 #[cfg(not(target_os = "windows"))]
 pub async fn reload_managed_ids(_pool: &crate::database::SeaOrmPool) {
     // No-op on non-Windows: there's no Raw Input capture to refresh.
+}
+
+/// A managed scanner's buffer that went stale without its Enter: kept when
+/// it is a whole microchip, dropped otherwise.
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub(crate) fn stale_scan(buffer: &str) -> Option<String> {
+    crate::services::device_capture::looks_like_microchip(buffer).then(|| buffer.to_string())
+}
+
+#[cfg(test)]
+mod stale_scan_tests {
+    use super::stale_scan;
+
+    // serial-pipeline #9: a chip whose Enter never came was dropped after 1 s.
+    #[test]
+    fn a_stale_buffer_that_is_a_chip_is_kept() {
+        assert_eq!(stale_scan("807010000007678").as_deref(), Some("807010000007678"));
+        assert_eq!(stale_scan("1A2B3C4D5E").as_deref(), Some("1A2B3C4D5E"));
+    }
+
+    #[test]
+    fn a_stale_buffer_that_is_not_a_chip_is_dropped() {
+        assert_eq!(stale_scan(""), None);
+        assert_eq!(stale_scan("123"), None);
+        assert_eq!(stale_scan("80701000000767"), None);
+    }
 }

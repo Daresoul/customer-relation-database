@@ -1,11 +1,21 @@
 # customer-relation-database
 
 ## Database migrations (`src-tauri/src/database/migrations.rs`)
-- Append new migrations to the list in `run_migrations`. Never change what an
+- Append new migrations to the end of `MIGRATIONS`. Never change what an
   already-shipped migration does; clinic databases have run it.
+- `run_migrations` runs every migration on a one-connection pool of its own
+  (same options as the pool it is given). Over the app's five-connection
+  pool a new install failed in migration 035.
+- When migrations are pending on a database that has run any before, start
+  first copies it (`VACUUM INTO`) to `vet_clinic_pre-migration-<local
+  time>.db` next to it and keeps the newest three
+  (`backup::backup_before_migrations`). A failed copy is logged and start
+  goes on.
 - A migration that rebuilds a table (CREATE new, copy, DROP old, RENAME) goes
   through `rebuild_with_foreign_keys_off`. Every pooled connection has foreign
-  keys on, so a plain `DROP TABLE` cascade-deletes the child rows. The helper
+  keys on (set per connection in `database/connection.rs`, with a 10 s busy
+  wait and WAL; connections live 30 min), so a plain `DROP TABLE`
+  cascade-deletes the child rows. The helper
   checks `PRAGMA foreign_key_check` before committing. Recreate the table's
   triggers and indexes inside the rebuild.
 - Never `.ok()` a statement that fills or moves data; let the migration fail.
@@ -21,6 +31,14 @@
   plain text. A phone typed with dashes matches one stored with spaces or none.
 - Search, quick search and the household list skip merged-away households
   (`households.merged_into_id IS NOT NULL`).
+- A query that is only a phone number also matches its local (0…) and
+  international (389…) digits, so "+389 70 123 456" finds "070 123 456"
+  (`household_search::household_fts_query`, using `normalize_phone`).
+- The household list is sorted in Rust in Macedonian alphabet order, case
+  folded, Latin first (`alphabet_key`); SQLite orders by code point, which
+  put Ѓ, Ј, Љ, Њ, Ќ, Џ before А. Paging happens after the sort.
+- The dashboard household table matches typed phone digits (+389 read as 0)
+  against every person's phones (`utils/phone.ts`).
 
 ## Microchips
 - Create and update store the chip without spaces or dashes, and a 12-hex
@@ -52,7 +70,16 @@
   neuter status (`neutered`: true, false or NULL for not recorded), age (days
   under a week, weeks under 8 weeks, then months, then years; frozen at the
   date of death), last weight with its date and a trend line, the owner with
-  a copyable phone, and alert chips.
+  a copyable phone, and alert chips. The banner has New record (the record
+  modal) and Book (the appointment form with the patient picked; not for a
+  deceased patient).
+- The Overview tab shows the next and the last appointment with Book, and the
+  medical notes (`patients.medical_notes`), edited in place.
+- Patient fields save quietly (no success toast); a failed save shows one
+  error. An inline edit still pending when the page closes is saved.
+- Back on the patient and household pages returns to the previous page, or
+  home when the page was opened first (`hooks/useGoBack.ts`). The patient
+  breadcrumb includes the household.
 - Alerts (`patient_alerts`) are typed: `allergy`, `aggressive`, `chronic`,
   `other`, each with a note of at most 200 characters. Allergy and aggressive
   show red. The patient table shows them next to the name.
@@ -90,6 +117,12 @@
   clears the others in a transaction; `update_person` with `isPrimary: true`
   does the same and ignores `false`. Deleting the primary person makes the
   longest-standing other person primary; the last person can't be deleted.
+- The household page shows the household's notes at the top. A person's
+  preferred contact is set with a switch in the person's edit form (one per
+  person); saving with no contacts removes them all. Inline field saves are
+  quiet unless they fail. "Register new pet" there asks no household.
+- New-household forms fill the household name from the last name until the
+  name is typed into.
 
 ## Frontend states and caching
 - A failed load shows `components/common/LoadError` (message plus Retry that
@@ -106,15 +139,40 @@
   (`utils/globalErrorReporting.ts`, installed in `main.tsx`).
 - Settings that fail to load show `LoadError` with Retry and no Save; there
   are no stand-in defaults that Save could write back.
+- Queries retry once; a failed query is logged as `webview.query_failed` with
+  its key (`utils/queryClient.ts`).
+- Errors on screen go through `errorText` / `notifyError`
+  (`utils/notifyError.ts`, a translated text, never `String(e)`). Backup
+  errors name their cause (folder missing, no permission, disk full,
+  database busy) through `utils/backupErrors.ts`. Tauri commands go through
+  `services/invoke`; eslint forbids the raw `invoke` outside it, `main.tsx`
+  and `ErrorBoundary`.
+- Tauri event listeners in components use `useTauriEvent(name, handler)`: it
+  calls the latest handler and unlistens even when unmounted early.
+- The saved settings (language, theme, date format) are applied at start by
+  `AppSettingsSync`; localStorage `themeMode` only paints the first frame.
+- Clearing the currency sends `currencyId: null`; the backend tells null
+  (clear) from a missing field (keep). New settings rows default to
+  `DD.MM.YYYY`; the "default" row seeded by migration 017 keeps `DD/MM/YYYY`.
+- Species, breeds, rooms and price list items refuse a blank name and a name
+  another one has in any case or spacing (`services/names.rs`, Unicode
+  lower-case). People names are trimmed and required. Required text fields
+  in forms use `whitespace: true`, and forms set `scrollToFirstError`.
+- Species have no colour (no column stores one).
 - Launch at login is turned on once for a new install
   (`utils/autostart.ts`, localStorage `arkivet.autostartDefaultApplied`);
   after that the Settings switch decides, and a failed switch flips back with
-  a message.
+  a message. The login entry starts the app with `--hidden`
+  (`services/app_launch.rs`), and only that start stays in the tray; a manual
+  start or the relaunch after an update shows the window. While launch at
+  login is on, each start re-registers it, so entries from older versions
+  gain the flag. A second copy started at login leaves the running window
+  alone.
 
 ## App shell and navigation
 - The app uses a data router: `createBrowserRouter(appRoutes)` in `App.tsx`,
   routes in `src/layouts/routes.tsx`. Every page renders inside
-  `layouts/RootLayout`: the header, the device bar, the lab import modal, the
+  `layouts/RootLayout`: the header (lab machines chip, lab inbox badge), the lab import modal, the
   chip-scan and wake-from-tray handlers, and the crash boundary. Code that
   needs the router (`useNavigate`, `useBlocker`) goes inside it. Tests render
   pages with `createMemoryRouter` + `RouterProvider`.
@@ -150,6 +208,21 @@
   Saved-for-later count; the strip takes it as `waitingLabCount`), and patients
   seen today (`count_patients_seen`: patients with a record created in the
   local day).
+- The window title names the page ("Arkivet — Settings"), from each route's
+  `handle.titleKey` (`layouts/DocumentTitle.tsx`).
+- The dashboard keeps its tab and search in the URL (`?tab=households&q=…`).
+  The full-page loader shows on the first load only; later reloads update in
+  place. Adding a patient opens its page. Empty lists offer Add. When backups
+  are not set up or the last one failed, the dashboard shows a warning with a
+  link to backup settings (`components/BackupWarning.tsx`).
+- Settings sections are in the URL (`/settings?section=clinic`); menu clicks
+  update it.
+- Updates: checked 10 s after start, retried after 5, 15 and 60 minutes when
+  the check fails, then daily (`services/updateCheckSchedule.ts`). The offer
+  and its download/install progress sit in a banner under the header
+  (`components/UpdateBanner.tsx`), not a notification. A failed automatic
+  check shows on the Updates settings page (localStorage
+  `arkivet.updateCheckFailure`, this computer only).
 - The household list has no Status or Last activity columns: the list query
   has no real last-visit date.
 
@@ -189,6 +262,9 @@
   patient picker shows owner (household name) and the chip's last 4 digits.
 - The old `/appointments` page is gone; its delete and duplicate live in the
   panel.
+- Duplicate keeps the original's local clock time on the chosen local day
+  (`AppointmentService::duplicate_start`, this computer's time zone), also
+  across a DST change.
 
 ## Google Calendar
 - The sync is one-way plus cancellations: new and changed appointments are
@@ -203,8 +279,15 @@
 - When Google refuses the stored login (refresh rejected or a 401), the app
   sets `google_calendar_settings.needs_reauth` (migration 048). Settings then
   shows "Reconnect", and the background sync stops until the user reconnects.
+  The Appointments tab shows a banner with Reconnect, which opens
+  `/settings?section=appointments` (`hooks/useGoogleCalendarStatus.ts`).
+- Event text (`google_calendar::event_description`): patient, room, status
+  and the appointment notes. The microchip number is not sent.
 - `last_sync_error` keeps the last sync failure until a sync succeeds; Settings
   shows it with the last-synced time.
+- Connect opens Google's sign-in page in the browser through ShellExecuteW
+  on Windows (never `cmd start`, which cut the URL at the first `&`); only
+  an http(s) address is opened (`OAuthService::browser_open_request`).
 - Events and the created calendar use this computer's time zone
   (`services::google_calendar::local_time_zone`, fallback Europe/Skopje).
 
@@ -214,13 +297,44 @@
   stops, so a failed save leaves the analyzer listening.
 - Parsers: HL7 takes the patient id from PID-3, else the name in PID-6, never
   the species in PID-5; lines may end in CR or LF; a repeated analyte keeps
-  none of the earlier OBX's unit, range or flag. Healvet ignores anything
-  before the first `#AFS1000`. Exigo lab reports print the run number (`SEQ`)
-  as the sample number, not the analyzer serial (`SNO`).
+  none of the earlier OBX's unit, range or flag. An OBX with no value is kept
+  as `—` (no result), and HL7 escapes (`\F\ \S\ \T\ \R\ \E\`) are decoded.
+  Healvet ignores anything before the first `#AFS1000`; a stream with several
+  samples (sample id + patient) is delivered as one result per sample. Exigo
+  lab reports print the run number (`SEQ`) as the sample number, not the
+  analyzer serial (`SNO`); attribute values are decoded and trimmed, the
+  patient comes from `SampleId`/`PatientID`/`MicrochipID`/`ID2` only, ranges
+  split on `-` or `–`, and a file that is not UTF-8 is read as Windows-1251
+  (`encoding_rs`).
+- Serial framing (`FrameAssembler` in `services/device_input.rs`): a Healvet
+  frame ends on `&EE` (every real frame has the `&`), so an `EE` inside a
+  value such as LEELOO is data; a frame ending in a bare `EE` counts once the
+  line has been quiet for 5 s. PointCare/PCR (MLLP): a start byte inside an
+  unfinished frame drops the cut part as a cut-off result and starts over,
+  so two animals' messages never merge.
+- Serial results, Recent files rows and cut-offs carry the integration's
+  name, not the port (`device_events::named_by_machine`; a removed
+  integration keeps the port name).
 - Serial read loop (`services/device_input.rs`): any read error other than a
-  timeout closes the port and reconnects with backoff (Windows unplug codes 22,
-  31, 1167 and 995 included). The backoff starts over after a connection that
-  stayed up for 30 s.
+  timeout closes the port and reconnects with backoff, capped at 10 s
+  (Windows unplug codes 22, 31, 1167 and 995 included). The backoff starts
+  over after a connection that stayed up for 30 s. The baud rate saved with a
+  device is used; empty means the protocol's default.
+- One enabled machine per serial port: saving or switching on a second one on
+  the same port is refused with `port_in_use:<other machine>`.
+- A listener thread that ends on its own (a crash) shows as Error with kind
+  `listener_stopped`; Reconnect stops and starts every enabled serial
+  machine, connected ones included.
+- The same serial frame from the same machine within 10 minutes is dropped
+  (logged), so a resend never makes a second result.
+- Raw serial logs (`raw_<port>-YYYY-MM-DD.log`) older than 30 days are deleted
+  at start; undated ones from older builds go by their last change.
+- Chip scanners: a HID scanner's reader stays open until a read fails. The
+  Windows Raw Input path sends scans off its message loop, and a buffered chip
+  whose Enter never came is still sent once the next key arrives.
+- Clinic PC setup: the lab PC must not sleep, and USB selective suspend must
+  be off (Power Options → USB settings). A serial line keeps nothing while
+  the app is not reading, so results sent then are lost.
 - Every result goes through `services/device_events.rs`: the copy is saved
   (`file_access_history`, status `ok`) before `device-data-received` is sent,
   and the payload carries `fileId` (that row's `file_id`). Bytes that don't
@@ -243,7 +357,7 @@
   folder is watched, what is already in it is recorded, not offered.
 
 ### Device health in the tray and the details drawer (`services/device_health.rs`)
-- The app starts hidden, so health also shows in the system tray. The tray
+- The app starts hidden at login, so health also shows in the system tray. The tray
   tooltip reads "Arkivet — All devices OK" or names each problem ("Blood
   analyzer: no connection since 10:42"), and the icon switches to
   `icons/tray-warning.png`. Text follows the app language (en/mk) and is cut
@@ -260,8 +374,11 @@
   `device_alert_settings` and `device_quiet_alerts`): on/off, N minutes
   (default 10), clinic hours (default 07:00–20:00, Mon–Sat), and the quiet
   alert per machine (default off, 4 h when switched on).
-- The header shows a "Lab machines" chip on every page with the worst state.
-  A click on it, or on any device chip, opens the details drawer: state with
+- The header shows a "Lab machines" chip on every page with the worst state,
+  as a shape and a word (it is the only device status; the dashboard bar and
+  the compact page chips are gone). A serial port that has failed for less
+  than 60 s shows as waiting, like the tray. Dev builds put the device
+  simulator button next to it. A click on the chip opens the details drawer: state with
   what to do, last result, last data, problems today, a live byte counter
   (serial), recent status changes, the last raw message (first 2 KB, text or
   hex), and Reconnect, Copy diagnostics and Open log folder. Diagnostics hold
@@ -270,6 +387,13 @@
   in memory for this session only.
 
 ### Lab inbox (`services/lab_inbox.rs`, page `/lab-inbox`, dashboard tab)
+- The header shows the lab inbox badge (waiting count) on every page.
+- The lab import lists each result's values the way the inbox does
+  (`preview_lab_values`), and its patient picker adds chip ending and age.
+- Attaching stores how the result reached its patient in
+  `file_access_history.match_method` (migration `061_lab_match_method`):
+  `microchip` or `name` when the matcher picked that patient, `manual`
+  otherwise (and for a move).
 - Every result row in `file_access_history` (one per result or Exigo sample)
   has `inbox_state`: `waiting`, `attached` or `discarded` (migration
   `055_lab_inbox`). A new result and a failed read start as `waiting`.
@@ -299,7 +423,12 @@
   `moved_by` = the computer's login name). A failed rebuild keeps the move
   and says so.
 - Deleting a lab attachment on the record page puts its result back in
-  `waiting`.
+  `waiting`, and the record's lab report is rebuilt from the lab results
+  left, or retired when none are left (`delete_medical_attachment` returns
+  the rebuild's status; the page warns when it failed).
+- A Recent files entry added in the new-record form is attached the same way
+  (`attach_lab_result`) once the record is saved; a result that can't be
+  (one that could not be read) is uploaded as a plain file.
 
 ### Lab results history (`services/lab_results.rs`, patient page Labs tab)
 - Every lab attachment's values are stored one per row in `lab_results`
@@ -348,6 +477,50 @@
   error}]`; the frontend warns about a failed one, and Retry calls
   `regenerate_record_document` (`report`, `pharmacy_note`, `invoice`) or, for a
   lab report, `regenerate_pdf_from_medical_record`.
+- A record whose line items or files can't be read is a load error, never an
+  empty list (a save would otherwise drop the invoice). An attachment row
+  that can't be read is logged and counted. Files are listed newest first.
+- Versions: an edit that changes anything, the invoice lines included, is a
+  new version with one history row (`changed_fields` names `line_items` for
+  the lines); an edit that changes nothing writes neither. Mind the
+  `medical_records_version` trigger: an UPDATE that leaves `version` alone
+  bumps it, so a save sets `version = version + 1` itself.
+- An old version (`get_medical_record_at_version`) shows that version's
+  snapshot, empty values included. Snapshots hold no invoice lines, so the
+  record page shows "Viewing version N" with Back to current, no Edit, and a
+  note instead of the invoice. `?edit=1` (the record card's Edit) opens the
+  page in edit mode. The history search also looks at the prescription.
+- Record PDFs (report, pharmacy note, invoice, lab and configured reports)
+  are written in a temp folder of their own per job
+  (`MedicalRecordService::job_output`), and Java runs in `spawn_blocking`. A
+  failed JAR run's error starts with its cause (shown in the save warning);
+  only a PDF ending in `%%EOF` counts; a copied PDF lands via a `.part` file.
+  `PDF_WARN` lines and every generated document (kind, ok, duration) are
+  telemetry events. A PDF fails, offering Retry, when the owner lookup
+  fails; a missing species or sex prints "Непознат Вид" / "Непознат".
+- The report prints the visit's date (the job's `date`, dd/MM/yyyy, the
+  record's local creation date); invoice lines print their `description`
+  under the name. The JAR writes amounts as in Macedonia ("1.500",
+  "1.500,50"), whatever the computer's locale; the screen uses the same
+  format (`src/utils/money.ts`: whole denars without decimals, the sign
+  after: "1.500 ден").
+- Opening, printing or previewing a file copies it to
+  `<temp>/vet-clinic-attachments/<file_id>/<name>`; preview images are cached
+  per stored file. Logs name the attachment id and extension, not the path.
+- The new-record modal tries every file (named in one message when some
+  fail) and its saved message has Open record. The price-list picker is
+  searchable; picking an item already on the invoice adds one to its
+  quantity. A diagnosis not in the list can be added from the picker.
+- A record made by the lab import gets its lab report from the save
+  (`device_report`, with `attachmentId`); the import only opens that one.
+  When the JAR prints `PDF_WARN code=unmapped_analytes … codes=A,B` (PointCare
+  codes without a row), the status carries `missingValues` and the save
+  warns "Values not on the lab report (2): A, B".
+- Lab PDF details: Healvet skips its test time and spare `field_N` keys,
+  "0-0" device ranges print blank, the PCR table shows each test's sample
+  type, PCR curves draw reading i at cycle i + 1, PointCare prints the sample
+  type the machine sent, and the legacy type `mnchip_pointcare_pcr_v1`
+  renders as PCR. A preview of a page past the end is an error.
 - The invoice number and date are assigned once, on the first invoice, in
   local time (`assign_invoice`; columns `invoice_number`, `invoice_date`). Later
   edits reprint the same number and date. The number's year is the local year.
@@ -406,7 +579,8 @@
   `address`, `city`, `phone`, `email`, `tax_number`, `registration_number`,
   `bank_account`, `bank_name`, `logo_path`}, null where blank; a job without
   it gets the profile last loaded by the app (`JavaPdfService::set_letterhead`).
-  An invoice line may carry `vat_label` and `vat_percent`, and an invoice
+  A report may carry `date` (dd/MM/yyyy; without it Java prints today). An
+  invoice line may carry `vat_label`, `vat_percent` and `description`, and an invoice
   `totals` {`subtotal`, `discount_amount`, `total`, `vat_total`,
   `prices_include_vat`, `vat_groups`: [{`label`, `percent`, `net`, `vat`,
   `gross`}]}; Java prints these instead of computing its own.
@@ -439,6 +613,14 @@
 ## Backups (`services/backup.rs`)
 - The database snapshot is written as `<name>.part` and renamed over the old
   one only when complete, so a failed rerun keeps today's earlier snapshot.
+- Snapshot names use the local date and time (`vet_clinic_<local day>.db`),
+  so a backup just after midnight doesn't replace the previous day's.
+- Snapshots carry no Google login: after `VACUUM INTO` the copy's tokens are
+  cleared (with `secure_delete`) and `needs_reauth` is set, so a restored
+  copy shows Reconnect in Settings.
+- The file mirror copies a file when the backup copy is missing, has another
+  size (a copy cut off mid-way) or is older; each copy is written as
+  `<name>.part` and renamed when complete.
 - `backup_config.json` is saved through a `.tmp` file. A config that exists
   but can't be read comes back with `last_error` set (the backup light turns
   red and says to choose the folder again), instead of silently reading as
@@ -457,6 +639,25 @@
   (`createMutationErrorHandler(notification, 'createAppointment', t)` shows
   "Неуспешно креирање на термин").
 - The calendar follows the app language, and weeks start on Monday.
+
+## App lifecycle and logs
+- A failed start (database, migration, plugin) logs the error, ships the
+  waiting log lines to Loki for at most 5 s (`loki_shipper::push_pending_now`;
+  nothing when Loki is not set up) and shows a dialog.
+- `<app data>/session.lock` is written at start and removed on Quit or a
+  normal exit. Found at the next start it logs a warn event "Previous session
+  ended unexpectedly" (`failure: unclean_shutdown`); with another version in
+  it, an info event that the session ended for an update.
+- Tray Quit uses `app.exit(0)`, which removes the tray icon first.
+- Log archives older than 30 days are pruned at start and daily while the
+  app runs (`log_rotation::run_log_prune_schedule`).
+- The Loki shipper stores, with each file's position, a fingerprint of its
+  first line; a file replaced under the same name is read from the start.
+- At start, files older than a day are deleted from the app's own temp
+  folders (`services/temp_cleanup.rs`, `OUR_TEMP_FOLDERS`); loose files in
+  the temp folder itself are left alone.
+- Log lines carry ids, never a patient's or owner's name, phone, email or
+  chip number; `tests/log_privacy_tests.rs` scans every `log::` call.
 
 ## Type check
 
@@ -479,7 +680,11 @@ Actions secrets:
 
 Failed Tauri commands are reported to the log (and so to Loki) with the
 command name, error message and duration only, never their arguments
-(`src/services/invoke.ts`).
+(`src/services/invoke.ts`). A command that has not answered after 60 s
+is rejected with a translated "did not finish" message and logged as a
+timeout (a panic inside an async command leaves its promise pending
+forever). Backups, PDF commands, lab imports, uploads and Google sign-in
+are never timed out; they are listed in `NO_TIMEOUT_COMMANDS`.
 
 ## Webview security
 

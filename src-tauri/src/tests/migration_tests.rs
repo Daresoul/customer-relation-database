@@ -146,3 +146,17 @@ async fn essential_tables_exist() {
         assert!(result.is_some(), "missing table: {}", table);
     }
 }
+
+/// A new install: the app opens its normal pool (several connections) on a
+/// file that doesn't exist yet and runs every migration through it.
+#[tokio::test]
+async fn a_new_install_migrates_through_the_apps_own_pool() {
+    let dir = tempfile::tempdir().unwrap();
+    let url = format!("sqlite://{}?mode=rwc", dir.path().join("fresh.db").display());
+    let (db, legacy) = crate::database::create_pools(&url).await.unwrap();
+
+    let result = run_migrations(&*legacy.lock().await).await;
+
+    assert!(result.is_ok(), "fresh install failed to migrate: {:?}", result.err());
+    assert!(count(&db, "device_integrations").await >= 0);
+}

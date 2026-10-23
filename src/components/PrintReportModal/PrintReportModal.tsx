@@ -18,6 +18,7 @@ import type { MedicalAttachment } from '@/types/medical';
 import type { PatientOverrides, PatientInfo, DeviceFileInfo } from '@/types/report';
 import { MedicalService } from '@/services/medicalService';
 import styles from './PrintReportModal.module.css';
+import { formatDateTime } from '../../utils/dateFormatter';
 
 const { Text, Title } = Typography;
 
@@ -269,7 +270,7 @@ const PrintReportModal: React.FC<PrintReportModalProps> = ({
                       {getDeviceDisplayName(file.deviceType, t('medical:printReport.unknownDevice'))}
                     </Tag>
                     <Text type="secondary">
-                      {new Date(file.uploadedAt).toLocaleString()}
+                      {formatDateTime(file.uploadedAt)}
                     </Text>
                   </div>
                 </div>

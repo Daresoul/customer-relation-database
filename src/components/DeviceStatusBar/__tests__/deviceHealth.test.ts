@@ -64,6 +64,15 @@ describe('describeSerialStatus', () => {
     expect(h.details).toBe('weird');
   });
 
+  it('says connecting without counting attempts', () => {
+    expect(describeSerialStatus(serial({ status: 'Connecting', retry_count: 4 }), t).text).toBe('status.connecting');
+  });
+
+  it('explains a listener that stopped on its own', () => {
+    const h = describeSerialStatus(serial({ status: 'Error', error_kind: 'listener_stopped' }), t);
+    expect(h.text).toBe('health.kinds.listener_stopped.title {"port":"COM3"}');
+  });
+
   it('keeps it short when connected', () => {
     const h = describeSerialStatus(serial({ status: 'Connected' }), t);
     expect(h.text).toBe('status.connected');
