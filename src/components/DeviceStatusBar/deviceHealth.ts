@@ -47,6 +47,32 @@ export function describeSerialStatus(status: DeviceConnectionStatus | undefined,
   }
 }
 
+/** working ✓ · waiting ○ (starting, stopped, no status yet) · down ✕ */
+export type HealthLevel = 'working' | 'waiting' | 'down';
+
+const LEVEL_RANK: Record<HealthLevel, number> = { working: 0, waiting: 1, down: 2 };
+
+export function serialLevel(status: DeviceConnectionStatus | undefined): HealthLevel {
+  if (!status) return 'waiting';
+  if (status.status === 'Connected') return 'working';
+  if (status.status === 'Connecting' && !status.retry_count && !status.error_kind) return 'waiting';
+  return 'down';
+}
+
+export function folderLevel(status: FileWatcherStatus | undefined): HealthLevel {
+  if (!status) return 'waiting';
+  if (status.status === 'Watching') return 'working';
+  if (status.status === 'Error') return 'down';
+  return 'waiting';
+}
+
+/** The worst level wins; `count` is how many machines are at it (0 when all work). */
+export function rollupHealth(levels: HealthLevel[]): { level: HealthLevel | 'none'; count: number } {
+  if (levels.length === 0) return { level: 'none', count: 0 };
+  const worst = levels.reduce((a, b) => (LEVEL_RANK[b] > LEVEL_RANK[a] ? b : a));
+  return { level: worst, count: worst === 'working' ? 0 : levels.filter((l) => l === worst).length };
+}
+
 export function describeFolderStatus(status: FileWatcherStatus | undefined, t: T): HealthText {
   if (!status) return { text: t('status.unknown') };
   switch (status.status) {

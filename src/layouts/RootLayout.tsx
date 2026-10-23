@@ -3,6 +3,7 @@ import { AppWrapper } from '../components/AppWrapper';
 import { RouteErrorBoundary } from '../components/common/ErrorBoundary';
 import DeviceImportModal from '../components/DeviceImportModal/DeviceImportModal';
 import { AppShellHeader, GlobalSearchProvider } from '../components/AppHeader';
+import { DeviceHealthChip } from '../components/DeviceStatusBar';
 import { WakeFromTrayHandler } from './WakeFromTrayHandler';
 import { ChipScanHandler } from './ChipScanHandler';
 
@@ -13,7 +14,7 @@ export function RootLayout() {
       <WakeFromTrayHandler />
       <ChipScanHandler />
       <DeviceImportModal />
-      <AppWrapper header={<AppShellHeader />}>
+      <AppWrapper header={<AppShellHeader deviceStatusSlot={<DeviceHealthChip />} />}>
         <RouteErrorBoundary>
           <Outlet />
         </RouteErrorBoundary>

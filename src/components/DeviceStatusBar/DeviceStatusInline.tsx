@@ -7,6 +7,7 @@ import { useDeviceIntegrations, useDeviceConnectionStatus, useFileWatcherStatus 
 import { ConnectionState, FileWatcherState, getDeviceTypeDisplayName } from '../../types/deviceIntegration';
 import { describeFolderStatus, describeSerialStatus, formatLastResult } from './deviceHealth';
 import { HealthLines } from './HealthLines';
+import { useDeviceDrawer } from './useDeviceDrawer';
 import styles from './DeviceStatusInline.module.css';
 
 const { Text } = Typography;
@@ -17,6 +18,7 @@ export const DeviceStatusInline: React.FC = () => {
   const { data: integrations, isLoading } = useDeviceIntegrations();
   const { getStatus: getSerialStatus } = useDeviceConnectionStatus();
   const { getStatus: getFileWatcherStatus } = useFileWatcherStatus();
+  const { chipProps, drawer } = useDeviceDrawer();
 
   // Get enabled integrations by type
   const serialPortIntegrations = integrations?.filter(
@@ -83,7 +85,7 @@ export const DeviceStatusInline: React.FC = () => {
                 </div>
               }
             >
-              <div className={styles.deviceItem}>
+              <div className={styles.deviceItem} {...chipProps(integration.id)}>
                 <UsbOutlined className={styles.typeIcon} />
                 <span
                   className={`${styles.statusDot} ${status?.status === 'Connecting' ? styles.pulsing : ''}`}
@@ -115,7 +117,7 @@ export const DeviceStatusInline: React.FC = () => {
                 </div>
               }
             >
-              <div className={styles.deviceItem}>
+              <div className={styles.deviceItem} {...chipProps(integration.id)}>
                 <FolderOutlined className={styles.typeIcon} />
                 <span
                   className={styles.statusDot}
@@ -135,6 +137,7 @@ export const DeviceStatusInline: React.FC = () => {
           onClick={() => navigate('/settings')}
         />
       </Tooltip>
+      {drawer}
     </div>
   );
 };

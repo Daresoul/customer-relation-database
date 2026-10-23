@@ -9,6 +9,7 @@ import { ConnectionState, FileWatcherState, getDeviceTypeDisplayName } from '../
 import { DevToolsDrawer } from '../DevTools';
 import { describeFolderStatus, describeSerialStatus, formatLastResult } from './deviceHealth';
 import { HealthLines } from './HealthLines';
+import { useDeviceDrawer } from './useDeviceDrawer';
 import styles from './DeviceStatusBar.module.css';
 
 const { Text } = Typography;
@@ -32,6 +33,7 @@ export const DeviceStatusBar: React.FC = () => {
   // can show "port not found" instead of a vague error.
   const [availablePorts, setAvailablePorts] = useState<string[] | null>(null);
   const [reconnecting, setReconnecting] = useState(false);
+  const { chipProps, drawer } = useDeviceDrawer();
 
   const scanPorts = useCallback(async () => {
     try {
@@ -160,7 +162,7 @@ export const DeviceStatusBar: React.FC = () => {
                   </div>
                 }
               >
-                <div className={styles.deviceItem}>
+                <div className={styles.deviceItem} {...chipProps(integration.id)}>
                   <UsbOutlined className={styles.typeIcon} />
                   <span
                     className={`${styles.statusDot} ${status?.status === 'Connecting' ? styles.pulsing : ''}`}
@@ -193,7 +195,7 @@ export const DeviceStatusBar: React.FC = () => {
                   </div>
                 }
               >
-                <div className={styles.deviceItem}>
+                <div className={styles.deviceItem} {...chipProps(integration.id)}>
                   <FolderOutlined className={styles.typeIcon} />
                   <span
                     className={styles.statusDot}
@@ -235,6 +237,8 @@ export const DeviceStatusBar: React.FC = () => {
           />
         </Tooltip>
       </div>
+
+      {drawer}
 
       {/* Dev Tools Drawer */}
       {devToolsEnabled && (
