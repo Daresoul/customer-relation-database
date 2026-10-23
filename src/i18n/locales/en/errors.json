@@ -1,5 +1,6 @@
 {
   "failedTo": "Failed to {{operation}}",
+  "commandTimeout": "Arkivet did not finish this within {{seconds}} seconds. Try again. If it keeps happening, restart Arkivet.",
 
   "network": {
     "error": "Unable to connect to the server. Please check your internet connection.",

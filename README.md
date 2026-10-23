@@ -473,7 +473,11 @@ Actions secrets:
 
 Failed Tauri commands are reported to the log (and so to Loki) with the
 command name, error message and duration only, never their arguments
-(`src/services/invoke.ts`).
+(`src/services/invoke.ts`). A command that has not answered after 60 s
+is rejected with a translated "did not finish" message and logged as a
+timeout (a panic inside an async command leaves its promise pending
+forever). Backups, PDF commands, lab imports, uploads and Google sign-in
+are never timed out; they are listed in `NO_TIMEOUT_COMMANDS`.
 
 ## Webview security
 
