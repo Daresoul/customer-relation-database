@@ -40,7 +40,8 @@
     "selectEndTime": "Please select end time",
     "endTimeAfterStart": "End time must be after start time",
     "fifteenMinuteIntervals": "Times must be on 15-minute intervals",
-    "unableToCheckConflicts": "Unable to check for conflicts. Please verify manually."
+    "conflictCheckFailed": "Could not check this time for clashes. Check the calendar before you save.",
+    "startInPast": "This start time has already passed."
   },
   "conflicts": {
     "roomCapacityExceeded": "Room Capacity Exceeded",
