@@ -25,9 +25,11 @@
   },
   "status": {
     "scheduled": "Закажан",
-    "inProgress": "Во тек",
+    "inProgress": "Во преглед",
     "completed": "Завршен",
-    "cancelled": "Откажан"
+    "cancelled": "Откажан",
+    "checkedIn": "Пристигнат",
+    "noShow": "Не дојде"
   },
   "validation": {
     "selectPatient": "Изберете пациент",
@@ -46,7 +48,8 @@
     "capacityWarning_plural": "Капацитетот на собата е {{capacity}}, но веќе има {{count}} закажани термини во овој временски период",
     "confirmTitle": "Капацитетот на собата е надминат",
     "confirmMessage": "Капацитетот на собата е {{capacity}}, но {{isPlural}} {{count}} термин{{pluralSuffix}} во овој временски период. Дали сакате да продолжите?",
-    "continueAnyway": "Сепак продолжи"
+    "continueAnyway": "Сепак продолжи",
+    "samePatientTitle": "Овој пациент веќе има термин во ова време"
   },
   "schedule": "Распоред",
   "actions": {
@@ -54,7 +57,17 @@
     "update": "Ажурирај",
     "cancel": "Откажи",
     "duplicate": "Дуплирај",
-    "delete": "Избриши"
+    "delete": "Избриши",
+    "openPatient": "Отвори пациент",
+    "startRecord": "Започни медицински запис",
+    "checkIn": "Пријави доаѓање",
+    "startConsult": "Започни преглед",
+    "markDone": "Заврши",
+    "reopen": "Врати во закажан",
+    "cancelAppointment": "Откажи термин",
+    "markNoShow": "Не дојде",
+    "edit": "Уреди",
+    "reschedule": "Презакажи"
   },
   "tabs": {
     "calendar": "Календар",
@@ -65,7 +78,9 @@
   "views": {
     "day": "Ден",
     "week": "Недела",
-    "month": "Месец"
+    "month": "Месец",
+    "list": "Листа",
+    "grid": "Распоред"
   },
   "filters": {
     "title": "Филтрирај термини",
@@ -91,7 +106,9 @@
     "updatedSuccess": "Терминот е успешно ажуриран",
     "updateFailed": "Неуспешно ажурирање на терминот",
     "saveFailed": "Неуспешно зачувување на терминот",
-    "duplicateSelectDate": "Изберете датум на кој ќе се дуплира овој термин:"
+    "duplicateSelectDate": "Изберете датум на кој ќе се дуплира овој термин:",
+    "statusChanged": "{{name}}: {{status}}",
+    "rescheduledSuccess": "Терминот е преместен"
   },
   "details": {
     "title": "Детали за терминот",
@@ -142,5 +159,44 @@
     "capacityPlaceholder": "Број на пациенти/животни",
     "colorLabel": "Боја на собата",
     "colorHint": "Оваа боја ќе се користи за препознавање на собата во календарот"
-  }
+  },
+  "drawer": {
+    "time": "Време",
+    "room": "Соба",
+    "noRoom": "Без соба",
+    "patient": "Пациент",
+    "owner": "Сопственик",
+    "noOwner": "Нема внесен сопственик",
+    "reason": "Причина",
+    "notes": "Белешки",
+    "status": "Статус",
+    "arrived": "Пристигна во {{time}}",
+    "waiting": "Чека {{minutes}} мин",
+    "record": "Медицински запис",
+    "openRecord": "Отвори запис",
+    "loadFailed": "Терминот не може да се вчита",
+    "googleLabel": "Google Calendar",
+    "google": {
+      "off": "Синхронизацијата е исклучена",
+      "synced": "Во Google Calendar",
+      "notSynced": "Сè уште не е во Google Calendar",
+      "reconnect": "Google бара повторно поврзување (Поставки)"
+    },
+    "googleSyncedAt": "Последно испратено {{time}}"
+  },
+  "reschedule": {
+    "title": "Презакажи термин",
+    "date": "Нов датум",
+    "time": "Ново време на почеток",
+    "save": "Премести",
+    "keepsLength": "Терминот го задржува времетраењето ({{minutes}} мин)."
+  },
+  "waiting": {
+    "waitingFor": "чека {{minutes}} мин",
+    "empty": "Денес нема термини"
+  },
+  "picker": {
+    "chip": "чип …{{digits}}"
+  },
+  "loadFailed": "Термините не може да се вчитаат"
 }

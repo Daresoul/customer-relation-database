@@ -22,6 +22,10 @@
   gap: 8px;
 }
 
+.conflictAlert {
+  margin-bottom: 16px;
+}
+
 .conflictWarning {
   color: var(--error-color);
   margin-top: 8px;

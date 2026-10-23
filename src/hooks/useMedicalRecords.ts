@@ -70,6 +70,7 @@ export function useCreateMedicalRecord() {
   const reportDocuments = useDocumentStatusNotice();
 
   return useMutation({
+    mutationKey: CREATE_RECORD_MUTATION_KEY,
     mutationFn: (input: CreateMedicalRecordInput) =>
       MedicalService.createMedicalRecord(input),
     onSuccess: (data, variables) => {

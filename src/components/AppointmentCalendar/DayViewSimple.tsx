@@ -1,19 +1,22 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Card, Tag, Button, Empty, Tooltip } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import { Card, Tooltip } from 'antd';
 import dayjs, { Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
-import { Appointment } from '../../types/appointments';
+import { Appointment, AppointmentStatus } from '../../types/appointments';
 import { useThemeColors } from '../../utils/themeStyles';
 import { useRooms } from '../../hooks/useRooms';
+import { isClosedStatus, statusLabelKey } from '../../utils/appointmentStatus';
+import { AppointmentStatusMenu } from './AppointmentStatusMenu';
 
 import styles from './DayViewSimple.module.css';
+import cardStyles from './AppointmentCard.module.css';
 interface DayViewSimpleProps {
   selectedDate: Dayjs;
   appointments: Appointment[];
   onSelectAppointment: (appointment: Appointment) => void;
   onCreateAppointment: (startDate: Date, endDate: Date) => void;
   onUpdateAppointment?: (id: number, startDate: Date, endDate: Date) => void;
+  onStatusChange?: (appointment: Appointment, status: AppointmentStatus) => void;
 }
 
 const DayViewSimple: React.FC<DayViewSimpleProps> = ({
@@ -22,6 +25,7 @@ const DayViewSimple: React.FC<DayViewSimpleProps> = ({
   onSelectAppointment,
   onCreateAppointment,
   onUpdateAppointment,
+  onStatusChange,
 }) => {
   const { t } = useTranslation('appointments');
   const themeColors = useThemeColors();
@@ -191,7 +195,7 @@ const DayViewSimple: React.FC<DayViewSimpleProps> = ({
           </div>
         )}
         <div className={styles.tooltipInfo}>
-          <strong>{t('fields.status')}:</strong> {t(`status.${apt.status === 'in_progress' ? 'inProgress' : apt.status}`)}
+          <strong>{t('fields.status')}:</strong> {t(statusLabelKey(apt.status))}
         </div>
         <div className={styles.tooltipTitle}>{apt.title}</div>
         {apt.description && (
@@ -297,9 +301,11 @@ const DayViewSimple: React.FC<DayViewSimpleProps> = ({
     const columnWidth = availableWidth / apt.totalColumns;
     const leftOffset = 5 + (apt.column * columnWidth); // Start at 5% from left
 
+    const closed = isClosedStatus(apt.status);
+
     return (
+      <AppointmentStatusMenu key={apt.id} appointment={apt} onStatusChange={onStatusChange}>
       <Tooltip
-        key={apt.id}
         title={getTooltipContent(apt)}
         placement="top"
         mouseEnterDelay={0.5}
@@ -308,7 +314,9 @@ const DayViewSimple: React.FC<DayViewSimpleProps> = ({
         <Card
           size="small"
           hoverable
-          className={apt.status === 'cancelled' ? 'appointment-cancelled' : ''}
+          className={`${closed ? cardStyles.closed : ''}`}
+          data-status={apt.status}
+          data-closed={closed ? 'true' : undefined}
           onClick={() => {
             onSelectAppointment(apt);
           }}
@@ -335,8 +343,10 @@ const DayViewSimple: React.FC<DayViewSimpleProps> = ({
           }}
         >
           <div className={styles.appointmentTitle}>
-            {apt.title}
+            <span className={cardStyles.statusDot} data-status={apt.status} title={t(statusLabelKey(apt.status))} />
+            <span className={cardStyles.patientName}>{apt.patientName || t('details.unknownPatient')}</span>
           </div>
+          <div className={`${styles.appointmentTime} ${cardStyles.title}`}>{apt.title}</div>
           {style.height > 40 && (
             <div className={styles.appointmentTime}>
               {dayjs(apt.startTime).format('HH:mm')} - {dayjs(apt.endTime).format('HH:mm')}
@@ -344,6 +354,7 @@ const DayViewSimple: React.FC<DayViewSimpleProps> = ({
           )}
         </Card>
       </Tooltip>
+      </AppointmentStatusMenu>
     );
   };
 

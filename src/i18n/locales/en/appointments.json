@@ -25,9 +25,11 @@
   },
   "status": {
     "scheduled": "Scheduled",
-    "inProgress": "In Progress",
-    "completed": "Completed",
-    "cancelled": "Cancelled"
+    "inProgress": "In consult",
+    "completed": "Done",
+    "cancelled": "Cancelled",
+    "checkedIn": "Checked in",
+    "noShow": "No-show"
   },
   "validation": {
     "selectPatient": "Please select a patient",
@@ -46,7 +48,8 @@
     "capacityWarning_plural": "Room capacity is {{capacity}}, but there are {{count}} appointments at this time",
     "confirmTitle": "Room Capacity Exceeded",
     "confirmMessage": "Room capacity is {{capacity}}, but there {{isPlural}} {{count}} appointment{{pluralSuffix}} at this time. Do you want to continue?",
-    "continueAnyway": "Continue Anyway"
+    "continueAnyway": "Continue Anyway",
+    "samePatientTitle": "This patient is already booked at this time"
   },
   "schedule": "Schedule",
   "actions": {
@@ -54,7 +57,17 @@
     "update": "Update",
     "cancel": "Cancel",
     "duplicate": "Duplicate",
-    "delete": "Delete"
+    "delete": "Delete",
+    "openPatient": "Open patient",
+    "startRecord": "Start medical record",
+    "checkIn": "Check in",
+    "startConsult": "Start consult",
+    "markDone": "Done",
+    "reopen": "Back to scheduled",
+    "cancelAppointment": "Cancel appointment",
+    "markNoShow": "No-show",
+    "edit": "Edit",
+    "reschedule": "Reschedule"
   },
   "tabs": {
     "calendar": "Calendar",
@@ -65,7 +78,9 @@
   "views": {
     "day": "Day",
     "week": "Week",
-    "month": "Month"
+    "month": "Month",
+    "list": "List",
+    "grid": "Grid"
   },
   "filters": {
     "title": "Filter Appointments",
@@ -91,7 +106,9 @@
     "updatedSuccess": "Appointment updated successfully",
     "updateFailed": "Failed to update appointment",
     "saveFailed": "Failed to save appointment",
-    "duplicateSelectDate": "Select a date to duplicate this appointment to:"
+    "duplicateSelectDate": "Select a date to duplicate this appointment to:",
+    "statusChanged": "{{name}}: {{status}}",
+    "rescheduledSuccess": "Appointment moved"
   },
   "details": {
     "title": "Appointment Details",
@@ -142,5 +159,44 @@
     "capacityPlaceholder": "Number of patients/animals",
     "colorLabel": "Room Color",
     "colorHint": "This color will be used to identify the room in the calendar"
-  }
+  },
+  "drawer": {
+    "time": "Time",
+    "room": "Room",
+    "noRoom": "No room",
+    "patient": "Patient",
+    "owner": "Owner",
+    "noOwner": "No owner on file",
+    "reason": "Reason",
+    "notes": "Notes",
+    "status": "Status",
+    "arrived": "Arrived {{time}}",
+    "waiting": "Waiting {{minutes}} min",
+    "record": "Medical record",
+    "openRecord": "Open record",
+    "loadFailed": "Could not load the appointment",
+    "googleLabel": "Google Calendar",
+    "google": {
+      "off": "Sync is off",
+      "synced": "On Google Calendar",
+      "notSynced": "Not on Google Calendar yet",
+      "reconnect": "Google needs reconnecting (Settings)"
+    },
+    "googleSyncedAt": "Last sent {{time}}"
+  },
+  "reschedule": {
+    "title": "Reschedule appointment",
+    "date": "New date",
+    "time": "New start time",
+    "save": "Move",
+    "keepsLength": "The appointment keeps its length ({{minutes}} min)."
+  },
+  "waiting": {
+    "waitingFor": "waiting {{minutes}} min",
+    "empty": "No appointments today"
+  },
+  "picker": {
+    "chip": "chip …{{digits}}"
+  },
+  "loadFailed": "Could not load the appointments"
 }

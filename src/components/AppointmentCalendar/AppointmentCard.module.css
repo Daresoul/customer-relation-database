@@ -1,0 +1,48 @@
+/* Shared by the day, week and month cards: status dot, patient name, closed visits. */
+
+.statusDot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 4px;
+  border-radius: 50%;
+  vertical-align: middle;
+  background: #1677ff;
+}
+
+.statusDot[data-status='checked_in'] {
+  background: #faad14;
+}
+
+.statusDot[data-status='in_progress'] {
+  background: #722ed1;
+}
+
+.statusDot[data-status='completed'] {
+  background: #52c41a;
+}
+
+.statusDot[data-status='cancelled'] {
+  background: #8c8c8c;
+}
+
+.statusDot[data-status='no_show'] {
+  background: #ff4d4f;
+}
+
+.patientName {
+  font-weight: 600;
+}
+
+.closed {
+  opacity: 0.55;
+}
+
+.closed .patientName,
+.closed .title {
+  text-decoration: line-through;
+}
+
+.title {
+  font-weight: normal;
+}

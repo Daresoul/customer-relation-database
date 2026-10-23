@@ -1,0 +1,28 @@
+.statusRow {
+  margin-bottom: 12px;
+}
+
+.actions {
+  margin: 12px 0;
+}
+
+.facts {
+  margin-top: 4px;
+}
+
+.notes {
+  white-space: pre-wrap;
+}
+
+.inlineLink {
+  padding: 0;
+  height: auto;
+}
+
+.divider {
+  margin: 12px 0;
+}
+
+.fullWidth {
+  width: 100%;
+}

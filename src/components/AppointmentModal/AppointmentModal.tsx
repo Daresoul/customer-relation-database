@@ -29,10 +29,14 @@ import {
   UpdateAppointmentInput,
   ConflictCheckInput,
 } from '../../types/appointments';
+import { useQuery } from '@tanstack/react-query';
 import { useRooms } from '../../hooks/useRooms';
 import appointmentService from '../../services/appointmentService';
+import { invoke } from '../../services/invoke';
 import { usePatients } from '../../hooks/usePatients';
 import { bookablePatients } from '../../utils/patientChart';
+import { statusLabelKey } from '../../utils/appointmentStatus';
+import type { AppointmentStatus } from '../../types/appointments';
 import { useTranslation } from 'react-i18next';
 import styles from './AppointmentModal.module.css';
 
@@ -52,6 +56,30 @@ interface AppointmentModalProps {
   rooms?: any[];
 }
 
+const EDIT_STATUSES: AppointmentStatus[] = ['scheduled', 'checked_in', 'in_progress', 'completed', 'cancelled', 'no_show'];
+
+/** `get_all_households` rows; the household part arrives in either case style. */
+interface HouseholdRow {
+  household?: { id?: number; householdName?: string; household_name?: string };
+}
+
+/** Household id → name, so two pets with the same name can be told apart. */
+function useHouseholdNames(): Map<number, string> {
+  const { data = [] } = useQuery({
+    queryKey: ['all-households', 'appointment-picker'],
+    queryFn: () => invoke<HouseholdRow[]>('get_all_households', {}),
+  });
+  return useMemo(() => {
+    const names = new Map<number, string>();
+    (data ?? []).forEach((row) => {
+      const id = row?.household?.id;
+      const name = row?.household?.householdName ?? row?.household?.household_name;
+      if (id != null && name) names.set(id, name);
+    });
+    return names;
+  }, [data]);
+}
+
 // Inner component that only renders when modal is open
 const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 'open'> & { isVisible: boolean }> = ({
   isVisible,
@@ -68,11 +96,27 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [conflicts, setConflicts] = useState<Appointment[]>([]);
+  const [patientConflicts, setPatientConflicts] = useState<Appointment[]>([]);
   const [checkingConflicts, setCheckingConflicts] = useState(false);
 
   const { data: hookRooms } = useRooms({ activeOnly: true });
-  const rooms = propsRooms || hookRooms;
+  const rooms = propsRooms ?? hookRooms ?? [];
   const { patients } = usePatients();
+  const householdNames = useHouseholdNames();
+
+  const patientOptions = useMemo(
+    () =>
+      bookablePatients(patients ?? [], mode === 'edit' ? appointment?.patientId : undefined).map((patient) => {
+        const owner = patient.householdId != null ? householdNames.get(patient.householdId) : undefined;
+        const chip = patient.microchipId
+          ? t('appointments:picker.chip', { digits: String(patient.microchipId).slice(-4) })
+          : undefined;
+        const who = [patient.name, patient.species].filter(Boolean).join(' · ');
+        const extra = [owner, chip].filter(Boolean).join(' · ');
+        return { value: patient.id, label: extra ? `${who} — ${extra}` : who };
+      }),
+    [patients, householdNames, mode, appointment?.patientId, t],
+  );
 
   // Time slot options (15-minute intervals)
   const timeSlots = useMemo(
@@ -120,10 +164,11 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
 
   // Check for conflicts when room or time changes
   const checkConflicts = async () => {
-    const values = form.getFieldsValue(['date', 'startTime', 'endTime', 'roomId']);
+    const values = form.getFieldsValue(['date', 'startTime', 'endTime', 'roomId', 'patientId']);
 
-    if (!values.date || !values.startTime || !values.endTime || !values.roomId) {
+    if (!values.date || !values.startTime || !values.endTime || (!values.roomId && !values.patientId)) {
       setConflicts([]);
+      setPatientConflicts([]);
       return;
     }
 
@@ -140,11 +185,14 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
         startTime: startDateTime.toISOString(),
         endTime: endDateTime.toISOString(),
         roomId: values.roomId,
+        patientId: values.patientId,
         excludeAppointmentId: mode === 'edit' ? appointment?.id : undefined,
       };
 
       const response = await appointmentService.checkConflicts(input);
-      setConflicts(response.conflicts || []);
+      // Without a room the backend lists every overlap; only the room's count matters.
+      setConflicts(values.roomId ? response.conflicts || [] : []);
+      setPatientConflicts(response.patientConflicts || []);
     } catch (error) {
       console.error('Failed to check conflicts:', error);
       // Clear conflicts and show warning instead of blocking
@@ -239,7 +287,8 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
         description: values.description,
         startTime: startDateTime.toISOString(),
         endTime: endDateTime.toISOString(),
-        roomId: values.roomId,
+        // On edit, null clears the room; left out would keep the old one.
+        roomId: mode === 'edit' ? values.roomId ?? null : values.roomId,
       };
 
       if (mode === 'edit') {
@@ -249,6 +298,7 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
       await onSave(data);
       form.resetFields();
       setConflicts([]);
+      setPatientConflicts([]);
     } catch (error) {
       console.error('Failed to save appointment:', error);
     } finally {
@@ -260,6 +310,7 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
   const handleCancel = () => {
     form.resetFields();
     setConflicts([]);
+    setPatientConflicts([]);
     onCancel();
   };
 
@@ -309,15 +360,12 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
               <Select
                 placeholder={t('appointments:placeholders.selectPatient')}
                 showSearch
-                optionFilterProp="children"
+                optionFilterProp="label"
                 suffixIcon={<UserOutlined />}
-              >
-                {bookablePatients(patients ?? [], mode === 'edit' ? appointment?.patientId : undefined).map((patient: any) => (
-                  <Option key={patient.id} value={patient.id}>
-                    {patient.name} - {patient.species}
-                  </Option>
-                ))}
-              </Select>
+                options={patientOptions}
+                onChange={checkConflicts}
+                popupMatchSelectWidth={false}
+              />
             </Form.Item>
           </Col>
           <Col span={12}>
@@ -375,6 +423,7 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
                 className={styles.fullWidth}
                 disabledDate={disabledDate}
                 format="MMMM DD, YYYY"
+                onChange={checkConflicts}
               />
             </Form.Item>
           </Col>
@@ -416,12 +465,29 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
             label={t('appointments:fields.status')}
           >
             <Select>
-              <Option value="scheduled">{t('appointments:status.scheduled')}</Option>
-              <Option value="in_progress">{t('appointments:status.inProgress')}</Option>
-              <Option value="completed">{t('appointments:status.completed')}</Option>
-              <Option value="cancelled">{t('appointments:status.cancelled')}</Option>
+              {EDIT_STATUSES.map((status) => (
+                <Option key={status} value={status}>{t(statusLabelKey(status))}</Option>
+              ))}
             </Select>
           </Form.Item>
+        )}
+
+        {patientConflicts.length > 0 && (
+          <Alert
+            className={styles.conflictAlert}
+            type="warning"
+            showIcon
+            message={t('appointments:conflicts.samePatientTitle')}
+            description={
+              <ul>
+                {patientConflicts.map((conflict) => (
+                  <li key={conflict.id}>
+                    {conflict.title} ({dayjs(conflict.startTime).format('D MMM HH:mm')}–{dayjs(conflict.endTime).format('HH:mm')})
+                  </li>
+                ))}
+              </ul>
+            }
+          />
         )}
 
         {(() => {

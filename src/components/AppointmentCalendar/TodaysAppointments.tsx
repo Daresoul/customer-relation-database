@@ -2,19 +2,21 @@ import React, { useMemo } from 'react';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import DayViewSimple from './DayViewSimple';
-import { Appointment } from '../../types/appointments';
+import { Appointment, AppointmentStatus } from '../../types/appointments';
 import styles from './TodaysAppointments.module.css';
 
 interface TodaysAppointmentsProps {
   appointments: Appointment[];
   onSelectAppointment: (appointment: Appointment) => void;
   onCreateAppointment: (startDate: Date, endDate?: Date) => void;
+  onStatusChange?: (appointment: Appointment, status: AppointmentStatus) => void;
 }
 
 const TodaysAppointments: React.FC<TodaysAppointmentsProps> = ({
   appointments: allAppointments,
   onSelectAppointment,
   onCreateAppointment,
+  onStatusChange,
 }) => {
   const { t } = useTranslation('appointments');
   const today = dayjs();
@@ -37,6 +39,7 @@ const TodaysAppointments: React.FC<TodaysAppointmentsProps> = ({
         appointments={todaysAppointments}
         onSelectAppointment={onSelectAppointment}
         onCreateAppointment={onCreateAppointment}
+        onStatusChange={onStatusChange}
       />
     </div>
   );

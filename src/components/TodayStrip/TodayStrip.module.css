@@ -26,6 +26,11 @@
   color: inherit;
 }
 
+.appointment[data-closed='true'] {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
 .appointment:hover,
 .appointment:focus-visible {
   background: rgba(127, 127, 127, 0.12);
