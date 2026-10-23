@@ -694,6 +694,29 @@ Then open `http://localhost:1420/?bridge=1` (the flag is remembered per tab;
   behind the browser), the tray, real serial ports and scanners, and
   `asset://` previews of PDFs and images.
 
+## Windows test lab (live, test machine only)
+The real Windows build on a test PC (`HomeGuiRunner`), driven from the Mac:
+real WebView2, installer, Java, tray and dialogs, virtual COM ports and an
+Exigo folder, and a demo clinic. Never set this up on a clinic PC: it opens
+SSH and starts the app with a DevTools port.
+
+- **One-time on the PC** (elevated PowerShell, as the lab user):
+  `bootstrap.ps1 -AuthorizedKey "<output of scripts/appctl keygen>"`, then turn
+  on auto-logon. It sets up OpenSSH, Java 17, Node LTS, com0com pairs
+  (app COM20/22/24 ↔ simulator COM21/23/25), `C:\ArkivetLab`, the agent token
+  and the `ArkivetLabAgent` logon task.
+- **From the Mac:** `scripts/appctl config <host> <user>`, `appctl connect`
+  (tunnels 9222 DevTools and 8787 agent), `appctl provision` (agent, clinic
+  simulator, fixtures, demo clinic from `scripts/windows-lab/make-demo-clinic.sh`).
+- **Daily use:** `appctl install <setup.exe>`, `appctl reset`, `appctl start`,
+  `appctl sim <scenario>` (`appctl sim list`), `appctl pw snapshot|click|fill|shot`
+  (Playwright over the WebView2 DevTools port), `appctl shot` (desktop),
+  `appctl ui list|press|type` and `appctl tray <item>` (Windows UI Automation),
+  `appctl log`.
+- **Lab agent** (`scripts/windows-lab/lab-agent.ps1`): runs in the logged-in
+  session so the app gets a real window (programs started over SSH can't show
+  one). Listens on 127.0.0.1:8787 with a token; reached only through SSH.
+
 ## Release build secrets
 
 The release workflow (`.github/workflows/release.yml`) reads these GitHub

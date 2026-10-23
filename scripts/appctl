@@ -1,0 +1,130 @@
+#!/usr/bin/env bash
+# Drive the Arkivet Windows test lab from this Mac (see README "Windows test lab").
+#
+#   appctl keygen                       make the lab SSH key, print the public key
+#   appctl config <host> <user>         where the lab is (Tailscale name or LAN IP)
+#   appctl connect | disconnect         SSH tunnels: 9222 (app DevTools), 8787 (agent)
+#   appctl provision                    copy agent, simulator, fixtures, demo clinic
+#   appctl install <setup.exe|.msi>     install a build
+#   appctl reset | start [--hidden] | stop | status
+#   appctl sim <scenario> | sim list    play lab machine data
+#   appctl shot [out.png]               screenshot of the Windows desktop
+#   appctl ui list [window] | ui press <name> [window] | ui type <name> <text>
+#   appctl keys <keys>                  e.g. "{ENTER}", "%{F4}"
+#   appctl tray <item>                  press an item in the app's tray menu
+#   appctl pw <command> …               Playwright in the real app (scripts/windows-lab/pw.mjs)
+#   appctl log [lines]                  tail the app log
+#   appctl ps <powershell>              run a PowerShell command on the lab
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+LAB_DIR="$ROOT/scripts/windows-lab"
+CONF_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/arkivet-lab"
+CONF="$CONF_DIR/lab.env"
+KEY="$HOME/.ssh/arkivet_lab"
+OUT="$ROOT/.lab"
+WIN_LAB='C:\ArkivetLab'
+
+[[ -f "$CONF" ]] && source "$CONF"
+
+die() { echo "appctl: $*" >&2; exit 1; }
+need_conf() { [[ -n "${LAB_HOST:-}" && -n "${LAB_USER:-}" ]] || die "run: appctl config <host> <user>"; }
+ssh_opts() { echo -i "$KEY" -o ControlMaster=auto -o ControlPath="$HOME/.ssh/arkivet-lab-%C" -o ControlPersist=4h -o ServerAliveInterval=30; }
+lab_ssh() { need_conf; ssh $(ssh_opts) "$LAB_USER@$LAB_HOST" "$@"; }
+lab_scp() { need_conf; scp $(ssh_opts) "$@"; }
+# Windows OpenSSH's scp wants forward slashes in paths.
+remote() { echo "$LAB_USER@$LAB_HOST:${1//\\//}"; }
+
+token() {
+  local cached="$CONF_DIR/token"
+  if [[ ! -s "$cached" ]]; then
+    lab_ssh "Get-Content '$WIN_LAB\\state\\agent.token' -Raw" | tr -d '\r\n ' >"$cached"
+    chmod 600 "$cached"
+  fi
+  cat "$cached"
+}
+
+agent() {
+  local action="$1" body="${2:-}"
+  [[ -n "$body" ]] || body='{}'
+  curl -sS -m 300 -X POST "http://127.0.0.1:8787/$action" \
+    -H "X-Lab-Token: $(token)" -H 'content-type: application/json' -d "$body" \
+    || die "agent not reachable (appctl connect; is the user logged in on the lab?)"
+  echo
+}
+
+json_str() { python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$1"; }
+
+cmd="${1:-help}"; shift || true
+case "$cmd" in
+  keygen)
+    [[ -f "$KEY" ]] || ssh-keygen -t ed25519 -f "$KEY" -N '' -C 'arkivet-lab'
+    cat "$KEY.pub"
+    ;;
+  config)
+    [[ $# -eq 2 ]] || die "usage: appctl config <host> <user>"
+    mkdir -p "$CONF_DIR"
+    printf 'LAB_HOST=%q\nLAB_USER=%q\n' "$1" "$2" >"$CONF"
+    rm -f "$CONF_DIR/token"
+    echo "saved $CONF"
+    ;;
+  connect)
+    need_conf
+    ssh $(ssh_opts) -f -N -L 9222:127.0.0.1:9222 -L 8787:127.0.0.1:8787 "$LAB_USER@$LAB_HOST"
+    echo "tunnels up: DevTools 127.0.0.1:9222, agent 127.0.0.1:8787"
+    ;;
+  disconnect)
+    need_conf
+    ssh $(ssh_opts) -O exit "$LAB_USER@$LAB_HOST" 2>/dev/null || true
+    ;;
+  provision)
+    need_conf
+    lab_scp "$LAB_DIR/lab-agent.ps1" "$(remote "$WIN_LAB\\lab-agent.ps1")"
+    lab_scp "$LAB_DIR/clinic-sim/package.json" "$LAB_DIR/clinic-sim/scenarios.mjs" "$LAB_DIR/clinic-sim/sim.mjs" \
+      "$(remote "$WIN_LAB\\clinic-sim\\")"
+    lab_scp "$ROOT"/src-tauri/tests/fixtures/* "$(remote "$WIN_LAB\\fixtures\\")"
+    if [[ -f "$LAB_DIR/.demo-clinic.zip" ]]; then
+      lab_scp "$LAB_DIR/.demo-clinic.zip" "$(remote "$WIN_LAB\\state\\demo-clinic.zip")"
+      lab_ssh "Remove-Item '$WIN_LAB\\state\\demo-clinic' -Recurse -Force -ErrorAction SilentlyContinue; Expand-Archive '$WIN_LAB\\state\\demo-clinic.zip' '$WIN_LAB\\state\\demo-clinic' -Force"
+    else
+      echo "appctl: no demo clinic yet (scripts/windows-lab/make-demo-clinic.sh); reset won't work until there is one" >&2
+    fi
+    lab_ssh "Push-Location '$WIN_LAB\\clinic-sim'; & 'C:\\Program Files\\nodejs\\npm.cmd' install --omit=dev --no-audit --no-fund; Pop-Location; Start-ScheduledTask -TaskName ArkivetLabAgent"
+    echo "provisioned; agent started in the logged-in session"
+    ;;
+  install)
+    [[ $# -eq 1 && -f "$1" ]] || die "usage: appctl install <setup.exe|.msi>"
+    lab_scp "$1" "$(remote "$WIN_LAB\\builds\\")"
+    agent install "{\"file\":$(json_str "$(basename "$1")")}"
+    ;;
+  reset | stop | status) agent "$cmd" ;;
+  start) [[ "${1:-}" == "--hidden" ]] && agent start '{"hidden":true}' || agent start ;;
+  sim)
+    lab_ssh "& 'C:\\Program Files\\nodejs\\node.exe' '$WIN_LAB\\clinic-sim\\sim.mjs' ${1:-list} --config '$WIN_LAB\\lab.json'"
+    ;;
+  shot)
+    mkdir -p "$OUT"
+    out="${1:-$OUT/shot-$(date +%H%M%S).png}"
+    path=$(agent shot | python3 -c 'import json,sys; print(json.load(sys.stdin)["result"]["path"])')
+    lab_scp "$(remote "$path")" "$out"
+    echo "$out"
+    ;;
+  ui)
+    sub="${1:-list}"; shift || true
+    case "$sub" in
+      list) agent ui-list "{\"window\":$(json_str "${1:-}")}" ;;
+      press) agent ui-press "{\"name\":$(json_str "$1"),\"window\":$(json_str "${2:-}")}" ;;
+      type) agent ui-type "{\"name\":$(json_str "$1"),\"text\":$(json_str "$2")}" ;;
+      *) die "usage: appctl ui list|press|type" ;;
+    esac
+    ;;
+  keys) agent keys "{\"keys\":$(json_str "$1")}" ;;
+  tray) agent tray "{\"item\":$(json_str "$1")}" ;;
+  pw) (cd "$ROOT" && node "$LAB_DIR/pw.mjs" "$@") ;;
+  log)
+    # Tauri v1 keeps logs in the roaming app data folder on Windows.
+    lab_ssh "Get-Content (Join-Path \$env:APPDATA 'com.vetclinic.app\\logs\\Arkivet.log') -Tail ${1:-60}"
+    ;;
+  ps) lab_ssh "$*" ;;
+  help | *) sed -n '2,20p' "$0" ;;
+esac
