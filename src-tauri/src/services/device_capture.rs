@@ -86,7 +86,7 @@ const KNOWN_SCANNER_VIDS: &[u16] = &[
 /// - 12 hex chars: ISO 11784/11785 FDX-B raw 48-bit ID (some readers' default)
 /// - 10 hex chars: AVID FDX-A (North America, may contain A-F)
 /// - 9 digits: Legacy European pre-ISO formats
-fn looks_like_microchip(code: &str) -> bool {
+pub(crate) fn looks_like_microchip(code: &str) -> bool {
     let len = code.len();
     match len {
         15 => code.chars().all(|c| c.is_ascii_digit()),
@@ -125,8 +125,10 @@ pub fn normalize_microchip_public(code: &str) -> String {
     normalize_microchip(code)
 }
 
-fn hid_thread_should_close(_read_failed: bool) -> bool {
-    false
+/// A scanner's reader stays open however long it is quiet: closing it made
+/// the next scan wait for a reopen. Only a read error (unplugged) ends it.
+fn hid_thread_should_close(read_failed: bool) -> bool {
+    read_failed
 }
 
 fn emit_barcode(app: &AppHandle, device_name: &str, code: &str) {
@@ -297,10 +299,14 @@ pub fn start_device_capture(app: AppHandle) {
                             let buf_state = Arc::new(Mutex::new(BarcodeBuffer::new()));
                             let mut read_buf = [0u8; 64];
                             let idle_timeout = Duration::from_millis(120);
-                            let mut last_emit = Instant::now();
 
                             loop {
-                                match device.read(&mut read_buf) {
+                                let read = device.read(&mut read_buf);
+                                if hid_thread_should_close(read.is_err()) {
+                                    log::debug!("HID read failed on {}: {:?}; closing", device_name, read.err());
+                                    break;
+                                }
+                                match read {
                                     Ok(n) if n > 0 => {
                                         let data = &read_buf[..n];
                                         // Extract hex digits and terminators from raw HID reports.
@@ -322,7 +328,6 @@ pub fn start_device_capture(app: AppHandle) {
                                                     st.clear();
                                                     if !code.is_empty() {
                                                         emit_barcode(&app_clone, &device_name, &code);
-                                                        last_emit = Instant::now();
                                                     }
                                                 } else {
                                                     st.push(ch);
@@ -330,12 +335,7 @@ pub fn start_device_capture(app: AppHandle) {
                                             }
                                         }
                                     }
-                                    Ok(_) => {
-                                        // no data
-                                    }
-                                    Err(_) => {
-                                        // Non-blocking read; ignore transient errors
-                                    }
+                                    Ok(_) | Err(_) => {}
                                 }
 
                                 // Idle finalize if buffer has been idle briefly
@@ -346,18 +346,10 @@ pub fn start_device_capture(app: AppHandle) {
                                         st.clear();
                                         if looks_like_microchip(&code) {
                                             emit_barcode(&app_clone, &device_name, &code);
-                                            last_emit = Instant::now();
                                         }
                                     }
                                 }
 
-                                // Break after inactivity to avoid zombie threads.
-                                // 60s is long enough to avoid constant re-open cycles (which cause
-                                // focus disruption on macOS via IOKit) while still cleaning up
-                                // threads for disconnected devices.
-                                if last_emit.elapsed() > Duration::from_secs(60) {
-                                    break;
-                                }
                                 thread::sleep(Duration::from_millis(5));
                             }
 

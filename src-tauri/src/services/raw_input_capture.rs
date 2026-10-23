@@ -480,7 +480,8 @@ mod windows_impl {
     /// merge their chip IDs. Stale-reset matters: a half-finished scan must
     /// not splice into the next scan. The 1-second threshold is heuristic
     /// (much longer than any realistic inter-character gap, much shorter
-    /// than any user noticing).
+    /// than any user noticing). A stale buffer that is a whole microchip
+    /// (its Enter was lost) is returned instead of dropped.
     fn accumulate_scan_char(
         buffers: &mut HashMap<isize, ScanBuffer>,
         h_device: isize,
@@ -494,7 +495,9 @@ mod windows_impl {
             chars: String::new(),
             last_ts: now,
         });
+        let mut stale = None;
         if now.duration_since(buf.last_ts) > Duration::from_secs(1) {
+            stale = super::stale_scan(&buf.chars);
             buf.chars.clear();
         }
         buf.last_ts = now;
@@ -502,13 +505,13 @@ mod windows_impl {
         if ch == '\r' || ch == '\n' {
             let code = std::mem::take(&mut buf.chars);
             if code.is_empty() {
-                None
+                stale
             } else {
                 Some(code)
             }
         } else {
             buf.chars.push(ch);
-            None
+            stale
         }
     }
 
@@ -885,7 +888,15 @@ mod windows_impl {
         None
     }
 
+    /// Called on the Raw Input message-loop thread: the emit and the window
+    /// wake run on their own thread so a slow webview never stalls keyboard
+    /// input.
     fn emit_scan(code: &str) {
+        let code = code.to_string();
+        std::thread::spawn(move || emit_scan_now(&code));
+    }
+
+    fn emit_scan_now(code: &str) {
         log::info!("raw_input_capture: scan from managed device: {}", code);
         if let Some(app) = APP_HANDLE.get() {
             let normalized = crate::services::device_capture::normalize_microchip_public(code);
@@ -2201,9 +2212,11 @@ pub async fn reload_managed_ids(_pool: &crate::database::SeaOrmPool) {
     // No-op on non-Windows: there's no Raw Input capture to refresh.
 }
 
-#[allow(dead_code)]
-pub(crate) fn stale_scan(_buffer: &str) -> Option<String> {
-    None
+/// A managed scanner's buffer that went stale without its Enter: kept when
+/// it is a whole microchip, dropped otherwise.
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+pub(crate) fn stale_scan(buffer: &str) -> Option<String> {
+    crate::services::device_capture::looks_like_microchip(buffer).then(|| buffer.to_string())
 }
 
 #[cfg(test)]

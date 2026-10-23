@@ -493,6 +493,7 @@ fn main() {
                             port_name,
                             integration.device_type.to_db_string().to_string(),
                             integration.id,
+                            integration.serial_baud_rate,
                         ) {
                             log::error!("❌ Failed to start listener for {}: {}", integration.name, e);
                         }

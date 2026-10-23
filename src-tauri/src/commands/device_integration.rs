@@ -33,17 +33,26 @@ pub async fn create_device_integration(
     // Auto-start listener if it's a serial port integration (new integrations are enabled by default)
     if integration.connection_type == ConnectionType::SerialPort {
         if let Some(ref port_name) = integration.serial_port_name {
-            let _ = start_listen(
-                app_handle,
-                port_name.clone(),
-                integration.device_type.to_db_string().to_string(),
-                integration.id,
-            );
+            start_serial_listener(app_handle, &integration, port_name);
         }
     }
 
     reload_file_watchers().await;
     Ok(integration)
+}
+
+/// Start a machine's listener with its saved baud rate. Saving already
+/// refused a port another enabled machine uses, so a failure here is logged.
+fn start_serial_listener(app_handle: AppHandle, integration: &DeviceIntegration, port_name: &str) {
+    if let Err(e) = start_listen(
+        app_handle,
+        port_name.to_string(),
+        integration.device_type.to_db_string().to_string(),
+        integration.id,
+        integration.serial_baud_rate,
+    ) {
+        log::error!("Could not start the listener for {} on {}: {}", integration.name, port_name, e);
+    }
 }
 
 #[tauri::command]
@@ -58,12 +67,7 @@ pub async fn update_device_integration(
     // Start new listener if enabled and it's a serial port integration
     if integration.enabled && integration.connection_type == ConnectionType::SerialPort {
         if let Some(ref port_name) = integration.serial_port_name {
-            let _ = start_listen(
-                app_handle,
-                port_name.clone(),
-                integration.device_type.to_db_string().to_string(),
-                integration.id,
-            );
+            start_serial_listener(app_handle, &integration, port_name);
         }
     }
 
@@ -119,12 +123,7 @@ pub async fn toggle_device_integration_enabled(
         if let Some(ref port_name) = integration.serial_port_name {
             if integration.enabled {
                 // Start listener
-                let _ = start_listen(
-                    app_handle,
-                    port_name.clone(),
-                    integration.device_type.to_db_string().to_string(),
-                    integration.id,
-                );
+                start_serial_listener(app_handle, &integration, port_name);
             } else {
                 // Stop listener
                 stop_listen(port_name, &integration.device_type.to_db_string());
