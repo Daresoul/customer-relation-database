@@ -440,7 +440,7 @@ pub(crate) async fn household_patients_json(
         .map(|row| {
             let patient_id: i64 = row.try_get("", "id").unwrap_or(0);
             let patient_name: String = row.try_get("", "name").unwrap_or_default();
-            log::debug!("  - Processing patient: {} (ID: {})", patient_name, patient_id);
+            log::debug!("  - Processing patient {}", patient_id);
 
             let species: String = row.try_get("", "species").unwrap_or_default();
             let breed: Option<String> = row.try_get("", "breed").ok();

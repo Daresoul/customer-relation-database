@@ -545,7 +545,6 @@ pub async fn regenerate_pdf_from_attachment(
         date_of_birth: patient_row.try_get("", "date_of_birth").ok(),
     };
 
-    log::debug!("Patient info: name={}, microchip={:?}", patient_data.name, patient_data.microchip_id);
 
     // 6. Generate PDF using centralized service (same function as file watcher)
     let pdf_filename = format!("{}_regenerated.pdf", original_name.trim_end_matches(".xml"));
@@ -699,7 +698,6 @@ pub async fn generate_configured_report(
         date_of_birth: overrides.date_of_birth.or_else(|| patient_row.try_get("", "date_of_birth").ok()),
     };
 
-    log::debug!("Patient info (with overrides): name={}, owner={}", patient_data.name, patient_data.owner);
 
     // 4. Fetch and parse selected attachments
     let record_time = MedicalRecordService::record_time(&pool, medical_record_id).await?;

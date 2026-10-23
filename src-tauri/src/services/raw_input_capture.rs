@@ -886,7 +886,7 @@ mod windows_impl {
     }
 
     fn emit_scan(code: &str) {
-        log::info!("raw_input_capture: scan from managed device: {}", code);
+        log::info!("raw_input_capture: scan from managed device ({} characters)", code.chars().count());
         if let Some(app) = APP_HANDLE.get() {
             let normalized = crate::services::device_capture::normalize_microchip_public(code);
             let _ = app.emit_all(

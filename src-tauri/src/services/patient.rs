@@ -398,8 +398,8 @@ impl PatientService {
             return Err("Patient must have either a name or a microchip ID".to_string());
         }
 
-        log::info!("🐾 Creating patient: name={:?}, species_id={:?}, breed_id={:?}, gender={:?}",
-            name, dto.species_id, dto.breed_id, dto.gender);
+        log::info!("🐾 Creating patient: species_id={:?}, breed_id={:?}, gender={:?}",
+            dto.species_id, dto.breed_id, dto.gender);
 
         let now = Utc::now();
 
