@@ -97,6 +97,14 @@ describe('patient banner', () => {
     expect(screen.getByText(/patients:chart.alerts.short.allergy/)).toBeInTheDocument();
   });
 
+  it('names the household, linked, when it has no person yet', () => {
+    answer({ get_patient_weights: [] });
+    render(<PatientBanner patient={rex({ household: { id: 8, householdName: 'Petrovski' } })} onDelete={vi.fn()} />, { wrapper });
+
+    expect(screen.getByRole('link', { name: 'Petrovski' })).toHaveAttribute('href', '/households/8');
+    expect(screen.queryByText('patients:chart.banner.noOwner')).not.toBeInTheDocument();
+  });
+
   it('shows a deceased patient as deceased, with its date', () => {
     answer({ get_patient_weights: [] });
     render(
