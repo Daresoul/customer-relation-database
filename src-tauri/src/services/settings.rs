@@ -310,8 +310,25 @@ impl SettingsService {
     }
 
     /// The logo as a `data:` URL for the settings preview.
-    pub fn clinic_logo_data_url(_profile: &ClinicProfile) -> Option<String> {
-        None
+    pub fn clinic_logo_data_url(profile: &ClinicProfile) -> Option<String> {
+        const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        let path = profile.logo_path.as_ref()?;
+        let bytes = std::fs::read(path).ok()?;
+        let mime = if path.to_ascii_lowercase().ends_with(".png") { "image/png" } else { "image/jpeg" };
+        let mut out = String::with_capacity(bytes.len() * 4 / 3 + 32);
+        out.push_str("data:");
+        out.push_str(mime);
+        out.push_str(";base64,");
+        for chunk in bytes.chunks(3) {
+            let n = (chunk[0] as u32) << 16
+                | (*chunk.get(1).unwrap_or(&0) as u32) << 8
+                | *chunk.get(2).unwrap_or(&0) as u32;
+            out.push(ALPHABET[(n >> 18) as usize & 63] as char);
+            out.push(ALPHABET[(n >> 12) as usize & 63] as char);
+            out.push(if chunk.len() > 1 { ALPHABET[(n >> 6) as usize & 63] as char } else { '=' });
+            out.push(if chunk.len() > 2 { ALPHABET[n as usize & 63] as char } else { '=' });
+        }
+        Some(out)
     }
 
     async fn store_logo_path(db: &DatabaseConnection, path: Option<String>) -> Result<(), String> {

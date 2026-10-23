@@ -929,6 +929,7 @@ impl MedicalRecordService {
 
     /// The JSON job the JAR renders the record's invoice from. Assigns the
     /// invoice number and date on first use.
+    #[cfg(test)]
     pub async fn invoice_job(db: &DatabaseConnection, record: &MedicalRecord) -> Result<serde_json::Value, String> {
         Ok(Self::invoice_job_parts(db, record).await?.0)
     }

@@ -416,6 +416,15 @@ fn main() {
                 }
             });
 
+            // The clinic profile for lab reports made without a database at hand.
+            let sea_orm_pool_for_letterhead = sea_orm_pool.clone();
+            tauri::async_runtime::spawn(async move {
+                match services::settings::SettingsService::get_clinic_profile(&sea_orm_pool_for_letterhead).await {
+                    Ok(profile) => services::java_pdf_service::JavaPdfService::set_letterhead(Some(profile)),
+                    Err(e) => log::warn!("Clinic profile not loaded for PDFs: {}", e),
+                }
+            });
+
             // Backup at start and then on a timer, in the background so a slow
             // or failing backup never blocks boot. See services::backup.
             let sea_orm_pool_for_backup = sea_orm_pool.clone();
@@ -550,6 +559,16 @@ fn main() {
             // Settings commands
             commands::get_app_settings,
             commands::update_app_settings,
+            commands::get_clinic_profile,
+            commands::update_clinic_profile,
+            commands::set_clinic_logo,
+            commands::remove_clinic_logo,
+            commands::get_clinic_logo,
+            commands::get_tax_rates,
+            commands::create_tax_rate,
+            commands::update_tax_rate,
+            commands::calculate_invoice_totals,
+            commands::get_record_invoice_totals,
             // Note: get_currencies is already registered above for medical
             // Database commands
             commands::init_database,
