@@ -49,6 +49,10 @@ INSERT INTO device_integrations (name, device_type, connection_type, watch_direc
   ('Healvet', 'healvet_hv_fia_3000', 'serial_port', NULL, NULL, 'COM22', 9600, 1, datetime('now'), datetime('now')),
   ('PCR', 'mnchip_pcr_analyzer', 'serial_port', NULL, NULL, 'COM24', 9600, 1, datetime('now'), datetime('now'));
 DELETE FROM device_processed_samples;
+UPDATE rooms SET name = CASE name
+  WHEN 'Exam Room 1' THEN 'Ординација 1' WHEN 'Exam Room 2' THEN 'Ординација 2'
+  WHEN 'Surgery Room' THEN 'Хирургија' WHEN 'Dental Suite' THEN 'Стоматологија'
+  WHEN 'Grooming Station' THEN 'Шишање' ELSE name END;
 DELETE FROM line_item_templates;
 INSERT INTO line_item_templates (name, description, default_price, currency_id, display_order, is_active, default_tax_rate_id) VALUES
   ('Преглед', 'Општ клинички преглед', 600, 1, 1, 1, 1),
