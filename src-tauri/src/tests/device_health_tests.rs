@@ -107,6 +107,25 @@ fn unknown_read_errors_are_fatal_by_default() {
     }
 }
 
+// Serial test on the Mac: a cable pulled while a result was half sent made the
+// half disappear without a trace (it is only in the raw log). It is reported
+// like a result that stopped, so the lab inbox shows something was lost.
+#[test]
+fn a_result_cut_by_an_unplug_is_reported_not_dropped() {
+    let mut half = vec![0x0B];
+    half.extend_from_slice(b"MSH|^~\\&|PointCare|PID|kiki|OBX|TBIL|0.2");
+    let mut reader = ScriptedReader::new(vec![Ok(half.clone()), Err(|| io::Error::from_raw_os_error(1167))]);
+    let (_tx, rx) = mpsc::channel::<()>();
+    let mut sink = RecordingSink::default();
+
+    let result = run_read_loop(&mut reader, &pointcare(), &rx, Duration::from_secs(5), &mut sink);
+
+    assert!(result.is_err());
+    assert!(sink.frames.is_empty());
+    assert_eq!(sink.cut_offs.len(), 1, "the half result must reach the lab inbox as cut off");
+    assert!(sink.cut_offs[0].ends_with(b"TBIL|0.2"));
+}
+
 #[test]
 fn read_loop_stops_on_unplug_error_instead_of_spinning() {
     let mut reader = ScriptedReader::new(vec![Err(|| io::Error::from_raw_os_error(1167))]);
