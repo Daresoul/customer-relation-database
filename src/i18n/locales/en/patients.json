@@ -127,7 +127,8 @@
       "failedToSave": "Failed to save changes",
       "placeholders": {
         "species": "Search species...",
-        "breed": "Search breed..."
+        "breed": "Search breed...",
+        "gender": "Not recorded"
       },
       "labels": {
         "name": "Name",
