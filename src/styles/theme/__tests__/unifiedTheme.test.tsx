@@ -25,6 +25,13 @@ describe.each(['light', 'dark'] as const)('%s theme', (mode) => {
     expect(css).toMatch(/\.ant-tooltip-inner\{[^}]*padding:6px 8px;/);
   });
 
+  it('tooltips have a dark background under their white text', () => {
+    const css = cssFor(mode, <Tooltip open title="Due today"><span>x</span></Tooltip>);
+    const background = mode === 'dark' ? '#262626' : 'rgba\\(0, 0, 0, 0\\.75\\)';
+    expect(css).toMatch(/\.ant-tooltip-inner\{[^}]*color:var\(--ant-tooltip-color, #ffffff\);/);
+    expect(css).toMatch(new RegExp(`\\.ant-tooltip-inner\\{[^}]*background-color:${background};`));
+  });
+
   it('breadcrumb separators have the same space on both sides', () => {
     const css = cssFor(mode, <Breadcrumb items={[{ title: 'Home' }, { title: 'Rex' }]} />);
     expect(css).toMatch(/\.ant-breadcrumb-separator\{margin-inline:8px;/);
