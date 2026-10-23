@@ -27,6 +27,7 @@ import MoveLabResultModal from '@/components/LabInbox/MoveLabResultModal';
 import RecordLabValues from '@/components/LabResults/RecordLabValues';
 import { labInboxService } from '@/services/labInboxService';
 import { invalidateLabInboxData } from '@/hooks/invalidation';
+import { changedFieldLabel } from '@/utils/recordHistory';
 import { InvoiceSummaryRows } from '@/components/InvoiceSummaryRows';
 import { formatMoney } from '@/utils/money';
 import { messageOf } from '@/utils/errors';
@@ -274,7 +275,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
         let fields: string[] = [];
         if (Array.isArray(cf)) fields = cf;
         else if (typeof cf === 'string' && cf.trim().length > 0) fields = cf.split(',').map((s: string) => s.trim());
-        return fields.length > 0 ? fields.map(f => <Tag key={f}>{f}</Tag>) : <Text type="secondary">-</Text>;
+        return fields.length > 0 ? fields.map(f => <Tag key={f}>{changedFieldLabel(t, f)}</Tag>) : <Text type="secondary">-</Text>;
       }
     }
   ];

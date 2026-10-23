@@ -46,7 +46,11 @@
     "updatedBy": "Ажуриран од",
     "documents": "Документи",
     "deviceData": "Податоци од уред",
-    "total": "Вкупно"
+    "total": "Вкупно",
+    "created": "Создаден запис",
+    "lineItems": "Ставки на фактура",
+    "discount": "Попуст",
+    "manualTotal": "Рачен вкупен износ"
   },
   "tabs": {
     "standard": "Стандард",

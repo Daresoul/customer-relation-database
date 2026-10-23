@@ -46,7 +46,11 @@
     "updatedBy": "Updated By",
     "documents": "Documents",
     "deviceData": "Device Data",
-    "total": "Total"
+    "total": "Total",
+    "created": "Record created",
+    "lineItems": "Invoice lines",
+    "discount": "Discount",
+    "manualTotal": "Manual total"
   },
   "tabs": {
     "standard": "Standard",
