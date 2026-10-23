@@ -164,11 +164,13 @@ pub enum ConnectionState {
 /// Update connection status and emit event to frontend
 #[allow(clippy::too_many_arguments)]
 fn update_connection_status(app_handle: &AppHandle, integration_id: i64, port_name: &str, device_type: &str, status: ConnectionState, error: Option<String>, error_kind: Option<DeviceErrorKind>, retry_count: u32, next_retry_secs: Option<u64>) {
-    log::info!("🔄 Device connection status update - Integration ID: {}, Port: {}, Device: {}, Status: {:?}, Retry: {}",
+    let loud = matches!(status, ConnectionState::Connected | ConnectionState::Disconnected) || log_this_attempt(retry_count);
+    let (info, error_level) = if loud { (log::Level::Info, log::Level::Error) } else { (log::Level::Debug, log::Level::Debug) };
+    log::log!(info, "🔄 Device connection status update - Integration ID: {}, Port: {}, Device: {}, Status: {:?}, Retry: {}",
         integration_id, port_name, device_type, status, retry_count);
 
     if let Some(ref err) = error {
-        log::error!("❌ Device error for {} ({}): {}", device_type, port_name, err);
+        log::log!(error_level, "❌ Device error for {} ({}): {}", device_type, port_name, err);
     }
 
     let now = Utc::now();
@@ -177,7 +179,7 @@ fn update_connection_status(app_handle: &AppHandle, integration_id: i64, port_na
     // already given up still reported a phantom "next retry" to the UI and logs.
     let next_retry = next_retry_secs.map(|secs| {
         let retry_time = (now + chrono::Duration::seconds(secs as i64)).to_rfc3339();
-        log::info!("⏰ Next reconnection attempt for {} ({}) scheduled in {}s (at {})",
+        log::log!(info, "⏰ Next reconnection attempt for {} ({}) scheduled in {}s (at {})",
             device_type, port_name, secs, retry_time);
         retry_time
     });
@@ -945,8 +947,9 @@ pub fn scan_ports() -> Result<Vec<PortInfo>, String> {
 }
 
 /// Whether a retry gets the normal log lines; the rest go to debug.
-pub(crate) fn log_this_attempt(_retry_count: u32) -> bool {
-    true
+/// Retries come every ~10 s, so the 60th is about ten minutes on.
+pub(crate) fn log_this_attempt(retry_count: u32) -> bool {
+    retry_count <= 1 || retry_count % 60 == 0
 }
 
 /// Calculate exponential backoff delay with jitter
@@ -1208,7 +1211,7 @@ pub fn start_listen(
             // Get protocol configuration for the device type
             let mut protocol = get_device_protocol(&device_type_clone);
             protocol.baud_rate = effective_baud_rate(protocol.baud_rate, saved_baud_rate);
-            log::info!("📋 Using protocol for {} - Baud: {}, Start: {:?}, End: {:?}",
+            log::debug!("📋 Using protocol for {} - Baud: {}, Start: {:?}, End: {:?}",
                 device_type_clone, protocol.baud_rate, protocol.start_symbol, protocol.end_symbol);
 
             match handle_listening_serial(&port_name_clone, &app_handle, protocol, &device_type_clone,
@@ -1229,7 +1232,8 @@ pub fn start_listen(
 
                     let delay = calculate_backoff_delay(retry_count);
                     let delay_secs = delay.as_secs();
-                    log::warn!("⚠️  Connection error on {} ({}): {} (attempt {}) - retrying in {}s",
+                    let level = if log_this_attempt(retry_count) { log::Level::Warn } else { log::Level::Debug };
+                    log::log!(level, "⚠️  Connection error on {} ({}): {} (attempt {}) - retrying in {}s",
                         device_type_clone, port_name_clone, failure.message, retry_count, delay_secs);
                     let state = if failure.connected_for.is_some() {
                         ConnectionState::Disconnected
@@ -1408,7 +1412,7 @@ fn handle_listening_serial(
         protocol.baud_rate
     };
 
-    log::info!("   ⚙️  Serial port configuration - Baud: {}, Data bits: 8, Parity: None, Stop bits: 1",
+    log::debug!("   ⚙️  Serial port configuration - Baud: {}, Data bits: 8, Parity: None, Stop bits: 1",
         baud_rate);
 
     let mut port = serialport::new(port_name, baud_rate)
@@ -1419,7 +1423,7 @@ fn handle_listening_serial(
         .flow_control(serialport::FlowControl::None)
         .open()
         .map_err(|e| {
-            log::error!("❌ Failed to open serial port {} for {} (Integration ID: {}): {}",
+            log::debug!("❌ Failed to open serial port {} for {} (Integration ID: {}): {}",
                 port_name, device_type, integration_id, e);
             ListenFailure {
                 message: format!("Failed to open port: {}", e),
