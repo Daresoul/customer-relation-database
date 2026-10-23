@@ -12,14 +12,14 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { SCENARIOS, serialPlan, exigoPlan } from './scenarios.mjs';
+import { SCENARIOS, serialPlan, exigoPlan, parseConfig } from './scenarios.mjs';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function loadConfig(argv) {
   const at = argv.indexOf('--config');
   const path = at >= 0 ? argv[at + 1] : 'C:\\ArkivetLab\\lab.json';
-  return JSON.parse(readFileSync(path, 'utf8'));
+  return parseConfig(readFileSync(path, 'utf8'));
 }
 
 async function runSerial(name, scenario, config) {

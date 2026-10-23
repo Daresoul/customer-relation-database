@@ -89,5 +89,5 @@ export function exigoPlan(scenario, dayXml, now = new Date()) {
 }
 
 export function parseConfig(text) {
-  return JSON.parse(text);
+  return JSON.parse(text.replace(/^\uFEFF/, ''));
 }
