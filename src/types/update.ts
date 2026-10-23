@@ -15,21 +15,9 @@ export interface UpdatePreferences {
   updatedAt: number;
 }
 
-/**
- * Update manifest from Tauri updater
- */
-export interface UpdateManifest {
-  version: string;
-  notes?: string;
-  pub_date: string;
-  platforms: Record<
-    string,
-    {
-      signature: string;
-      url: string;
-    }
-  >;
-}
+/** What Tauri's `checkUpdate` reports; the release notes are in `body`. */
+export type { UpdateManifest } from '@tauri-apps/api/updater';
+import type { UpdateManifest } from '@tauri-apps/api/updater';
 
 /**
  * Update status for UI state management
