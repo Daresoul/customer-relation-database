@@ -285,6 +285,8 @@ pub fn problem_line(problem: &DeviceProblem, now: DateTime<FixedOffset>, lang: L
 
 /// Windows cuts tray tooltips at 127 characters.
 pub const TOOLTIP_MAX_CHARS: usize = 127;
+/// What the Windows 11 tray actually shows of the tooltip.
+pub const TOOLTIP_FIRST_LINE_CHARS: usize = 63;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TraySummary {
@@ -1085,8 +1087,8 @@ mod tests {
         };
         let s = tray_summary(&[down.clone()], 2, now, Lang::En, "%d.%m.");
         assert!(s.warning);
-        assert_eq!(s.tooltip, "Arkivet\nBlood analyzer: no connection since 10:42");
-        assert_eq!(tray_summary(&[down], 2, now, Lang::Mk, "%d.%m.").tooltip, "Arkivet\nBlood analyzer: нема врска од 10:42");
+        assert_eq!(s.tooltip, "Arkivet — Blood analyzer: no connection since 10:42");
+        assert_eq!(tray_summary(&[down], 2, now, Lang::Mk, "%d.%m.").tooltip, "Arkivet — Blood analyzer: нема врска од 10:42");
     }
 
     #[test]
@@ -1112,6 +1114,10 @@ mod tests {
         let s = tray_summary(&problems, 6, monday(11, 0), Lang::Mk, "%d.%m.");
         assert!(s.tooltip.chars().count() <= TOOLTIP_MAX_CHARS);
         assert!(s.tooltip.ends_with('…'));
+        // Windows 11 shows only about the first 64 characters: they hold the summary.
+        let first = s.tooltip.lines().next().unwrap();
+        assert_eq!(first, "Arkivet — 6 апарати бараат внимание");
+        assert!(first.chars().count() <= TOOLTIP_FIRST_LINE_CHARS);
     }
 
     #[test]
