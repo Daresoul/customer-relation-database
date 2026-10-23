@@ -15,7 +15,9 @@ vi.mock('@/services/invoke', () => ({ invoke: (...a: unknown[]) => invokeMock(..
 const today = new Date();
 const at = (h: number, m: number) => new Date(today.getFullYear(), today.getMonth(), today.getDate(), h, m).toISOString();
 
+const updateIntegration = vi.hoisted(() => vi.fn().mockResolvedValue({}));
 vi.mock('../../../hooks/useDeviceIntegrations', () => ({
+  useUpdateDeviceIntegration: () => ({ mutateAsync: updateIntegration, isPending: false }),
   useDeviceIntegrations: () => ({
     data: [
       { id: 1, name: 'PointCare', deviceType: 'mnchip_pointcare_chemistry', connectionType: 'serial_port', serialPortName: 'COM3', enabled: true },
@@ -68,6 +70,11 @@ beforeEach(() => {
   invokeMock.mockImplementation(async (cmd: string) => {
     if (cmd === 'get_device_details') return details;
     if (cmd === 'get_results_today') return { 1: 4, 2: 7 };
+    if (cmd === 'get_available_ports')
+      return [
+        { port_name: 'COM5', port_type: { USB: { vid: 0x1a86, pid: 0x7523, device_name: 'USB-SERIAL CH340' } } },
+        { port_name: 'COM9', port_type: { HIDDevice: { vid: 1, pid: 2, device_name: 'Barcode scanner' } } },
+      ];
     if (cmd === 'get_device_diagnostics') return 'Arkivet diagnostics\nDevice: PointCare';
     return undefined;
   });
@@ -124,6 +131,17 @@ describe('device details drawer', () => {
     fireEvent.click(screen.getByRole('switch', { name: 'drawer.showHex' }));
     expect(screen.getByTestId('device-raw-message').textContent).toBe('4D 53 48 7C 31 0D');
     expect(invokeMock).toHaveBeenCalledWith('get_device_details', { integrationId: 1 });
+  });
+
+  // Machine status #2: a replugged USB cable comes back as another COM number.
+  it('offers the ports this computer has now when the machine port is gone', async () => {
+    await renderDrawer();
+    expect(await screen.findByText('drawer.portsNow')).toBeInTheDocument();
+    expect(screen.getByText('COM5 - USB-SERIAL CH340')).toBeInTheDocument();
+    expect(screen.queryByText(/Barcode scanner/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'drawer.usePort {"port":"COM5"}' }));
+    await waitFor(() => expect(updateIntegration).toHaveBeenCalledWith({ id: 1, data: { serialPortName: 'COM5' } }));
   });
 
   it('copies the diagnostics text', async () => {
