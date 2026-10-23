@@ -30,12 +30,21 @@ function problem(kind: string, params: Record<string, unknown>, details: string 
   };
 }
 
-export function describeSerialStatus(status: DeviceConnectionStatus | undefined, t: T): HealthText {
+/** How long a connected port may stay silent before the panel mentions it. */
+export const SILENT_AFTER_MS = 30 * 60_000;
+
+export function describeSerialStatus(status: DeviceConnectionStatus | undefined, t: T, now: Date = new Date()): HealthText {
   if (!status) return { text: t('status.unknown') };
   const params = { port: status.port_name };
   switch (status.status) {
-    case 'Connected':
-      return { text: t('status.connected') };
+    case 'Connected': {
+      const since = status.last_connected ? dayjs(status.last_connected) : null;
+      const sentSince = status.last_byte_at && since ? !dayjs(status.last_byte_at).isBefore(since) : false;
+      const silent = since?.isValid() && !sentSince && now.getTime() - since.valueOf() >= SILENT_AFTER_MS;
+      return silent
+        ? { text: t('status.connectedSilent', { time: since!.format('HH:mm') }), action: t('status.connectedSilentAction') }
+        : { text: t('status.connected') };
+    }
     case 'Connecting':
       return { text: t('status.connecting') };
     case 'Disconnected':

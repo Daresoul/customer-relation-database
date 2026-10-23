@@ -19,7 +19,9 @@
     "watching": "Watching for files",
     "stopped": "Stopped",
     "enabled": "Enabled",
-    "disabled": "Disabled"
+    "disabled": "Disabled",
+    "connectedSilent": "Connected, but nothing received since {{time}}",
+    "connectedSilentAction": "If a test was run, check that the machine is on and set to send results to the computer."
   },
   "connectionTypes": {
     "serialPort": "Serial Port",
