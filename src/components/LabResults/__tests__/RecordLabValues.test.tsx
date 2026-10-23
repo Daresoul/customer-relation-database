@@ -71,7 +71,7 @@ describe('Record lab values', () => {
     expect(screen.getByLabelText('devices:labs.record.up')).toBeInTheDocument();
     expect(screen.getByLabelText('devices:labs.record.down')).toBeInTheDocument();
     expect(screen.getByText('10.4')).toBeInTheDocument();
-    expect(screen.getByText('10/07/2026')).toBeInTheDocument();
+    expect(screen.getAllByText('10/07/2026')).toHaveLength(2);
   });
 
   it('shows nothing on a record without lab values', async () => {
