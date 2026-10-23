@@ -50,7 +50,8 @@ function Find-AppExe {
   throw 'Arkivet is not installed (looked in LOCALAPPDATA\Arkivet and Program Files\Arkivet)'
 }
 
-function Get-AppProcess { @(Get-Process -Name 'Arkivet' -ErrorAction SilentlyContinue) }
+# vet-clinic.exe: dev and e2e builds of the same app (same data folder).
+function Get-AppProcess { @(Get-Process -Name 'Arkivet', 'vet-clinic' -ErrorAction SilentlyContinue) }
 
 function Get-Status {
   $cdp = $false
@@ -75,7 +76,15 @@ function Start-App($body) {
 
 function Stop-App {
   $procs = Get-AppProcess
-  if ($procs.Count -gt 0) { $procs | Stop-Process -Force; Start-Sleep -Milliseconds 800 }
+  if ($procs.Count -gt 0) {
+    $procs | Stop-Process -Force
+    $procs | Wait-Process -Timeout 15 -ErrorAction SilentlyContinue
+    # WebView2 keeps its browser process (and the profile) a moment longer.
+    Get-Process msedgewebview2 -ErrorAction SilentlyContinue |
+      Where-Object { $_.Path -and (Get-CimInstance Win32_Process -Filter "ProcessId=$($_.Id)").CommandLine -like '*com.vetclinic.app*' } |
+      Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 500
+  }
   @{ stopped = ($procs.Count -gt 0) }
 }
 
