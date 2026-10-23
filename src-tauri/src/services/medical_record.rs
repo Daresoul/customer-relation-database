@@ -54,6 +54,11 @@ fn row_to_record(row: &QueryResult) -> MedicalRecord {
     }
 }
 
+/// Printed on PDFs when the patient's name, species or sex is missing.
+pub(crate) const UNKNOWN_PATIENT: &str = "Непознат Пациент";
+pub(crate) const UNKNOWN_SPECIES: &str = "Непознат Вид";
+pub(crate) const UNKNOWN_GENDER: &str = "Непознат";
+
 /// An invoice's number and the date printed on it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Invoice {
@@ -381,7 +386,7 @@ impl MedicalRecordService {
 
         // Fetch attachments only for the records on this page.
         for record in page_records.iter_mut() {
-            let attachments = Self::fetch_attachments(db, record.id).await.unwrap_or_default();
+            let attachments = Self::fetch_attachments(db, record.id).await?;
             record.attachments = if attachments.is_empty() { None } else { Some(attachments) };
         }
 
@@ -408,20 +413,28 @@ impl MedicalRecordService {
             .await
             .map_err(|e| format!("Failed to fetch attachments: {}", e))?;
 
-        let attachments: Vec<MedicalAttachment> = rows
-            .iter()
-            .filter_map(|row| {
-                let uploaded_at_str: Option<String> = row.try_get("", "uploaded_at").ok();
-                let uploaded_at = uploaded_at_str
-                    .as_deref()
-                    .map(Self::parse_datetime)
-                    .unwrap_or_else(Utc::now);
-
-                Some(MedicalAttachment {
-                    id: row.try_get("", "id").ok()?,
-                    medical_record_id: row.try_get("", "medical_record_id").ok()?,
-                    file_id: row.try_get("", "file_id").ok()?,
-                    original_name: row.try_get("", "original_name").ok()?,
+        let mut attachments = Vec::with_capacity(rows.len());
+        for row in &rows {
+            let uploaded_at = row
+                .try_get::<String>("", "uploaded_at")
+                .ok()
+                .as_deref()
+                .map(Self::parse_datetime)
+                .unwrap_or_else(Utc::now);
+            let required = (|| -> Result<_, sea_orm::DbErr> {
+                Ok((
+                    row.try_get::<i64>("", "id")?,
+                    row.try_get::<i64>("", "medical_record_id")?,
+                    row.try_get::<String>("", "file_id")?,
+                    row.try_get::<String>("", "original_name")?,
+                ))
+            })();
+            match required {
+                Ok((id, medical_record_id, file_id, original_name)) => attachments.push(MedicalAttachment {
+                    id,
+                    medical_record_id,
+                    file_id,
+                    original_name,
                     file_size: row.try_get("", "file_size").ok(),
                     mime_type: row.try_get("", "mime_type").ok(),
                     uploaded_at,
@@ -429,9 +442,13 @@ impl MedicalRecordService {
                     device_name: row.try_get("", "device_name").ok(),
                     connection_method: row.try_get("", "connection_method").ok(),
                     attachment_type: row.try_get("", "attachment_type").ok(),
-                })
-            })
-            .collect();
+                }),
+                Err(e) => log::warn!("Record {}: an attachment row can't be read and is not shown: {}", record_id, e),
+            }
+        }
+        if attachments.len() < rows.len() {
+            log::warn!("Record {}: {} of {} attachments skipped", record_id, rows.len() - attachments.len(), rows.len());
+        }
 
         Ok(attachments)
     }
@@ -467,15 +484,13 @@ impl MedicalRecordService {
             .ok_or("Medical record not found".to_string())?;
 
         // Get line items using the LineItemService
-        let line_items = crate::services::line_item::LineItemService::get_line_items_for_record(db, record_id)
-            .await
-            .unwrap_or_default();
+        let line_items = crate::services::line_item::LineItemService::get_line_items_for_record(db, record_id).await?;
 
         let mut record = row_to_record(&row);
         record.line_items = if line_items.is_empty() { None } else { Some(line_items) };
 
         // Get attachments using helper
-        let attachments = Self::fetch_attachments(db, record_id).await.unwrap_or_default();
+        let attachments = Self::fetch_attachments(db, record_id).await?;
 
         // Get history if requested
         let history = if include_history {
@@ -1049,49 +1064,16 @@ impl MedicalRecordService {
 
         let birthdate: Option<String> = row.try_get("", "date_of_birth").ok();
 
-        // Try to get owner information - prefer primary contact's full name, fall back to household name
-        log::debug!("Looking up owner for patient_id: {}", patient_id);
-
-        let owner_result = db
-            .query_one(Statement::from_sql_and_values(
-                DbBackend::Sqlite,
-                "SELECT COALESCE( \
-                    (SELECT p.first_name || ' ' || p.last_name \
-                     FROM people p \
-                     WHERE p.household_id = h.id AND p.is_primary = 1 \
-                     LIMIT 1), \
-                    h.household_name \
-                 ) as owner_name \
-                 FROM households h \
-                 JOIN patient_households ph ON h.id = ph.household_id \
-                 WHERE ph.patient_id = ? \
-                 LIMIT 1",
-                [patient_id.into()],
-            ))
-            .await;
-
-        let owner = match owner_result {
-            Ok(Some(r)) => {
-                let name: String = r.try_get("", "owner_name").unwrap_or_default();
-                log::debug!("Found owner: {}", name);
-                name
-            }
-            Ok(None) => {
-                log::debug!("No household link found for patient");
-                String::new() // Empty string - PDF will skip owner row
-            }
-            Err(e) => {
-                log::warn!("Owner query failed: {}", e);
-                String::new() // Empty string - PDF will skip owner row
-            }
-        };
+        // A failed lookup fails the document (the save offers Retry) rather
+        // than printing it without an owner.
+        let owner = crate::commands::medical::lookup_owner_name(db, patient_id).await?;
 
         Ok(crate::services::device_pdf_service::PatientData {
             name: row.try_get("", "name").unwrap_or_default(),
             owner,
-            species: row.try_get::<String>("", "species_name").ok().unwrap_or_else(|| "Unknown Species".to_string()),
+            species: row.try_get::<String>("", "species_name").ok().unwrap_or_else(|| UNKNOWN_SPECIES.to_string()),
             microchip_id: row.try_get("", "microchip_id").ok(),
-            gender: row.try_get::<String>("", "gender").ok().unwrap_or_else(|| "Unknown".to_string()),
+            gender: row.try_get::<String>("", "gender").ok().unwrap_or_else(|| UNKNOWN_GENDER.to_string()),
             date_of_birth: birthdate,
         })
     }
@@ -1341,7 +1323,10 @@ impl MedicalRecordService {
             return Err("No fields to update".to_string());
         }
 
-        // Only run SQL update if there are record fields to update
+        let record_fields_updated = !update_parts.is_empty();
+        // Only run SQL update if there are record fields to update. The
+        // version moves in the same UPDATE: the medical_records_version
+        // trigger bumps it on any UPDATE that leaves it unchanged.
         if !update_parts.is_empty() {
             update_parts.push("updated_at = ?");
             params.push(now.to_rfc3339().into());
@@ -1362,16 +1347,17 @@ impl MedicalRecordService {
         }
 
         // Handle line items replacement if provided
+        let mut line_items_changed = false;
         let line_items = if let Some(items) = updates.line_items {
+            let before = crate::services::line_item::LineItemService::get_line_items_for_record_in(&txn, record_id).await?;
             let replaced_items = crate::services::line_item::LineItemService::replace_line_items_for_record_in(&txn, record_id, items)
                 .await
                 .map_err(|e| format!("Failed to update line items: {}", e))?;
+            line_items_changed = Self::line_items_differ(&before, &replaced_items);
             if replaced_items.is_empty() { None } else { Some(replaced_items) }
         } else {
             // Fetch existing line items
-            let existing = crate::services::line_item::LineItemService::get_line_items_for_record_in(&txn, record_id)
-                .await
-                .unwrap_or_default();
+            let existing = crate::services::line_item::LineItemService::get_line_items_for_record_in(&txn, record_id).await?;
             if existing.is_empty() { None } else { Some(existing) }
         };
 
@@ -1446,6 +1432,27 @@ impl MedicalRecordService {
         if old_snapshot.get("discount_percent") != new_snapshot.get("discount_percent") { changed_fields.push("discount_percent"); }
         if old_snapshot.get("manual_total") != new_snapshot.get("manual_total") { changed_fields.push("manual_total"); }
         if old_snapshot.get("is_archived") != new_snapshot.get("is_archived") { changed_fields.push("is_archived"); }
+        if line_items_changed { changed_fields.push("line_items"); }
+
+        // Nothing changed: no new version and no history row.
+        if changed_fields.is_empty() {
+            txn.rollback().await.map_err(|e| format!("Failed to save the record: {}", e))?;
+            let mut unchanged = row_to_record(&old_row);
+            unchanged.line_items = updated_record.line_items;
+            return Ok(unchanged);
+        }
+
+        if !record_fields_updated {
+            txn.execute(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "UPDATE medical_records SET version = version + 1, updated_at = ? WHERE id = ?",
+                [now.to_rfc3339().into(), record_id.into()],
+            ))
+            .await
+            .map_err(|e| format!("Failed to update medical record: {}", e))?;
+            updated_record.version += 1;
+            updated_record.updated_at = now;
+        }
 
         log::debug!("History snapshot insert (update): rec_id={}, version={}, fields={}", record_id, updated_record.version, changed_fields.join(","));
         txn
@@ -1467,6 +1474,28 @@ impl MedicalRecordService {
         txn.commit().await.map_err(|e| format!("Failed to save the record: {}", e))?;
 
         Ok(updated_record)
+    }
+
+    /// Whether an edit changed what the invoice lines say (ids and times
+    /// are new on every save, so they are left out).
+    fn line_items_differ(
+        before: &[crate::models::MedicalRecordLineItem],
+        after: &[crate::models::MedicalRecordLineItem],
+    ) -> bool {
+        let key = |i: &crate::models::MedicalRecordLineItem| {
+            (
+                i.template_id,
+                i.name.clone(),
+                i.description.clone(),
+                i.unit_price.to_bits(),
+                i.currency_id,
+                i.quantity,
+                i.tax_rate_id,
+                i.vat_name.clone(),
+                i.vat_percent.map(f64::to_bits),
+            )
+        };
+        before.len() != after.len() || before.iter().zip(after).any(|(a, b)| key(a) != key(b))
     }
 
     pub async fn update_medical_record(
@@ -1577,6 +1606,24 @@ impl MedicalRecordService {
         Ok(currencies)
     }
 
+    /// Every key the snapshot has, empty values included: the old version's
+    /// values, never today's. A snapshot has no invoice lines, so none are shown.
+    fn overlay_snapshot(base: &mut MedicalRecord, v: &serde_json::Value) {
+        let text = |k: &str| v.get(k).map(|x| x.as_str().map(str::to_string));
+        let number = |k: &str| v.get(k).map(|x| x.as_f64());
+        if let Some(Some(rt)) = text("record_type") { base.record_type = rt; }
+        if let Some(nm) = text("name") { base.name = nm.unwrap_or_default(); }
+        if let Some(pn) = text("procedure_name") { base.procedure_name = pn; }
+        if let Some(desc) = text("description") { base.description = desc.unwrap_or_default(); }
+        if let Some(prn) = text("prescription_notes") { base.prescription_notes = prn; }
+        if let Some(pr) = number("price") { base.price = pr; }
+        if let Some(cid) = v.get("currency_id") { base.currency_id = cid.as_i64(); }
+        if let Some(d) = number("discount_percent") { base.discount_percent = d; }
+        if let Some(m) = number("manual_total") { base.manual_total = m; }
+        if let Some(ia) = v.get("is_archived").and_then(|x| x.as_bool()) { base.is_archived = ia; }
+        base.line_items = None;
+    }
+
     // Get a record snapshot at a specific version using history new_values
     pub async fn get_record_at_version(
         db: &DatabaseConnection,
@@ -1609,14 +1656,7 @@ impl MedicalRecordService {
         if let Some(hr) = hrow {
             let json_str: String = hr.try_get("", "new_values").unwrap_or_default();
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(&json_str) {
-                if let Some(rt) = v.get("record_type").and_then(|x| x.as_str()) { base.record_type = rt.to_string(); }
-                if let Some(nm) = v.get("name").and_then(|x| x.as_str()) { base.name = nm.to_string(); }
-                if let Some(pn) = v.get("procedure_name").and_then(|x| x.as_str()) { base.procedure_name = Some(pn.to_string()); }
-                if let Some(desc) = v.get("description").and_then(|x| x.as_str()) { base.description = desc.to_string(); }
-                if let Some(prn) = v.get("prescription_notes").and_then(|x| x.as_str()) { base.prescription_notes = Some(prn.to_string()); }
-                if let Some(pr) = v.get("price").and_then(|x| x.as_f64()) { base.price = Some(pr); }
-                if let Some(cid) = v.get("currency_id").and_then(|x| x.as_i64()) { base.currency_id = Some(cid); }
-                if let Some(ia) = v.get("is_archived").and_then(|x| x.as_bool()) { base.is_archived = ia; }
+                Self::overlay_snapshot(&mut base, &v);
                 base.version = version;
             }
         }
