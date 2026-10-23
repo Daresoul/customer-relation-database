@@ -445,3 +445,25 @@ pub async fn get_valid_access_token(
 
     Ok(new_access_token)
 }
+
+#[cfg(test)]
+mod browser_open_tests {
+    use super::*;
+
+    const SIGN_IN_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id=abc.apps.googleusercontent.com&state=xyz&code_challenge=q%2Fw&redirect_uri=http%3A%2F%2F127.0.0.1%3A8000%2Fcallback";
+
+    #[test]
+    fn the_sign_in_url_goes_to_the_shell_whole_with_every_ampersand() {
+        let request = OAuthService::browser_open_request(SIGN_IN_URL).unwrap();
+        assert_eq!(request.verb, "open");
+        assert_eq!(request.target, SIGN_IN_URL);
+        assert_eq!(request.target.matches('&').count(), 4);
+    }
+
+    #[test]
+    fn only_web_addresses_are_opened() {
+        assert!(OAuthService::browser_open_request("C:\\Windows\\System32\\calc.exe").is_err());
+        assert!(OAuthService::browser_open_request("file:///etc/passwd").is_err());
+        assert!(OAuthService::browser_open_request("https://accounts.google.com/x\" & calc").is_err());
+    }
+}
