@@ -205,6 +205,9 @@
   shows "Reconnect", and the background sync stops until the user reconnects.
 - `last_sync_error` keeps the last sync failure until a sync succeeds; Settings
   shows it with the last-synced time.
+- Connect opens Google's sign-in page in the browser through ShellExecuteW
+  on Windows (never `cmd start`, which cut the URL at the first `&`); only
+  an http(s) address is opened (`OAuthService::browser_open_request`).
 - Events and the created calendar use this computer's time zone
   (`services::google_calendar::local_time_zone`, fallback Europe/Skopje).
 
@@ -217,6 +220,15 @@
   none of the earlier OBX's unit, range or flag. Healvet ignores anything
   before the first `#AFS1000`. Exigo lab reports print the run number (`SEQ`)
   as the sample number, not the analyzer serial (`SNO`).
+- Serial framing (`FrameAssembler` in `services/device_input.rs`): a Healvet
+  frame ends on `&EE` (every real frame has the `&`), so an `EE` inside a
+  value such as LEELOO is data; a frame ending in a bare `EE` counts once the
+  line has been quiet for 5 s. PointCare/PCR (MLLP): a start byte inside an
+  unfinished frame drops the cut part as a cut-off result and starts over,
+  so two animals' messages never merge.
+- Serial results, Recent files rows and cut-offs carry the integration's
+  name, not the port (`device_events::named_by_machine`; a removed
+  integration keeps the port name).
 - Serial read loop (`services/device_input.rs`): any read error other than a
   timeout closes the port and reconnects with backoff (Windows unplug codes 22,
   31, 1167 and 995 included). The backoff starts over after a connection that
