@@ -641,6 +641,8 @@ async fn deleting_a_plain_file_leaves_the_lab_report_alone() {
 
     assert!(pdf.is_none());
     assert_eq!(live_lab_reports(&db, record).await.len(), 1);
+}
+
 // device-import #7: the import showed only the file name; it shows the
 // values the same way the inbox does.
 #[test]

@@ -791,7 +791,7 @@ impl JavaPdfService {
 
     /// Render a prepared JSON job (report, pharmacy note, invoice) to `output_path`.
     pub fn generate_from_job(jar_path: &Path, output_path: &str, job: Value) -> Result<(), String> {
-        Self::run_jar_job(jar_path, job, output_path, JAVA_TIMEOUT)
+        Self::run_jar_job(jar_path, job, output_path, JAVA_TIMEOUT).map(|_| ())
     }
 
 }

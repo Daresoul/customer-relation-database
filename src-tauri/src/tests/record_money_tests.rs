@@ -673,6 +673,8 @@ async fn the_history_search_finds_words_in_the_prescription() {
     };
     let listed = MedicalRecordService::get_medical_records(&db, patient_id, Some(filter), None).await.unwrap();
     assert_eq!(listed.total, 1);
+}
+
 // device-health #12: PointCare values without a row were only logged.
 // device-import #14: the import opens this report instead of building another.
 #[tokio::test]
