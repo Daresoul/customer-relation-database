@@ -7,10 +7,10 @@
 $ErrorActionPreference = 'Stop'
 $src = 'C:\ArkivetLab\src'
 
-$jdk = Get-ChildItem 'C:\actions-runner\_work\_tool\Java_Temurin-Hotspot_jdk' -Directory -ErrorAction SilentlyContinue |
-  ForEach-Object { Get-ChildItem $_.FullName -Directory } | Where-Object { Test-Path (Join-Path $_.FullName 'x64\bin\javac.exe') } |
-  Sort-Object Name -Descending | Select-Object -First 1
-if ($jdk) { $env:JAVA_HOME = Join-Path $jdk.FullName 'x64' }
+$javac = Get-ChildItem 'C:\actions-runner\_work\_tool\Java_Temurin-Hotspot_jdk', "$env:ProgramFiles\Eclipse Adoptium" -Recurse -Filter javac.exe -Depth 4 -ErrorAction SilentlyContinue |
+  Sort-Object FullName -Descending | Select-Object -First 1
+# The runtime bootstrap installs has no compiler; the PDF generator needs a JDK.
+$env:JAVA_HOME = if ($javac) { Split-Path (Split-Path $javac.FullName) } else { $null }
 if (-not $env:JAVA_HOME) { throw 'No JDK found for the PDF generator build' }
 $env:Path = "$env:JAVA_HOME\bin;$env:USERPROFILE\.cargo\bin;$env:ProgramFiles\nodejs;$env:Path"
 
