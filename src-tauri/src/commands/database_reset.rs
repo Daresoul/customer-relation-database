@@ -19,8 +19,8 @@ async fn create_patient_for_seed(pool: &SqlitePool, dto: CreatePatientDto) -> Re
 
     // Insert the patient
     let result = sqlx::query(
-        "INSERT INTO patients (name, species_id, breed_id, gender, date_of_birth, weight, medical_notes, is_active)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO patients (name, species_id, breed_id, gender, date_of_birth, weight, microchip_id, medical_notes, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
     )
     .bind(&dto.name)
     .bind(dto.species_id)
@@ -28,6 +28,7 @@ async fn create_patient_for_seed(pool: &SqlitePool, dto: CreatePatientDto) -> Re
     .bind(&dto.gender)
     .bind(&dto.date_of_birth)
     .bind(&dto.weight)
+    .bind(&dto.microchip_id)
     .bind(&dto.medical_notes)
     .bind(true)
     .execute(&mut *tx)
