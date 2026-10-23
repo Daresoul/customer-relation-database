@@ -19,6 +19,8 @@
   migration that recreates the triggers.
 - Search terms are quoted per word, so dashes, quotes and FTS5 keywords are
   plain text. A phone typed with dashes matches one stored with spaces or none.
+- Search, quick search and the household list skip merged-away households
+  (`households.merged_into_id IS NOT NULL`).
 
 ## Microchips
 - Create and update store the chip without spaces or dashes, and a 12-hex
@@ -35,6 +37,31 @@
   patient can be hard-deleted.
 - `update_household`: a field left out (`None`) is kept; an empty string clears
   address, city, postal code or notes to NULL. The name can't be cleared.
+- Duplicate warning: every household create form (dashboard, Add patient, lab
+  import, patient page) shows `DuplicateHouseholdWarning` while typing. It
+  calls `find_household_duplicates` (`queries/household_duplicates.rs`):
+  same phone (digits only, +389 read as 0), same email (any case), or same
+  person name in Latin or Cyrillic (names are compared transliterated; FTS
+  finds the candidates). It never blocks: the submit button becomes "Create
+  anyway". At most 5 matches, best first; merged-away households never match.
+- Merge (`merge_households`, `queries/household_merge.rs`): one transaction
+  moves people, contacts and pet links into the kept household. A person
+  with the same name folds into the kept person; a phone or email the kept
+  household already has is dropped; the kept household keeps one primary
+  person. Name and address come from whichever household the user picks.
+  The merged-away row stays with `merged_into_id` set: lists and search hide
+  it, its search row is removed, and opening its id
+  (`get_household_with_people`, the household page) shows the kept
+  household. Each merge is logged in `household_merges`. There is no undo.
+- Moving a pet (`update_patient_household`): one transaction; a pet has one
+  household. A missing pet or household changes nothing. "Link existing pet"
+  on the household page uses the same command.
+- Deleting a household is refused (`HOUSEHOLD_HAS_PETS`) while pets belong
+  to it; the page offers Merge instead. Households merged into it go too.
+- One primary person per household: `set_primary_person` ("Make primary")
+  clears the others in a transaction; `update_person` with `isPrimary: true`
+  does the same and ignores `false`. Deleting the primary person makes the
+  longest-standing other person primary; the last person can't be deleted.
 
 ## Frontend states and caching
 - A failed load shows `components/common/LoadError` (message plus Retry that
