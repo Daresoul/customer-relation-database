@@ -13,6 +13,7 @@ use rand::Rng;
 use crate::services::device_input::PortType::HIDDevice;
 use crate::services::file_storage::FileStorageService;
 use crate::database::SeaOrmPool;
+use crate::services::device_health;
 use crate::services::device_events::{
     deliver_result, last_bytes, last_result, note_bytes, report_cut_off, AppSink, DeviceErrorKind,
     ResultSource,
@@ -214,6 +215,12 @@ fn update_connection_status(app_handle: &AppHandle, integration_id: i64, port_na
     };
 
     if should_emit {
+        device_health::record_status(
+            integration_id,
+            &format!("{:?}", connection_status.status),
+            connection_status.error_kind,
+            device_health::serial_health(&connection_status),
+        );
         match app_handle.emit_all("device-connection-status", &connection_status) {
             Ok(_) => log::info!("📡 Emitted device-connection-status event to frontend for {} ({})", device_type, port_name),
             Err(e) => log::error!("❌ Failed to emit device-connection-status event: {}", e),
@@ -1409,6 +1416,7 @@ impl FrameSink for SerialSink<'_> {
     fn on_bytes(&mut self, data: &[u8]) {
         write_raw_log(self.app_handle, self.port_name, data);
         note_bytes(self.integration_id);
+        device_health::note_bytes(self.integration_id, data.len());
     }
 
     fn on_frame(&mut self, frame: Vec<u8>) {

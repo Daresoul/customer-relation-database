@@ -69,6 +69,12 @@ fn update_file_watcher_status(
             return;
         }
     }
+    crate::services::device_health::record_status(
+        config.integration_id,
+        &format!("{:?}", watcher_status.status),
+        watcher_status.error_kind,
+        crate::services::device_health::folder_health(&watcher_status),
+    );
 
     log::info!("📂 File watcher '{}' ({}): {:?} {}", config.name, config.directory,
         watcher_status.status, watcher_status.last_error.as_deref().unwrap_or(""));

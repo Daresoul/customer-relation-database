@@ -213,6 +213,33 @@
   in the last 72 h while the app was closed are offered. The first time a
   folder is watched, what is already in it is recorded, not offered.
 
+### Device health in the tray and the details drawer (`services/device_health.rs`)
+- The app starts hidden, so health also shows in the system tray. The tray
+  tooltip reads "Arkivet — All devices OK" or names each problem ("Blood
+  analyzer: no connection since 10:42"), and the icon switches to
+  `icons/tray-warning.png`. Text follows the app language (en/mk) and is cut
+  to 127 characters (the Windows limit). A machine counts as a problem only
+  after it has been down for 60 s; a port retrying after an outage stays the
+  same outage.
+- A background monitor checks at start, 2 s after a status change and every
+  30 s. It sends an OS notification (Tauri `notification` Cargo feature; the
+  webview allowlist is unchanged) when a machine has been down longer than N
+  minutes during clinic hours, once per outage, and a "back online" note
+  after it. Opt-in per machine: "quiet for too long", no result for X hours
+  during clinic hours, counted from opening time.
+- Settings → Devices → Notifications (migration `060_device_alerts`, tables
+  `device_alert_settings` and `device_quiet_alerts`): on/off, N minutes
+  (default 10), clinic hours (default 07:00–20:00, Mon–Sat), and the quiet
+  alert per machine (default off, 4 h when switched on).
+- The header shows a "Lab machines" chip on every page with the worst state.
+  A click on it, or on any device chip, opens the details drawer: state with
+  what to do, last result, last data, problems today, a live byte counter
+  (serial), recent status changes, the last raw message (first 2 KB, text or
+  hex), and Reconnect, Copy diagnostics and Open log folder. Diagnostics hold
+  app version, OS, the device settings, states and times; never message
+  contents, so no patient names. The bytes, last message and status log live
+  in memory for this session only.
+
 ### Lab inbox (`services/lab_inbox.rs`, page `/lab-inbox`, dashboard tab)
 - Every result row in `file_access_history` (one per result or Exigo sample)
   has `inbox_state`: `waiting`, `attached` or `discarded` (migration

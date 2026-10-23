@@ -129,6 +129,46 @@ export interface FileWatcherStatus {
   last_result_at?: string | null;
 }
 
+// The last bytes a machine sent (first 2 KB), readable and as hex
+export interface DeviceRawMessage {
+  at: string;
+  byteCount: number;
+  text: string;
+  hex: string;
+  truncated: boolean;
+}
+
+// A status change ("Connected", "Error") or a device event ("cut_off")
+export interface DeviceLogEntry {
+  at: string;
+  label: string;
+  errorKind?: string | null;
+  isError: boolean;
+}
+
+// `get_device_details`: what a machine did this session
+export interface DeviceDetails {
+  bytesLastMinute: number;
+  errorsToday: number;
+  lastRaw?: DeviceRawMessage | null;
+  log: DeviceLogEntry[];
+}
+
+export interface DeviceQuietAlert {
+  integrationId: number;
+  afterHours: number;
+}
+
+// When to notify about lab machines. Days: 1 = Monday … 7 = Sunday.
+export interface DeviceAlertSettings {
+  notifyEnabled: boolean;
+  downAfterMinutes: number;
+  clinicOpen: string;
+  clinicClose: string;
+  clinicDays: number[];
+  quietAlerts: DeviceQuietAlert[];
+}
+
 // Helper function to get display name for device type
 export function getDeviceTypeDisplayName(deviceType: DeviceType): string {
   switch (deviceType) {

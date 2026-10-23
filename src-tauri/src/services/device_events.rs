@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Mutex, OnceLock};
 use crate::commands::file_history::record_device_file_with_status;
+use crate::services::device_health;
 use crate::services::device_integration::DeviceIntegrationService;
 use crate::services::device_parser::{DeviceData, DeviceParserService};
 use crate::services::device_capture::throttled_show_and_focus;
@@ -210,6 +211,7 @@ pub async fn deliver_result(
     raw_name: &str,
     raw: &[u8],
 ) -> Delivery {
+    device_health::note_raw_message(source.integration_id, raw);
     let parsed = DeviceParserService::parse_device_data(
         &source.device_type,
         &source.device_name,
@@ -270,6 +272,7 @@ pub async fn report_cut_off(
     source: &ResultSource,
     partial: &[u8],
 ) -> Option<String> {
+    device_health::note_raw_message(source.integration_id, partial);
     let name = format!("{}_cut_off_{}.txt", source.device_type, Utc::now().format("%Y%m%d_%H%M%S"));
     let detail = format!("Result stopped after {} bytes", partial.len());
     let file_id = keep_unreadable(db, storage_dir, source, &name, partial, &detail).await;
@@ -332,6 +335,7 @@ pub async fn raise(
     file_name: Option<String>,
     file_id: Option<String>,
 ) {
+    device_health::record_event(source.integration_id, kind);
     let device_name = integration_name(db, source.integration_id)
         .await
         .unwrap_or_else(|| source.device_name.clone());

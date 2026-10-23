@@ -327,5 +327,78 @@
       "same": "Same as the previous result",
       "loadFailed": "Could not load the lab values"
     }
+  },
+  "chip": {
+    "label": "Lab machines",
+    "tooltip": {
+      "working": "All lab machines are working. Click for details.",
+      "waiting": "Waiting for a lab machine. Click for details.",
+      "down": "{{count}} lab machine(s) not working. Click for details."
+    }
+  },
+  "drawer": {
+    "title": "Lab machine details",
+    "noDevice": "This machine is no longer set up.",
+    "lastResultLabel": "Last result",
+    "noResultYet": "No results yet",
+    "lastDataLabel": "Last data received",
+    "lastData": "At {{time}}",
+    "noDataYet": "Nothing received since Arkivet started",
+    "errorsLabel": "Problems",
+    "errorsToday": "{{count}} today",
+    "liveLabel": "Live",
+    "bytesLastMinute": "{{count}} bytes in the last minute",
+    "recentTitle": "Recent changes",
+    "log": {
+      "Connected": "Connected",
+      "Connecting": "Connecting",
+      "Disconnected": "Disconnected",
+      "Error": "Not reachable",
+      "Watching": "Watching the folder",
+      "Stopped": "Stopped",
+      "parse_failed": "Couldn't read a result",
+      "empty_result": "Result had no values",
+      "cut_off": "Result was cut off",
+      "save_failed": "Result couldn't be saved",
+      "folder_lost": "Lost the folder"
+    },
+    "lastRawTitle": "Last message",
+    "lastRaw": "Last message ({{time}}, {{count}} bytes)",
+    "noRawYet": "No message since Arkivet started.",
+    "rawTruncated": "Showing the first 2 KB.",
+    "showHex": "Hex",
+    "reconnect": "Reconnect",
+    "reconnectStarted": "Reconnecting. The status updates in a few seconds.",
+    "copyDiagnostics": "Copy diagnostics",
+    "copied": "Diagnostics copied. Paste them into your message to support.",
+    "openLogFolder": "Open log folder",
+    "actionFailed": "That didn't work: {{error}}"
+  },
+  "alerts": {
+    "title": "Notifications",
+    "intro": "Arkivet usually runs in the tray. It shows a Windows notification when a lab machine stops working during clinic hours.",
+    "notifyEnabled": "Notify me when a lab machine is not connected",
+    "downAfterMinutes": "minutes before the notification",
+    "clinicHours": "Clinic hours",
+    "opens": "Opens",
+    "closes": "Closes",
+    "days": {
+      "1": "Mon",
+      "2": "Tue",
+      "3": "Wed",
+      "4": "Thu",
+      "5": "Fri",
+      "6": "Sat",
+      "7": "Sun"
+    },
+    "quietTitle": "Warn when a machine is quiet",
+    "quietIntro": "For machines used all day: warn when no result arrives for a while during clinic hours.",
+    "quietFor": "Warn when {{name}} is quiet",
+    "quietHours": "Hours without results for {{name}}",
+    "hoursWithoutResults": "hours without results",
+    "save": "Save",
+    "saved": "Notification settings saved",
+    "saveFailed": "Couldn't save: {{error}}",
+    "loadFailed": "Couldn't load the notification settings: {{error}}"
   }
 }

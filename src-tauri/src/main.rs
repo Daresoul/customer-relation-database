@@ -459,6 +459,10 @@ fn main() {
                 Err(e) => log::warn!("Lab values: no attachment folder, skipping backfill: {}", e),
             }
 
+            // Tray tooltip and icon show lab machine health; OS notifications
+            // when one is down or quiet too long in clinic hours.
+            services::device_health::start_monitor(app.handle(), sea_orm_pool.clone());
+
             // Initialize serial port listeners for device integrations
             let sea_orm_pool_for_serial = sea_orm_pool.clone();
             let app_handle_for_serial = app.handle();
@@ -656,6 +660,12 @@ fn main() {
             commands::list_serial_port_names,
             commands::get_device_connection_statuses,
             commands::get_file_watcher_statuses,
+            // Device health: details drawer, diagnostics, notification settings
+            commands::get_device_details,
+            commands::get_device_diagnostics,
+            commands::open_device_log_folder,
+            commands::get_device_alert_settings,
+            commands::update_device_alert_settings,
             // Device integration commands
             commands::get_device_integrations,
             commands::get_device_integration,

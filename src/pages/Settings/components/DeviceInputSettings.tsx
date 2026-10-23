@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { invoke } from '@tauri-apps/api';
 import { open } from '@tauri-apps/api/dialog';
 import styles from '../Settings.module.css';
+import { DeviceAlertSettings } from './DeviceAlertSettings';
 import {
   useDeviceIntegrations,
   useCreateDeviceIntegration,
@@ -686,6 +687,7 @@ const DeviceInputSettings: React.FC = () => {
           />
         </Card>
 
+        <DeviceAlertSettings />
       </Space>
 
       {/* Add/Edit Integration Modal */}

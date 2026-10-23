@@ -36,3 +36,4 @@ pub mod lab_inbox;
 pub mod lab_reference;
 pub mod lab_results;
 pub mod record_template;
+pub mod device_health;
