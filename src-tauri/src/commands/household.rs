@@ -2,7 +2,7 @@ use tauri::State;
 use serde::Deserialize;
 use crate::database::SeaOrmPool;
 use crate::models::household::*;
-use crate::database::queries::{household, household_merge, household_search};
+use crate::database::queries::{household, household_duplicates, household_merge, household_search};
 use sea_orm::{ConnectionTrait, Statement, DbBackend, Value};
 
 #[allow(dead_code)]
@@ -154,6 +154,14 @@ pub async fn search_households(
     offset: Option<i32>,
 ) -> Result<SearchHouseholdsResponse, String> {
     household_search::search_households(&pool, &query, limit, offset).await
+}
+
+#[tauri::command]
+pub async fn find_household_duplicates(
+    pool: State<'_, SeaOrmPool>,
+    check: household_duplicates::DuplicateCheck,
+) -> Result<Vec<household_duplicates::DuplicateMatch>, String> {
+    household_duplicates::find_household_duplicates(&pool, &check).await
 }
 
 #[tauri::command]

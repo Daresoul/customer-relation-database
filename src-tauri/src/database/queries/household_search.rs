@@ -45,7 +45,7 @@ pub(crate) fn index_rows_sql(filter: &str) -> String {
 // matches "070 123 456" and "Петровска-Николовска" matches as a phrase. A
 // word made only of digit groups also matches the digits run together.
 // Words are OR-ed; bm25 ranks households matching more words first.
-fn sanitize_fts5_query(query: &str) -> String {
+pub(crate) fn sanitize_fts5_query(query: &str) -> String {
     query
         .split_whitespace()
         .filter_map(|word| {

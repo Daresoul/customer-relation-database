@@ -7,6 +7,7 @@ use sea_orm::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use super::household_duplicates::{is_phone_type, latinize, normalize_phone};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MergePet {
@@ -46,45 +47,6 @@ async fn count<C: ConnectionTrait>(c: &C, sql: &str, values: Vec<Value>) -> Resu
         .map_err(|e| format!("{sql}: {e}"))?
         .map(|r| r.try_get_by_index::<i64>(0).unwrap_or(0))
         .ok_or_else(|| format!("{sql}: no row"))
-}
-
-/// Lower-case Latin form of a name, so "Марко" and "Marko" compare equal.
-/// Macedonian Cyrillic is transliterated; spaces and punctuation drop out.
-pub fn latinize(text: &str) -> String {
-    let mut out = String::new();
-    for c in text.to_lowercase().chars() {
-        let mapped = match c {
-            'а' => "a", 'б' => "b", 'в' => "v", 'г' => "g", 'д' => "d", 'ѓ' | 'ǵ' => "gj",
-            'е' | 'ё' | 'э' => "e", 'ж' | 'ž' => "zh", 'з' => "z", 'ѕ' => "dz", 'и' => "i",
-            'ј' | 'й' => "j", 'к' => "k", 'л' => "l", 'љ' => "lj", 'м' => "m", 'н' => "n",
-            'њ' => "nj", 'о' => "o", 'п' => "p", 'р' => "r", 'с' => "s", 'т' => "t",
-            'ќ' | 'ћ' | 'ć' | 'ḱ' => "kj", 'у' => "u", 'ф' => "f", 'х' => "h", 'ц' => "c",
-            'ч' | 'č' => "ch", 'џ' => "dzh", 'ш' | 'š' => "sh", 'ђ' | 'đ' => "dj",
-            'ы' => "y", 'ю' => "ju", 'я' => "ja", 'щ' => "sht",
-            c if c.is_ascii_alphanumeric() => {
-                out.push(c);
-                continue;
-            }
-            _ => continue,
-        };
-        out.push_str(mapped);
-    }
-    out
-}
-
-/// Digits of a phone number with a Macedonian country prefix turned into
-/// the local 0, so "+389 70 123 456" and "070-123-456" compare equal.
-pub fn normalize_phone(value: &str) -> String {
-    let digits: String = value.chars().filter(|c| c.is_ascii_digit()).collect();
-    let digits = digits.strip_prefix("00").unwrap_or(&digits).to_string();
-    match digits.strip_prefix("389") {
-        Some(rest) if !rest.is_empty() => format!("0{}", rest.trim_start_matches('0')),
-        _ => digits,
-    }
-}
-
-pub fn is_phone_type(contact_type: &str) -> bool {
-    matches!(contact_type, "phone" | "mobile" | "work_phone")
 }
 
 /// Two contacts with the same key are the same phone number or email.
