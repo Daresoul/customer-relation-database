@@ -107,3 +107,20 @@ fn events_use_the_local_time_zone() {
         assert!(!source.contains("America/New_York"));
     }
 }
+
+// A client who cancels next week's visit in Google must be seen: the pull asks
+// for events changed lately, not for events that took place in the last week.
+#[test]
+fn the_cancellation_pull_asks_for_recent_changes_including_future_events() {
+    use crate::services::sync_scheduler::cancellation_query;
+    use chrono::{TimeZone, Utc};
+
+    let now = Utc.with_ymd_and_hms(2026, 10, 23, 9, 0, 0).unwrap();
+    let query = cancellation_query(now);
+    let get = |k: &str| query.iter().find(|(key, _)| *key == k).map(|(_, v)| v.clone());
+
+    assert_eq!(get("updatedMin").as_deref(), Some("2026-10-16T09:00:00+00:00"));
+    assert_eq!(get("timeMax"), None, "a time window would hide future appointments");
+    assert_eq!(get("timeMin"), None);
+    assert_eq!(get("showDeleted").as_deref(), Some("true"));
+}

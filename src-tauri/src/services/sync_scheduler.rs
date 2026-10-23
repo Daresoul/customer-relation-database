@@ -1,11 +1,21 @@
 // T038: Periodic sync scheduler - checks Google Calendar for cancellations every 1 minute (with immediate check on startup)
 use crate::services::google_calendar::{calendar_ready_for_sync, mark_needs_reauth, record_sync_outcome};
 use crate::services::oauth::{get_valid_access_token, REAUTH_REQUIRED};
-use chrono::{Utc, Duration};
+use chrono::{DateTime, Duration, Utc};
 use std::sync::Arc;
 use sea_orm::{DatabaseConnection, ConnectionTrait, Statement, DbBackend};
 
 pub struct SyncScheduler;
+
+/// Query for the Google events the cancellation pull reads.
+pub fn cancellation_query(now: DateTime<Utc>) -> Vec<(&'static str, String)> {
+    vec![
+        ("timeMin", (now - Duration::days(7)).to_rfc3339()),
+        ("timeMax", now.to_rfc3339()),
+        ("showDeleted", "true".to_string()),
+        ("singleEvents", "true".to_string()),
+    ]
+}
 
 impl SyncScheduler {
     /// Start the periodic sync scheduler
@@ -90,20 +100,11 @@ impl SyncScheduler {
         calendar_id: &str,
         access_token: &str,
     ) -> Result<(i32, i32), String> {
-        // Get events from last 7 days to now
-        let time_min = (Utc::now() - Duration::days(7)).to_rfc3339();
-        let time_max = Utc::now().to_rfc3339();
-
         let client = reqwest::Client::new();
         let response = client
             .get(format!("https://www.googleapis.com/calendar/v3/calendars/{}/events", calendar_id))
             .header("Authorization", format!("Bearer {}", access_token))
-            .query(&[
-                ("timeMin", time_min.as_str()),
-                ("timeMax", time_max.as_str()),
-                ("showDeleted", "true"),
-                ("singleEvents", "true"),
-            ])
+            .query(&cancellation_query(Utc::now()))
             .send()
             .await
             .map_err(|e| format!("Failed to fetch Google Calendar events: {}", e))?;
