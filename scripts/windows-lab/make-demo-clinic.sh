@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds the demo clinic the Windows lab resets to: demo patients and records,
+# Builds the demo clinic the Windows lab resets to: demo patients and records, a price list,
 # Macedonian, MKD, a clinic profile, and lab machines wired to the lab's
 # virtual COM ports and Exigo folder. Output: scripts/windows-lab/.demo-clinic.zip
 # (git-ignored; `appctl provision` copies it over).
@@ -49,6 +49,18 @@ INSERT INTO device_integrations (name, device_type, connection_type, watch_direc
   ('Healvet', 'healvet_hv_fia_3000', 'serial_port', NULL, NULL, 'COM22', 9600, 1, datetime('now'), datetime('now')),
   ('PCR', 'mnchip_pcr_analyzer', 'serial_port', NULL, NULL, 'COM24', 9600, 1, datetime('now'), datetime('now'));
 DELETE FROM device_processed_samples;
+DELETE FROM line_item_templates;
+INSERT INTO line_item_templates (name, description, default_price, currency_id, display_order, is_active, default_tax_rate_id) VALUES
+  ('Преглед', 'Општ клинички преглед', 600, 1, 1, 1, 1),
+  ('Контролен преглед', NULL, 300, 1, 2, 1, 1),
+  ('Вакцина DHPPi', NULL, 1200, 1, 3, 1, 1),
+  ('Вакцина против беснило', NULL, 800, 1, 4, 1, 1),
+  ('Чипирање', 'Микрочип и регистрација', 1000, 1, 5, 1, 1),
+  ('Крвна слика (Exigo)', NULL, 900, 1, 6, 1, 1),
+  ('Биохемија (PointCare)', NULL, 1500, 1, 7, 1, 1),
+  ('Кастрација мачка', NULL, 4500, 1, 8, 1, 1),
+  ('Чистење заби', NULL, 3000, 1, 9, 1, 1),
+  ('Амоксицилин 250 мг (кутија)', NULL, 350, 1, 10, 1, 2);
 PRAGMA wal_checkpoint(TRUNCATE);
 SQL
 
