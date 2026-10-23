@@ -86,6 +86,9 @@ struct JavaSample {
     test_results: HashMap<String, String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     test_type: Option<String>,
+    /// PointCare's OBR-15 ("Whole blood"); the JAR prints serum without it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    sample_type: Option<String>,
 }
 
 impl JavaPdfService {
@@ -165,7 +168,7 @@ impl JavaPdfService {
                 "exigo_eos_vet" => 0,              // Exigo first
                 "mnchip_pointcare_chemistry" => 1, // Pointcare chemistry second
                 "healvet_hv_fia_3000" => 2,        // Healvet third
-                "mnchip_pcr_analyzer" => 3,        // PCR last (separate page)
+                "mnchip_pcr_analyzer" | "mnchip_pointcare_pcr_v1" => 3, // PCR last (separate page)
                 _ => 99,                            // Unknown devices last
             }
         });
@@ -186,6 +189,10 @@ impl JavaPdfService {
                 .unwrap_or_else(|| "N/A".to_string());
 
             let java_device_type = Self::map_device_type(&device_data.device_type);
+            let sample_type = (java_device_type == "pointcare")
+                .then(|| test_results.get("sample_type").cloned())
+                .flatten()
+                .filter(|s| !s.trim().is_empty());
 
             JavaSample {
                 device_type: java_device_type,
@@ -193,6 +200,7 @@ impl JavaPdfService {
                 patient_id,
                 detected_at: device_data.detected_at.to_rfc3339(),
                 analysis_datetime: Self::analysis_datetime(device_data, tz),
+                sample_type,
                 test_results,
                 test_type: None,
             }
@@ -684,11 +692,11 @@ impl JavaPdfService {
     /// Map detailed device type names to Java-expected format
     /// Java expects: "exigo_eos_vet", "healvet", "pointcare", or "pcr"
     /// We use: "exigo_eos_vet", "healvet_hv_fia_3000", "mnchip_pointcare_chemistry", "mnchip_pcr_analyzer"
-    fn map_device_type(device_type: &str) -> String {
+    pub(crate) fn map_device_type(device_type: &str) -> String {
         match device_type {
             "healvet_hv_fia_3000" => "healvet".to_string(),
             "mnchip_pointcare_chemistry" => "pointcare".to_string(),
-            "mnchip_pcr_analyzer" => "pcr".to_string(),
+            "mnchip_pcr_analyzer" | "mnchip_pointcare_pcr_v1" => "pcr".to_string(),
             "exigo_eos_vet" => "exigo_eos_vet".to_string(),
             _ => device_type.to_string(), // Pass through unknown types
         }
@@ -980,6 +988,31 @@ mod tests {
             analysis_datetime("healvet_hv_fia_3000", serde_json::json!({"cCRP": "12.5", "test_datetime": "06-04-2026 11:49:53"})),
             "2026-04-06T11:49:53"
         );
+    }
+
+    // parsers M6: the PointCare report always said "serum".
+    #[test]
+    fn pointcare_sample_type_reaches_the_jar() {
+        let chem = sample("mnchip_pointcare_chemistry", serde_json::json!({"GLU": "95", "sample_type": "Whole blood"}));
+        let json = contract_json(&patient_with_dob(None), &[chem]);
+        assert_eq!(json["samples"][0]["sample_type"], "Whole blood");
+
+        let exigo = sample("exigo_eos_vet", serde_json::json!({"WBC": "10.4"}));
+        let json = contract_json(&patient_with_dob(None), &[exigo]);
+        assert!(json["samples"][0].get("sample_type").is_none());
+    }
+
+    #[test]
+    fn legacy_pcr_samples_sort_with_pcr() {
+        let json = contract_json(
+            &patient_with_dob(None),
+            &[
+                sample("mnchip_pointcare_pcr_v1", serde_json::json!({"IC": "32.03"})),
+                sample("exigo_eos_vet", serde_json::json!({"WBC": "10.4"})),
+            ],
+        );
+        assert_eq!(json["samples"][0]["device_type"], "exigo_eos_vet");
+        assert_eq!(json["samples"][1]["device_type"], "pcr");
     }
 
     #[test]

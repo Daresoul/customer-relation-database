@@ -6367,6 +6367,7 @@ dependencies = [
  "dirs 5.0.1",
  "dotenv",
  "dunce",
+ "encoding_rs",
  "fake",
  "flate2",
  "glob",

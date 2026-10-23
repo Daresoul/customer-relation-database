@@ -12,6 +12,65 @@ pub const EXIGO_PDF_ANALYTE_KEYS: [&str; 19] = [
     "ER", "RBC", "MCV", "HCT", "MCH", "MCHC", "RDWR", "RDWA",
 ];
 
+/// The value kept for an HL7 analyte the machine sent without a result, so
+/// the row shows as "no result" instead of disappearing.
+pub const NO_RESULT: &str = "—";
+
+/// Device files are UTF-8, but a Macedonian Windows operator's input can
+/// arrive as Windows-1251. A file with NUL bytes (UTF-16) is neither.
+fn decode_device_text(bytes: &[u8]) -> Result<std::borrow::Cow<'_, str>, String> {
+    match std::str::from_utf8(bytes) {
+        Ok(text) => Ok(std::borrow::Cow::Borrowed(text)),
+        Err(e) if bytes.contains(&0) => Err(format!("Invalid UTF-8 in XML file: {}", e)),
+        Err(_) => Ok(encoding_rs::WINDOWS_1251.decode_without_bom_handling(bytes).0),
+    }
+}
+
+/// Decodes HL7 escape sequences (`\F\ \S\ \T\ \R\ \E\`) in a field value.
+/// Anything else between backslashes is kept as sent.
+fn hl7_unescape(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    let mut rest = value;
+    while let Some(start) = rest.find('\\') {
+        out.push_str(&rest[..start]);
+        let after = &rest[start + 1..];
+        let decoded = after.find('\\').and_then(|end| match &after[..end] {
+            "F" => Some(('|', end)),
+            "S" => Some(('^', end)),
+            "T" => Some(('&', end)),
+            "R" => Some(('~', end)),
+            "E" => Some(('\\', end)),
+            _ => None,
+        });
+        match decoded {
+            Some((c, end)) => {
+                out.push(c);
+                rest = &after[end + 1..];
+            }
+            None => {
+                out.push('\\');
+                rest = after;
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+/// Splits "low-high" on the first `-` or en dash after the first character,
+/// so a negative low bound keeps its sign.
+fn split_range(range: &str) -> Option<(&str, &str)> {
+    let r = range.trim();
+    let first = r.chars().next()?.len_utf8();
+    let dash = r[first..].find(['-', '\u{2013}'])? + first;
+    let dash_len = r[dash..].chars().next()?.len_utf8();
+    Some((r[..dash].trim(), r[dash + dash_len..].trim()))
+}
+
+/// Header elements that name the patient in the Exigo `<ExigoResult>` and
+/// test formats; anything else that merely contains "id" does not.
+const EXIGO_PATIENT_ID_ELEMENTS: [&str; 5] = ["sampleid", "patientid", "microchipid", "microchip", "id2"];
+
 /// Standardized device data structure that will be sent to frontend
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -77,8 +136,7 @@ impl DeviceParserService {
         file_data: &[u8],
         connection_method: &str,
     ) -> Result<DeviceData, String> {
-        let xml_str = String::from_utf8(file_data.to_vec())
-            .map_err(|e| format!("Invalid UTF-8 in XML file: {}", e))?;
+        let xml_str = decode_device_text(file_data)?;
 
         let mut reader = Reader::from_str(&xml_str);
         reader.trim_text(true);
@@ -129,8 +187,11 @@ impl DeviceParserService {
                         for attr_result in e.attributes() {
                             if let Ok(attr) = attr_result {
                                 let key = String::from_utf8_lossy(attr.key.as_ref()).to_string();
-                                let value = String::from_utf8_lossy(&attr.value).to_string();
-                                sample.insert(key, value);
+                                let value = attr
+                                    .unescape_value()
+                                    .map(|v| v.to_string())
+                                    .unwrap_or_else(|_| String::from_utf8_lossy(&attr.value).to_string());
+                                sample.insert(key, value.trim().to_string());
                             }
                         }
                         if !sample.is_empty() {
@@ -175,20 +236,13 @@ impl DeviceParserService {
                         if current_element.is_empty() {
                             continue;
                         }
-                        // Header-level or other top-level text. Apply the
-                        // patient-identifier heuristic (first ID-bearing element
-                        // wins — SampleId beats OperatorId on document order)
-                        // and fall through to the generic text-element bucket
-                        // so the test format's <PatientID>/<MicrochipID>/... still
-                        // populate the map.
-                        if current_element.to_lowercase().contains("patient")
-                            || current_element.to_lowercase().contains("microchip")
-                            || current_element.eq_ignore_ascii_case("sampleid")
-                            || current_element.to_lowercase().contains("id")
+                        // Header-level or other top-level text: the first
+                        // patient-naming element wins, and every element
+                        // also lands in the generic text bucket.
+                        if patient_id.is_none()
+                            && EXIGO_PATIENT_ID_ELEMENTS.contains(&current_element.to_lowercase().as_str())
                         {
-                            if patient_id.is_none() {
-                                patient_id = Some(text.clone());
-                            }
+                            patient_id = Some(text.clone());
                         }
                         results.insert(current_element.clone(), text);
                     }
@@ -202,17 +256,8 @@ impl DeviceParserService {
                         if let (Some(code), Some(value)) =
                             (current_param_code.take(), current_param_value.take())
                         {
-                            // RefRange splits as "<low>-<high>". Real Exigo
-                            // ranges look like "5.5-16.9" (decimal-dash-decimal),
-                            // which `split_once('-')` handles cleanly. If a
-                            // future firmware uses negative bounds (e.g.
-                            // "-2.0-5.0") this naive split would mis-parse the
-                            // sign — not a known case today, would need a real
-                            // sample to design against.
                             if let Some(range) = current_param_ref_range.take() {
-                                if let Some((low, high)) = range.split_once('-') {
-                                    let low = low.trim();
-                                    let high = high.trim();
+                                if let Some((low, high)) = split_range(&range) {
                                     if !low.is_empty() {
                                         results.insert(format!("{}_L", code), low.to_string());
                                     }
@@ -320,6 +365,40 @@ impl DeviceParserService {
         })
     }
 
+    /// The Healvet messages of one stream (anything before the first marker
+    /// and the `EE` end dropped), each with the sample it belongs to:
+    /// its sample id and patient.
+    fn healvet_messages(text: &str) -> Vec<(String, &str)> {
+        let body = text.strip_suffix("EE").unwrap_or(text);
+        body.split("#AFS1000")
+            .skip(1)
+            .filter(|m| m.split('&').count() >= 6)
+            .map(|m| {
+                let fields: Vec<&str> = m.split('&').collect();
+                let field = |i: usize| fields.get(i).map(|s| s.trim()).unwrap_or("");
+                (format!("{}\u{0}{}", field(1), field(6)), m)
+            })
+            .collect()
+    }
+
+    /// One Healvet stream can hold several samples; each becomes its own
+    /// result. A stream with one sample comes back unchanged.
+    pub fn split_healvet_samples(serial_data: &[u8]) -> Vec<Vec<u8>> {
+        let text = String::from_utf8_lossy(serial_data);
+        let mut groups: Vec<(String, String)> = Vec::new();
+        for (sample, message) in Self::healvet_messages(&text) {
+            let chunk = format!("#AFS1000{}", message);
+            match groups.iter_mut().find(|(key, _)| *key == sample) {
+                Some((_, joined)) => joined.push_str(&chunk),
+                None => groups.push((sample, chunk)),
+            }
+        }
+        if groups.len() <= 1 {
+            return vec![serial_data.to_vec()];
+        }
+        groups.into_iter().map(|(_, joined)| format!("{}EE", joined).into_bytes()).collect()
+    }
+
     /// Parse Healvet HV-FIA 3000 serial data (chemistry analyzer)
     /// Format: Multiple #AFS1000&SAMPLE_ID&RESULT&DATETIME&&PARAM_CODE&PATIENT_ID&&GENDER&SAMPLE_TYPE messages ending with EE
     /// The Healvet sends ALL parameters in ONE continuous stream, all ending with a single EE marker
@@ -332,22 +411,26 @@ impl DeviceParserService {
     ) -> Result<DeviceData, String> {
         let data_str = String::from_utf8_lossy(serial_data).to_string();
 
-        // Strip the trailing EE marker
-        let data_str = data_str.strip_suffix("EE")
-            .or_else(|| data_str.strip_suffix("&EE"))
-            .unwrap_or(&data_str);
-
-        // Split by #AFS1000 to get individual parameter messages
         // Each message is: #AFS1000&SAMPLE_ID&RESULT&DATETIME&&PARAM_CODE&PATIENT_ID&&GENDER&SAMPLE_TYPE
         // Healvet has no start byte, so anything before the first marker is a
-        // cut frame or line noise, never a message.
-        let messages: Vec<&str> = data_str.split("#AFS1000")
-            .skip(1)
-            .filter(|s| !s.trim().is_empty())
-            .collect();
-
-        if messages.is_empty() {
+        // cut frame or line noise, never a message. Only the first sample's
+        // messages are read: a stream holding several samples is split by
+        // `split_healvet_samples` before it gets here, and must never blend.
+        let all_messages = Self::healvet_messages(&data_str);
+        let Some(first_sample) = all_messages.first().map(|(sample, _)| sample.clone()) else {
             return Err("No valid Healvet messages found in data".to_string());
+        };
+        let messages: Vec<&str> = all_messages
+            .iter()
+            .filter(|(sample, _)| *sample == first_sample)
+            .map(|(_, m)| *m)
+            .collect();
+        if messages.len() < all_messages.len() {
+            log::warn!(
+                "Healvet stream holds more than one sample; reading the first ({} of {} messages)",
+                messages.len(),
+                all_messages.len()
+            );
         }
 
         // Parse all parameters into a flat HashMap
@@ -475,11 +558,14 @@ impl DeviceParserService {
                 continue;
             }
 
-            // Split by pipe delimiter
-            let fields: Vec<&str> = line.split('|').collect();
-            if fields.is_empty() {
-                continue;
-            }
+            // Split by pipe delimiter. MSH-2 holds the encoding characters
+            // themselves, so only the other segments are unescaped.
+            let is_header = line.starts_with("MSH");
+            let decoded: Vec<String> = line
+                .split('|')
+                .map(|f| if is_header { f.to_string() } else { hl7_unescape(f) })
+                .collect();
+            let fields: Vec<&str> = decoded.iter().map(String::as_str).collect();
 
             let segment_type = fields[0].trim();
 
@@ -567,14 +653,20 @@ impl DeviceParserService {
                     // OBX-18 on a PCR result: the device's threshold for its curve.
                     let threshold = fields.get(18).map(|s| s.trim()).unwrap_or("");
 
-                    if !param_code.is_empty() && !result.is_empty() {
+                    if !param_code.is_empty() {
                         // A repeated analyte replaces the earlier one whole,
                         // so no unit, range or flag carries over from it.
                         for suffix in ["unit", "range", "flag", "sample_type", "curve", "threshold", "lot"] {
                             test_results.remove(&format!("{}_{}", param_code, suffix));
                         }
-                        test_results.insert(param_code.to_string(), result.to_string());
-                        analyte_count += 1;
+                        // A failed analyte keeps its row as "no result"; only
+                        // real values count towards a non-empty result.
+                        if result.is_empty() {
+                            test_results.insert(param_code.to_string(), NO_RESULT.to_string());
+                        } else {
+                            test_results.insert(param_code.to_string(), result.to_string());
+                            analyte_count += 1;
+                        }
 
                         // Also store unit, range, and flag if present
                         if !unit.is_empty() {
