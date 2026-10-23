@@ -217,6 +217,7 @@ export const AnimalsSection: React.FC<AnimalsSectionProps> = ({
         destroyOnHidden
       >
         <PatientFormWithOwner
+          hideHouseholdPicker
           onSubmit={handleCreatePatient}
           onCancel={() => setIsPatientModalOpen(false)}
           loading={submitting}
