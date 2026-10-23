@@ -56,7 +56,7 @@ import CreatePatientSection from './CreatePatientSection';
 import { TabbedMedicalRecordFields } from '@/components/forms/fieldGroups';
 import type { RecordType } from '@/components/forms/fieldGroups';
 import { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
-import { listen } from '@tauri-apps/api/event';
+import { useTauriEvent } from '@/hooks/useTauriEvent';
 import { validatePatientSelection, getMatchStrength } from '@/utils/deviceDataValidation';
 import type { MatchStrength } from '@/utils/deviceDataValidation';
 import type { ValidationWarning } from '@/types/deviceImport';
@@ -227,32 +227,18 @@ const DeviceImportDialog: React.FC = () => {
     onScan: handleScanCode,
   });
 
-  // React to HID scan events (both wake-from-tray and scanner:barcode)
-  useEffect(() => {
-    let unlistenWake: (() => void) | undefined;
-    let unlistenBarcode: (() => void) | undefined;
-    const setup = async () => {
-      // wake-from-tray fires when the window was hidden and a scan brought it back
-      unlistenWake = await listen<any>('wake-from-tray', (event) => {
-        const payload = event.payload || {};
-        if (payload.cause === 'scan' && payload.code) {
-          handleScanCode(String(payload.code));
-        }
-      });
-      // scanner:barcode fires for every HID scan regardless of window visibility
-      unlistenBarcode = await listen<any>('scanner:barcode', (event) => {
-        const payload = event.payload || {};
-        if (payload.code) {
-          handleScanCode(String(payload.code));
-        }
-      });
-    };
-    setup();
-    return () => {
-      if (unlistenWake) unlistenWake();
-      if (unlistenBarcode) unlistenBarcode();
-    };
-  }, [patients, form]);
+  // wake-from-tray fires when the window was hidden and a scan brought it back
+  useTauriEvent<{ cause?: string; code?: unknown } | null>('wake-from-tray', (payload) => {
+    if (payload?.cause === 'scan' && payload.code) {
+      handleScanCode(String(payload.code));
+    }
+  });
+  // scanner:barcode fires for every HID scan regardless of window visibility
+  useTauriEvent<{ code?: unknown } | null>('scanner:barcode', (payload) => {
+    if (payload?.code) {
+      handleScanCode(String(payload.code));
+    }
+  });
 
   // Compute default form values based on device data
   const getDefaultFormValues = () => {
@@ -283,7 +269,7 @@ const DeviceImportDialog: React.FC = () => {
     if (modalOpen) {
       refreshPatients();
     }
-  }, [modalOpen]);
+  }, [modalOpen, refreshPatients]);
 
   // Defaults for this result. A field only follows a new default while it still holds
   // the previous one (antd counts setFieldsValue as "touched", so that flag can't tell).
