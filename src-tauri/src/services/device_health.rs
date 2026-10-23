@@ -707,6 +707,97 @@ pub fn snapshots(
         .collect()
 }
 
+// ---- Tray and notifications ------------------------------------------------
+
+const TRAY_ICON: &[u8] = include_bytes!("../../icons/32x32.png");
+const TRAY_WARNING_ICON: &[u8] = include_bytes!("../../icons/tray-warning.png");
+
+fn tray_icon(png: &[u8]) -> Option<tauri::Icon> {
+    let image = image::load_from_memory(png).ok()?.into_rgba8();
+    let (width, height) = image.dimensions();
+    Some(tauri::Icon::Rgba { rgba: image.into_raw(), width, height })
+}
+
+/// Checks machine health in the background: at start, after each status
+/// change (a burst settles for 2 s first) and every 30 s, so grace periods and
+/// clinic hours tick over without a status change.
+pub fn start_monitor(app: tauri::AppHandle, db: crate::database::SeaOrmPool) {
+    tauri::async_runtime::spawn(async move {
+        let mut tracker = HealthTracker::default();
+        let mut shown: Option<TraySummary> = None;
+        loop {
+            check_once(&app, &db, &mut tracker, &mut shown).await;
+            let _ = tokio::time::timeout(std::time::Duration::from_secs(30), kick().notified()).await;
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        }
+    });
+}
+
+async fn check_once(
+    app: &tauri::AppHandle,
+    db: &DatabaseConnection,
+    tracker: &mut HealthTracker,
+    shown: &mut Option<TraySummary>,
+) {
+    use crate::services::device_events::last_result;
+    use crate::services::device_integration::DeviceIntegrationService;
+
+    let settings = load_alert_settings(db).await.unwrap_or_else(|e| {
+        log::warn!("Device alerts: using defaults, settings not readable: {e}");
+        DeviceAlertSettings::default()
+    });
+    let lang = crate::services::settings::SettingsService::get_settings(db, "default")
+        .await
+        .map(|s| Lang::from_code(&s.settings.language))
+        .unwrap_or(Lang::En);
+    let integrations = DeviceIntegrationService::get_all(db).await.unwrap_or_default();
+    let stored = DeviceIntegrationService::last_result_times(db).await.unwrap_or_default();
+
+    let mut serial = crate::services::device_input::get_all_connection_statuses();
+    for s in &mut serial {
+        s.last_result_at = last_result(s.integration_id).or(s.last_result_at.take());
+    }
+    let mut folders = crate::services::file_watcher::get_all_file_watcher_statuses();
+    for f in &mut folders {
+        f.last_result_at = last_result(f.integration_id).or(f.last_result_at.take());
+    }
+
+    let devices = snapshots(&integrations, &serial, &folders, &stored);
+    let now = chrono::Local::now().fixed_offset();
+    let observed = tracker.observe(now, &devices, &settings);
+
+    let summary = tray_summary(&observed.problems, devices.len(), now, lang);
+    if shown.as_ref() != Some(&summary) {
+        show_in_tray(app, &summary);
+        *shown = Some(summary);
+    }
+    for alert in &observed.alerts {
+        let text = alert_text(alert, now, lang);
+        log::info!("Device alert: {} | {}", text.title, text.body);
+        let identifier = app.config().tauri.bundle.identifier.clone();
+        if let Err(e) = tauri::api::notification::Notification::new(identifier)
+            .title(&text.title)
+            .body(&text.body)
+            .show()
+        {
+            log::warn!("Could not show the device notification: {e}");
+        }
+    }
+}
+
+fn show_in_tray(app: &tauri::AppHandle, summary: &TraySummary) {
+    let tray = app.tray_handle();
+    if let Err(e) = tray.set_tooltip(&summary.tooltip) {
+        log::debug!("Tray tooltip not set: {e}");
+    }
+    let icon = tray_icon(if summary.warning { TRAY_WARNING_ICON } else { TRAY_ICON });
+    if let Some(icon) = icon {
+        if let Err(e) = tray.set_icon(icon) {
+            log::warn!("Tray icon not set: {e}");
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1181,6 +1272,19 @@ mod tests {
 
         let empty = device_details(9_100_002, now);
         assert_eq!(empty, DeviceDetails { bytes_last_minute: 0, errors_today: 0, last_raw: None, log: vec![] });
+    }
+
+    #[test]
+    fn both_tray_icons_decode_to_the_same_size() {
+        for png in [TRAY_ICON, TRAY_WARNING_ICON] {
+            match tray_icon(png) {
+                Some(tauri::Icon::Rgba { width, height, rgba }) => {
+                    assert_eq!((width, height), (32, 32));
+                    assert_eq!(rgba.len(), 32 * 32 * 4);
+                }
+                _ => panic!("tray icon must decode"),
+            }
+        }
     }
 
     struct NullSink;
