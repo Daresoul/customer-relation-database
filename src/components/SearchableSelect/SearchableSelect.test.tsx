@@ -176,3 +176,31 @@ describe('SearchableSelect — clear behavior', () => {
     expect(onChange).toHaveBeenCalledWith('');
   });
 });
+
+// forms-validation.md #5: Enter compared the typed name with option ids, so
+// an existing breed offered "Create" and the create then failed.
+describe('SearchableSelect — Enter on a name that exists', () => {
+  it('picks the existing option instead of creating a new one', () => {
+    const onChange = vi.fn();
+    const onCreateNew = vi.fn();
+    render(<SearchableSelect value={null} onChange={onChange} options={BREEDS} onCreateNew={onCreateNew} />);
+    const input = screen.getByRole('combobox');
+
+    fireEvent.change(input, { target: { value: 'poodle' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(onCreateNew).not.toHaveBeenCalled();
+    expect(onChange).toHaveBeenCalledWith('2');
+  });
+
+  it('still offers to create a name that does not exist', () => {
+    const onCreateNew = vi.fn();
+    render(<SearchableSelect value={null} onChange={vi.fn()} options={BREEDS} onCreateNew={onCreateNew} />);
+    const input = screen.getByRole('combobox');
+
+    fireEvent.change(input, { target: { value: 'Beagle' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(onCreateNew).toHaveBeenCalledWith('Beagle');
+  });
+});
