@@ -392,7 +392,17 @@
     "copyDiagnostics": "Copy diagnostics",
     "copied": "Diagnostics copied. Paste them into your message to support.",
     "openLogFolder": "Open log folder",
-    "actionFailed": "That didn't work: {{error}}"
+    "actionFailed": "That didn't work: {{error}}",
+    "hours": "h",
+    "minutes": "min",
+    "today": {
+      "clean": "No breaks today",
+      "down": "Without connection {{time}}, {{count}} break(s)"
+    },
+    "todayLabel": "Today",
+    "downSince": "Without connection since {{time}}",
+    "attempts": "{{count}} attempts",
+    "nextTry": "next try {{time}}"
   },
   "alerts": {
     "title": "Notifications",

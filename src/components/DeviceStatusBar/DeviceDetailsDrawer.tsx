@@ -13,7 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { invoke } from '@/services/invoke';
 import { useDeviceConnectionStatus, useDeviceIntegrations, useFileWatcherStatus } from '../../hooks/useDeviceIntegrations';
 import { DeviceDetails, DeviceType, getDeviceTypeDisplayName } from '../../types/deviceIntegration';
-import { describeFolderStatus, describeSerialStatus, folderLevel, formatLastResult, HealthLevel, serialDownSince, serialLevel } from './deviceHealth';
+import { describeFolderStatus, describeSerialStatus, folderLevel, formatDownSince, formatLastResult, formatToday, HealthLevel, serialDownSince, serialLevel } from './deviceHealth';
 import { errorText } from '@/utils/notifyError';
 import { formatDayMonth } from '@/utils/dateFormatter';
 
@@ -133,6 +133,7 @@ export const DeviceDetailsDrawer: React.FC<DeviceDetailsDrawerProps> = ({ open, 
   const lastData = clock(serialStatus?.last_byte_at);
   const raw = details?.lastRaw;
   const recent = [...(details?.log ?? [])].reverse().slice(0, 8);
+  const downLine = formatDownSince(details?.downSince, serialStatus?.retry_count ?? 0, serialStatus?.next_retry, t);
 
   return (
     <Drawer
@@ -192,6 +193,11 @@ export const DeviceDetailsDrawer: React.FC<DeviceDetailsDrawerProps> = ({ open, 
                   <Text strong>{health.text}</Text>
                 </div>
                 {health.action && <Text>{health.action}</Text>}
+                {downLine && (
+                  <div>
+                    <Text type="secondary">{downLine}</Text>
+                  </div>
+                )}
                 {health.details && (
                   <div>
                     <Text type="secondary" style={{ fontSize: 12 }}>
@@ -210,8 +216,8 @@ export const DeviceDetailsDrawer: React.FC<DeviceDetailsDrawerProps> = ({ open, 
                 {lastData ? t('drawer.lastData', { time: lastData }) : t('drawer.noDataYet')}
               </Descriptions.Item>
             )}
-            <Descriptions.Item label={t('drawer.errorsLabel')}>
-              {t('drawer.errorsToday', { count: details?.errorsToday ?? 0 })}
+            <Descriptions.Item label={t('drawer.todayLabel')}>
+              {formatToday(details?.outagesToday ?? 0, details?.downMinutesToday ?? 0, t)}
             </Descriptions.Item>
             {isSerial && (
               <Descriptions.Item label={t('drawer.liveLabel')}>

@@ -392,7 +392,17 @@
     "copyDiagnostics": "Копирај дијагностика",
     "copied": "Дијагностиката е копирана. Залепете ја во пораката до поддршката.",
     "openLogFolder": "Отвори ја папката со логови",
-    "actionFailed": "Не успеа: {{error}}"
+    "actionFailed": "Не успеа: {{error}}",
+    "hours": "ч",
+    "minutes": "мин",
+    "today": {
+      "clean": "Без прекини денес",
+      "down": "Без врска {{time}}, прекини: {{count}}"
+    },
+    "todayLabel": "Денес",
+    "downSince": "Без врска од {{time}}",
+    "attempts": "{{count}} обиди",
+    "nextTry": "следен обид {{time}}"
   },
   "alerts": {
     "title": "Известувања",

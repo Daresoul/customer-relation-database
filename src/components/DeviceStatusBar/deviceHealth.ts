@@ -127,10 +127,23 @@ export function chipText(devices: Array<{ name: string; level: HealthLevel }>, t
   return at.length === 1 ? t(`chip.one${kind}`, { name: at[0].name }) : t(`chip.many${kind}`, { count: at.length });
 }
 
-export function formatToday(_outages: number, _minutes: number, _t: T): string {
-  return '';
+function duration(minutes: number, t: T): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h > 0 ? `${h} ${t('drawer.hours')} ${m} ${t('drawer.minutes')}` : `${m} ${t('drawer.minutes')}`;
 }
 
-export function formatDownSince(_since: string | null | undefined, _attempts: number, _next: string | null | undefined, _t: T): string | null {
-  return '';
+/** "Без врска 52 мин, 3 прекини" — or that today had no breaks. */
+export function formatToday(outages: number, minutes: number, t: T): string {
+  if (outages === 0) return t('drawer.today.clean');
+  return t('drawer.today.down', { time: duration(minutes, t), count: outages });
+}
+
+/** "Без врска од 14:03 · 182 обиди · следен обид 14:57:10"; null while it works. */
+export function formatDownSince(since: string | null | undefined, attempts: number, next: string | null | undefined, t: T): string | null {
+  if (!since) return null;
+  const parts = [t('drawer.downSince', { time: dayjs(since).isSame(dayjs(), 'day') ? dayjs(since).format('HH:mm') : formatDayMonth(since, true) })];
+  if (attempts > 0) parts.push(t('drawer.attempts', { count: attempts }));
+  if (next) parts.push(t('drawer.nextTry', { time: dayjs(next).format('HH:mm:ss') }));
+  return parts.join(' · ');
 }

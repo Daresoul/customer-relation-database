@@ -153,6 +153,10 @@ export interface DeviceDetails {
   errorsToday: number;
   lastRaw?: DeviceRawMessage | null;
   log: DeviceLogEntry[];
+  /** When the current outage began; absent while it works. */
+  downSince?: string | null;
+  outagesToday?: number;
+  downMinutesToday?: number;
 }
 
 export interface DeviceQuietAlert {
