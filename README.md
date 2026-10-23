@@ -458,6 +458,12 @@
   "Неуспешно креирање на термин").
 - The calendar follows the app language, and weeks start on Monday.
 
+## Type check
+
+`npx tsc --noEmit` must be clean. `npm run build` runs it before `vite build`
+(so `tauri build` does too, through `beforeBuildCommand`), and the release
+workflow runs it as its own step before the tests.
+
 ## Release build secrets
 
 The release workflow (`.github/workflows/release.yml`) reads these GitHub
