@@ -199,9 +199,9 @@ async fn the_list_without_a_type_holds_every_type_and_search_ignores_cyrillic_ca
     let notes = RecordTemplateService::list(&db, Some("note")).await.unwrap();
     assert_eq!(notes.len(), 1);
 
-    let found = RecordTemplateService::search(&db, "ВАКЦ", None).await.unwrap();
+    let found = RecordTemplateService::search(&db, "КОНТР", None).await.unwrap();
     assert_eq!(found.len(), 1);
-    assert_eq!(found[0].title, "Вакцинација");
+    assert_eq!(found[0].title, "Контрола");
 }
 
 #[tokio::test]
