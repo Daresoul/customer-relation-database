@@ -179,7 +179,9 @@ async fn run_backup_skips_up_to_date_files() {
     let dest_file = fx.dest_dir.path().join("files/a.txt");
     let src_file = fx.app_dir.path().join("files/a.txt");
 
-    fs::write(&dest_file, "destination-edited").unwrap();
+    // Same size: a destination of another size is what a cut-off copy looks
+    // like, and that one is copied again.
+    fs::write(&dest_file, "ORIGINAL").unwrap();
     // Push the source's mtime 60s into the past so it's older than dest.
     let older = std::time::SystemTime::now() - Duration::from_secs(60);
     fs::OpenOptions::new()
@@ -192,7 +194,7 @@ async fn run_backup_skips_up_to_date_files() {
     BackupService::run_backup(fx.app_dir.path(), &fx.test_db).await.unwrap();
 
     let dest_content = fs::read_to_string(&dest_file).unwrap();
-    assert_eq!(dest_content, "destination-edited", "newer dest should be preserved");
+    assert_eq!(dest_content, "ORIGINAL", "newer dest of the same size should be preserved");
 }
 
 #[tokio::test]
