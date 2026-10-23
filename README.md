@@ -47,6 +47,44 @@
 - Routed pages sit inside `RouteErrorBoundary`; a crash shows a translated
   screen with Reload and Go to dashboard, and leaving the page clears it.
 
+## App shell and navigation
+- The app uses a data router: `createBrowserRouter(appRoutes)` in `App.tsx`,
+  routes in `src/layouts/routes.tsx`. Every page renders inside
+  `layouts/RootLayout`: the header, the device bar, the lab import modal, the
+  chip-scan and wake-from-tray handlers, and the crash boundary. Code that
+  needs the router (`useNavigate`, `useBlocker`) goes inside it. Tests render
+  pages with `createMemoryRouter` + `RouterProvider`.
+- `useUnsavedChangesGuard(dirty)` holds every in-app navigation (header,
+  links, Back, breadcrumbs) behind "Discard / Keep editing" while `dirty`, and
+  asks the browser before a reload. Its returned `confirmLeave(fn)` covers
+  non-navigation exits such as closing a form. The record page and record
+  modal use it.
+- Header (`components/AppHeader`): app name (home), patient search, backup
+  light, Settings (always shown). Slots for other features:
+  `AppShellHeader` props `labInboxSlot` (lab inbox badge) and
+  `deviceStatusSlot`.
+- Patient search opens with Ctrl/Cmd+K, `/` (not while typing in a field) or
+  the header button. It calls `global_patient_search`: pet name or chip
+  (Unicode-aware), and every pet of an owner found by name or phone through the
+  household index (dashes and spaces ignored). Arrows move, Enter opens.
+  Before typing it lists the last 8 opened patients (localStorage
+  `arkivet.recentPatients`, this computer only).
+- A chip scan on any page (keyboard wedge, HID event, wake from tray) opens the
+  one patient with that chip, opens the search when several have it, and offers
+  "Create patient" (dashboard form, chip filled in) when none has it. It is
+  ignored while a text field has focus, while the lab import is open, or over
+  another dialog. The dashboard no longer handles scans itself.
+- Backup light: red when the last backup attempt failed, amber when no folder
+  is set, no backup ran yet, or the last one is 26 hours old or more, green
+  otherwise. Click opens `/settings?section=backups` (any section key works).
+- Dashboard "Today" strip (replaces the all-time counters): today's
+  appointments (click opens the patient), lab results waiting (today the
+  Saved-for-later count; the strip takes it as `waitingLabCount`), and patients
+  seen today (`count_patients_seen`: patients with a record created in the
+  local day).
+- The household list has no Status or Last activity columns: the list query
+  has no real last-visit date.
+
 ## Google Calendar
 - When Google refuses the stored login (refresh rejected or a 401), the app
   sets `google_calendar_settings.needs_reauth` (migration 048). Settings then
