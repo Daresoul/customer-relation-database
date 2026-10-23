@@ -1,3 +1,4 @@
+use crate::services::device_health::Lang;
 use sea_orm::*;
 use crate::models::medical::*;
 use crate::models::dto::MaybeNull;
@@ -165,6 +166,14 @@ pub struct SavedMedicalRecord {
 }
 
 // T027: MedicalRecordService with CRUD operations
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PdfKind {
+    Report,
+    PharmacyNote,
+    Invoice,
+    DeviceReport,
+}
+
 pub struct MedicalRecordService;
 
 impl MedicalRecordService {
@@ -833,6 +842,16 @@ impl MedicalRecordService {
     /// enough for human filenames.
     pub(crate) fn pdf_timestamp() -> String {
         chrono::Local::now().format("%Y-%m-%d %H-%M").to_string()
+    }
+
+    /// The document's name at the start of its file name, in the app language.
+    pub fn pdf_kind_name(kind: PdfKind, _lang: Lang) -> &'static str {
+        match kind {
+            PdfKind::Report => "Medical Report",
+            PdfKind::PharmacyNote => "Pharmacy Note",
+            PdfKind::Invoice => "Invoice",
+            PdfKind::DeviceReport => "Device Report",
+        }
     }
 
     /// Where one PDF job writes `file_name`: a fresh folder of its own.

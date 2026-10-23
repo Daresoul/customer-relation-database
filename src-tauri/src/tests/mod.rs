@@ -153,3 +153,6 @@ pub mod master_data_names_tests;
 
 #[cfg(all(test, debug_assertions))]
 pub mod dev_bridge_tests;
+
+#[cfg(test)]
+pub mod pdf_name_tests;
