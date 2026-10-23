@@ -12,6 +12,8 @@ vi.mock('react-i18next', () => ({
 }));
 vi.mock('@/services/invoke', () => ({ invoke: vi.fn(), convertFileSrc: vi.fn() }));
 vi.mock('@tanstack/react-query', () => ({ useQueryClient: () => ({ invalidateQueries: vi.fn() }) }));
+// The lab values card reads through react-query, which this test stubs out.
+vi.mock('@/components/LabResults/RecordLabValues', () => ({ default: () => null }));
 
 const recordQuery = {
   data: {

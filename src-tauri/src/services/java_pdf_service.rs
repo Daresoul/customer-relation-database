@@ -246,6 +246,14 @@ impl JavaPdfService {
         device_data: &crate::services::device_pdf_service::DeviceTestData,
         tz: &Tz,
     ) -> String {
+        Self::device_time(&device_data.test_results)
+            .unwrap_or_else(|| device_data.detected_at.with_timezone(tz).naive_local())
+            .format("%Y-%m-%dT%H:%M:%S")
+            .to_string()
+    }
+
+    /// The analyzer's own run time (local wall time), when the result has one.
+    pub fn device_time(test_results: &serde_json::Value) -> Option<chrono::NaiveDateTime> {
         const DEVICE_TIME_KEYS: [&str; 4] = ["DATE", "DateTime", "test_datetime", "message_datetime"];
         const DEVICE_TIME_FORMATS: [&str; 6] = [
             "%Y-%m-%d %H:%M:%S",
@@ -255,18 +263,14 @@ impl JavaPdfService {
             "%d.%m.%Y %H:%M:%S",
             "%Y/%m/%d %H:%M:%S",
         ];
-        let device_time = DEVICE_TIME_KEYS
+        DEVICE_TIME_KEYS
             .iter()
-            .filter_map(|k| device_data.test_results.get(*k).and_then(|v| v.as_str()))
+            .filter_map(|k| test_results.get(*k).and_then(|v| v.as_str()))
             .find_map(|raw| {
                 DEVICE_TIME_FORMATS
                     .iter()
                     .find_map(|f| chrono::NaiveDateTime::parse_from_str(raw.trim(), f).ok())
-            });
-        device_time
-            .unwrap_or_else(|| device_data.detected_at.with_timezone(tz).naive_local())
-            .format("%Y-%m-%dT%H:%M:%S")
-            .to_string()
+            })
     }
 
     /// Create a Java command configured to prevent macOS focus-stealing.

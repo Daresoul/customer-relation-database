@@ -114,3 +114,6 @@ pub mod invoice_totals_tests;
 
 #[cfg(test)]
 pub mod clinic_vat_tests;
+
+#[cfg(test)]
+pub mod lab_results_tests;

@@ -8,7 +8,8 @@ import {
   UserOutlined,
   MedicineBoxOutlined,
   TeamOutlined,
-  CalendarOutlined
+  CalendarOutlined,
+  ExperimentOutlined
 } from '@ant-design/icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePatientDetail, useDeleteConfirmation } from '../../hooks/usePatient';
@@ -19,6 +20,7 @@ import { PatientBanner } from './chart/PatientBanner';
 import { WeightLogCard } from './chart/WeightLogCard';
 import DiagnosisTagList from '../../components/DiagnosisTagList';
 import MedicalHistorySection from './MedicalHistory/MedicalHistorySection';
+import { LabsTab } from './LabsTab';
 import { Link } from 'react-router-dom';
 import { useThemeColors } from '../../utils/themeStyles';
 import { DeviceStatusInline } from '../../components/DeviceStatusBar';
@@ -208,6 +210,20 @@ export const PatientDetail: React.FC = () => {
           patientName={patient.name}
           onNavigateToRecord={handleNavigateToMedicalRecord}
         />
+      ),
+    },
+    {
+      key: 'labs',
+      label: (
+        <span>
+          <ExperimentOutlined />
+          {t('devices:labs.tab')}
+        </span>
+      ),
+      children: (
+        <div className={styles.tabContent}>
+          <LabsTab patientId={patient.id} />
+        </div>
       ),
     },
   ];

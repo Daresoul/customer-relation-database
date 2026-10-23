@@ -72,6 +72,7 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, WEIGHT_LOG_MIGRATION, create_patient_weight_log).await?;
     run_migration(pool, "055_lab_inbox", add_lab_inbox).await?;
     run_migration(pool, "056_clinic_profile_and_vat", add_clinic_profile_and_vat).await?;
+    run_migration(pool, "05x_lab_results", create_lab_results).await?;
 
     Ok(())
 }
@@ -3360,6 +3361,59 @@ fn add_clinic_profile_and_vat(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::f
                     .await?;
             }
         }
+        Ok(())
+    })
+}
+
+/// Migration 05x: lab values one per row (`lab_results`), one row per analyte
+/// per lab attachment, and `lab_result_imports`, which notes each attachment
+/// read (or that could not be read) so it is read once. Rows for older
+/// attachments are filled at start by `services::lab_results::backfill`.
+fn create_lab_results(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS lab_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                patient_id INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+                medical_record_id INTEGER NOT NULL REFERENCES medical_records(id) ON DELETE CASCADE,
+                attachment_id INTEGER NOT NULL REFERENCES medical_attachments(id) ON DELETE CASCADE,
+                source_file_id TEXT,
+                device_type TEXT NOT NULL,
+                device_name TEXT,
+                sample_at TEXT NOT NULL,
+                analyte_code TEXT NOT NULL,
+                display_name TEXT NOT NULL,
+                position INTEGER NOT NULL DEFAULT 0,
+                value_text TEXT NOT NULL,
+                value_num REAL,
+                unit TEXT,
+                ref_low REAL,
+                ref_high REAL,
+                range_text TEXT,
+                flag TEXT NOT NULL DEFAULT 'U' CHECK (flag IN ('H', 'L', 'N', 'U')),
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (attachment_id, analyte_code)
+            )",
+        )
+        .execute(pool)
+        .await?;
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_lab_results_patient ON lab_results(patient_id, sample_at)")
+            .execute(pool)
+            .await?;
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_lab_results_record ON lab_results(medical_record_id)")
+            .execute(pool)
+            .await?;
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS lab_result_imports (
+                attachment_id INTEGER PRIMARY KEY REFERENCES medical_attachments(id) ON DELETE CASCADE,
+                status TEXT NOT NULL CHECK (status IN ('ok', 'failed')),
+                analyte_count INTEGER NOT NULL DEFAULT 0,
+                error TEXT,
+                imported_at TEXT NOT NULL
+            )",
+        )
+        .execute(pool)
+        .await?;
         Ok(())
     })
 }

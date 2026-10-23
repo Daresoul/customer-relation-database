@@ -33,3 +33,5 @@ pub mod startup_failure;
 pub mod patient_search;
 pub mod dashboard;
 pub mod lab_inbox;
+pub mod lab_reference;
+pub mod lab_results;

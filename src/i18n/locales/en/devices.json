@@ -287,5 +287,45 @@
     "namedVirtual": "{{device}} Virtual Port",
     "virtualSerial": "Virtual Serial Port ({{name}})",
     "linuxUsbAdapter": "Linux USB Serial Adapter #{{number}}"
+  },
+  "labs": {
+    "tab": "Labs",
+    "title": "Lab results",
+    "empty": "No lab results yet. Results attached to this patient's records show up here.",
+    "loadFailed": "Could not load the lab results",
+    "all": "All",
+    "panels": {
+      "hematology": "Blood count",
+      "chemistry": "Chemistry",
+      "immunoassay": "Hormones and markers",
+      "pcr": "PCR",
+      "other": "Other"
+    },
+    "columns": {
+      "analyte": "Analyte",
+      "unit": "Unit",
+      "range": "Range"
+    },
+    "flags": {
+      "H": "High",
+      "L": "Low"
+    },
+    "hint": "Click an analyte to see its trend.",
+    "trend": {
+      "label": "Trend of {{code}}",
+      "title": "{{code}} over time",
+      "close": "Close",
+      "noNumbers": "No numbers to chart for this analyte.",
+      "band": "Reference range"
+    },
+    "record": {
+      "title": "Lab values",
+      "value": "Value",
+      "previous": "Previous",
+      "up": "Higher than the previous result",
+      "down": "Lower than the previous result",
+      "same": "Same as the previous result",
+      "loadFailed": "Could not load the lab values"
+    }
   }
 }

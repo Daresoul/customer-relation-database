@@ -25,6 +25,7 @@ import type { MedicalRecord, MedicalRecordHistory, UpdateMedicalRecordInput } fr
 import type { MedicalRecordLineItem } from '@/types/lineItem';
 import { DeviceStatusInline } from '@/components/DeviceStatusBar';
 import MoveLabResultModal from '@/components/LabInbox/MoveLabResultModal';
+import RecordLabValues from '@/components/LabResults/RecordLabValues';
 import { labInboxService } from '@/services/labInboxService';
 import { invalidateLabInboxData } from '@/hooks/invalidation';
 import { InvoiceSummaryRows } from '@/components/InvoiceSummaryRows';
@@ -1040,6 +1041,12 @@ export const MedicalRecordDetailPage: React.FC = () => {
           t('medical:detail.noDeviceData', 'No device data attached'),
         )}
       </Card>
+
+      <RecordLabValues
+        recordId={record.id}
+        attachmentsKey={attachments.map((a: MedicalAttachment) => a.id).join(',')}
+        className={styles.marginTop16}
+      />
 
       <Card title={t('medical:detail.versionHistory')} className={styles.marginTop16}>
         <Table

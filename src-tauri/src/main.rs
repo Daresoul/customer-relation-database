@@ -450,6 +450,15 @@ fn main() {
                 Err(e) => log::warn!("Attachment purge: no attachment folder, skipping: {}", e),
             }
 
+            // Read lab results attached before lab values were stored one
+            // per row. See services::lab_results::backfill.
+            match services::file_storage::FileStorageService::get_storage_dir(&app.handle()) {
+                Ok(dir) => {
+                    tauri::async_runtime::spawn(services::lab_results::run_backfill(dir, sea_orm_pool.clone()));
+                }
+                Err(e) => log::warn!("Lab values: no attachment folder, skipping backfill: {}", e),
+            }
+
             // Initialize serial port listeners for device integrations
             let sea_orm_pool_for_serial = sea_orm_pool.clone();
             let app_handle_for_serial = app.handle();
@@ -669,6 +678,9 @@ fn main() {
             commands::restore_lab_result,
             commands::attach_lab_result,
             commands::move_lab_result,
+            // Lab values (Labs tab, record page)
+            commands::get_patient_lab_results,
+            commands::get_record_lab_values,
             // Line item template commands
             commands::get_line_item_templates,
             commands::get_line_item_template,

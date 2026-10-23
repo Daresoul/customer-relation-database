@@ -40,9 +40,11 @@ export function invalidateHouseholdData(queryClient: QueryClient): void {
  *   medical-record(s), medical-records-search
  *                                record page attachments and record lists
  *                                (a move or attach changes two records)
+ *   patient-labs, record-labs    Labs tab and the record page's lab values
+ *                                (useLabResults; both also refetch on mount)
  */
 const LAB_INBOX_READERS = ['lab-inbox', 'lab-inbox-count'];
-const LAB_RECORD_READERS = ['medical-record', 'medical-records', 'medical-records-search'];
+const LAB_RECORD_READERS = ['medical-record', 'medical-records', 'medical-records-search', 'patient-labs', 'record-labs'];
 
 export function invalidateLabInboxData(queryClient: QueryClient): void {
   LAB_INBOX_READERS.forEach((key) => queryClient.invalidateQueries({ queryKey: [key] }));

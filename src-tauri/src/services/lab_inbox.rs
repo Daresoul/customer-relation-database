@@ -14,14 +14,6 @@ use std::path::Path;
 /// Reasons a result can be discarded with.
 pub const DISCARD_REASONS: [&str; 4] = ["qc", "test", "duplicate", "other"];
 
-/// The units the lab PDF prints for Exigo analytes (`PdfGeneratorCLI.java`).
-const EXIGO_UNITS: [(&str, &str); 19] = [
-    ("PLT", "10e+9/L"), ("MPV", "fL"), ("HGB", "g/dL"), ("WBC", "10e+9/L"), ("LA", "10e+9/L"),
-    ("MA", "10e+9/L"), ("GA", "10e+9/L"), ("LR", "%"), ("MR", "%"), ("GR", "%"), ("EA", "10e+9/L"),
-    ("ER", "%"), ("RBC", "10e+12/L"), ("MCV", "fL"), ("HCT", "%"), ("MCH", "pg"), ("MCHC", "g/dL"),
-    ("RDWR", "%"), ("RDWA", "fL"),
-];
-
 /// Keys the parsers add next to the analytes that describe the sample, not a value.
 const METADATA_KEYS: [&str; 20] = [
     "sample_id", "test_datetime", "patient_name", "patient_id", "patient_id_internal", "gender",
@@ -134,7 +126,7 @@ fn is_segment_field(key: &str) -> bool {
     seg.len() == 3 && seg.chars().all(|c| c.is_ascii_uppercase()) && idx.chars().all(|c| c.is_ascii_digit())
 }
 
-fn is_analyte_key(key: &str) -> bool {
+pub(crate) fn is_analyte_key(key: &str) -> bool {
     !METADATA_KEYS.contains(&key)
         && !FIELD_SUFFIXES.iter().any(|s| key.ends_with(s))
         && !key.starts_with("field_")
@@ -166,7 +158,7 @@ pub fn lab_values(device_type: &str, test_results: &serde_json::Value) -> Vec<La
                 Some(LabValue {
                     code: code.to_string(),
                     flag: flag_from_range(&value, low.as_deref(), high.as_deref()),
-                    unit: EXIGO_UNITS.iter().find(|(k, _)| k == code).map(|(_, u)| u.to_string()),
+                    unit: crate::services::lab_reference::exigo(code).and_then(|(_, r)| r.unit).map(str::to_string),
                     range,
                     value,
                 })
@@ -508,6 +500,9 @@ pub async fn attach_to_record(
     .await
     .map_err(|e| format!("Failed to update the file history: {}", e))?;
     txn.commit().await.map_err(|e| format!("Failed to attach the lab result: {}", e))?;
+    if let Err(e) = crate::services::lab_results::index_attachment(db, storage_dir, attachment_id).await {
+        log::warn!("Lab values of attachment {} not stored: {}", attachment_id, e);
+    }
     Ok(attachment_id)
 }
 
@@ -670,6 +665,7 @@ pub async fn move_result(
     .await
     .map_err(|e| format!("Failed to detach the lab result: {}", e))?;
     retire_lab_reports(&txn, from_record_id, None).await?;
+    crate::services::lab_results::repoint(&txn, attachment_id, new_id, target_record_id).await?;
     txn.execute(Statement::from_sql_and_values(
         DbBackend::Sqlite,
         "INSERT INTO lab_result_moves (file_id, from_attachment_id, to_attachment_id, from_record_id, to_record_id, moved_at, moved_by) \
@@ -690,6 +686,9 @@ pub async fn move_result(
         set_attached(&txn, file_id, target_record_id, Some(new_id)).await?;
     }
     txn.commit().await.map_err(|e| format!("Failed to move the lab result: {}", e))?;
+    if let Err(e) = crate::services::lab_results::index_attachment(db, &env.storage_dir, new_id).await {
+        log::warn!("Lab values of attachment {} not stored: {}", new_id, e);
+    }
 
     let mut pdfs = vec![pdf_status("device_report", regenerate_lab_report(env, db, target_record_id).await)];
     let source_has_results = !db

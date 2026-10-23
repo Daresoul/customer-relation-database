@@ -159,6 +159,16 @@ pub async fn upload_medical_attachment(
         }
     }
 
+    if attachment.device_type.is_some() {
+        let indexed = match FileStorageService::get_storage_dir(&app_handle) {
+            Ok(dir) => crate::services::lab_results::index_attachment(&pool, &dir, attachment.id).await,
+            Err(e) => Err(e),
+        };
+        if let Err(e) = indexed {
+            log::warn!("Lab values of attachment {} not stored: {}", attachment.id, e);
+        }
+    }
+
     Ok(attachment)
 }
 
