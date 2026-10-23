@@ -696,16 +696,6 @@ const DeviceImportDialog: React.FC = () => {
                   <Space>
                     <Text strong>{file.fileName}</Text>
                     <Tag color="green">{file.deviceName}</Tag>
-                    {file.isSession && (
-                      <>
-                        <Tag color="purple">
-                          {t('medical:deviceImport.parameter', { count: file.parameterCount })}
-                        </Tag>
-                        {file.sessionInProgress && (
-                          <Tag color="orange">{t('medical:deviceImport.sessionInProgress')}</Tag>
-                        )}
-                      </>
-                    )}
                     {file.patientId && (
                       <Tag color="blue" icon={<CheckCircleOutlined />}>
                         {t('medical:deviceImport.patientDetected')}
