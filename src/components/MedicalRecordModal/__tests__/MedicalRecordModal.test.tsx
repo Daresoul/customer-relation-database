@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
 import { App } from 'antd';
+import { createMemoryRouter, RouterProvider, Link } from 'react-router-dom';
 import MedicalRecordModal from '../MedicalRecordModal';
 
 vi.mock('react-i18next', () => ({
@@ -25,14 +26,30 @@ vi.mock('../MedicalRecordForm', () => ({
 
 afterEach(cleanup);
 
+// In a data router, with a link outside the dialog like the app header's.
 function renderModal() {
   const onClose = vi.fn();
+  const router = createMemoryRouter(
+    [
+      {
+        path: '/patients/3',
+        element: (
+          <>
+            <Link to="/settings">header link</Link>
+            <MedicalRecordModal open onClose={onClose} patientId={3} patientName="Rex" recordId={null} />
+          </>
+        ),
+      },
+      { path: '/settings', element: <div>settings page</div> },
+    ],
+    { initialEntries: ['/patients/3'] },
+  );
   render(
     <App>
-      <MedicalRecordModal open onClose={onClose} patientId={3} patientName="Rex" recordId={null} />
+      <RouterProvider router={router} />
     </App>,
   );
-  return { onClose };
+  return { onClose, router };
 }
 
 const closeX = () => screen.getByRole('button', { name: /close/i });
@@ -65,6 +82,16 @@ describe('MedicalRecordModal: unsaved changes', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'unsaved.discard' }));
 
     await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+
+  it('asks before a link elsewhere in the app drops typed text', async () => {
+    const { router } = renderModal();
+    fireEvent.click(screen.getByText('type something'));
+
+    fireEvent.click(screen.getByText('header link'));
+
+    expect(await screen.findByText('medical:unsaved.title')).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/patients/3');
   });
 
   it('does not close on a click outside the dialog', () => {
