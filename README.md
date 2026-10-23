@@ -727,7 +727,15 @@ SSH and starts the app with a DevTools port.
   `appctl sim <scenario>` (`appctl sim list`), `appctl pw snapshot|click|fill|shot`
   (Playwright over the WebView2 DevTools port), `appctl shot` (desktop),
   `appctl ui list|press|type` and `appctl tray <item>` (Windows UI Automation),
-  `appctl log`.
+  `appctl log`, `appctl click <x> <y>` (native dialogs UI Automation can't reach).
+- **Serial ports (com0com):** the signed 3.0.0.0 build installs, but with
+  Secure Boot on (Windows Server 2025, VM 107) Windows refuses to load its 2017
+  signature (device problem 52), so the COM pairs don't work until Secure Boot
+  or driver signature enforcement is turned off on that VM. The pairs are made
+  in the desktop session (`com-pairs` agent action) because Windows asks about
+  the driver on screen. Serial reading can also be tested on the Mac: socat
+  pty pairs (`/tmp/ttyArk_*` ↔ `/tmp/ttySim_*`), the dev bridge, and the same
+  simulator with a config pointing at the `ttySim` ends.
 - **Lab agent** (`scripts/windows-lab/lab-agent.ps1`): runs in the logged-in
   session so the app gets a real window (programs started over SSH can't show
   one). Listens on 127.0.0.1:8787 with a token; reached only through SSH.
