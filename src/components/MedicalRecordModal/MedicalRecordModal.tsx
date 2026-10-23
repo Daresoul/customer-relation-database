@@ -7,6 +7,7 @@ import type { CreateMedicalRecordInput, UpdateMedicalRecordInput, MedicalRecordH
 import { invoke } from '@/services/invoke';
 import { useQueryClient } from '@tanstack/react-query';
 import { DIAGNOSES_KEYS } from '@/hooks/useDiagnoses';
+import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import styles from './MedicalRecordModal.module.css';
 
 interface MedicalRecordModalProps {
@@ -25,7 +26,7 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
   recordId,
 }) => {
   const { t } = useTranslation('medical');
-  const { notification, modal } = App.useApp();
+  const { notification } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [dirty, setDirty] = useState(false);
 
@@ -33,24 +34,13 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
     if (!open) setDirty(false);
   }, [open]);
 
-  // Closing (X, Esc or Cancel) with typed text asks first.
-  const requestClose = () => {
-    if (!dirty) {
+  // Closing (X, Esc or Cancel) or leaving the page with typed text asks first.
+  const confirmLeave = useUnsavedChangesGuard(open && dirty);
+  const requestClose = () =>
+    confirmLeave(() => {
+      setDirty(false);
       onClose();
-      return;
-    }
-    modal.confirm({
-      title: t('unsaved.title'),
-      content: t('unsaved.body'),
-      okText: t('unsaved.discard'),
-      okButtonProps: { danger: true },
-      cancelText: t('unsaved.keepEditing'),
-      onOk: () => {
-        setDirty(false);
-        onClose();
-      },
     });
-  };
   const { data: recordDetail, isLoading: isLoadingRecord, isError, error, refetch } = useMedicalRecord(
     recordId || 0,
     true // include history when editing
