@@ -1943,8 +1943,9 @@ public class PDFReportService {
             }
             if (dateOfBirth != null && !dateOfBirth.isEmpty()) {
                 if (microchipId != null && !microchipId.isEmpty()) p.add(new Chunk("          ", valueFont));
+                java.time.LocalDate born = Util.parseDateStringRepresentation(dateOfBirth);
                 p.add(new Chunk("Роден: ", labelFont));
-                p.add(new Chunk(dateOfBirth, valueFont));
+                p.add(new Chunk(born != null ? Util.formatDate(born) : dateOfBirth, valueFont));
             }
             ColumnText col = new ColumnText(canvas);
             col.setSimpleColumn(leftMargin, infoY - 18, rightMargin, infoY + 2);
