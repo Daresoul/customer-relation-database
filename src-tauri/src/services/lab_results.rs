@@ -193,7 +193,8 @@ pub fn extract_values(device_type: &str, results: &serde_json::Value, species: O
         .filter_map(|key| {
             let value = get(key)?;
             let known: Option<(usize, &Reference)> = if healvet {
-                lab_reference::healvet(key, species)
+                // Another species borrows only the dog entry's name, unit and order.
+                lab_reference::healvet(key, if species == Species::Other { Species::Dog } else { species })
             } else if is_pointcare(device_type) {
                 lab_reference::pointcare(key)
             } else {
@@ -207,6 +208,7 @@ pub fn extract_values(device_type: &str, results: &serde_json::Value, species: O
             let device_range = get(&format!("{}_range", key));
             let (low, high) = match device_range.as_deref().and_then(parse_range) {
                 Some((l, h)) => (Some(l), Some(h)),
+                None if healvet && species == Species::Other => (None, None),
                 None => (reference.and_then(|r| r.low), reference.and_then(|r| r.high)),
             };
             let flag = device_flag(get(&format!("{}_flag", key))).unwrap_or_else(|| classify(&value, low, high));

@@ -9,6 +9,8 @@
 pub enum Species {
     Dog,
     Cat,
+    /// No reference ranges of its own: values show without a range or flag.
+    Other,
 }
 
 impl Species {
@@ -20,7 +22,7 @@ impl Species {
         } else if name.contains("cat") || name.contains("мачка") {
             Species::Cat
         } else {
-            Species::Dog
+            Species::Other
         }
     }
 }
