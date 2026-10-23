@@ -4,7 +4,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { App } from 'antd';
 
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({
+    t: (key: string, o?: Record<string, unknown>) => (o ? `${key} ${Object.values(o).join(' ')}` : key),
+  }),
 }));
 
 vi.mock('../../../hooks/usePatients', () => ({
@@ -45,6 +47,7 @@ const appointment = {
 const rooms = [{ id: 3, name: 'Exam 1', capacity: 2 }];
 
 function renderModal(onSave = vi.fn().mockResolvedValue(undefined), mode: 'edit' | 'create' = 'edit') {
+  if (!checkConflicts.getMockImplementation()) checkConflicts.mockResolvedValue({ conflicts: [], patientConflicts: [] });
   invokeMock.mockImplementation((cmd: string) =>
     Promise.resolve(
       cmd === 'get_all_households'
@@ -88,8 +91,9 @@ describe('AppointmentModal edits', () => {
 
     fireEvent.mouseDown(selectors()[0]);
 
-    expect(await screen.findByText(/Петровски/)).toBeInTheDocument();
-    expect(screen.getByText(/Stojanovski/)).toBeInTheDocument();
+    // antd renders each option twice (visible list + accessible listbox).
+    expect((await screen.findAllByText(/Петровски/)).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Stojanovski/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/3456/).length).toBeGreaterThan(0);
   });
 
@@ -98,7 +102,7 @@ describe('AppointmentModal edits', () => {
     await screen.findByDisplayValue('Vaccination');
 
     fireEvent.mouseDown(selectors()[0]);
-    fireEvent.click(await screen.findByText(/Stojanovski/));
+    fireEvent.click((await screen.findAllByText(/Stojanovski/))[0]);
     fireEvent.click(screen.getByText('common:update'));
 
     await waitFor(() => expect(onSave).toHaveBeenCalled());
