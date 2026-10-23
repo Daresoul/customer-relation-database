@@ -22,6 +22,7 @@ const integrations = {
 };
 
 vi.mock('../../../hooks/useDeviceIntegrations', () => ({
+  useUpdateDeviceIntegration: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useDeviceIntegrations: () => ({ data: integrations.current, isLoading: false }),
   useDeviceConnectionStatus: () => ({
     getStatus: (id: number) =>
