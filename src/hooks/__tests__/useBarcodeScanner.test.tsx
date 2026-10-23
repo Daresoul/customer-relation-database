@@ -290,12 +290,12 @@ describe('useBarcodeScanner — regression: stuck-scanning recovery', () => {
       textarea.dispatchEvent(letterEvent);
       expect(letterEvent.defaultPrevented).toBe(false);
 
-      // But the suffix key (Enter) MUST still preventDefault — otherwise
-      // it would submit the surrounding form before the hook gets to
-      // overwrite the value with the normalized scan code.
+      // "12345a" is no chip, so its Enter belongs to the field (a new line
+      // here). A real chip's Enter is still held back; see "prevents form
+      // submission on the scanner Enter inside an input".
       const enterEvent = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
       textarea.dispatchEvent(enterEvent);
-      expect(enterEvent.defaultPrevented).toBe(true);
+      expect(enterEvent.defaultPrevented).toBe(false);
     } finally {
       document.body.removeChild(textarea);
     }
