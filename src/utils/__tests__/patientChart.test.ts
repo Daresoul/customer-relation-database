@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import dayjs from 'dayjs';
-import { formatPatientAge, patientStatus, visiblePatients, alertColor, sexLabel, bookablePatients } from '../patientChart';
+import { formatPatientAge, patientStatus, visiblePatients, alertColor, sexLabel, bookablePatients, formatKg } from '../patientChart';
 
 const t = (key: string, opts?: Record<string, unknown>) =>
   opts && 'count' in opts ? `${key}:${opts.count}` : key;
@@ -80,5 +80,21 @@ describe('bookablePatients', () => {
   it('offers active patients only, plus the one an existing appointment already has', () => {
     expect(bookablePatients(list).map((p) => p.id)).toEqual([1]);
     expect(bookablePatients(list, 3).map((p) => p.id)).toEqual([1, 3]);
+  });
+});
+
+describe('formatKg', () => {
+  it('writes a Macedonian weight with a decimal comma, like money', () => {
+    expect(formatKg(53.48, 'mk')).toBe('53,48');
+    expect(formatKg(12.5, 'mk')).toBe('12,5');
+    expect(formatKg(30, 'mk')).toBe('30');
+  });
+
+  it('keeps the decimal point in English', () => {
+    expect(formatKg(53.48, 'en')).toBe('53.48');
+  });
+
+  it('rounds to two decimals', () => {
+    expect(formatKg(4.256, 'mk')).toBe('4,26');
   });
 });
