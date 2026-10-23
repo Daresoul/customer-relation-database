@@ -66,14 +66,15 @@ class ClinicLetterheadTest {
         return f;
     }
 
-    static int imagesOnFirstPage(File pdf) throws Exception {
+    /** Images of the test logo's size (40 x 40 px) on the first page. */
+    static int logosOnFirstPage(File pdf) throws Exception {
         PdfReader reader = new PdfReader(Files.readAllBytes(pdf.toPath()));
-        int count = countImages(reader.getPageN(1).getAsDict(PdfName.RESOURCES), 0);
+        int count = countLogos(reader.getPageN(1).getAsDict(PdfName.RESOURCES), 0);
         reader.close();
         return count;
     }
 
-    private static int countImages(PdfDictionary resources, int depth) {
+    private static int countLogos(PdfDictionary resources, int depth) {
         if (resources == null || depth > 4) return 0;
         PdfDictionary xobjects = resources.getAsDict(PdfName.XOBJECT);
         if (xobjects == null) return 0;
@@ -82,8 +83,11 @@ class ClinicLetterheadTest {
             PdfObject obj = PdfReader.getPdfObject(xobjects.get(key));
             if (!(obj instanceof PdfDictionary)) continue;
             PdfDictionary x = (PdfDictionary) obj;
-            if (PdfName.IMAGE.equals(x.getAsName(PdfName.SUBTYPE))) count++;
-            else count += countImages(x.getAsDict(PdfName.RESOURCES), depth + 1);
+            if (PdfName.IMAGE.equals(x.getAsName(PdfName.SUBTYPE))) {
+                if (x.getAsNumber(PdfName.WIDTH).intValue() == 40 && x.getAsNumber(PdfName.HEIGHT).intValue() == 40) count++;
+            } else {
+                count += countLogos(x.getAsDict(PdfName.RESOURCES), depth + 1);
+            }
         }
         return count;
     }
@@ -186,13 +190,12 @@ class ClinicLetterheadTest {
                 deviceInput(patient("BLEKI", "Dog", "Male"), sample("exigo_eos_vet", DeviceReportRenderTest.exigo())),
         };
         for (JsonObject plain : inputs) {
-            int before = imagesOnFirstPage(renderFile(plain.deepCopy()));
+            assertEquals(0, logosOnFirstPage(renderFile(plain.deepCopy())));
             JsonObject withLogo = plain.deepCopy();
             JsonObject c = new JsonObject();
             c.addProperty("logo_path", logo);
             withLogo.add("clinic", c);
-            int after = imagesOnFirstPage(renderFile(withLogo));
-            assertTrue(after > before, plain.get("report_type") + ": " + before + " -> " + after);
+            assertEquals(1, logosOnFirstPage(renderFile(withLogo)), String.valueOf(plain.get("report_type")));
         }
     }
 
