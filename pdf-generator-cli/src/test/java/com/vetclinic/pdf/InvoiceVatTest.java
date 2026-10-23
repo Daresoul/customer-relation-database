@@ -65,7 +65,7 @@ class InvoiceVatTest {
         assertTrue(text.contains(" 50 ден"), text);
         assertTrue(text.contains("230 ден"), text);
         assertTrue(text.contains("За наплата"), text);
-        assertTrue(text.contains("2230 ден"), text);
+        assertTrue(text.contains("2.230 ден"), text);
     }
 
     @Test
@@ -102,8 +102,8 @@ class InvoiceVatTest {
         totals.addProperty("subtotal", 2000);
         totals.addProperty("prices_include_vat", false);
         String text = render(in);
-        assertTrue(text.contains("2000 ден"), text);
+        assertTrue(text.contains("2.000 ден"), text);
         assertTrue(text.contains("+230 ден"), text);
-        assertTrue(text.contains("2230 ден"), text);
+        assertTrue(text.contains("2.230 ден"), text);
     }
 }
