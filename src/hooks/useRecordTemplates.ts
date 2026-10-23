@@ -15,7 +15,9 @@ export function useRecordTemplates(recordType?: RecordType) {
   return useQuery({
     queryKey: ['record-templates', recordType],
     queryFn: () => TemplateService.getRecordTemplates(recordType),
-    staleTime: 5 * 60 * 1000, // Cache for 5 minutes - templates don't change frequently
+    // Refetch on each open: a template's lines carry the price list's
+    // current price and VAT rate, which change outside this cache.
+    staleTime: 0,
     retry: 1,
   });
 }

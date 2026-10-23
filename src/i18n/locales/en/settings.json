@@ -224,7 +224,19 @@
     "confirmDelete": "Are you sure you want to delete this template?",
     "totalTemplates": "templates",
     "titlePlaceholder": "Enter template title",
-    "descriptionPlaceholder": "Enter template description"
+    "descriptionPlaceholder": "Enter template description",
+    "hint": "Picking a template in a record fills its record type, title, description, prescription, invoice lines and diagnoses. A line's price and VAT rate come from the price list when the template is used.",
+    "fills": "Fills",
+    "diagnosesCount_one": "{{count}} diagnosis",
+    "diagnosesCount_other": "{{count}} diagnoses",
+    "prescriptionPlaceholder": "Usual prescription or advice for this visit (optional)",
+    "lines": "Invoice lines from the price list",
+    "linesHint": "Each line is added to the record's invoice with this quantity.",
+    "lineItem": "Price-list item",
+    "quantity": "Quantity",
+    "addLine": "Add a price-list item",
+    "removeLine": "Remove this line",
+    "removedItem": "removed from the price list"
   },
   "lineItems": {
     "title": "Factura",
