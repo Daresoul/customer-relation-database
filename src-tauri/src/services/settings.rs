@@ -309,6 +309,11 @@ impl SettingsService {
         Self::get_clinic_profile(db).await
     }
 
+    /// The logo as a `data:` URL for the settings preview.
+    pub fn clinic_logo_data_url(_profile: &ClinicProfile) -> Option<String> {
+        None
+    }
+
     async fn store_logo_path(db: &DatabaseConnection, path: Option<String>) -> Result<(), String> {
         db.execute(Statement::from_sql_and_values(
             DbBackend::Sqlite,

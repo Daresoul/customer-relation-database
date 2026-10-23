@@ -151,6 +151,20 @@ async fn a_logo_is_copied_into_the_app_folder() {
 }
 
 #[tokio::test]
+async fn the_logo_preview_is_a_data_url() {
+    let db = create_test_db_with_migrations().await;
+    let src = tempfile::tempdir().unwrap();
+    let app = tempfile::tempdir().unwrap();
+    let logo = src.path().join("logo.png");
+    std::fs::write(&logo, png_bytes()).unwrap();
+    let p = SettingsService::set_clinic_logo(&db, app.path(), &logo).await.unwrap();
+
+    let url = SettingsService::clinic_logo_data_url(&p).unwrap();
+    assert!(url.starts_with("data:image/png;base64,iVBORw0KGgo"), "{}", url);
+    assert_eq!(SettingsService::clinic_logo_data_url(&Default::default()), None);
+}
+
+#[tokio::test]
 async fn a_logo_must_be_a_small_png_or_jpg() {
     let db = create_test_db_with_migrations().await;
     let src = tempfile::tempdir().unwrap();
