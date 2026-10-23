@@ -182,10 +182,6 @@ export class MedicalService {
     });
   }
 
-  static async revertMedicalRecord(recordId: number): Promise<MedicalRecord> {
-    return ApiService.invokeRaw('revert_medical_record', { recordId, record_id: recordId });
-  }
-
   static async downloadAndOpenAttachment(
     attachmentId: number,
     fileName: string
