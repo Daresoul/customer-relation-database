@@ -120,9 +120,9 @@
   "googleCalendar": {
     "title": "Google Calendar Integration",
     "syncTitle": "Google Calendar Sync",
-    "syncDescription": "Connect your Google Calendar to automatically sync appointments between your veterinary clinic and Google Calendar. This allows you to view and manage appointments from both systems.",
+    "syncDescription": "Connect your Google Calendar to send the clinic’s appointments to it. New and changed appointments go to Google. An event cancelled in Google cancels the appointment here; other changes made in Google are not read back.",
     "enableSync": "Enable Google Calendar Sync",
-    "syncHint": "Two-way sync between clinic appointments and Google Calendar",
+    "syncHint": "One-way: clinic appointments are sent to Google Calendar; cancellations in Google come back",
     "connectionStatus": "Connection Status",
     "connected": "Connected",
     "notConnected": "Not Connected",
