@@ -32,6 +32,7 @@ vi.mock('@/hooks/useCurrencies', () => ({
   useCurrencies: () => ({ data: [{ id: 1, code: 'MKD', name: 'Denar', symbol: 'ден' }] }),
 }));
 vi.mock('@/hooks/useAppSettings', () => ({ useAppSettings: () => ({ settings: { currencyId: 1 } }) }));
+vi.mock('@/utils/themeStyles', () => ({ useThemeColors: () => ({}) }));
 vi.mock('@/hooks/useClinic', () => ({
   useTaxRates: () => ({
     data: [
