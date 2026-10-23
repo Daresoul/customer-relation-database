@@ -32,7 +32,7 @@ import {
 } from '@/utils/appointmentStatus';
 import styles from './AppointmentDrawer.module.css';
 import { speciesLabel } from '../../utils/species';
-import { formatDayMonth, getDatePickerFormat } from '@/utils/dateFormatter';
+import { formatDateTime, formatDayMonth, getDatePickerFormat } from '@/utils/dateFormatter';
 
 const { Text } = Typography;
 
@@ -197,7 +197,7 @@ export const AppointmentDrawer: React.FC<AppointmentDrawerProps> = ({ appointmen
 
         <Descriptions column={1} size="small" bordered className={styles.facts}>
           <Descriptions.Item label={t('appointments:drawer.time')}>
-            {dayjs(apt.startTime).format('ddd D MMM YYYY, HH:mm')}–{dayjs(apt.endTime).format('HH:mm')}
+            {dayjs(apt.startTime).format('ddd')} {formatDateTime(apt.startTime)}–{dayjs(apt.endTime).format('HH:mm')}
           </Descriptions.Item>
           <Descriptions.Item label={t('appointments:drawer.room')}>
             {apt.room?.name ?? <Text type="secondary">{t('appointments:drawer.noRoom')}</Text>}
