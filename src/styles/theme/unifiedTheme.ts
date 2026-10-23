@@ -276,7 +276,7 @@ export const createUnifiedTheme = ({
 
       // Tooltip styles - replaces antd.css lines 358-366
       Tooltip: {
-        colorBgDefault: isDark ? '#262626' : 'rgba(0, 0, 0, 0.75)',
+        colorBgSpotlight: isDark ? '#262626' : 'rgba(0, 0, 0, 0.75)',
         colorTextLightSolid: '#ffffff',
       },
 
