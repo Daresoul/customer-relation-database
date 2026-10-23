@@ -105,6 +105,33 @@ function extractName(testResults: Record<string, unknown>): string | undefined {
   return typeof name === 'string' && name.trim() ? name.trim() : undefined;
 }
 
+/** Names a machine or a clinic may use for the same species. */
+const SPECIES_ALIASES: string[][] = [
+  ['dog', 'canine', 'canis familiaris', 'куче', 'пес', 'kuche', 'kuce', 'kuče', 'pes'],
+  ['cat', 'feline', 'felis catus', 'мачка', 'machka', 'macka', 'mačka'],
+];
+
+function aliasGroup(name: string): number {
+  return SPECIES_ALIASES.findIndex((group) => group.includes(name));
+}
+
+/**
+ * The clinic's species for a name from a machine: the same name in any case,
+ * or another name for dog or cat ("Dog" finds "Куче" and back).
+ */
+export function findSpeciesIdByName(
+  species: Array<{ id: number; name: string }>,
+  name?: string,
+): number | undefined {
+  if (!name) return undefined;
+  const wanted = name.trim().toLowerCase();
+  const exact = species.find((s) => s.name.trim().toLowerCase() === wanted);
+  if (exact) return exact.id;
+  const group = aliasGroup(wanted);
+  if (group < 0) return undefined;
+  return species.find((s) => aliasGroup(s.name.trim().toLowerCase()) === group)?.id;
+}
+
 function extractSpecies(testResults: Record<string, unknown>): string | undefined {
   // Try different possible field names
   // - species: HL7 PID-5 (PointCare, Healvet)
