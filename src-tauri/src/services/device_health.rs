@@ -252,17 +252,22 @@ impl HealthTracker {
 }
 
 /// The clinic's date setting (DD/MM/YYYY …) as a chrono day-and-month pattern.
-pub fn day_month_pattern(_date_format: &str) -> &'static str {
-    "%d.%m."
+pub fn day_month_pattern(date_format: &str) -> &'static str {
+    match date_format {
+        "DD.MM.YYYY" => "%d.%m",
+        "MM/DD/YYYY" => "%m/%d",
+        "YYYY-MM-DD" => "%m-%d",
+        _ => "%d/%m",
+    }
 }
 
-/// "10:42" today, "17.10. 18:05" on an earlier day.
-fn when(at: DateTime<FixedOffset>, now: DateTime<FixedOffset>, _day_month: &str) -> String {
+/// "10:42" today, "17/10 18:05" on an earlier day (day and month as the clinic writes them).
+fn when(at: DateTime<FixedOffset>, now: DateTime<FixedOffset>, day_month: &str) -> String {
     let at = at.with_timezone(now.offset());
     if at.date_naive() == now.date_naive() {
         at.format("%H:%M").to_string()
     } else {
-        at.format("%d.%m. %H:%M").to_string()
+        format!("{} {}", at.format(day_month), at.format("%H:%M"))
     }
 }
 
