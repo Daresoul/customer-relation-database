@@ -72,6 +72,7 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, WEIGHT_LOG_MIGRATION, create_patient_weight_log).await?;
     run_migration(pool, "055_lab_inbox", add_lab_inbox).await?;
     run_migration(pool, "056_clinic_profile_and_vat", add_clinic_profile_and_vat).await?;
+    run_migration(pool, "05x_device_alerts", add_device_alerts).await?;
 
     Ok(())
 }
@@ -3360,6 +3361,35 @@ fn add_clinic_profile_and_vat(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::f
                     .await?;
             }
         }
+        Ok(())
+    })
+}
+
+/// When to notify about lab machines (one row), and which machines warn when
+/// they stay quiet. Missing rows mean the defaults.
+fn add_device_alerts(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS device_alert_settings (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                notify_enabled INTEGER NOT NULL DEFAULT 1,
+                down_after_minutes INTEGER NOT NULL DEFAULT 10,
+                clinic_open TEXT NOT NULL DEFAULT '07:00',
+                clinic_close TEXT NOT NULL DEFAULT '20:00',
+                clinic_days TEXT NOT NULL DEFAULT '1,2,3,4,5,6',
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )",
+        )
+        .execute(pool)
+        .await?;
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS device_quiet_alerts (
+                integration_id INTEGER PRIMARY KEY REFERENCES device_integrations(id) ON DELETE CASCADE,
+                after_hours INTEGER NOT NULL CHECK (after_hours BETWEEN 1 AND 72)
+            )",
+        )
+        .execute(pool)
+        .await?;
         Ok(())
     })
 }

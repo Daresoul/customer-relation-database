@@ -5,10 +5,11 @@
 use chrono::{DateTime, Datelike, Duration, FixedOffset, NaiveTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
+use std::sync::{Mutex, OnceLock};
 
-use sea_orm::DatabaseConnection;
+use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Statement, TransactionTrait};
 
-use crate::models::device_integration::DeviceIntegration;
+use crate::models::device_integration::{ConnectionType, DeviceIntegration};
 use crate::services::device_events::{DeviceErrorKind, DeviceEventKind};
 use crate::services::device_input::{ConnectionState, DeviceConnectionStatus};
 use crate::services::file_watcher::{FileWatcherState, FileWatcherStatus};
@@ -503,14 +504,83 @@ pub fn diagnostics_text(input: &DiagnosticsInput) -> String {
 // ---- Stored settings -------------------------------------------------------
 
 pub async fn load_alert_settings(db: &DatabaseConnection) -> Result<DeviceAlertSettings, String> {
-    todo!("{db:?}")
+    let fail = |e: sea_orm::DbErr| format!("Failed to read the device alert settings: {e}");
+    let mut settings = DeviceAlertSettings::default();
+    let row = db
+        .query_one(Statement::from_string(
+            DbBackend::Sqlite,
+            "SELECT notify_enabled, down_after_minutes, clinic_open, clinic_close, clinic_days \
+             FROM device_alert_settings WHERE id = 1",
+        ))
+        .await
+        .map_err(fail)?;
+    if let Some(row) = row {
+        settings.notify_enabled = row.try_get::<i64>("", "notify_enabled").map_err(fail)? != 0;
+        settings.down_after_minutes = row.try_get::<i64>("", "down_after_minutes").map_err(fail)? as u32;
+        settings.clinic_open = row.try_get("", "clinic_open").map_err(fail)?;
+        settings.clinic_close = row.try_get("", "clinic_close").map_err(fail)?;
+        let days: String = row.try_get("", "clinic_days").map_err(fail)?;
+        settings.clinic_days = days.split(',').filter_map(|d| d.trim().parse().ok()).collect();
+    }
+    let rows = db
+        .query_all(Statement::from_string(
+            DbBackend::Sqlite,
+            "SELECT q.integration_id, q.after_hours FROM device_quiet_alerts q \
+             JOIN device_integrations d ON d.id = q.integration_id \
+             WHERE d.deleted_at IS NULL ORDER BY q.integration_id",
+        ))
+        .await
+        .map_err(fail)?;
+    for row in rows {
+        settings.quiet_alerts.push(QuietAlert {
+            integration_id: row.try_get("", "integration_id").map_err(fail)?,
+            after_hours: row.try_get::<i64>("", "after_hours").map_err(fail)? as u32,
+        });
+    }
+    Ok(settings)
 }
 
 pub async fn save_alert_settings(
     db: &DatabaseConnection,
     settings: &DeviceAlertSettings,
 ) -> Result<DeviceAlertSettings, String> {
-    todo!("{db:?} {settings:?}")
+    settings.validate()?;
+    let fail = |e: sea_orm::DbErr| format!("Failed to save the device alert settings: {e}");
+    let mut days = settings.clinic_days.clone();
+    days.sort_unstable();
+    days.dedup();
+    let days = days.iter().map(|d| d.to_string()).collect::<Vec<_>>().join(",");
+
+    let txn = db.begin().await.map_err(fail)?;
+    txn.execute(Statement::from_sql_and_values(
+        DbBackend::Sqlite,
+        "INSERT OR REPLACE INTO device_alert_settings \
+         (id, notify_enabled, down_after_minutes, clinic_open, clinic_close, clinic_days, updated_at) \
+         VALUES (1, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)",
+        [
+            (settings.notify_enabled as i64).into(),
+            (settings.down_after_minutes as i64).into(),
+            settings.clinic_open.trim().into(),
+            settings.clinic_close.trim().into(),
+            days.into(),
+        ],
+    ))
+    .await
+    .map_err(fail)?;
+    txn.execute(Statement::from_string(DbBackend::Sqlite, "DELETE FROM device_quiet_alerts"))
+        .await
+        .map_err(fail)?;
+    for q in &settings.quiet_alerts {
+        txn.execute(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "INSERT OR REPLACE INTO device_quiet_alerts (integration_id, after_hours) VALUES (?, ?)",
+            [q.integration_id.into(), (q.after_hours as i64).into()],
+        ))
+        .await
+        .map_err(fail)?;
+    }
+    txn.commit().await.map_err(fail)?;
+    load_alert_settings(db).await
 }
 
 // ---- What each machine did this session --------------------------------------
@@ -525,26 +595,83 @@ pub struct DeviceDetails {
     pub log: Vec<LogEntry>,
 }
 
+#[derive(Default)]
+struct DeviceRuntime {
+    bytes: ByteWindow,
+    last_raw: Option<RawMessage>,
+    log: VecDeque<LogEntry>,
+    last_health: Option<Health>,
+}
+
+static RUNTIME: OnceLock<Mutex<HashMap<i64, DeviceRuntime>>> = OnceLock::new();
+
+fn with_runtime<R>(integration_id: i64, f: impl FnOnce(&mut DeviceRuntime) -> R) -> R {
+    let mut all = RUNTIME
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    f(all.entry(integration_id).or_default())
+}
+
+fn snake_case<T: Serialize>(value: &T) -> Option<String> {
+    serde_json::to_value(value).ok()?.as_str().map(str::to_string)
+}
+
 pub fn note_bytes(integration_id: i64, bytes: usize) {
-    todo!("{integration_id} {bytes}")
+    with_runtime(integration_id, |rt| rt.bytes.add(Utc::now(), bytes));
 }
 
 pub fn note_raw_message(integration_id: i64, raw: &[u8]) {
-    todo!("{integration_id} {raw:?}")
+    let message = raw_message(raw, &Utc::now().to_rfc3339());
+    with_runtime(integration_id, |rt| rt.last_raw = Some(message));
 }
 
 /// A connection state change. Only the step into "down" counts as an error, so
 /// a port retrying every minute is one error, not sixty.
 pub fn record_status(integration_id: i64, label: &str, error_kind: Option<DeviceErrorKind>, health: Health) {
-    todo!("{integration_id} {label} {error_kind:?} {health:?}")
+    with_runtime(integration_id, |rt| {
+        let is_error = health == Health::Down && rt.last_health != Some(Health::Down);
+        if health != Health::Starting {
+            rt.last_health = Some(health);
+        }
+        push_log(
+            &mut rt.log,
+            LogEntry {
+                at: Utc::now().to_rfc3339(),
+                label: label.to_string(),
+                error_kind: error_kind.as_ref().and_then(snake_case),
+                is_error,
+            },
+        );
+    });
+    kick_monitor();
 }
 
 pub fn record_event(integration_id: i64, kind: DeviceEventKind) {
-    todo!("{integration_id} {kind:?}")
+    let label = snake_case(&kind).unwrap_or_else(|| format!("{kind:?}"));
+    with_runtime(integration_id, |rt| {
+        push_log(&mut rt.log, LogEntry { at: Utc::now().to_rfc3339(), label, error_kind: None, is_error: true });
+    });
 }
 
 pub fn device_details(integration_id: i64, now: DateTime<FixedOffset>) -> DeviceDetails {
-    todo!("{integration_id} {now}")
+    with_runtime(integration_id, |rt| DeviceDetails {
+        bytes_last_minute: rt.bytes.in_last_minute(Utc::now()),
+        errors_today: errors_today(&rt.log, now),
+        last_raw: rt.last_raw.clone(),
+        log: rt.log.iter().cloned().collect(),
+    })
+}
+
+static KICK: OnceLock<tokio::sync::Notify> = OnceLock::new();
+
+fn kick() -> &'static tokio::sync::Notify {
+    KICK.get_or_init(tokio::sync::Notify::new)
+}
+
+/// Ask the monitor to look again soon, e.g. after a status change.
+pub fn kick_monitor() {
+    kick().notify_one();
 }
 
 /// Enabled machines with their current health, for the tray and the notifier.
@@ -554,7 +681,30 @@ pub fn snapshots(
     folders: &[FileWatcherStatus],
     stored_last_results: &HashMap<i64, String>,
 ) -> Vec<DeviceSnapshot> {
-    todo!("{integrations:?} {serial:?} {folders:?} {stored_last_results:?}")
+    integrations
+        .iter()
+        .filter(|i| i.enabled)
+        .filter_map(|i| {
+            let (health, last) = match i.connection_type {
+                ConnectionType::SerialPort => serial
+                    .iter()
+                    .filter(|s| s.integration_id == i.id)
+                    .max_by_key(|s| Some(&s.port_name) == i.serial_port_name.as_ref())
+                    .map(|s| (serial_health(s), s.last_result_at.clone()))
+                    .unwrap_or((Health::Starting, None)),
+                ConnectionType::FileWatch => folders
+                    .iter()
+                    .find(|f| f.integration_id == i.id)
+                    .map(|f| (folder_health(f), f.last_result_at.clone()))
+                    .unwrap_or((Health::Starting, None)),
+                ConnectionType::Hl7Tcp => return None,
+            };
+            let last = last
+                .or_else(|| stored_last_results.get(&i.id).cloned())
+                .and_then(|at| DateTime::parse_from_rfc3339(&at).ok());
+            Some(DeviceSnapshot { integration_id: i.id, name: i.name.clone(), health, last_result_at: last })
+        })
+        .collect()
 }
 
 #[cfg(test)]
