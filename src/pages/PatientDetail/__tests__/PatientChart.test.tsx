@@ -10,6 +10,7 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, opts?: Record<string, unknown>) =>
       opts ? [key, ...Object.values(opts)].join('|') : key,
+    i18n: { language: 'en' },
   }),
 }));
 
