@@ -32,6 +32,7 @@ import {
 import { Patient, PatientWithHousehold } from '../../types';
 import type { BaseTableProps } from '../../types/ui.types';
 import dayjs from 'dayjs';
+import { formatPatientAge } from '../../utils/patientChart';
 import { formatDate } from '../../utils/dateFormatter';
 import styles from './Tables.module.css';
 import { AlertChips } from '../patient/AlertChips';
@@ -104,17 +105,8 @@ export const PatientTable: React.FC<PatientTableProps> = ({
     return isActive !== false ? 'success' : 'default';
   };
 
-  // Calculate age from date of birth
-  const calculateAge = (dateOfBirth: string | undefined) => {
-    if (!dateOfBirth) return t('patients:unknownAge');
-    const years = dayjs().diff(dayjs(dateOfBirth), 'year');
-    const months = dayjs().diff(dayjs(dateOfBirth), 'month') % 12;
-
-    if (years > 0) {
-      return t('households:detail.animals.age.years', { count: years });
-    }
-    return t('households:detail.animals.age.months', { count: months });
-  };
+  const calculateAge = (dateOfBirth: string | undefined) =>
+    formatPatientAge(dateOfBirth, t) ?? t('patients:unknownAge');
 
   const columns: ColumnsType<PatientWithHousehold> = [
     {
