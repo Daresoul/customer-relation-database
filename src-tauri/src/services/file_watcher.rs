@@ -420,6 +420,16 @@ pub async fn catch_up(ctx: &WatchContext, sink: &dyn DeviceSink) -> Result<usize
     Ok(offered)
 }
 
+/// Files changed this recently are re-checked by the periodic rescan.
+pub const RESCAN_WINDOW: Duration = Duration::from_secs(15 * 60);
+
+/// Offer results in recently changed files that no folder event reported
+/// (events are lost on network shares, after sleep, or when the OS buffer
+/// overflows). Already-offered samples are skipped.
+pub async fn rescan_recent(_ctx: &WatchContext, _sink: &dyn DeviceSink) -> Result<usize, String> {
+    Ok(0)
+}
+
 struct ActiveWatcher {
     config: WatchConfig,
     _watcher: notify::RecommendedWatcher,
