@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { App } from 'antd';
 import { MedicalRecordDetailPage } from '..';
 
@@ -61,12 +61,15 @@ afterEach(cleanup);
 function renderPage() {
   render(
     <App>
-      <MemoryRouter initialEntries={['/medical-records/7']}>
-        <Routes>
-          <Route path="/medical-records/:id" element={<MedicalRecordDetailPage />} />
-          <Route path="/patients/:id" element={<div>patient page</div>} />
-        </Routes>
-      </MemoryRouter>
+      <RouterProvider
+        router={createMemoryRouter(
+          [
+            { path: '/medical-records/:id', element: <MedicalRecordDetailPage /> },
+            { path: '/patients/:id', element: <div>patient page</div> },
+          ],
+          { initialEntries: ['/medical-records/7'] },
+        )}
+      />
     </App>,
   );
 }
