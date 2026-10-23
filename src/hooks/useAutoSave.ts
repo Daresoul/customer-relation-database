@@ -32,10 +32,10 @@ export function useAutoSave({ onSave, delay = 500, enabled = true }: UseAutoSave
     [debouncedSave, enabled]
   );
 
-  // Cancel pending saves on unmount
+  // Leaving the page right after typing still saves what was typed.
   useEffect(() => {
     return () => {
-      debouncedSave.cancel();
+      debouncedSave.flush();
     };
   }, [debouncedSave]);
 

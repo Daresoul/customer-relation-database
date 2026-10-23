@@ -13,6 +13,8 @@ export interface Patient {
   weight?: number;
   microchipId?: string;
   notes?: string;
+  /** Standing medical notes (`patients.medical_notes`); saved through `notes`. */
+  medicalNotes?: string | null;
   isActive: boolean;
   householdId?: number;
   createdAt: string;

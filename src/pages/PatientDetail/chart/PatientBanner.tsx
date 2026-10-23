@@ -3,7 +3,9 @@ import { App, Button, Dropdown, Tag, Typography } from 'antd';
 import type { MenuProps } from 'antd';
 import {
   AlertOutlined,
+  CalendarOutlined,
   DeleteOutlined,
+  FileAddOutlined,
   DownOutlined,
   HomeOutlined,
   PlusOutlined,
@@ -32,6 +34,9 @@ interface PatientBannerProps {
   patient: PatientDetail;
   /** Hard delete; the backend refuses it for a patient with history. */
   onDelete: () => void;
+  onNewRecord?: () => void;
+  /** Book an appointment; not offered for a deceased patient. */
+  onBook?: () => void;
 }
 
 type Dialog = 'weight' | 'alerts' | 'deceased' | 'inactive' | null;
@@ -43,7 +48,7 @@ function ownerPhone(patient: PatientDetail): string | undefined {
 }
 
 /** Who this animal is, in the first glance: signalment, weight, owner, alerts and status. */
-export const PatientBanner: React.FC<PatientBannerProps> = ({ patient, onDelete }) => {
+export const PatientBanner: React.FC<PatientBannerProps> = ({ patient, onDelete, onNewRecord, onBook }) => {
   const { t } = useTranslation(['patients', 'entities', 'common']);
   const { modal } = App.useApp();
   const [dialog, setDialog] = useState<Dialog>(null);
@@ -121,6 +126,16 @@ export const PatientBanner: React.FC<PatientBannerProps> = ({ patient, onDelete 
           <AlertChips alerts={alerts} />
         </div>
         <div className={styles.actions}>
+          {onNewRecord && (
+            <Button type="primary" icon={<FileAddOutlined />} onClick={onNewRecord}>
+              {t('patients:chart.banner.newRecord')}
+            </Button>
+          )}
+          {onBook && !deceased && (
+            <Button icon={<CalendarOutlined />} onClick={onBook}>
+              {t('patients:chart.banner.book')}
+            </Button>
+          )}
           {!deceased && (
             <Button icon={<PlusOutlined />} onClick={() => setDialog('weight')}>
               {t('patients:chart.banner.addWeight')}

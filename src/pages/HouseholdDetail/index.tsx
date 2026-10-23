@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useGoBack } from '../../hooks/useGoBack';
 import { Layout, Spin, Alert, Button, Space, Breadcrumb, Dropdown, Modal, App, Typography } from 'antd';
 import { ArrowLeftOutlined, HomeOutlined, DownOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
@@ -19,6 +20,7 @@ const { Content } = Layout;
 export const HouseholdDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const goBack = useGoBack();
   const { t } = useTranslation('households');
   const householdId = parseInt(id || '0', 10);
 
@@ -151,7 +153,7 @@ export const HouseholdDetail: React.FC = () => {
       <div className={`${styles.marginBottom16} ${styles.breadcrumbRow}`}>
         <Button
           icon={<ArrowLeftOutlined />}
-          onClick={() => navigate('/')}
+          onClick={goBack}
         >
           {t('detail.backToHouseholds')}
         </Button>

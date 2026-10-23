@@ -1,40 +1,46 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { Layout, Spin, Alert, Button, Space, Breadcrumb, Tabs } from 'antd';
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Layout, Spin, Alert, Button, Space, Breadcrumb, Tabs, App } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
   ArrowLeftOutlined,
   HomeOutlined,
   UserOutlined,
   MedicineBoxOutlined,
-  TeamOutlined,
-  CalendarOutlined,
   ExperimentOutlined
 } from '@ant-design/icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePatientDetail, useDeleteConfirmation } from '../../hooks/usePatient';
 import { PatientInfo } from './PatientInfo';
-import { MedicalSection } from './MedicalSection';
 import { HouseholdSection } from './HouseholdSection';
 import { PatientBanner } from './chart/PatientBanner';
 import { WeightLogCard } from './chart/WeightLogCard';
+import { PatientNotesCard } from './chart/PatientNotesCard';
+import { PatientAppointmentsCard } from './chart/PatientAppointmentsCard';
+import AppointmentModal from '../../components/AppointmentModal/AppointmentModal';
+import MedicalRecordModal from '@/components/MedicalRecordModal/MedicalRecordModal';
+import { useAppointments } from '../../hooks/useAppointments';
+import { useGoBack } from '../../hooks/useGoBack';
+import { patientStatus } from '../../utils/patientChart';
+import type { CreateAppointmentInput, UpdateAppointmentInput } from '../../types/appointments';
 import DiagnosisTagList from '../../components/DiagnosisTagList';
 import MedicalHistorySection from './MedicalHistory/MedicalHistorySection';
 import { LabsTab } from './LabsTab';
 import { Link } from 'react-router-dom';
-import { useThemeColors } from '../../utils/themeStyles';
 import { DeviceStatusInline } from '../../components/DeviceStatusBar';
 import styles from './PatientDetail.module.css';
 
 const { Content } = Layout;
 
 export const PatientDetail: React.FC = () => {
-  const { t } = useTranslation(['patients', 'common', 'navigation', 'medical']);
+  const { t } = useTranslation(['patients', 'common', 'navigation', 'medical', 'appointments']);
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const location = useLocation();
+  const goBack = useGoBack();
+  const { message } = App.useApp();
   const patientId = parseInt(id || '0', 10);
-  const themeColors = useThemeColors();
+  const [dialog, setDialog] = useState<'book' | 'record' | null>(null);
+  const { createAppointment } = useAppointments();
 
   // Restore the active tab if returning from medical record detail
   const savedActiveTab = sessionStorage.getItem(`patient-detail-active-tab-${patientId}`);
@@ -149,8 +155,18 @@ export const PatientDetail: React.FC = () => {
     showDeleteConfirm(patient.id, patient.name);
   };
 
+  const canBook = patientStatus(patient) !== 'deceased';
+  const openBook = canBook ? () => setDialog('book') : undefined;
+
+  const saveBooking = async (values: CreateAppointmentInput | UpdateAppointmentInput) => {
+    // A failure is reported by useAppointments; rethrow so the modal keeps the form.
+    await createAppointment(values as CreateAppointmentInput);
+    message.success(t('appointments:messages.createdSuccess'));
+    setDialog(null);
+  };
+
   // Save scroll position before navigating away
-  const handleNavigateToMedicalRecord = (recordId: number) => {
+  const handleNavigateToMedicalRecord = (recordId: number, attachmentId?: number) => {
     // Save window scroll position
     sessionStorage.setItem(
       `patient-detail-scroll-${patientId}`,
@@ -161,7 +177,7 @@ export const PatientDetail: React.FC = () => {
       `patient-detail-active-tab-${patientId}`,
       activeTab
     );
-    navigate(`/medical-records/${recordId}`);
+    navigate(`/medical-records/${recordId}${attachmentId != null ? `?attachmentId=${attachmentId}` : ''}`);
   };
 
   const tabItems = [
@@ -176,6 +192,8 @@ export const PatientDetail: React.FC = () => {
       children: (
         <div className={styles.tabContent}>
           <PatientInfo patient={patient} />
+          <PatientAppointmentsCard patientId={patient.id} onBook={openBook} />
+          <PatientNotesCard patientId={patient.id} notes={patient.medicalNotes} />
           <WeightLogCard patientId={patient.id} />
           {/* Aggregated diagnoses for this patient — every distinct
               diagnosis ever applied to any of their medical records.
@@ -239,6 +257,15 @@ export const PatientDetail: React.FC = () => {
               {
                 title: <Link to="/" className={styles.breadcrumbLink}><HomeOutlined /> {t('navigation:home')}</Link>,
               },
+              ...(patient.household
+                ? [{
+                    title: (
+                      <Link to={`/households/${patient.household.id}`} className={styles.breadcrumbLink}>
+                        {patient.household.householdName}
+                      </Link>
+                    ),
+                  }]
+                : []),
               {
                 title: <span className={styles.breadcrumbCurrent}>{patient.name}</span>,
               },
@@ -251,14 +278,19 @@ export const PatientDetail: React.FC = () => {
       <div className={styles.header}>
         <Button
           icon={<ArrowLeftOutlined />}
-          onClick={() => navigate('/')}
+          onClick={goBack}
           className={styles.backButton}
         >
           {t('common:back')}
         </Button>
       </div>
 
-      <PatientBanner patient={patient} onDelete={handleDelete} />
+      <PatientBanner
+        patient={patient}
+        onDelete={handleDelete}
+        onNewRecord={() => setDialog('record')}
+        onBook={openBook}
+      />
 
       <Tabs
         activeKey={activeTab}
@@ -267,6 +299,25 @@ export const PatientDetail: React.FC = () => {
         size="large"
         className={styles.tabs}
       />
+
+      <AppointmentModal
+        open={dialog === 'book'}
+        mode="create"
+        appointment={null}
+        initialPatientId={patient.id}
+        onCancel={() => setDialog(null)}
+        onSave={saveBooking}
+      />
+
+      {dialog === 'record' && (
+        <MedicalRecordModal
+          open
+          onClose={() => setDialog(null)}
+          patientId={patient.id}
+          patientName={patient.name ?? ''}
+          recordId={null}
+        />
+      )}
     </Content>
   );
 };

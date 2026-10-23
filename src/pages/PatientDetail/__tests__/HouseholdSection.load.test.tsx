@@ -9,6 +9,8 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
+vi.mock('../../../utils/themeStyles', () => ({ useThemeColors: () => ({}) }));
+
 const invokeMock = vi.fn();
 vi.mock('@/services/invoke', () => ({ invoke: (...a: unknown[]) => invokeMock(...a) }));
 

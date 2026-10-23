@@ -8,6 +8,7 @@ import { useRooms } from '../../hooks/useRooms';
 import { isClosedStatus, statusLabelKey } from '../../utils/appointmentStatus';
 import { AppointmentStatusMenu } from './AppointmentStatusMenu';
 
+import { useNow } from '../../hooks/useNow';
 import styles from './WeekView.module.css';
 import cardStyles from './AppointmentCard.module.css';
 interface WeekViewProps {
@@ -33,6 +34,7 @@ const WeekView: React.FC<WeekViewProps> = ({
   const themeColors = useThemeColors();
   const { data: rooms = [] } = useRooms({ activeOnly: true });
   const containerRef = useRef<HTMLDivElement>(null);
+  const now = useNow();
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState<{ day: number; slot: number; y: number } | null>(null);
   const [dragEnd, setDragEnd] = useState<{ day: number; slot: number; y: number } | null>(null);
@@ -560,8 +562,7 @@ const WeekView: React.FC<WeekViewProps> = ({
       </div>
 
       {/* Current time indicator (only for today) */}
-      {weekDays.some(day => day.isSame(dayjs(), 'day')) && (() => {
-        const now = dayjs();
+      {weekDays.some(day => day.isSame(now, 'day')) && (() => {
         const currentSlot = getSlotFromTime(now);
         const slotHeight = 20;
 

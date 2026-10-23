@@ -50,6 +50,8 @@ interface AppointmentModalProps {
   appointment?: Appointment | null;
   initialDate?: Date;
   initialEndDate?: Date;
+  /** Create mode: the patient already picked (e.g. Book from the patient page). */
+  initialPatientId?: number;
   onCancel: () => void;
   onSave: (data: CreateAppointmentInput | UpdateAppointmentInput) => Promise<void>;
   mode?: 'create' | 'edit';
@@ -80,12 +82,19 @@ function useHouseholdNames(): Map<number, string> {
   }, [data]);
 }
 
+/** The first quarter hour strictly after `now` (10:07 → 10:15, 10:15 → 10:30). */
+function nextQuarterHour(now: Dayjs): Dayjs {
+  const base = now.second(0).millisecond(0);
+  return base.minute(Math.floor(base.minute() / 15) * 15).add(15, 'minute');
+}
+
 // Inner component that only renders when modal is open
 const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 'open'> & { isVisible: boolean }> = ({
   isVisible,
   appointment,
   initialDate,
   initialEndDate,
+  initialPatientId,
   onCancel,
   onSave,
   mode = 'create',
@@ -98,6 +107,14 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
   const [conflicts, setConflicts] = useState<Appointment[]>([]);
   const [patientConflicts, setPatientConflicts] = useState<Appointment[]>([]);
   const [checkingConflicts, setCheckingConflicts] = useState(false);
+  const [checkFailed, setCheckFailed] = useState(false);
+  const watchedDate = Form.useWatch('date', form) as Dayjs | undefined;
+  const watchedStart = Form.useWatch('startTime', form) as Dayjs | undefined;
+  const startsInPast =
+    mode === 'create' &&
+    !!watchedDate &&
+    !!watchedStart &&
+    dayjs(watchedDate).hour(watchedStart.hour()).minute(watchedStart.minute()).second(0).isBefore(dayjs());
 
   const { data: hookRooms } = useRooms({ activeOnly: true });
   const rooms = propsRooms ?? hookRooms ?? [];
@@ -140,11 +157,9 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
         });
       } else if (mode === 'create') {
         const defaultDate = initialDate ? dayjs(initialDate) : dayjs();
-        let defaultStartTime = defaultDate
-          .hour(9)
-          .minute(0)
-          .second(0)
-          .millisecond(0);
+        let defaultStartTime = defaultDate.isSame(dayjs(), 'day')
+          ? nextQuarterHour(dayjs())
+          : defaultDate.hour(9).minute(0).second(0).millisecond(0);
         let defaultEndTime = defaultStartTime.add(30, 'minutes');
 
         // If dragged from calendar, use the exact times
@@ -157,10 +172,11 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
           date: defaultDate,
           startTime: defaultStartTime,
           endTime: defaultEndTime,
+          ...(initialPatientId != null ? { patientId: initialPatientId } : {}),
         });
       }
     }
-  }, [isVisible, appointment, mode, initialDate, initialEndDate, form]);
+  }, [isVisible, appointment, mode, initialDate, initialEndDate, initialPatientId, form]);
 
   // Check for conflicts when room or time changes
   const checkConflicts = async () => {
@@ -193,16 +209,12 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
       // Without a room the backend lists every overlap; only the room's count matters.
       setConflicts(values.roomId ? response.conflicts || [] : []);
       setPatientConflicts(response.patientConflicts || []);
+      setCheckFailed(false);
     } catch (error) {
       console.error('Failed to check conflicts:', error);
-      // Clear conflicts and show warning instead of blocking
       setConflicts([]);
-      notification.warning({
-        message: t('common:error'),
-        description: t('appointments:validation.unableToCheckConflicts'),
-        placement: 'bottomRight',
-        duration: 4,
-      });
+      setPatientConflicts([]);
+      setCheckFailed(true);
     } finally {
       setCheckingConflicts(false);
     }
@@ -470,6 +482,24 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
               ))}
             </Select>
           </Form.Item>
+        )}
+
+        {startsInPast && (
+          <Alert
+            className={styles.conflictAlert}
+            type="warning"
+            showIcon
+            message={t('appointments:validation.startInPast')}
+          />
+        )}
+
+        {checkFailed && (
+          <Alert
+            className={styles.conflictAlert}
+            type="warning"
+            showIcon
+            message={t('appointments:validation.conflictCheckFailed')}
+          />
         )}
 
         {patientConflicts.length > 0 && (

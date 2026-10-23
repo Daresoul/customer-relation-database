@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 import type { MedicalRecord } from '@/types/medical';
 import { useArchiveMedicalRecord, useDownloadAttachment, useCurrencies } from '@/hooks/useMedicalRecords';
 import { Link, useNavigate } from 'react-router-dom';
-import { formatDate } from '@/utils/dateFormatter';
+import { formatDate, formatDateTime } from '@/utils/dateFormatter';
 import MedicalRecordDetailDrawer from '@/components/MedicalRecordDetail/MedicalRecordDetailDrawer';
 import DiagnosisTagList from '@/components/DiagnosisTagList';
 import styles from './MedicalHistory.module.css';
@@ -26,7 +26,8 @@ interface MedicalRecordCardsProps {
   records: MedicalRecord[];
   onRefresh: () => void;
   patientId: number;
-  onNavigateToRecord?: (recordId: number) => void;
+  /** Opens the record page; `attachmentId` opens that document there. */
+  onNavigateToRecord?: (recordId: number, attachmentId?: number) => void;
 }
 
 const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
@@ -165,20 +166,6 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
         <Descriptions column={1} size="small">
           {isProcedure && (
             <>
-              <Descriptions.Item label={t('fields.procedureName')}>
-                <Link
-                  to={`/medical-records/${record.id}`}
-                  className={styles.inheritColor}
-                  onClick={(e) => {
-                    if (onNavigateToRecord) {
-                      e.preventDefault();
-                      onNavigateToRecord(record.id);
-                    }
-                  }}
-                >
-                  {record.name}
-                </Link>
-              </Descriptions.Item>
               {/* Show line items total if available */}
               {record.lineItems && record.lineItems.length > 0 && (() => {
                 const subtotal = record.lineItems.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
@@ -214,7 +201,7 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
           </Descriptions.Item>
 
           <Descriptions.Item label={t('fields.createdAt')}>
-            <Text type="secondary">{new Date(record.createdAt).toLocaleString()}</Text>
+            <Text type="secondary">{formatDateTime(record.createdAt)}</Text>
             {record.createdBy && (
               <Text type="secondary"> {t('history.by', { name: record.createdBy })}</Text>
             )}
@@ -251,13 +238,9 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
                       icon={isPdf ? <FileTextOutlined /> : <DownloadOutlined />}
                       onClick={() => {
                         if (isPdf) {
-                          // Navigate to detail page with attachment ID to auto-expand
+                          // The record page opens this document when the URL names it.
                           if (onNavigateToRecord) {
-                            onNavigateToRecord(record.id);
-                            // Add a small delay to ensure navigation happens before query params are set
-                            setTimeout(() => {
-                              navigate(`/medical-records/${record.id}?attachmentId=${attachment.id}`);
-                            }, 50);
+                            onNavigateToRecord(record.id, attachment.id);
                           } else {
                             navigate(`/medical-records/${record.id}?attachmentId=${attachment.id}`);
                           }
@@ -282,7 +265,7 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
           })()}
 
           <Descriptions.Item label={t('fields.updatedAt')}>
-            <Text type="secondary">{new Date(record.updatedAt).toLocaleString()}</Text>
+            <Text type="secondary">{formatDateTime(record.updatedAt)}</Text>
             {record.updatedBy && (
               <Text type="secondary"> {t('history.by', { name: record.updatedBy })}</Text>
             )}

@@ -114,4 +114,24 @@ describe('HouseholdDetail actions', () => {
     expect(await screen.findByText('detail.delete.failed')).toBeInTheDocument();
     expect(screen.queryByText('dashboard')).not.toBeInTheDocument();
   });
+
+  it('Back returns to the patient page it was opened from', async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter initialEntries={['/patients/3', '/households/4']} initialIndex={1}>
+          <App>
+            <Routes>
+              <Route path="/households/:id" element={<HouseholdDetail />} />
+              <Route path="/patients/:id" element={<div>patient page</div>} />
+              <Route path="/" element={<div>dashboard</div>} />
+            </Routes>
+          </App>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(screen.getByText('detail.backToHouseholds'));
+
+    expect(await screen.findByText('patient page')).toBeInTheDocument();
+  });
 });

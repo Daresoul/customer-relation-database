@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Descriptions, Typography, App, Select, DatePicker } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { knownErrorMessage } from '@/utils/errors';
 import { useQueryClient } from '@tanstack/react-query';
 import { PatientDetail, GENDER_OPTIONS, PATIENT_FIELD_RULES } from '../../types/patient';
 import { useUpdatePatient } from '../../hooks/usePatient';
@@ -109,8 +108,8 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
       if (field in localValues) {
         setLocalValues(prev => ({ ...prev, [field]: patient[field as keyof typeof patient] }));
       }
+      // useUpdatePatient already showed the error.
       console.error('Update failed:', error);
-      notification.error({ message: t('common:error'), description: knownErrorMessage(error, t) || t('detail.patientInfo.failedToSave'), placement: "bottomRight", duration: 5 });
     }
   };
 
@@ -180,6 +179,7 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
         <Descriptions.Item label={t('detail.patientInfo.labels.name')} span={1}>
           <Text
             editable={{
+              text: localValues.name || '',
               onChange: (value) => {
                 setLocalValues(prev => ({ ...prev, name: value })); // Immediate update
                 const result = nameEdit.onChange(value);
@@ -287,7 +287,8 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
 
         <Descriptions.Item label={t('detail.patientInfo.labels.gender')} span={1}>
           <Select
-            value={patient.gender || 'Unknown'}
+            value={patient.gender || undefined}
+            placeholder={t('detail.patientInfo.placeholders.gender')}
             onChange={(value) => handleFieldUpdate('gender', value)}
             options={translatedGenderOptions}
             className={styles.fullWidth}
@@ -317,6 +318,7 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
         <Descriptions.Item label={t('detail.patientInfo.labels.color')} span={1}>
           <Text
             editable={{
+              text: localValues.color || '',
               onChange: (value) => {
                 setLocalValues(prev => ({ ...prev, color: value })); // Immediate update
                 const result = colorEdit.onChange(value);
@@ -336,6 +338,7 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
         <Descriptions.Item label={t('detail.patientInfo.labels.microchipId')} span={1}>
           <Text
             editable={{
+              text: localValues.microchipId || '',
               onChange: (value) => {
                 setLocalValues(prev => ({ ...prev, microchipId: value })); // Immediate update
                 const result = microchipEdit.onChange(value);

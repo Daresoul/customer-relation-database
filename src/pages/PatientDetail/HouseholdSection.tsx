@@ -10,6 +10,7 @@ import { invoke } from '@/services/invoke';
 import { CreateHouseholdInline, type CreatedHousehold } from '../../components/forms/CreateHouseholdInline';
 import { LoadError } from '../../components/common/LoadError';
 import { invalidatePatientData, invalidateHouseholdData } from '../../hooks/invalidation';
+import { useThemeColors } from '../../utils/themeStyles';
 import styles from './PatientDetail.module.css';
 
 const { Title, Text } = Typography;
@@ -41,6 +42,7 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({
   onRetry = () => {},
 }) => {
   const { t } = useTranslation('patients');
+  const themeColors = useThemeColors();
   const { notification } = App.useApp();
   const queryClient = useQueryClient();
   const [mode, setMode] = useState<AssignMode>('pick');
@@ -247,13 +249,13 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({
         column={{ xs: 1, sm: 1, md: 1, lg: 2, xl: 2 }}
         styles={{
           label: {
-            background: '#262626',
-            color: '#A6A6A6',
+            background: themeColors.hover,
+            color: themeColors.textSecondary,
             width: '140px',
             minWidth: '120px',
             maxWidth: '160px'
           },
-          content: { background: '#1f1f1f', color: '#E6E6E6' }
+          content: { background: themeColors.cardBg, color: themeColors.text }
         }}
         bordered
       >
