@@ -1,3 +1,4 @@
+import './devBridge/install'; // dev only: real backend in a plain browser (?bridge=1)
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './styles/globals.css';

@@ -39,6 +39,18 @@ export function bridgeRequested(search: string, storage: Storage | undefined): b
   }
 }
 
+/** Dev builds only, when asked, and never inside the real Tauri webview. */
+export function shouldInstallBridge(
+  isDev: boolean,
+  search: string,
+  storage: Storage | undefined,
+  win: Window,
+): boolean {
+  if (!isDev) return false;
+  if (typeof (win as ShimWindow).__TAURI_IPC__ === 'function') return false;
+  return bridgeRequested(search, storage);
+}
+
 export function installIpcShim(
   win: Window,
   fetchImpl: typeof fetch = fetch,
