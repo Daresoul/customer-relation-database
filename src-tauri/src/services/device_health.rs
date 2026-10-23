@@ -6,6 +6,10 @@ use chrono::{DateTime, Datelike, Duration, FixedOffset, NaiveTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 
+use sea_orm::DatabaseConnection;
+
+use crate::models::device_integration::DeviceIntegration;
+use crate::services::device_events::{DeviceErrorKind, DeviceEventKind};
 use crate::services::device_input::{ConnectionState, DeviceConnectionStatus};
 use crate::services::file_watcher::{FileWatcherState, FileWatcherStatus};
 
@@ -496,6 +500,63 @@ pub fn diagnostics_text(input: &DiagnosticsInput) -> String {
     lines.join("\n") + "\n"
 }
 
+// ---- Stored settings -------------------------------------------------------
+
+pub async fn load_alert_settings(db: &DatabaseConnection) -> Result<DeviceAlertSettings, String> {
+    todo!("{db:?}")
+}
+
+pub async fn save_alert_settings(
+    db: &DatabaseConnection,
+    settings: &DeviceAlertSettings,
+) -> Result<DeviceAlertSettings, String> {
+    todo!("{db:?} {settings:?}")
+}
+
+// ---- What each machine did this session --------------------------------------
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceDetails {
+    pub bytes_last_minute: usize,
+    pub errors_today: usize,
+    pub last_raw: Option<RawMessage>,
+    /// Oldest first.
+    pub log: Vec<LogEntry>,
+}
+
+pub fn note_bytes(integration_id: i64, bytes: usize) {
+    todo!("{integration_id} {bytes}")
+}
+
+pub fn note_raw_message(integration_id: i64, raw: &[u8]) {
+    todo!("{integration_id} {raw:?}")
+}
+
+/// A connection state change. Only the step into "down" counts as an error, so
+/// a port retrying every minute is one error, not sixty.
+pub fn record_status(integration_id: i64, label: &str, error_kind: Option<DeviceErrorKind>, health: Health) {
+    todo!("{integration_id} {label} {error_kind:?} {health:?}")
+}
+
+pub fn record_event(integration_id: i64, kind: DeviceEventKind) {
+    todo!("{integration_id} {kind:?}")
+}
+
+pub fn device_details(integration_id: i64, now: DateTime<FixedOffset>) -> DeviceDetails {
+    todo!("{integration_id} {now}")
+}
+
+/// Enabled machines with their current health, for the tray and the notifier.
+pub fn snapshots(
+    integrations: &[DeviceIntegration],
+    serial: &[DeviceConnectionStatus],
+    folders: &[FileWatcherStatus],
+    stored_last_results: &HashMap<i64, String>,
+) -> Vec<DeviceSnapshot> {
+    todo!("{integrations:?} {serial:?} {folders:?} {stored_last_results:?}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -885,5 +946,145 @@ mod tests {
             assert!(text.contains(expected), "missing {expected:?} in:\n{text}");
         }
         assert!(!text.contains("Folder:"));
+    }
+
+    async fn add_integration(db: &DatabaseConnection, name: &str) -> i64 {
+        use sea_orm::{ConnectionTrait, DbBackend, Statement};
+        db.execute(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "INSERT INTO device_integrations (name, device_type, connection_type, watch_directory, file_pattern, enabled) \
+             VALUES (?, 'exigo_eos_vet', 'file_watch', '/lab', '*.xml', 1)",
+            [name.into()],
+        ))
+        .await
+        .unwrap()
+        .last_insert_id() as i64
+    }
+
+    #[tokio::test]
+    async fn alert_settings_start_at_the_defaults() {
+        let test_db = crate::test_utils::create_test_db_with_migrations().await;
+        assert_eq!(load_alert_settings(&test_db.db).await.unwrap(), DeviceAlertSettings::default());
+    }
+
+    #[tokio::test]
+    async fn alert_settings_are_saved_with_quiet_alerts_per_device() {
+        let test_db = crate::test_utils::create_test_db_with_migrations().await;
+        let db = &test_db.db;
+        let exigo = add_integration(db, "Exigo").await;
+        let wanted = DeviceAlertSettings {
+            notify_enabled: false,
+            down_after_minutes: 15,
+            clinic_open: "08:00".into(),
+            clinic_close: "18:30".into(),
+            clinic_days: vec![1, 2, 3, 4, 5],
+            quiet_alerts: vec![QuietAlert { integration_id: exigo, after_hours: 3 }],
+        };
+        assert_eq!(save_alert_settings(db, &wanted).await.unwrap(), wanted);
+        assert_eq!(load_alert_settings(db).await.unwrap(), wanted);
+
+        let fewer = DeviceAlertSettings { quiet_alerts: vec![], ..wanted };
+        save_alert_settings(db, &fewer).await.unwrap();
+        assert_eq!(load_alert_settings(db).await.unwrap(), fewer, "turning the quiet alert off removes it");
+    }
+
+    #[tokio::test]
+    async fn invalid_alert_settings_are_refused_and_deleted_devices_ignored() {
+        let test_db = crate::test_utils::create_test_db_with_migrations().await;
+        let db = &test_db.db;
+        let bad = DeviceAlertSettings { clinic_open: "21:00".into(), ..DeviceAlertSettings::default() };
+        assert!(save_alert_settings(db, &bad).await.is_err());
+        assert_eq!(load_alert_settings(db).await.unwrap(), DeviceAlertSettings::default());
+
+        let gone = add_integration(db, "Old analyzer").await;
+        let with_gone = DeviceAlertSettings {
+            quiet_alerts: vec![QuietAlert { integration_id: gone, after_hours: 2 }],
+            ..DeviceAlertSettings::default()
+        };
+        save_alert_settings(db, &with_gone).await.unwrap();
+        crate::services::device_integration::DeviceIntegrationService::delete(db, gone).await.unwrap();
+        assert!(load_alert_settings(db).await.unwrap().quiet_alerts.is_empty());
+    }
+
+    #[test]
+    fn details_count_bytes_keep_the_last_message_and_count_each_outage_once() {
+        let id = 9_100_001;
+        note_bytes(id, 120);
+        note_bytes(id, 30);
+        note_raw_message(id, b"MSH|1\rPID|Max\r");
+        record_status(id, "Connected", None, Health::Working);
+        record_status(id, "Error", Some(DeviceErrorKind::PortMissing), Health::Down);
+        record_status(id, "Connecting", None, Health::Down);
+        record_status(id, "Error", Some(DeviceErrorKind::PortMissing), Health::Down);
+        record_status(id, "Connected", None, Health::Working);
+        record_status(id, "Error", Some(DeviceErrorKind::Disconnected), Health::Down);
+        record_event(id, DeviceEventKind::CutOff);
+
+        let now = Utc::now().fixed_offset();
+        let d = device_details(id, now);
+        assert_eq!(d.bytes_last_minute, 150);
+        assert_eq!(d.last_raw.as_ref().map(|m| m.text.as_str()), Some("MSH|1\nPID|Max\n"));
+        assert_eq!(d.errors_today, 3, "two outages and one cut-off result");
+        assert_eq!(d.log.len(), 7);
+        assert_eq!(d.log[1].error_kind.as_deref(), Some("port_missing"));
+        assert_eq!(d.log[6].label, "cut_off");
+
+        let empty = device_details(9_100_002, now);
+        assert_eq!(empty, DeviceDetails { bytes_last_minute: 0, errors_today: 0, last_raw: None, log: vec![] });
+    }
+
+    fn integration(id: i64, name: &str, connection: crate::models::device_integration::ConnectionType, enabled: bool) -> DeviceIntegration {
+        use crate::models::device_integration::DeviceType;
+        DeviceIntegration {
+            id,
+            name: name.into(),
+            device_type: DeviceType::ExigoEosVet,
+            connection_type: connection,
+            watch_directory: None,
+            file_pattern: None,
+            serial_port_name: Some("COM3".into()),
+            serial_baud_rate: None,
+            tcp_host: None,
+            tcp_port: None,
+            enabled,
+            last_connected_at: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            deleted_at: None,
+        }
+    }
+
+    #[test]
+    fn snapshots_cover_enabled_machines_with_their_names_and_last_results() {
+        use crate::models::device_integration::ConnectionType;
+        let integrations = vec![
+            integration(1, "PointCare", ConnectionType::SerialPort, true),
+            integration(2, "Exigo", ConnectionType::FileWatch, true),
+            integration(3, "Spare", ConnectionType::SerialPort, false),
+            integration(4, "New analyzer", ConnectionType::SerialPort, true),
+        ];
+        let mut port = serial(ConnectionState::Error, 2);
+        port.last_result_at = Some("2026-10-19T08:55:00+00:00".into());
+        let folder = FileWatcherStatus {
+            integration_id: 2,
+            name: "exigo".into(),
+            watch_directory: "/lab".into(),
+            status: FileWatcherState::Watching,
+            last_error: None,
+            error_kind: None,
+            files_processed: 0,
+            last_result_at: None,
+        };
+        let stored = HashMap::from([(2, "2026-10-18T17:00:00+00:00".to_string())]);
+
+        let snaps = snapshots(&integrations, &[port], &[folder], &stored);
+        let ids: Vec<i64> = snaps.iter().map(|s| s.integration_id).collect();
+        assert_eq!(ids, vec![1, 2, 4]);
+        assert_eq!(snaps[0].name, "PointCare");
+        assert_eq!(snaps[0].health, Health::Down);
+        assert_eq!(snaps[0].last_result_at, DateTime::parse_from_rfc3339("2026-10-19T08:55:00+00:00").ok());
+        assert_eq!(snaps[1].health, Health::Working);
+        assert_eq!(snaps[1].last_result_at, DateTime::parse_from_rfc3339("2026-10-18T17:00:00+00:00").ok());
+        assert_eq!(snaps[2].health, Health::Starting, "no status yet");
     }
 }
