@@ -287,7 +287,7 @@ pub async fn trigger_manual_sync(
         DbBackend::Sqlite,
         "SELECT
             a.id, a.title, a.description, a.start_time, a.end_time,
-            p.name as patient_name, p.microchip_id, r.name as room_name, a.status
+            p.name as patient_name, r.name as room_name, a.status
          FROM appointments a
          LEFT JOIN patients p ON a.patient_id = p.id
          LEFT JOIN rooms r ON a.room_id = r.id
@@ -312,7 +312,6 @@ pub async fn trigger_manual_sync(
         let start_time: String = row.try_get("", "start_time").unwrap_or_default();
         let end_time: String = row.try_get("", "end_time").unwrap_or_default();
         let patient_name: Option<String> = row.try_get("", "patient_name").ok();
-        let microchip_id: Option<String> = row.try_get("", "microchip_id").ok();
         let room_name: Option<String> = row.try_get("", "room_name").ok();
         let status: String = row.try_get("", "status").unwrap_or_default();
 
@@ -334,24 +333,12 @@ pub async fn trigger_manual_sync(
         let patient_display = patient_name.as_deref().unwrap_or("Unknown Patient");
         let event_summary = format!("{} - {}", title, patient_display);
 
-        let mut desc_parts = Vec::new();
-        desc_parts.push(format!("Patient: {}", patient_display));
-        desc_parts.push(format!("Microchip ID: {}", microchip_id.as_deref().unwrap_or("-")));
-
-        if let Some(room) = room_name {
-            desc_parts.push(format!("Room: {}", room));
-        }
-
-        desc_parts.push(format!("Status: {}", status));
-
-        if let Some(desc) = description {
-            if !desc.is_empty() {
-                desc_parts.push(String::from(""));
-                desc_parts.push(desc);
-            }
-        }
-
-        let event_description = desc_parts.join("\n");
+        let event_description = crate::services::google_calendar::event_description(
+            patient_display,
+            room_name.as_deref(),
+            &status,
+            description.as_deref(),
+        );
 
         // Create event in Google Calendar
         let event_body = serde_json::json!({

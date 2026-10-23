@@ -171,28 +171,12 @@ async fn trigger_sync_after_create(
 
     let event_summary = format!("{} - {}", appointment.appointment.title, patient_name);
 
-    let mut desc_parts = Vec::new();
-    desc_parts.push(format!("Patient: {}", patient_name));
-
-    if appointment.patient.is_some() {
-        desc_parts.push(format!("Microchip ID: {}",
-            appointment.appointment.microchip_id.as_deref().unwrap_or("-")));
-    }
-
-    if let Some(room) = &appointment.room {
-        desc_parts.push(format!("Room: {}", room.name));
-    }
-
-    desc_parts.push(format!("Status: {}", appointment.appointment.status));
-
-    if let Some(desc) = &appointment.appointment.description {
-        if !desc.is_empty() {
-            desc_parts.push(String::from(""));
-            desc_parts.push(desc.clone());
-        }
-    }
-
-    let event_description = desc_parts.join("\n");
+    let event_description = crate::services::google_calendar::event_description(
+        &patient_name,
+        appointment.room.as_ref().map(|r| r.name.as_str()),
+        &appointment.appointment.status.to_string(),
+        appointment.appointment.description.as_deref(),
+    );
 
     // Create event in Google Calendar
     let client = reqwest::Client::new();
@@ -294,28 +278,12 @@ async fn trigger_sync_after_update(
 
     let event_summary = format!("{} - {}", appointment.appointment.title, patient_name);
 
-    let mut desc_parts = Vec::new();
-    desc_parts.push(format!("Patient: {}", patient_name));
-
-    if appointment.patient.is_some() {
-        desc_parts.push(format!("Microchip ID: {}",
-            appointment.appointment.microchip_id.as_deref().unwrap_or("-")));
-    }
-
-    if let Some(room) = &appointment.room {
-        desc_parts.push(format!("Room: {}", room.name));
-    }
-
-    desc_parts.push(format!("Status: {}", appointment.appointment.status));
-
-    if let Some(desc) = &appointment.appointment.description {
-        if !desc.is_empty() {
-            desc_parts.push(String::from(""));
-            desc_parts.push(desc.clone());
-        }
-    }
-
-    let event_description = desc_parts.join("\n");
+    let event_description = crate::services::google_calendar::event_description(
+        &patient_name,
+        appointment.room.as_ref().map(|r| r.name.as_str()),
+        &appointment.appointment.status.to_string(),
+        appointment.appointment.description.as_deref(),
+    );
 
     // Update event in Google Calendar
     let client = reqwest::Client::new();

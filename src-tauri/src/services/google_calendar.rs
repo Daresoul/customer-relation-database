@@ -304,6 +304,21 @@ pub struct GoogleSyncStatus {
 
 /// "Connected" means Google still accepts the stored login, not merely that a
 /// token is stored.
+/// The text of a Google Calendar event. It lands on every phone the Google
+/// account syncs to, so it carries no microchip number.
+pub fn event_description(patient: &str, room: Option<&str>, status: &str, notes: Option<&str>) -> String {
+    let mut parts = vec![format!("Patient: {}", patient)];
+    if let Some(room) = room {
+        parts.push(format!("Room: {}", room));
+    }
+    parts.push(format!("Status: {}", status));
+    if let Some(notes) = notes.filter(|n| !n.is_empty()) {
+        parts.push(String::new());
+        parts.push(notes.to_string());
+    }
+    parts.join("\n")
+}
+
 pub async fn load_sync_status(db: &DatabaseConnection) -> Result<GoogleSyncStatus, String> {
     let row = db
         .query_one(Statement::from_string(
