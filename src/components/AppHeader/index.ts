@@ -1,2 +1,3 @@
 export { AppShellHeader } from './AppShellHeader';
-export { GlobalSearchProvider } from './GlobalSearchContext';
+export type { AppShellHeaderProps } from './AppShellHeader';
+export { GlobalSearchProvider, useGlobalSearch } from './GlobalSearchContext';
