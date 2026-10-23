@@ -29,6 +29,7 @@ import RecordLabValues from '@/components/LabResults/RecordLabValues';
 import { labInboxService } from '@/services/labInboxService';
 import { invalidateLabInboxData } from '@/hooks/invalidation';
 import { InvoiceSummaryRows } from '@/components/InvoiceSummaryRows';
+import { formatMoney } from '@/utils/money';
 import styles from './MedicalRecordDetailPage.module.css';
 import DocumentUpload from './DocumentUpload';
 import { invalidateRecordFiles } from '@/hooks/invalidation';
@@ -49,7 +50,8 @@ export const MedicalRecordDetailPage: React.FC = () => {
   const updateMutation = useUpdateMedicalRecord();
   const queryClient = useQueryClient();
   const { data: currencies } = useCurrencies();
-  const [isEditing, setIsEditing] = useState(false);
+  // `?edit=1` (the record card's Edit) opens the page ready to edit.
+  const [isEditing, setIsEditing] = useState(() => searchParams.get('edit') === '1');
   const [editDirty, setEditDirty] = useState(false);
   useEffect(() => {
     if (!isEditing) setEditDirty(false);
@@ -209,30 +211,33 @@ export const MedicalRecordDetailPage: React.FC = () => {
     }
   }, [selectedVersion]);
 
-  // Load concrete snapshot from backend when selecting a version
+  // The newest version with a history row is the current one (archiving
+  // bumps the record's version without writing history).
+  const latestVersion = sortedHistory.length > 0
+    ? Math.max(...sortedHistory.map(h => h.version))
+    : record?.version ?? null;
+  const isOldVersion = selectedVersion != null && latestVersion != null && selectedVersion < latestVersion;
+
+  // Load concrete snapshot from backend when selecting an old version
   useEffect(() => {
     let active = true;
     (async () => {
       if (!record) return;
-      // No version pinned, or pinned to the *current* record version → no need
-      // to call the history snapshot IPC; the live `record` already is that
-      // state. Avoids a race where a stale `selectedVersion` from before an
-      // update would fetch the old snapshot even after refetch.
-      if (!selectedVersion || selectedVersion === record.version) {
+      if (!isOldVersion || !selectedVersion) {
         setDisplayRecord(record);
         return;
       }
       try {
         const snap = await MedicalService.getMedicalRecordAtVersion(record.id, selectedVersion);
         if (active) {
-          setDisplayRecord(snap);
+          setDisplayRecord({ ...snap, version: selectedVersion, lineItems: undefined });
         }
       } catch (e) {
-        if (active) setDisplayRecord(snapshot || record);
+        if (active && snapshot) setDisplayRecord({ ...snapshot, version: selectedVersion, lineItems: undefined });
       }
     })();
     return () => { active = false; };
-  }, [record, selectedVersion, snapshot]);
+  }, [record, selectedVersion, snapshot, isOldVersion]);
 
   // Selected history entry and parsed values for inline diffs
   const selectedEntry = useMemo(() => {
@@ -247,6 +252,20 @@ export const MedicalRecordDetailPage: React.FC = () => {
   function camelize(s: string) {
     return s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
   }
+
+  // An old version shows that version's values only, never today's.
+  const shown: MedicalRecord | null = !record
+    ? null
+    : !isOldVersion
+      ? record
+      : displayRecord && displayRecord.version === selectedVersion
+        ? displayRecord
+        : null;
+
+  const backToCurrent = () => {
+    setSelectedVersion(null);
+    setSelectedHistory(null);
+  };
 
   const columns = [
     {
@@ -505,8 +524,16 @@ export const MedicalRecordDetailPage: React.FC = () => {
   const handleDeleteAttachment = async (row: any) => {
     setDeletingAttachmentId(row.id);
     try {
-      await MedicalService.deleteAttachment(row.id);
+      const labReport = await MedicalService.deleteAttachment(row.id);
       invalidateRecordFiles(queryClient);
+      if (labReport && !labReport.ok) {
+        notification.warning({
+          message: t('medical:detail.labReportNotRebuilt'),
+          description: (labReport.error ?? '').split('\n')[0],
+          placement: 'bottomRight',
+          duration: 0,
+        });
+      }
       // Collapse the row if its preview was expanded — the id no longer exists.
       setExpandedRowKeys(prev => prev.filter(k => k !== String(row.id)));
       notification.success({
@@ -539,6 +566,42 @@ export const MedicalRecordDetailPage: React.FC = () => {
   const isLabResult = (att: MedicalAttachment) =>
     att.attachmentType === 'test_result' ||
     (!!att.deviceType && !!att.deviceName && att.attachmentType !== 'generated_pdf' && att.mimeType !== 'application/pdf');
+
+  const fileActionFailed = (message: string, error: unknown) => {
+    notification.error({
+      message: t(message),
+      description: error instanceof Error ? error.message : String(error ?? ''),
+      placement: 'bottomRight',
+      duration: 6,
+    });
+  };
+
+  const openFile = async (row: MedicalAttachment) => {
+    try {
+      await MedicalService.openAttachmentExternally(row.id);
+    } catch (e) {
+      fileActionFailed('medical:detail.openFailed', e);
+    }
+  };
+
+  const downloadFile = async (row: MedicalAttachment) => {
+    try {
+      await MedicalService.saveAttachmentAs(row.id, row.originalName);
+    } catch (e) {
+      fileActionFailed('medical:messages.downloadFailed', e);
+    }
+  };
+
+  const printFile = async (row: MedicalAttachment) => {
+    try {
+      await MedicalService.printAttachment(row.id);
+    } catch (e) {
+      fileActionFailed('medical:pdfPreview.printFailed', e);
+    }
+  };
+
+  const isPdf = (row: MedicalAttachment) =>
+    (row.mimeType || '').toLowerCase() === 'application/pdf' || String(row.originalName).toLowerCase().endsWith('.pdf');
 
   const renderAttachmentsTable = (dataSource: any[], emptyText: string) => (
     <Table
@@ -633,7 +696,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
                 size="small"
                 onClick={(e) => {
                   e.stopPropagation();
-                  MedicalService.openAttachmentExternally(row.id);
+                  openFile(row);
                 }}
               >
                 {t('medical:detail.openInApp')}
@@ -642,11 +705,22 @@ export const MedicalRecordDetailPage: React.FC = () => {
                 size="small"
                 onClick={(e) => {
                   e.stopPropagation();
-                  MedicalService.saveAttachmentAs(row.id, row.originalName);
+                  downloadFile(row);
                 }}
               >
                 {t('common:download')}
               </Button>
+              {isPdf(row) && (
+                <Button
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    printFile(row);
+                  }}
+                >
+                  {t('common:print')}
+                </Button>
+              )}
               {isLabResult(row) && (
                 <Button
                   size="small"
@@ -773,10 +847,10 @@ export const MedicalRecordDetailPage: React.FC = () => {
 
       <Card
         title={<Title level={4} className={styles.titleZeroMargin}>{
-          (displayRecord?.name) || record.name
+          (shown ?? record).name
         }</Title>}
         extra={
-          !isEditing ? (
+          !isEditing && !isOldVersion ? (
             <Button type="primary" icon={<EditOutlined />} onClick={() => setIsEditing(true)} data-testid="medical-record-edit-btn">{t('common:edit')}</Button>
           ) : undefined
         }
@@ -792,13 +866,28 @@ export const MedicalRecordDetailPage: React.FC = () => {
             <Text type={selectedEntry ? 'secondary' : undefined}>{t('medical:detail.showDifferences')}</Text>
           </Space>
         </div>
-        {!isEditing ? (
+        {isOldVersion && (
+          <Alert
+            type="info"
+            showIcon
+            className={styles.marginTop16}
+            message={t('medical:detail.viewingVersion', { version: selectedVersion })}
+            action={
+              <Button size="small" onClick={backToCurrent}>
+                {t('medical:detail.backToCurrent')}
+              </Button>
+            }
+          />
+        )}
+        {!isEditing && !shown ? (
+          <Spin />
+        ) : !isEditing && shown ? (
           <>
             {(() => {
-              const typeVal = displayRecord?.recordType || record.recordType;
-              const nameVal = displayRecord?.name || record.name;
+              const typeVal = shown.recordType;
+              const nameVal = shown.name;
               const procVal = typeVal === 'procedure' ? nameVal : undefined;
-              const descVal = displayRecord?.description || record.description;
+              const descVal = shown.description;
 
               return (
                 <>
@@ -813,7 +902,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
                     )}
                     <Descriptions.Item label={t('medical:fields.createdAt')}>{new Date(record.createdAt).toLocaleString()}</Descriptions.Item>
                     <Descriptions.Item label={t('medical:fields.updatedAt')}>{new Date(((selectedEntry as any)?.changedAt) || record.updatedAt).toLocaleString()}</Descriptions.Item>
-                    <Descriptions.Item label={t('medical:fields.version')}>{selectedVersion || record.version}</Descriptions.Item>
+                    <Descriptions.Item label={t('medical:fields.version')}>{isOldVersion ? selectedVersion : latestVersion ?? record.version}</Descriptions.Item>
                   </Descriptions>
 
                   <div className={styles.marginTop16}>
@@ -822,26 +911,30 @@ export const MedicalRecordDetailPage: React.FC = () => {
                   </div>
 
                   {/* Prescription Notes - only show if there's content */}
-                  {(displayRecord?.prescriptionNotes || record.prescriptionNotes) && (
+                  {shown.prescriptionNotes && (
                     <div className={styles.marginTop16}>
                       <Text type="secondary" className={styles.descriptionLabel}>{t('medical:fields.prescriptionNotes')}</Text>
                       <Paragraph className={styles.descriptionText}>
-                        {displayRecord?.prescriptionNotes || record.prescriptionNotes}
+                        {shown.prescriptionNotes}
                       </Paragraph>
+                    </div>
+                  )}
+
+                  {isOldVersion && (
+                    <div className={styles.marginTop16}>
+                      <Text type="secondary">{t('medical:detail.oldVersionNoInvoice')}</Text>
                     </div>
                   )}
 
                   {/* Line Items - only show if there are items */}
                   {(() => {
-                    const lineItems = displayRecord?.lineItems || record.lineItems;
-                    const discount = displayRecord?.discountPercent ?? record.discountPercent;
+                    const lineItems = isOldVersion ? undefined : shown.lineItems;
+                    const discount = shown.discountPercent;
 
                     if (!lineItems || lineItems.length === 0) return null;
 
-                    // Get currency for display
                     const firstCurrencyId = lineItems[0]?.currencyId;
                     const currency = currencies?.find(c => c.id === firstCurrencyId);
-                    const currencySymbol = currency?.symbol || currency?.code || '';
                     const hasVat = lineItems.some(item => item.vatName);
 
                     return (
@@ -881,7 +974,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
                               key: 'unitPrice',
                               width: 120,
                               align: 'right' as const,
-                              render: (price: number) => `${currencySymbol}${price.toFixed(2)}`,
+                              render: (price: number) => formatMoney(price, currency),
                             },
                             {
                               title: t('medical:lineItems.subtotal', 'Subtotal'),
@@ -889,7 +982,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
                               width: 120,
                               align: 'right' as const,
                               render: (_: any, item: MedicalRecordLineItem) => (
-                                <Text strong>{currencySymbol}{(item.unitPrice * item.quantity).toFixed(2)}</Text>
+                                <Text strong>{formatMoney(item.unitPrice * item.quantity, currency)}</Text>
                               ),
                             },
                           ]}
@@ -897,7 +990,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
                             <InvoiceSummaryRows
                               lineItems={lineItems}
                               discountPercent={discount}
-                              currencySymbol={currencySymbol}
+                              currency={currency}
                               labelSpan={hasVat ? 4 : 3}
                             />
                           )}

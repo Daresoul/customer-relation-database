@@ -4,13 +4,14 @@ import { useTranslation } from 'react-i18next';
 import { useInvoiceTotals } from '@/hooks/useClinic';
 import { toMoneyLines } from '@/utils/invoiceLines';
 import type { MedicalRecordLineItem } from '@/types/lineItem';
+import { formatMoney, type MoneyCurrency } from '@/utils/money';
 
 const { Text } = Typography;
 
 interface InvoiceSummaryRowsProps {
   lineItems: MedicalRecordLineItem[];
   discountPercent?: number | null;
-  currencySymbol: string;
+  currency?: MoneyCurrency | null;
   /** Columns before the amount column. */
   labelSpan: number;
 }
@@ -22,14 +23,14 @@ interface InvoiceSummaryRowsProps {
 export const InvoiceSummaryRows: React.FC<InvoiceSummaryRowsProps> = ({
   lineItems,
   discountPercent,
-  currencySymbol,
+  currency,
   labelSpan,
 }) => {
   const { t } = useTranslation(['medical']);
   const lines = useMemo(() => toMoneyLines(lineItems), [lineItems]);
   const { data: totals } = useInvoiceTotals(lines, discountPercent);
   const money = (amount: number | undefined) =>
-    amount === undefined ? '—' : `${currencySymbol}${amount.toFixed(2)}`;
+    amount === undefined ? '—' : formatMoney(amount, currency);
 
   return (
     <Table.Summary>

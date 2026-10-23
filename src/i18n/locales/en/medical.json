@@ -116,7 +116,8 @@
     "regeneratePdf": "Regenerate PDF",
     "printReport": "Print Report",
     "browseRecentFiles": "Browse Recent Files",
-    "browseRecentDeviceFiles": "Browse Recent Device Files"
+    "browseRecentDeviceFiles": "Browse Recent Device Files",
+    "openRecord": "Open record"
   },
   "messages": {
     "createSuccess": "Medical record created successfully",
@@ -151,7 +152,8 @@
     "partialFailure": "Partial Failure",
     "bulkFailed_one": "Failed to process {{count}} record(s)",
     "bulkFailed_other": "Failed to process {{count}} record(s)",
-    "fileTooLarge": "File size exceeds {{max}}MB limit"
+    "fileTooLarge": "File size exceeds {{max}}MB limit",
+    "uploadFailedFiles": "Not uploaded: {{names}}. Add them again from the record page."
   },
   "filters": {
     "all": "All Records",
@@ -226,7 +228,12 @@
     "fileContentLoadFailed": "Error loading file content",
     "unknownSize": "Unknown size",
     "saveAttachmentAs": "Save Attachment As",
-    "fileTypeFilter": "{{ext}} Files"
+    "fileTypeFilter": "{{ext}} Files",
+    "viewingVersion": "Viewing version {{version}}",
+    "backToCurrent": "Back to current",
+    "oldVersionNoInvoice": "Invoice lines are not kept per version. Go back to the current version to see the invoice.",
+    "openFailed": "Could not open the file",
+    "labReportNotRebuilt": "The file was deleted, but the lab report could not be rebuilt"
   },
   "deviceImport": {
     "title": "Import Device Data to Medical Record",
@@ -395,7 +402,7 @@
     "printFailed": "Print failed",
     "printDialogFailed": "Failed to open print dialog",
     "pagesLoaded": "{{loaded}} of {{total}} pages loaded",
-    "regenerate": "Regenerate",
+    "regenerate": "Refresh preview",
     "pageAlt": "Page {{page}}",
     "loadingMore": "Loading more pages...",
     "scrollForMore": "Scroll down to load more pages",
@@ -442,5 +449,9 @@
     "withLines_one": "Also copy the invoice line ({{count}})",
     "withLines_other": "Also copy the invoice lines ({{count}})",
     "never": "The invoice number, the invoice date and files are never copied."
+  },
+  "diagnosisPicker": {
+    "add": "Add \"{{name}}\" as a new diagnosis",
+    "addFailed": "Could not add the diagnosis"
   }
 }
