@@ -86,7 +86,7 @@ export const CreateBreedModal: React.FC<CreateBreedModalProps> = ({
       confirmLoading={createBreed.isPending}
       okText={t('common:create')}
     >
-      <Form form={form} layout="vertical">
+      <Form scrollToFirstError={{ focus: true }} form={form} layout="vertical">
         <Form.Item
           name="speciesId"
           label={t('patients:fields.species')}

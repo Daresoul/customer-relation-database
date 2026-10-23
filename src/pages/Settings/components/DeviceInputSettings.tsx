@@ -703,7 +703,7 @@ const DeviceInputSettings: React.FC = () => {
         confirmLoading={createIntegrationMutation.isPending || updateIntegrationMutation.isPending}
         width={600}
       >
-        <Form
+        <Form scrollToFirstError={{ focus: true }}
           form={integrationForm}
           layout="vertical"
           onFinish={handleIntegrationSubmit}

@@ -232,7 +232,7 @@ export const CreateHouseholdInline: React.FC<CreateHouseholdInlineProps> = ({
   const busy = isSubmitting || disabled;
 
   return (
-    <Form<FormValues>
+    <Form<FormValues> scrollToFirstError={{ focus: true }}
       form={form}
       layout="vertical"
       onFinish={handleSubmit}

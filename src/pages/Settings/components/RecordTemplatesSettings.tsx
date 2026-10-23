@@ -240,7 +240,7 @@ const RecordTemplatesSettings: React.FC = () => {
         width={680}
         confirmLoading={createMutation.isPending || updateMutation.isPending}
       >
-        <Form
+        <Form scrollToFirstError={{ focus: true }}
           form={form}
           layout="vertical"
           initialValues={{ recordType: 'note', lineItems: [], diagnosisIds: [] }}

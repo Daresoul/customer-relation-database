@@ -267,7 +267,7 @@ const SettingsLayout: React.FC = () => {
                 // No made-up defaults: Save would write them over the real settings.
                 <LoadError title={t('settings:loadFailed')} onRetry={() => refetch?.()} retrying={isRefetching} />
               ) : (
-                <Form
+                <Form scrollToFirstError={{ focus: true }}
                   form={form}
                   layout="vertical"
                   onFinish={handleSubmit}

@@ -89,7 +89,7 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({
       ]}
       // Modal content will reset on close
     >
-      <Form
+      <Form scrollToFirstError={{ focus: true }}
         form={form}
         layout="vertical"
         initialValues={{

@@ -581,7 +581,7 @@ const ManagedScannersSettings: React.FC = () => {
         confirmLoading={submitting}
         okText={t('common:buttons.create', 'Create')}
       >
-        <Form form={form} layout="vertical" onFinish={handleAdd}>
+        <Form scrollToFirstError={{ focus: true }} form={form} layout="vertical" onFinish={handleAdd}>
           <Form.Item
             name="name"
             label={t('settings:managedScanners.name', 'Name')}

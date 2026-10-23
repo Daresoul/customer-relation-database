@@ -326,7 +326,7 @@ const DiagnosesSettings: React.FC = () => {
         onOk={() => form.submit()}
         okText={editing ? t('common:save', 'Save') : t('common:create', 'Create')}
       >
-        <Form form={form} layout="vertical" onFinish={handleSubmit}>
+        <Form scrollToFirstError={{ focus: true }} form={form} layout="vertical" onFinish={handleSubmit}>
           <Form.Item
             name="name"
             label={t('settings:diagnoses.name', 'Name')}

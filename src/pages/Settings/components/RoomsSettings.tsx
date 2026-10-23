@@ -207,7 +207,7 @@ const RoomsSettings: React.FC<RoomsSettingsProps> = ({ isUpdating }) => {
         onOk={() => roomForm.submit()}
         confirmLoading={createRoomMutation.isPending || updateRoomMutation.isPending}
       >
-        <Form
+        <Form scrollToFirstError={{ focus: true }}
           form={roomForm}
           layout="vertical"
           onFinish={handleRoomSubmit}

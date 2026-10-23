@@ -388,7 +388,7 @@ const SpeciesSettings: React.FC<SpeciesSettingsProps> = ({ isUpdating }) => {
         onOk={() => speciesForm.submit()}
         confirmLoading={createSpeciesMutation.isPending || updateSpeciesMutation.isPending}
       >
-        <Form
+        <Form scrollToFirstError={{ focus: true }}
           form={speciesForm}
           layout="vertical"
           onFinish={handleSpeciesSubmit}
@@ -417,7 +417,7 @@ const SpeciesSettings: React.FC<SpeciesSettingsProps> = ({ isUpdating }) => {
         onOk={() => breedForm.submit()}
         confirmLoading={createBreedMutation.isPending || updateBreedMutation.isPending}
       >
-        <Form
+        <Form scrollToFirstError={{ focus: true }}
           form={breedForm}
           layout="vertical"
           onFinish={handleBreedSubmit}

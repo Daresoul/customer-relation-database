@@ -69,7 +69,7 @@ export const CreateSpeciesModal: React.FC<CreateSpeciesModalProps> = ({
       confirmLoading={createSpecies.isPending}
       okText={t('common:create')}
     >
-      <Form form={form} layout="vertical">
+      <Form scrollToFirstError={{ focus: true }} form={form} layout="vertical">
         <Form.Item
           name="name"
           label={t('settings:species.nameColumn')}

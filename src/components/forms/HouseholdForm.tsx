@@ -202,7 +202,7 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
       }
       className={styles.formCardLarge}
     >
-      <Form
+      <Form scrollToFirstError={{ focus: true }}
         form={form}
         layout="vertical"
         onFinish={handleSubmit}

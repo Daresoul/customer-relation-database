@@ -259,7 +259,7 @@ const LineItemsSettings: React.FC<LineItemsSettingsProps> = ({ isUpdating }) => 
         onOk={() => form.submit()}
         confirmLoading={createMutation.isPending || updateMutation.isPending}
       >
-        <Form
+        <Form scrollToFirstError={{ focus: true }}
           form={form}
           layout="vertical"
           onFinish={handleSubmit}
