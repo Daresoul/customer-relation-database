@@ -22,6 +22,8 @@ export const createUnifiedTheme = ({
   fontSize = 14,
 }: CustomThemeOptions): ThemeConfig => {
   const isDark = mode === 'dark';
+  // antd's Modal reads this token for confirm dialogs but leaves it out of its public type.
+  const modalConfirmTokens: Record<string, number> = { confirmBodyPadding: 32 };
 
   return {
     algorithm: isDark ? theme.darkAlgorithm : theme.defaultAlgorithm,
@@ -162,16 +164,10 @@ export const createUnifiedTheme = ({
       Modal: {
         contentBg: isDark ? '#1F1F1F' : '#ffffff',
         headerBg: isDark ? '#1F1F1F' : '#ffffff',
-        headerBorderColorSplit: isDark ? '#303030' : '#f0f0f0',
-        headerBorderWidth: 1,
         footerBg: isDark ? '#1F1F1F' : '#ffffff',
-        footerBorderColorSplit: isDark ? '#303030' : '#f0f0f0',
-        footerBorderWidth: 1,
         colorText: isDark ? '#E6E6E6' : '#262626',
         colorTextHeading: isDark ? '#E6E6E6' : '#262626',
-        // Confirm modal specific
-        confirmBodyPadding: 32,
-        confirmTitleFontSize: 16,
+        ...modalConfirmTokens,
       },
 
       // Tabs customizations - replaces antd.css lines 276-291
@@ -230,7 +226,6 @@ export const createUnifiedTheme = ({
         cellHoverBg: isDark ? '#262626' : '#f5f5f5',
         cellHoverWithRangeBg: isDark ? '#303030' : '#f0f0f0',
         cellRangeBorderColor: primaryColor,
-        cellRangeHoverBg: isDark ? '#303030' : '#f0f0f0',
         cellHeight: 24,
         cellWidth: 36,
         hoverBorderColor: isDark ? '#404040' : '#40a9ff',
@@ -430,7 +425,6 @@ export const createUnifiedTheme = ({
         itemPaddingBottom: 16,
         labelBg: isDark ? '#262626' : '#fafafa',
         titleColor: isDark ? '#E6E6E6' : '#262626',
-        titleFontSize: 16,
         titleMarginBottom: 20,
       },
 
@@ -473,8 +467,6 @@ export const createUnifiedTheme = ({
         lineHeightHeading3: 1.35,
         lineHeightHeading4: 1.4,
         lineHeightHeading5: 1.5,
-        marginBottom: '0.5em',
-        marginTop: '1.2em',
       },
     },
   };
