@@ -573,7 +573,7 @@ mod tests {
     #[test]
     fn raw_message_is_readable_with_a_hex_view_and_capped() {
         let m = raw_message(b"\x0bMSH|^~\\&|PointCare\rPID|1\r\x1c\r", "2026-10-19T08:55:00Z");
-        assert_eq!(m.byte_count, 30);
+        assert_eq!(m.byte_count, 28);
         assert_eq!(m.text, "<0B>MSH|^~\\&|PointCare\nPID|1\n<1C>\n");
         assert!(m.hex.starts_with("0B 4D 53 48"));
         assert!(!m.truncated);
