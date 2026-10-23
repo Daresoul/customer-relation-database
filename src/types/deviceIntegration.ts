@@ -171,16 +171,21 @@ export interface DeviceAlertSettings {
 }
 
 // Helper function to get display name for device type
-export function getDeviceTypeDisplayName(deviceType: DeviceType): string {
+/** Takes the settings type ('healvet_hv_fia3000') or the stored one on results ('healvet_hv_fia_3000'). */
+export function getDeviceTypeDisplayName(deviceType: DeviceType | string): string {
   switch (deviceType) {
     case 'exigo_eos_vet':
       return 'Exigo Eos Vet';
     case 'healvet_hv_fia3000':
+    case 'healvet_hv_fia_3000':
       return 'Healvet HV-FIA 3000';
     case 'mnchip_pointcare_chemistry':
       return 'MNCHIP PointCare Chemistry';
     case 'mnchip_pcr_analyzer':
+    case 'mnchip_pointcare_pcr_v1':
       return 'MNCHIP PCR Analyzer';
+    default:
+      return deviceType;
   }
 }
 

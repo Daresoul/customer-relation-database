@@ -3,6 +3,7 @@ import { Table, Button, Tag, Space, Typography, Tooltip, App, Modal } from 'antd
 import { ClockCircleOutlined, CheckCircleOutlined, WarningOutlined, EyeOutlined, PlusOutlined, FileSearchOutlined } from '@ant-design/icons';
 import { fileHistoryService } from '../services/fileHistoryService';
 import type { FileAccessHistoryWithRecord } from '../types/fileHistory';
+import { getDeviceTypeDisplayName } from '../types/deviceIntegration';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -107,25 +108,15 @@ const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, da
     switch (deviceType.toLowerCase()) {
       case 'exigo_eos_vet':
         return 'blue';
-      case 'healvet_hv_fia3000':
+      case 'healvet_hv_fia_3000':
         return 'green';
+      case 'mnchip_pointcare_chemistry':
+        return 'cyan';
+      case 'mnchip_pcr_analyzer':
       case 'mnchip_pointcare_pcr_v1':
         return 'purple';
       default:
         return 'default';
-    }
-  };
-
-  const getDeviceTypeDisplay = (deviceType: string): string => {
-    switch (deviceType) {
-      case 'exigo_eos_vet':
-        return 'Exigo Eos Vet';
-      case 'healvet_hv_fia3000':
-        return 'Healvet HV-FIA 3000';
-      case 'mnchip_pointcare_pcr_v1':
-        return 'MNCHIP PointCare PCR';
-      default:
-        return deviceType;
     }
   };
 
@@ -156,7 +147,7 @@ const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, da
       render: (deviceType: string, record: FileAccessHistoryWithRecord) => (
         <Tooltip title={t('medical:recentFiles.via', { device: record.deviceName, connection: record.connectionMethod || t('medical:recentFiles.unknown') })}>
           <Tag color={getDeviceTypeColor(deviceType)}>
-            {getDeviceTypeDisplay(deviceType)}
+            {getDeviceTypeDisplayName(deviceType)}
           </Tag>
         </Tooltip>
       ),
