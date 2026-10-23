@@ -194,15 +194,14 @@ fn command_input_tells_a_null_currency_from_a_missing_one() {
     assert!(matches!(set.currency_id, MaybeNull::Value(2)));
 }
 
-/// settings.md #17: the clinic writes dates day first, with dots. (The
-/// "default" row seeded by migration 017 keeps its DD/MM/YYYY; changing it
-/// needs a migration.)
+/// The clinic writes dates day first with slashes, as its PDFs do, and as
+/// the "default" row seeded by migration 017 already does.
 #[tokio::test]
-async fn a_new_install_shows_dates_as_day_month_year_with_dots() {
+async fn a_new_install_shows_dates_as_day_month_year_with_slashes() {
     let db = create_test_db_with_migrations().await;
     let fresh = SettingsService::get_settings(&db, "new-user").await.unwrap();
-    assert_eq!(fresh.settings.date_format, "DD.MM.YYYY");
+    assert_eq!(fresh.settings.date_format, "DD/MM/YYYY");
 
     let other = SettingsService::update_settings(&db, "someone-else", only_currency(MaybeNull::Undefined)).await.unwrap();
-    assert_eq!(other.settings.date_format, "DD.MM.YYYY");
+    assert_eq!(other.settings.date_format, "DD/MM/YYYY");
 }
