@@ -117,11 +117,6 @@ export interface Patient {
   deceasedAt?: string | null;
 }
 
-// Household detail view with patients
-export interface HouseholdDetailView extends HouseholdWithPeople {
-  patients: Patient[];
-}
-
 // For patient creation with household
 export interface CreatePatientWithHouseholdDto {
   household: CreateHouseholdDto;
