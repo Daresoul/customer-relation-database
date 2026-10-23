@@ -161,6 +161,20 @@ pub async fn wipe_database_data(
 
 use tauri::State;
 
+/// Spreads demo records over the past two years, so "seen today", history
+/// and trends look like a working clinic instead of one busy day.
+async fn backdate_record(pool: &SqlitePool, record_id: i64, rng: &mut rand::rngs::StdRng) -> Result<(), String> {
+    let when = Utc::now() - chrono::Duration::minutes(rng.gen_range(60..=2 * 365 * 24 * 60));
+    sqlx::query("UPDATE medical_records SET created_at = ?, updated_at = ? WHERE id = ?")
+        .bind(when)
+        .bind(when)
+        .bind(record_id)
+        .execute(pool)
+        .await
+        .map(|_| ())
+        .map_err(|e| format!("Failed to backdate record: {}", e))
+}
+
 #[tauri::command]
 pub async fn populate_database(
     app: AppHandle,
@@ -379,6 +393,41 @@ pub async fn populate_database(
         created_households += 1;
         println!("[SEED]   -> Household ID: {} (stored in DB)", household_id);
 
+        // One or two people per household, the first is the primary contact,
+        // each with a North Macedonian mobile number.
+        for person_num in 0..rng.gen_range(1..=2) {
+            let first_name: String = FirstName().fake_with_rng(&mut rng);
+            let person = sqlx::query(
+                "INSERT INTO people (household_id, first_name, last_name, is_primary, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?)",
+            )
+            .bind(household_id)
+            .bind(&first_name)
+            .bind(&last_name)
+            .bind(person_num == 0)
+            .bind(Utc::now())
+            .bind(Utc::now())
+            .execute(&*pool)
+            .await
+            .map_err(|e| format!("Failed to insert person: {}", e))?;
+            let phone = format!(
+                "07{} {:03} {:03}",
+                rng.gen_range(0..=9),
+                rng.gen_range(0..1000),
+                rng.gen_range(0..1000)
+            );
+            sqlx::query(
+                "INSERT INTO person_contacts (person_id, contact_type, contact_value, is_primary, created_at)
+                 VALUES (?, 'phone', ?, 1, ?)",
+            )
+            .bind(person.last_insert_rowid())
+            .bind(phone)
+            .bind(Utc::now())
+            .execute(&*pool)
+            .await
+            .map_err(|e| format!("Failed to insert phone: {}", e))?;
+        }
+
         // Create 1-5 pets per household
         let pet_count = rng.gen_range(1..=5);
         println!("[SEED]   -> Creating {} pets", pet_count);
@@ -436,10 +485,17 @@ pub async fn populate_database(
                 species_id: Some(*species_id),
                 breed_id,
                 gender,
-                date_of_birth: None,
+                // Between three months and fifteen years old.
+                date_of_birth: Some(
+                    (Utc::now() - chrono::Duration::days(rng.gen_range(90..=15 * 365))).date_naive(),
+                ),
                 color: None,
                 weight,
-                microchip_id: None,
+                microchip_id: if rng.gen_bool(0.6) {
+                    Some(format!("807{:012}", rng.gen_range(0..1_000_000_000_000u64)))
+                } else {
+                    None
+                },
                 medical_notes: notes,
                 household_id: Some(household_id),
             };
@@ -490,9 +546,9 @@ pub async fn populate_database(
                     rng.gen_range(50.0..=400.0)
                 };
 
-                let price = Some((base_price * 100.0_f64).round() / 100.0_f64);
-                // Use currency IDs that match the migration: 1=MKD, 2=USD, 3=EUR, 4=GBP
-                let currency_id = Some([1i64, 2, 3, 4].choose(&mut rng).copied().unwrap());
+                // A clinic in North Macedonia bills in denars (currency 1 = MKD).
+                let price = Some((base_price * 10.0_f64).round());
+                let currency_id = Some(1i64);
 
                 let input = CreateMedicalRecordInput {
                     patient_id: patient_id,
@@ -513,7 +569,8 @@ pub async fn populate_database(
                 };
 
                 match MedicalRecordService::create_medical_record(&app, &sea_orm_pool, input).await {
-                    Ok(_) => {
+                    Ok(saved) => {
+                        backdate_record(&pool, saved.record.id, &mut rng).await?;
                         created_records += 1;
                         if proc_num == 0 {
                             println!("[SEED]          Procedure: {} (${:.2})",
@@ -576,7 +633,8 @@ pub async fn populate_database(
                 };
 
                 match MedicalRecordService::create_medical_record(&app, &sea_orm_pool, input).await {
-                    Ok(_) => {
+                    Ok(saved) => {
+                        backdate_record(&pool, saved.record.id, &mut rng).await?;
                         created_records += 1;
                     }
                     Err(e) => {
