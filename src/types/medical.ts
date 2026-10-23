@@ -30,7 +30,7 @@ export interface MedicalRecord {
 }
 
 // Attachment types: 'file' (manual uploads), 'test_result' (device data like Exigo XML), 'generated_pdf'
-export type AttachmentType = 'file' | 'test_result' | 'generated_pdf';
+export type AttachmentType = 'file' | 'test_result' | 'generated_pdf' | 'simple_report' | 'pharmacy_note' | 'invoice';
 
 export interface MedicalAttachment {
   id: number;

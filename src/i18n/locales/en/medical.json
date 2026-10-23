@@ -411,5 +411,14 @@
     "updatedDesc": "Record template updated successfully",
     "deleted": "Template Deleted",
     "deletedDesc": "Record template deleted successfully"
+  },
+  "upload": {
+    "drop": "Drop files here, or click to choose them",
+    "limit": "Several files at once, up to {{max}} MB each",
+    "waiting": "Waiting",
+    "sending": "Sending",
+    "failed": "Upload failed",
+    "retry": "Retry",
+    "remove": "Remove from the list"
   }
 }

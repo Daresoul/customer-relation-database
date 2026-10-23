@@ -107,3 +107,11 @@
   font-feature-settings: 'liga' 0;
   letter-spacing: 0.02em;
 }
+
+.uploadRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--ant-color-border-secondary, #f0f0f0);
+}
