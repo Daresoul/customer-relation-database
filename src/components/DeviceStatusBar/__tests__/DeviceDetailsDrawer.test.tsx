@@ -22,6 +22,7 @@ vi.mock('../../../hooks/useDeviceIntegrations', () => ({
     data: [
       { id: 1, name: 'PointCare', deviceType: 'mnchip_pointcare_chemistry', connectionType: 'serial_port', serialPortName: 'COM3', enabled: true },
       { id: 2, name: 'Exigo', deviceType: 'exigo_eos_vet', connectionType: 'file_watch', watchDirectory: '/lab', filePattern: '*.xml', enabled: true },
+      { id: 3, name: 'Healvet', deviceType: 'healvet_hv_fia3000', connectionType: 'serial_port', serialPortName: 'COM7', enabled: true },
     ],
     isLoading: false,
   }),
@@ -75,6 +76,7 @@ beforeEach(() => {
       return [
         { port_name: 'COM5', port_type: { USB: { vid: 0x1a86, pid: 0x7523, device_name: 'USB-SERIAL CH340' } } },
         { port_name: 'COM9', port_type: { HIDDevice: { vid: 1, pid: 2, device_name: 'Barcode scanner' } } },
+        { port_name: 'COM7', port_type: { USB: { vid: 0x0403, pid: 0x6001, device_name: 'FTDI' } } },
       ];
     if (cmd === 'get_device_diagnostics') return 'Arkivet diagnostics\nDevice: PointCare';
     return undefined;
@@ -140,6 +142,8 @@ describe('device details drawer', () => {
     expect(await screen.findByText('drawer.portsNow')).toBeInTheDocument();
     expect(screen.getByText('COM5 - USB-SERIAL CH340')).toBeInTheDocument();
     expect(screen.queryByText(/Barcode scanner/)).not.toBeInTheDocument();
+    // COM7 is Healvet's: offering it would take it away from that machine.
+    expect(screen.queryByRole('button', { name: 'drawer.usePort {"port":"COM7"}' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'drawer.usePort {"port":"COM5"}' }));
     await waitFor(() => expect(updateIntegration).toHaveBeenCalledWith({ id: 1, data: { serialPortName: 'COM5' } }));
