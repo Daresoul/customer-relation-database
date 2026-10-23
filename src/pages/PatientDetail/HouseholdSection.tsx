@@ -13,6 +13,7 @@ import { invalidatePatientData, invalidateHouseholdData } from '../../hooks/inva
 import { useThemeColors } from '../../utils/themeStyles';
 import styles from './PatientDetail.module.css';
 import { errorText } from '@/utils/notifyError';
+import type { HouseholdWithPeople } from '@/types/generated/HouseholdWithPeople';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -56,7 +57,7 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({
   // renders the read-only summary instead and we never reach here.)
   const { data: allHouseholds = [], isLoading: isLoadingHouseholds } = useQuery({
     queryKey: ['all-households'],
-    queryFn: () => invoke<any[]>('get_all_households', {}),
+    queryFn: () => invoke<HouseholdWithPeople[]>('get_all_households', {}),
     enabled: !household && !loadFailed && mode === 'pick',
   });
 
@@ -165,9 +166,9 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({
               value={selectedHouseholdId}
               allowClear
             >
-              {allHouseholds.map((h: any) => (
-                <Option key={h.household?.id || h.id} value={h.household?.id || h.id}>
-                  {h.household?.householdName || h.householdName || h.household?.household_name || t('entities:defaults.unknown')}
+              {allHouseholds.map((h) => (
+                <Option key={h.household.id} value={h.household.id}>
+                  {h.household.household_name || t('entities:defaults.unknown')}
                 </Option>
               ))}
             </Select>

@@ -5,7 +5,7 @@
 import { invoke } from '@/services/invoke';
 import { emit } from '@tauri-apps/api/event';
 import type { Patient } from '../types';
-import type { HouseholdTableRecord } from '../types/ui.types';
+import type { HouseholdFormValues, HouseholdTableRecord } from '../types/ui.types';
 import i18n from 'i18next';
 import { errorText } from '@/utils/notifyError';
 import type { App } from 'antd';
@@ -155,7 +155,7 @@ export const householdApi = {
     }
   },
 
-  create: async (household: Partial<HouseholdTableRecord>): Promise<HouseholdTableRecord> => {
+  create: async (household: HouseholdFormValues | Partial<HouseholdTableRecord>): Promise<HouseholdTableRecord> => {
     const hide = showLoading(i18n.t('common:api.loading.creatingHousehold'));
     try {
       // Format address as a single string if it's an object
@@ -164,7 +164,7 @@ export const householdApi = {
         if (typeof household.address === 'string') {
           addressString = household.address;
         } else if (typeof household.address === 'object') {
-          const addr = household.address as { street?: string; city?: string; state?: string; zipCode?: string };
+          const addr = household.address;
           const parts = [addr.street, addr.city, addr.state, addr.zipCode].filter(Boolean);
           addressString = parts.length > 0 ? parts.join(', ') : null;
         }

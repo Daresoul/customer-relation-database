@@ -91,7 +91,7 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
     });
   }, [patient.name, patient.breed, patient.color, patient.microchipId, patient.dateOfBirth]);
 
-  const handleFieldUpdate = async (field: string, value: any) => {
+  const handleFieldUpdate = async (field: string, value: string | number | null) => {
 
     // Optimistic update for text fields
     if (field in localValues) {

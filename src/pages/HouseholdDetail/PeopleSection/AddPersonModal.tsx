@@ -38,7 +38,7 @@ export const AddPersonModal: React.FC<AddPersonModalProps> = ({
           last_name: values.lastName,
           is_primary: values.isPrimary || false
         },
-        contacts: (values.contacts || []).map((contact: any) => ({
+        contacts: (values.contacts || []).map((contact: { contactType: string; contactValue: string; isPrimary?: boolean }) => ({
           contact_type: contact.contactType,
           contact_value: contact.contactValue,
           is_primary: contact.isPrimary || false

@@ -27,7 +27,8 @@ import { invalidatePatientData, invalidateHouseholdData } from '../hooks/invalid
 import api, { setAppInstance } from '../services/api.integration';
 import { PatientService } from '../services';
 import type { PatientWithHousehold } from '../types';
-import type { HouseholdTableRecord } from '../types/ui.types';
+import type { CreatePatientInput } from '../types';
+import type { HouseholdFormValues, HouseholdTableRecord } from '../types/ui.types';
 import { normalizeMicrochip } from '@/hooks/useBarcodeScanner';
 import { useTauriEvent } from '../hooks/useTauriEvent';
 import { BackupWarning } from '../components/BackupWarning';
@@ -171,7 +172,7 @@ export const MainDashboard: React.FC = () => {
   });
 
   // The dashboard only adds; editing happens on the patient and household pages.
-  const handleSavePatient = async (values: any) => {
+  const handleSavePatient = async (values: CreatePatientInput) => {
     const created = await api.patient.create(values);
     invalidatePatientData(queryClient);
     setShowPatientForm(false);
@@ -184,7 +185,7 @@ export const MainDashboard: React.FC = () => {
     }
   };
 
-  const handleSaveHousehold = async (values: any) => {
+  const handleSaveHousehold = async (values: HouseholdFormValues) => {
     await api.household.create(values);
     invalidateHouseholdData(queryClient);
     setShowHouseholdForm(false);
