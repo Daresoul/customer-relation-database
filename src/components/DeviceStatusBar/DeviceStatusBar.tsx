@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Space, Tooltip, Typography, App } from 'antd';
 import { ApiOutlined, SettingOutlined, FolderOutlined, UsbOutlined, ThunderboltOutlined, ReloadOutlined } from '@ant-design/icons';
-import { invoke } from '@tauri-apps/api';
+import { invoke } from '@/services/invoke';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useDeviceIntegrations, useDeviceConnectionStatus, useFileWatcherStatus } from '../../hooks/useDeviceIntegrations';

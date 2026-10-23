@@ -3,7 +3,7 @@ import { App } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useEffect, useState, useCallback } from 'react';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
-import { invoke } from '@tauri-apps/api';
+import { invoke } from '@/services/invoke';
 import { DeviceIntegrationService } from '../services/deviceIntegrationService';
 import { DeviceIntegration, CreateDeviceIntegrationInput, UpdateDeviceIntegrationInput, DeviceConnectionStatus, FileWatcherStatus } from '../types/deviceIntegration';
 import { createMutationErrorHandler } from '../utils/errors';

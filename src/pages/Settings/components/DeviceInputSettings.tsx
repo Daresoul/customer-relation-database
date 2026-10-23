@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Card, Table, Button, Typography, Space, Tag, Modal, Form, Input, Select, InputNumber, Switch, Popconfirm, AutoComplete } from 'antd';
 import { UsbOutlined, ReloadOutlined, ApiOutlined, PlusOutlined, EditOutlined, DeleteOutlined, PoweroffOutlined, FolderOpenOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { invoke } from '@tauri-apps/api';
+import { invoke } from '@/services/invoke';
 import { open } from '@tauri-apps/api/dialog';
 import styles from '../Settings.module.css';
 import { DeviceAlertSettings } from './DeviceAlertSettings';
