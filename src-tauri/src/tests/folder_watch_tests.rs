@@ -191,6 +191,34 @@ async fn each_sample_in_a_day_file_is_offered_once() {
     assert_eq!(sink.patient_ids(), vec!["KOKO", "KIRE"]);
 }
 
+/// The single-result format (`<ExigoResult>`); its `<SampleId>` tag must not
+/// be mistaken for a per-day `<sample>` still being written.
+const SINGLE_RESULT: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<ExigoResult>
+  <Header>
+    <SampleId>TEST-3376</SampleId>
+    <DateTime>2026-10-23T15:42:59</DateTime>
+    <DeviceType>Exigo Eos Vet</DeviceType>
+  </Header>
+  <Results>
+    <Parameter><Code>WBC</Code><Value>12.5</Value><Unit>10^9/L</Unit><RefRange>5.5-16.9</RefRange><Flag>N</Flag></Parameter>
+    <Parameter><Code>HGB</Code><Value>15.8</Value><Unit>g/dL</Unit><RefRange>12-18</RefRange><Flag>N</Flag></Parameter>
+  </Results>
+</ExigoResult>
+"#;
+
+#[tokio::test]
+async fn a_single_result_file_is_offered_once() {
+    let f = exigo_folder().await;
+    let sink = RecordingSink::default();
+    let path = f.file("exigo_test_TEST-3376.xml");
+    write_old(&path, SINGLE_RESULT);
+
+    assert_eq!(process_file(&f.ctx, &sink, &path, ProcessMode::Offer).await.unwrap(), 1);
+    assert_eq!(process_file(&f.ctx, &sink, &path, ProcessMode::Offer).await.unwrap(), 0);
+    assert_eq!(sink.patient_ids(), vec!["TEST-3376"]);
+}
+
 #[tokio::test]
 async fn a_growing_day_file_offers_only_the_new_sample() {
     let f = exigo_folder().await;
