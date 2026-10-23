@@ -180,13 +180,27 @@ function Find-Control($name, $title) {
 function Open-TrayMenu($item) {
   $taskbar = $UIA::RootElement.FindFirst($Tree::Children,
     (New-Object System.Windows.Automation.PropertyCondition ($UIA::ClassNameProperty), 'Shell_TrayWnd'))
-  $icon = $taskbar.FindAll($Tree::Descendants, $Cond::TrueCondition) |
-    Where-Object { $_.Current.Name -like '*Arkivet*' } | Select-Object -First 1
-  if (-not $icon) { throw 'No Arkivet tray icon visible (it may be in the hidden-icons overflow)' }
+  # Only notification-area icons; the app's taskbar button is also called Arkivet.
+  $isIcon = { $_.Current.AutomationId -eq 'NotifyItemIcon' -and $_.Current.Name.Trim() -like 'Arkivet*' }
+  $byId = New-Object System.Windows.Automation.PropertyCondition ($UIA::AutomationIdProperty), 'NotifyItemIcon'
+  $find = { $UIA::RootElement.FindAll($Tree::Descendants, $byId) | Where-Object $isIcon | Select-Object -First 1 }
+  $icon = & $find
+  if (-not $icon) {
+    # Windows 11 keeps most tray icons behind the "Show hidden icons" chevron.
+    $chevron = $taskbar.FindAll($Tree::Descendants, $Cond::TrueCondition) |
+      Where-Object { $_.Current.Name -like '*Hidden Icons*' } | Select-Object -First 1
+    if ($chevron) { Click-Element $chevron }
+    for ($i = 0; $i -lt 10 -and -not $icon; $i++) { Start-Sleep -Milliseconds 300; $icon = & $find }
+  }
+  if (-not $icon) { throw 'No Arkivet tray icon found, also not behind "Show hidden icons"' }
   Click-Element $icon -Right
   Start-Sleep -Milliseconds 500
-  $menuItem = $UIA::RootElement.FindAll($Tree::Descendants,
-    (New-Object System.Windows.Automation.PropertyCondition ($UIA::NameProperty), $item)) | Select-Object -First 1
+  $byName = New-Object System.Windows.Automation.PropertyCondition ($UIA::NameProperty), $item
+  $menuItem = $null
+  for ($i = 0; $i -lt 10 -and -not $menuItem; $i++) {
+    $menuItem = $UIA::RootElement.FindAll($Tree::Descendants, $byName) | Select-Object -First 1
+    if (-not $menuItem) { Start-Sleep -Milliseconds 300 }
+  }
   if (-not $menuItem) { throw "No tray menu item '$item'" }
   Press-Element $menuItem
   @{ pressed = $item; tooltip = $icon.Current.Name }
@@ -216,6 +230,13 @@ function Invoke-Action($action, $body) {
       @{ clicked = @($body.x, $body.y) }
     }
     'tray' { Open-TrayMenu $body.item }
+    'tray-list' {
+      $taskbar = $UIA::RootElement.FindFirst($Tree::Children,
+        (New-Object System.Windows.Automation.PropertyCondition ($UIA::ClassNameProperty), 'Shell_TrayWnd'))
+      @($UIA::RootElement.FindAll($Tree::Descendants,
+          (New-Object System.Windows.Automation.PropertyCondition ($UIA::AutomationIdProperty), 'NotifyItemIcon')) |
+        ForEach-Object { @{ name = $_.Current.Name; class = $_.Current.ClassName; id = $_.Current.AutomationId } })
+    }
     default { throw "Unknown action '$action'" }
   }
 }
