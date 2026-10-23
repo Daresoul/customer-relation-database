@@ -6,7 +6,13 @@ import AppointmentModal from './AppointmentModal';
 
 // Mock Ant Design components
 vi.mock('antd', () => ({
-  Modal: ({ open, onCancel, onOk, title, children }: any) => (
+  Modal: ({ open, onCancel, onOk, title, children }: {
+    open?: boolean;
+    onCancel?: () => void;
+    onOk?: () => void;
+    title?: React.ReactNode;
+    children?: React.ReactNode;
+  }) => (
     <div data-testid="modal" style={{ display: open ? 'block' : 'none' }}>
       <div data-testid="modal-title">{title}</div>
       <div data-testid="modal-content">{children}</div>
@@ -18,23 +24,32 @@ vi.mock('antd', () => ({
       </button>
     </div>
   ),
-  Form: ({ children, onFinish }: any) => (
+  Form: ({ children, onFinish }: { children?: React.ReactNode; onFinish?: React.FormEventHandler<HTMLFormElement> }) => (
     <form data-testid="appointment-form" onSubmit={onFinish}>
       {children}
     </form>
   ),
-  'Form.Item': ({ children, label, name, rules }: any) => (
+  'Form.Item': ({ children, label, name, rules }: {
+    children?: React.ReactNode;
+    label?: React.ReactNode;
+    name?: string;
+    rules?: Array<{ required?: boolean }>;
+  }) => (
     <div data-testid={`form-item-${name}`}>
       <label data-testid={`label-${name}`}>{label}</label>
       {children}
-      {rules?.some((rule: any) => rule.required) && (
+      {rules?.some((rule) => rule.required) && (
         <span data-testid={`required-${name}`} aria-label="required">
           *
         </span>
       )}
     </div>
   ),
-  Input: ({ placeholder, value, onChange }: any) => (
+  Input: ({ placeholder, value, onChange }: {
+    placeholder?: string;
+    value?: string;
+    onChange?: React.ChangeEventHandler<HTMLInputElement>;
+  }) => (
     <input
       data-testid="input-field"
       placeholder={placeholder}
@@ -42,7 +57,12 @@ vi.mock('antd', () => ({
       onChange={onChange}
     />
   ),
-  'Input.TextArea': ({ placeholder, value, onChange, rows }: any) => (
+  'Input.TextArea': ({ placeholder, value, onChange, rows }: {
+    placeholder?: string;
+    value?: string;
+    onChange?: React.ChangeEventHandler<HTMLTextAreaElement>;
+    rows?: number;
+  }) => (
     <textarea
       data-testid="textarea-field"
       placeholder={placeholder}
@@ -51,7 +71,12 @@ vi.mock('antd', () => ({
       rows={rows}
     />
   ),
-  Select: ({ children, placeholder, value, onChange }: any) => (
+  Select: ({ children, placeholder, value, onChange }: {
+    children?: React.ReactNode;
+    placeholder?: string;
+    value?: string;
+    onChange?: (value: string) => void;
+  }) => (
     <select
       data-testid="select-field"
       value={value}
@@ -61,10 +86,15 @@ vi.mock('antd', () => ({
       {children}
     </select>
   ),
-  'Select.Option': ({ children, value }: any) => (
+  'Select.Option': ({ children, value }: { children?: React.ReactNode; value?: string | number }) => (
     <option value={value}>{children}</option>
   ),
-  TimePicker: ({ value, onChange, format, minuteStep }: any) => (
+  TimePicker: ({ value, onChange, format, minuteStep }: {
+    value?: string;
+    onChange?: (value: string) => void;
+    format?: string;
+    minuteStep?: number;
+  }) => (
     <input
       data-testid="time-picker"
       type="time"
@@ -74,7 +104,11 @@ vi.mock('antd', () => ({
       data-format={format}
     />
   ),
-  DatePicker: ({ value, onChange, placeholder }: any) => (
+  DatePicker: ({ value, onChange, placeholder }: {
+    value?: string;
+    onChange?: (value: string) => void;
+    placeholder?: string;
+  }) => (
     <input
       data-testid="date-picker"
       type="date"
@@ -83,7 +117,7 @@ vi.mock('antd', () => ({
       placeholder={placeholder}
     />
   ),
-  Alert: ({ message, type, showIcon }: any) => (
+  Alert: ({ message, type, showIcon }: { message?: React.ReactNode; type?: string; showIcon?: boolean }) => (
     <div data-testid="alert" data-type={type}>
       {showIcon && <span data-testid="alert-icon">!</span>}
       {message}

@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { render, renderHook, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useBarcodeScanner, normalizeMicrochip } from '../useBarcodeScanner';
@@ -158,7 +158,7 @@ describe('useBarcodeScanner — editable focus', () => {
   });
 
   it('prevents form submission on the scanner Enter inside an input', async () => {
-    const onSubmit = vi.fn((e: any) => e.preventDefault());
+    const onSubmit = vi.fn((e: FormEvent) => e.preventDefault());
     renderHook(() => useBarcodeScanner({ onScan, suffixKey: 'Enter' }));
     render(
       <form onSubmit={onSubmit}>

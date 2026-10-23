@@ -117,7 +117,7 @@ describe('HouseholdForm — patient association (create mode)', () => {
         initialValues={{
           lastName: 'NoId Household',
           contacts: [],
-        } as any}
+        }}
         onSubmit={vi.fn()}
         onCancel={vi.fn()}
       />,

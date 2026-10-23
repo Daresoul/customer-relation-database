@@ -141,17 +141,17 @@ describe('caseTransform Utility', () => {
     });
 
     it('handles null values', () => {
-      expect(snakeToCamelObject(null as any)).toBeNull();
+      expect(snakeToCamelObject(null)).toBeNull();
     });
 
     it('handles undefined values', () => {
-      expect(snakeToCamelObject(undefined as any)).toBeUndefined();
+      expect(snakeToCamelObject(undefined)).toBeUndefined();
     });
 
     it('preserves primitive values', () => {
-      expect(snakeToCamelObject('string' as any)).toBe('string');
-      expect(snakeToCamelObject(123 as any)).toBe(123);
-      expect(snakeToCamelObject(true as any)).toBe(true);
+      expect(snakeToCamelObject('string')).toBe('string');
+      expect(snakeToCamelObject(123)).toBe(123);
+      expect(snakeToCamelObject(true)).toBe(true);
     });
 
     it('preserves null values in object properties', () => {
@@ -223,11 +223,11 @@ describe('caseTransform Utility', () => {
     });
 
     it('handles null values', () => {
-      expect(camelToSnakeObject(null as any)).toBeNull();
+      expect(camelToSnakeObject(null)).toBeNull();
     });
 
     it('handles undefined values', () => {
-      expect(camelToSnakeObject(undefined as any)).toBeUndefined();
+      expect(camelToSnakeObject(undefined)).toBeUndefined();
     });
 
     it('handles empty objects', () => {

@@ -166,7 +166,7 @@ export interface DatabaseCommands {
 export interface TauriError {
   message: string;
   code?: string;
-  details?: any;
+  details?: unknown;
 }
 
 /**

@@ -65,7 +65,7 @@ export const config: Options.Testrunner = {
       // tauri-driver auto-translates this to the right WebView driver
       'tauri:options': {
         application: tauriBinary,
-      } as any,
+      },
     },
   ],
 

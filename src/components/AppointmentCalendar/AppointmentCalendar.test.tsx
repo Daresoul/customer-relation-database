@@ -6,7 +6,12 @@ import AppointmentCalendar from './AppointmentCalendar';
 
 // Mock Ant Design Calendar
 vi.mock('antd', () => ({
-  Calendar: ({ dateCellRender, onSelect, mode, onChange }: any) => (
+  Calendar: ({ dateCellRender, onSelect, mode, onChange }: {
+    dateCellRender?: (date: Date) => React.ReactNode;
+    onSelect?: (date: Date) => void;
+    mode?: string;
+    onChange?: (date: Date) => void;
+  }) => (
     <div data-testid="calendar-mock">
       <div data-testid="calendar-mode">{mode}</div>
       <button
@@ -26,18 +31,22 @@ vi.mock('antd', () => ({
       </div>
     </div>
   ),
-  Badge: ({ children, count }: any) => (
+  Badge: ({ children, count }: { children?: React.ReactNode; count?: number }) => (
     <div data-testid="badge" data-count={count}>
       {children}
     </div>
   ),
-  Select: ({ children, onChange, placeholder }: any) => (
+  Select: ({ children, onChange, placeholder }: {
+    children?: React.ReactNode;
+    onChange?: React.ChangeEventHandler<HTMLSelectElement>;
+    placeholder?: string;
+  }) => (
     <select data-testid="view-mode-select" onChange={onChange}>
       <option value="">{placeholder}</option>
       {children}
     </select>
   ),
-  Button: ({ children, onClick, type }: any) => (
+  Button: ({ children, onClick, type }: { children?: React.ReactNode; onClick?: () => void; type?: string }) => (
     <button data-testid={`button-${type}`} onClick={onClick}>
       {children}
     </button>
