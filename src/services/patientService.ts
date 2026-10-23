@@ -7,7 +7,6 @@ import { ApiService } from './api';
 import { emit } from '@tauri-apps/api/event';
 import {
   Patient,
-  PatientWithOwners,
   CreatePatientInput,
   UpdatePatientInput,
   PatientAlert,
@@ -18,14 +17,14 @@ export class PatientService {
   /**
    * Get all patients
    */
-  static async getPatients(): Promise<PatientWithOwners[]> {
-    return ApiService.invoke<PatientWithOwners[]>('get_patients');
+  static async getPatients(): Promise<Patient[]> {
+    return ApiService.invoke<Patient[]>('get_patients');
   }
 
   /**
    * Get a single patient by ID
    */
-  static async getPatient(id: number): Promise<PatientWithOwners> {
+  static async getPatient(id: number): Promise<Patient> {
     const response = await PatientService.findPatient(id);
 
     if (!response) {
@@ -38,14 +37,14 @@ export class PatientService {
   /**
    * Get a single patient by ID, or null when no such patient exists
    */
-  static async findPatient(id: number): Promise<PatientWithOwners | null> {
-    return ApiService.invoke<PatientWithOwners | null>('get_patient', { id });
+  static async findPatient(id: number): Promise<Patient | null> {
+    return ApiService.invoke<Patient | null>('get_patient', { id });
   }
 
   /**
    * Create a new patient
    */
-  static async createPatient(input: CreatePatientInput): Promise<PatientWithOwners> {
+  static async createPatient(input: CreatePatientInput): Promise<Patient> {
     const dto = {
       name: input.name,
       speciesId: input.speciesId,
@@ -62,7 +61,7 @@ export class PatientService {
     if (input.color !== undefined) (dto as any).color = input.color || null;
     if (input.microchipId !== undefined) (dto as any).microchipId = input.microchipId || null;
 
-    const created = await ApiService.invokeRaw<PatientWithOwners>('create_patient', { dto });
+    const created = await ApiService.invokeRaw<Patient>('create_patient', { dto });
     try { await emit('patient-created', created as any); } catch {}
     return created;
   }
@@ -70,7 +69,7 @@ export class PatientService {
   /**
    * Update an existing patient
    */
-  static async updatePatient(id: number, updates: UpdatePatientInput): Promise<PatientWithOwners> {
+  static async updatePatient(id: number, updates: UpdatePatientInput): Promise<Patient | null> {
     // Only include fields that are actually being updated (not undefined)
     const dto: Record<string, unknown> = {};
 
@@ -87,7 +86,7 @@ export class PatientService {
     if (updates.neutered !== undefined) dto.neutered = updates.neutered;
 
     // Use raw invoke to preserve camelCase DTO expected by backend
-    return ApiService.invokeRaw<PatientWithOwners>('update_patient', { id, dto });
+    return ApiService.invokeRaw<Patient | null>('update_patient', { id, dto });
   }
 
   /**
