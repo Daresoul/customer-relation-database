@@ -35,7 +35,7 @@ describe('UpdateBanner', () => {
 
   it('offers the new version until the user installs it', () => {
     const onInstall = renderBanner({ status: 'ready', manifest });
-    expect(screen.getByText('updates.updateAvailable 2.4.0')).toBeInTheDocument();
+    expect(screen.getByText('updates.updateAvailableVersion 2.4.0')).toBeInTheDocument();
     expect(screen.getByText('Faster lab import')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'updates.installAndRestart' }));
