@@ -43,6 +43,9 @@ export function bookablePatients<P extends StatusFields & { id: number }>(list: 
   return list.filter((p) => p.id === keepId || patientStatus(p) === 'active');
 }
 
+/** 12.4, not 12.40 */
+export const formatKg = (weight: number): string => String(Number(weight.toFixed(2)));
+
 export function alertColor(type: string): string {
   switch (type) {
     case 'allergy':

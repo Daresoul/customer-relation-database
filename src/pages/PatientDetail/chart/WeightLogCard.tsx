@@ -6,11 +6,10 @@ import { LoadError } from '../../../components/common/LoadError';
 import { WeightSparkline } from '../../../components/patient/WeightSparkline';
 import { useDeleteWeight, usePatientWeights } from '../../../hooks/usePatientChart';
 import { formatDate } from '../../../utils/dateFormatter';
+import { formatKg } from '../../../utils/patientChart';
 import styles from './PatientChart.module.css';
 
 const { Text } = Typography;
-
-export const formatKg = (weight: number) => String(Number(weight.toFixed(2)));
 
 /** The weight log on the overview: trend line and every entry, newest first. */
 export const WeightLogCard: React.FC<{ patientId: number }> = ({ patientId }) => {
