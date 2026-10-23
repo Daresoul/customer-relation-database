@@ -339,7 +339,10 @@ impl DeviceParserService {
 
         // Split by #AFS1000 to get individual parameter messages
         // Each message is: #AFS1000&SAMPLE_ID&RESULT&DATETIME&&PARAM_CODE&PATIENT_ID&&GENDER&SAMPLE_TYPE
+        // Healvet has no start byte, so anything before the first marker is a
+        // cut frame or line noise, never a message.
         let messages: Vec<&str> = data_str.split("#AFS1000")
+            .skip(1)
             .filter(|s| !s.trim().is_empty())
             .collect();
 
@@ -466,7 +469,7 @@ impl DeviceParserService {
         let mut patient_id: Option<String> = None;
         let mut analyte_count = 0usize;
 
-        for line in data_str.split('\r') {
+        for line in data_str.split(['\r', '\n']) {
             let line = line.trim();
             if line.is_empty() {
                 continue;
@@ -516,12 +519,11 @@ impl DeviceParserService {
                             };
                             test_results.insert(key, value.to_string());
 
-                            // Set patient_id for filename generation
-                            // Priority: field 3 (patient_id) > field 6 (patient_name) > field 5 (species)
+                            // Patient id: field 3, else the name in field 6.
+                            // Field 5 is the species and never identifies a patient.
                             match idx {
                                 3 => patient_id = Some(value.to_string()),
                                 6 if patient_id.is_none() => patient_id = Some(value.to_string()),
-                                5 if patient_id.is_none() => patient_id = Some(value.to_string()),
                                 _ => {}
                             }
                         }
@@ -566,6 +568,11 @@ impl DeviceParserService {
                     let threshold = fields.get(18).map(|s| s.trim()).unwrap_or("");
 
                     if !param_code.is_empty() && !result.is_empty() {
+                        // A repeated analyte replaces the earlier one whole,
+                        // so no unit, range or flag carries over from it.
+                        for suffix in ["unit", "range", "flag", "sample_type", "curve", "threshold", "lot"] {
+                            test_results.remove(&format!("{}_{}", param_code, suffix));
+                        }
                         test_results.insert(param_code.to_string(), result.to_string());
                         analyte_count += 1;
 
