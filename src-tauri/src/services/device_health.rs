@@ -309,11 +309,20 @@ pub fn tray_summary(
         };
         return TraySummary { warning: false, tooltip };
     }
-    let mut tooltip = String::from("Arkivet");
-    for p in problems {
-        tooltip.push('\n');
-        tooltip.push_str(&problem_line(p, now, lang, day_month));
-    }
+    // Windows 11 shows only the first ~64 characters, so the summary goes first.
+    let mut tooltip = if let [only] = problems {
+        format!("Arkivet — {}", problem_line(only, now, lang, day_month))
+    } else {
+        let mut t = match lang {
+            Lang::En => format!("Arkivet — {} machines need attention", problems.len()),
+            Lang::Mk => format!("Arkivet — {} апарати бараат внимание", problems.len()),
+        };
+        for p in problems {
+            t.push('\n');
+            t.push_str(&problem_line(p, now, lang, day_month));
+        }
+        t
+    };
     if tooltip.chars().count() > TOOLTIP_MAX_CHARS {
         tooltip = tooltip.chars().take(TOOLTIP_MAX_CHARS - 1).collect::<String>() + "…";
     }
