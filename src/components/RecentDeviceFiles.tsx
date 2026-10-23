@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Table, Button, Tag, Space, Typography, Tooltip, App, Modal } from 'antd';
 import { CheckCircleOutlined, WarningOutlined, EyeOutlined, PlusOutlined, FileSearchOutlined } from '@ant-design/icons';
 import { fileHistoryService } from '../services/fileHistoryService';
@@ -42,18 +42,23 @@ const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, da
     }
   };
 
+  // The refresh handed out stays the same function and always loads with the current props.
+  const loadRef = useRef(loadRecentFiles);
+  loadRef.current = loadRecentFiles;
+  const refresh = useCallback(() => {
+    void loadRef.current();
+  }, []);
+
   useEffect(() => {
-    loadRecentFiles();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [days]);
+    refresh();
+  }, [days, refresh]);
 
   // Expose refresh function to parent
   useEffect(() => {
     if (onRefreshNeeded) {
-      onRefreshNeeded(loadRecentFiles);
+      onRefreshNeeded(refresh);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onRefreshNeeded]);
+  }, [onRefreshNeeded, refresh]);
 
   const handleAddToRecord = (file: FileAccessHistoryWithRecord) => {
     if (onAddToRecord) {
