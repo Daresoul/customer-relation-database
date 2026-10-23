@@ -74,9 +74,9 @@ export const generateCSSVariables = (theme: ThemeConfig, isDark: boolean): Recor
     '--font-weight-normal': '400',
     '--font-weight-medium': '500',
     '--font-weight-strong': `${token.fontWeightStrong || 600}`,
-    '--line-height-base': token.lineHeight || '1.5',
-    '--line-height-lg': token.lineHeightLG || '1.5',
-    '--line-height-sm': token.lineHeightSM || '1.5',
+    '--line-height-base': `${token.lineHeight || 1.5}`,
+    '--line-height-lg': `${token.lineHeightLG || 1.5}`,
+    '--line-height-sm': `${token.lineHeightSM || 1.5}`,
 
     // Shadows
     '--shadow-sm': isDark
