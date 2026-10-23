@@ -165,6 +165,10 @@ jobs:
       - name: Type check frontend
         run: npx tsc --noEmit
 
+      - name: Lint frontend
+        # --max-warnings 0: a new lint warning fails the release like an error.
+        run: npm run lint
+
       - name: Run frontend unit tests
         run: npx vitest run
 
