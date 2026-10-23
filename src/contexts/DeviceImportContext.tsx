@@ -17,8 +17,6 @@ export interface PendingDeviceFile {
   matchMethod?: 'microchip' | 'name' | 'none';
   matchAmbiguous?: boolean;
   detectedAt: string;
-  // If loaded from "Saved For Later", track the pending entry id so we can mark processed on success
-  pendingEntryId?: number;
   // If known, propagate the original history file_id so backend can auto-mark processed
   sourceFileId?: string;
 }
@@ -64,7 +62,6 @@ export interface GroupedDeviceFile {
   sessionInProgress?: boolean;
   // File history tracking (propagated from PendingDeviceFile)
   sourceFileId?: string;
-  pendingEntryId?: number;
 }
 
 interface DeviceImportState {
