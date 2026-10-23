@@ -78,7 +78,7 @@ export interface UserInfo {
 }
 
 // Form Types
-export interface BaseFormProps<T = any> {
+export interface BaseFormProps<T = unknown> {
   form?: FormInstance<T>;
   initialValues?: Partial<T>;
   onSubmit: (values: T) => Promise<void>;
@@ -129,7 +129,7 @@ export interface AddressFormValues {
 }
 
 // Table Types
-export interface BaseTableProps<T = any> {
+export interface BaseTableProps<T = unknown> {
   data: T[];
   columns: TableColumnsType<T>;
   loading?: boolean;
@@ -188,7 +188,7 @@ export interface HouseholdTableRecord {
 export interface SearchProps {
   placeholder?: string;
   onSearch: (value: string) => void;
-  onSelect?: (value: any, option: any) => void;
+  onSelect?: (value: unknown, option: unknown) => void;
   loading?: boolean;
   style?: React.CSSProperties;
   size?: 'small' | 'middle' | 'large';
@@ -266,7 +266,7 @@ export type AppointmentStatus = 'scheduled' | 'completed' | 'cancelled' | 'no-sh
 // Action Types for State Management
 export interface UIAction {
   type: string;
-  payload?: any;
+  payload?: unknown;
 }
 
 // Tab Configuration

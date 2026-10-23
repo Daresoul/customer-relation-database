@@ -116,7 +116,7 @@ export const updateService = {
    * Subscribe to updater events
    * Returns an unlisten function to cleanup the event listener
    */
-  onUpdateEvent(handler: (event: any) => void) {
+  onUpdateEvent(handler: Parameters<typeof onUpdaterEvent>[0]) {
     return onUpdaterEvent(handler);
   },
 };

@@ -120,9 +120,9 @@ export interface GetHouseholdResponse {
 }
 
 // Search state types
-export interface SearchState {
+export interface SearchState<T = unknown> {
   query: string;
-  results: any[];
+  results: T[];
   loading: boolean;
   hasQuery: boolean;
 }

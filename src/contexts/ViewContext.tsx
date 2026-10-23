@@ -13,8 +13,8 @@ interface ViewContextType {
   isLoading: boolean;
 
   // Search states (separate for each view)
-  animalSearchState: SearchState;
-  householdSearchState: SearchState;
+  animalSearchState: SearchState<Patient>;
+  householdSearchState: SearchState<HouseholdSearchResult>;
 
   // Actions
   switchToAnimalView: () => Promise<void>;
@@ -39,14 +39,14 @@ export const ViewProvider: React.FC<ViewProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   // Separate search states for each view
-  const [animalSearchState, setAnimalSearchState] = useState<SearchState>({
+  const [animalSearchState, setAnimalSearchState] = useState<SearchState<Patient>>({
     query: '',
     results: [],
     loading: false,
     hasQuery: false,
   });
 
-  const [householdSearchState, setHouseholdSearchState] = useState<SearchState>({
+  const [householdSearchState, setHouseholdSearchState] = useState<SearchState<HouseholdSearchResult>>({
     query: '',
     results: [],
     loading: false,

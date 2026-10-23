@@ -227,26 +227,6 @@ export class HouseholdService {
   static async rebuildHouseholdSearchIndex(): Promise<void> {
     await ApiService.invoke('rebuild_household_search_index');
   }
-
-  /**
-   * Search households (simple format for backward compatibility)
-   */
-  static async searchHouseholdsSimple(query: string): Promise<any[]> {
-    const response = await this.searchHouseholds(query);
-    return response.results.map(result => ({
-      id: result.id,
-      householdName: result.householdName,
-      address: result.address,
-      contacts: result.people.flatMap(person =>
-        person.contacts.map(contact => ({
-          type: contact.contactType,
-          value: contact.contactValue,
-          isPrimary: contact.isPrimary
-        }))
-      ),
-      petCount: 0 // TODO: Implement pet count
-    }));
-  }
 }
 
 // Export standalone functions for backward compatibility

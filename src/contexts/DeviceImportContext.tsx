@@ -10,7 +10,7 @@ export interface PendingDeviceFile {
   fileName: string;
   fileData: number[]; // Array of bytes
   mimeType: string;
-  testResults: any;
+  testResults: Record<string, unknown>;
   patientId?: number;
   patientIdentifier?: string;
   // How the backend matched patientIdentifier; ambiguous means 2+ patients and no pick

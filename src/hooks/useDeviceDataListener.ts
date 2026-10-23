@@ -10,7 +10,7 @@ interface DeviceDataPayload {
   deviceName: string;
   connectionMethod: string;
   patientIdentifier?: string;
-  testResults: any;
+  testResults: Record<string, unknown>;
   originalFileName: string;
   fileData: number[];
   mimeType: string;
