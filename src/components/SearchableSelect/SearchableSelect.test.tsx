@@ -25,7 +25,6 @@
  * fails at the most informative test.
  */
 
-import React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -46,7 +45,7 @@ describe('SearchableSelect — display label, not value', () => {
     // The regression case: form state is a number (after
     // getValueFromEvent coerces "2" → 2). Component receives value={2}.
     // Pre-fix: input rendered "2". Post-fix: input renders "Poodle".
-    render(<SearchableSelect value={2 as any} options={BREEDS} />);
+    render(<SearchableSelect value={2} options={BREEDS} />);
     const input = screen.getByRole('combobox') as HTMLInputElement;
     expect(input.value).toBe('Poodle');
   });
@@ -76,7 +75,7 @@ describe('SearchableSelect — display label, not value', () => {
     // the raw id briefly than nothing, so the user knows there IS a
     // selection — gets replaced with the label as soon as options
     // arrive.
-    render(<SearchableSelect value={42 as any} options={[]} />);
+    render(<SearchableSelect value={42} options={[]} />);
     const input = screen.getByRole('combobox') as HTMLInputElement;
     expect(input.value).toBe('42');
   });
@@ -86,7 +85,7 @@ describe('SearchableSelect — display label, not value', () => {
     // have loaded (1, 2, 3), but 5 doesn't exist. Better to show
     // empty than the raw id — the user will notice the missing breed
     // visually and can pick a new one.
-    render(<SearchableSelect value={5 as any} options={BREEDS} />);
+    render(<SearchableSelect value={5} options={BREEDS} />);
     const input = screen.getByRole('combobox') as HTMLInputElement;
     expect(input.value).toBe('');
   });
@@ -163,7 +162,7 @@ describe('SearchableSelect — clear behavior', () => {
     const onChange = vi.fn();
     render(
       <SearchableSelect
-        value={2 as any}
+        value={2}
         onChange={onChange}
         options={BREEDS}
       />,

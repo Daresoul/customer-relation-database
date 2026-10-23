@@ -130,7 +130,7 @@ describe('View Preference Commands', () => {
 
     it('T005: should reject invalid view values', async () => {
       // Arrange
-      const command = { activeView: 'invalid' as any };
+      const command = { activeView: 'invalid' };
       vi.mocked(invoke).mockRejectedValue(new Error('Invalid view type'));
 
       // Act & Assert

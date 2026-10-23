@@ -18,7 +18,7 @@ vi.mock('../../../hooks/useAppSettings', () => ({
 }));
 
 const setThemeMode = vi.fn();
-vi.mock('../../../contexts/ThemeContext', () => ({
+vi.mock('../../../contexts/useTheme', () => ({
   useTheme: () => ({ themeMode: 'light', setThemeMode }),
 }));
 

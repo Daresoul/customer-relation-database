@@ -117,7 +117,7 @@ export const DevToolsDrawer: React.FC<DevToolsDrawerProps> = ({ open, onClose })
         placement: 'bottomRight',
       });
       await checkVirtualPortStatus();
-    } catch (error: any) {
+    } catch (error) {
       notification.error({
         message: 'Failed to Start Virtual Ports',
         description: errorText(error, t),
@@ -137,7 +137,7 @@ export const DevToolsDrawer: React.FC<DevToolsDrawerProps> = ({ open, onClose })
         placement: 'bottomRight',
       });
       await checkVirtualPortStatus();
-    } catch (error: any) {
+    } catch (error) {
       notification.error({
         message: 'Failed to Stop Virtual Ports',
         description: errorText(error, t),
@@ -162,7 +162,7 @@ export const DevToolsDrawer: React.FC<DevToolsDrawerProps> = ({ open, onClose })
         description: `Sent ${HEALVET_PARAMS.length} test results for ${values.patientId}`,
         placement: 'bottomRight',
       });
-    } catch (error: any) {
+    } catch (error) {
       notification.error({
         message: 'Failed to Send Healvet Data',
         description: errorText(error, t),
@@ -186,7 +186,7 @@ export const DevToolsDrawer: React.FC<DevToolsDrawerProps> = ({ open, onClose })
         description: `Sent test type ${values.testType} for ${values.patientId}`,
         placement: 'bottomRight',
       });
-    } catch (error: any) {
+    } catch (error) {
       notification.error({
         message: 'Failed to Send PointCare Data',
         description: errorText(error, t),
@@ -210,7 +210,7 @@ export const DevToolsDrawer: React.FC<DevToolsDrawerProps> = ({ open, onClose })
         description: `Sent PCR result for ${values.patientId}`,
         placement: 'bottomRight',
       });
-    } catch (error: any) {
+    } catch (error) {
       notification.error({
         message: 'Failed to Send PCR Data',
         description: errorText(error, t),
@@ -229,7 +229,7 @@ export const DevToolsDrawer: React.FC<DevToolsDrawerProps> = ({ open, onClose })
         description: 'Test XML file dropped in watch directory',
         placement: 'bottomRight',
       });
-    } catch (error: any) {
+    } catch (error) {
       notification.error({
         message: 'Failed to Create Exigo File',
         description: errorText(error, t),

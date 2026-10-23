@@ -8,7 +8,7 @@ vi.mock('react-i18next', () => ({
 }));
 vi.mock('@tauri-apps/api', () => ({ invoke: vi.fn().mockResolvedValue([]) }));
 vi.mock('@/services/invoke', () => ({ invoke: vi.fn().mockResolvedValue([]) }));
-vi.mock('../../contexts/ThemeContext', () => ({ useTheme: () => ({ themeMode: 'light' }) }));
+vi.mock('../../contexts/useTheme', () => ({ useTheme: () => ({ themeMode: 'light' }) }));
 vi.mock('../../hooks/useUpdater', () => ({ useUpdater: () => ({ checkForUpdates: vi.fn() }) }));
 vi.mock('../../services/updateService', () => ({
   updateService: { getPreferences: vi.fn().mockResolvedValue({ autoCheckEnabled: false }) },

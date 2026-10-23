@@ -28,7 +28,7 @@ vi.mock('@tauri-apps/api/event', () => ({
 }));
 
 let labImportOpen = false;
-vi.mock('../../contexts/DeviceImportContext', () => ({
+vi.mock('../../contexts/useDeviceImport', () => ({
   useDeviceImport: () => ({ modalOpen: labImportOpen }),
 }));
 

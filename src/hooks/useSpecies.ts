@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { App } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { SpeciesService } from '../services/speciesService';
-import { Species, CreateSpeciesInput, UpdateSpeciesInput } from '../types/species';
+import { CreateSpeciesInput, UpdateSpeciesInput } from '../types/species';
 import { createMutationErrorHandler } from '../utils/errors';
 
 export const useSpecies = (activeOnly: boolean = true) => {

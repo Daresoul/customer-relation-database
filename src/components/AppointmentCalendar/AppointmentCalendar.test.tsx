@@ -1,11 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import * as appointmentHooks from '../../hooks/useAppointments';
 import AppointmentCalendar from './AppointmentCalendar';
 
 // Mock Ant Design Calendar
 vi.mock('antd', () => ({
-  Calendar: ({ dateCellRender, onSelect, mode, onChange }: any) => (
+  Calendar: ({ dateCellRender, onSelect, mode, onChange }: {
+    dateCellRender?: (date: Date) => React.ReactNode;
+    onSelect?: (date: Date) => void;
+    mode?: string;
+    onChange?: (date: Date) => void;
+  }) => (
     <div data-testid="calendar-mock">
       <div data-testid="calendar-mode">{mode}</div>
       <button
@@ -25,18 +31,22 @@ vi.mock('antd', () => ({
       </div>
     </div>
   ),
-  Badge: ({ children, count }: any) => (
+  Badge: ({ children, count }: { children?: React.ReactNode; count?: number }) => (
     <div data-testid="badge" data-count={count}>
       {children}
     </div>
   ),
-  Select: ({ children, onChange, placeholder }: any) => (
+  Select: ({ children, onChange, placeholder }: {
+    children?: React.ReactNode;
+    onChange?: React.ChangeEventHandler<HTMLSelectElement>;
+    placeholder?: string;
+  }) => (
     <select data-testid="view-mode-select" onChange={onChange}>
       <option value="">{placeholder}</option>
       {children}
     </select>
   ),
-  Button: ({ children, onClick, type }: any) => (
+  Button: ({ children, onClick, type }: { children?: React.ReactNode; onClick?: () => void; type?: string }) => (
     <button data-testid={`button-${type}`} onClick={onClick}>
       {children}
     </button>
@@ -82,11 +92,12 @@ const createWrapper = () => {
     },
   });
 
-  return ({ children }: { children: React.ReactNode }) => (
+  const Wrapper = ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={queryClient}>
       {children}
     </QueryClientProvider>
   );
+  return Wrapper;
 };
 
 // TDD scaffold from appointments feature branch — stale antd mock
@@ -216,7 +227,7 @@ describe.skip('AppointmentCalendar', () => {
 
   it('shows loading state when appointments are loading', () => {
     // Mock loading state
-    vi.mocked(require('../../hooks/useAppointments').useAppointments).mockReturnValue({
+    vi.mocked(appointmentHooks.useAppointments).mockReturnValue({
       data: null,
       isLoading: true,
       error: null,
@@ -249,7 +260,7 @@ describe.skip('AppointmentCalendar', () => {
   });
 
   it('handles empty appointment data gracefully', () => {
-    vi.mocked(require('../../hooks/useAppointments').useAppointments).mockReturnValue({
+    vi.mocked(appointmentHooks.useAppointments).mockReturnValue({
       data: { appointments: [] },
       isLoading: false,
       error: null,
@@ -269,7 +280,7 @@ describe.skip('AppointmentCalendar', () => {
   });
 
   it('shows error message when appointments fail to load', () => {
-    vi.mocked(require('../../hooks/useAppointments').useAppointments).mockReturnValue({
+    vi.mocked(appointmentHooks.useAppointments).mockReturnValue({
       data: null,
       isLoading: false,
       error: new Error('Failed to fetch appointments'),

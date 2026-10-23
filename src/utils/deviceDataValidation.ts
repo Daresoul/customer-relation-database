@@ -7,7 +7,6 @@ import type { PendingDeviceFile } from '../contexts/DeviceImportContext';
 import type {
   ValidationResult,
   ValidationWarning,
-  ValidationError,
   PatientDataConflict,
 } from '../types/deviceImport';
 import { extractPatientDataFromFile, detectPatientDataConflicts } from './deviceDataExtraction';

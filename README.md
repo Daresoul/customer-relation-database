@@ -663,7 +663,11 @@
 
 `npx tsc --noEmit` must be clean. `npm run build` runs it before `vite build`
 (so `tauri build` does too, through `beforeBuildCommand`), and the release
-workflow runs it as its own step before the tests.
+workflow runs it as its own step before the tests. Catch variables are
+`unknown` (`useUnknownInCatchVariables`); read a message with `messageOf`.
+
+`npm run lint` must report no errors and no warnings (`--max-warnings 0`); the
+release workflow runs it right after the type check.
 
 ## Release build secrets
 

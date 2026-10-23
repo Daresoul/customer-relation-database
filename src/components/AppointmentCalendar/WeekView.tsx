@@ -26,7 +26,6 @@ const WeekView: React.FC<WeekViewProps> = ({
   appointments,
   onSelectAppointment,
   onCreateAppointment,
-  onUpdateAppointment,
   onDayHeaderClick,
   onStatusChange,
 }) => {
@@ -39,7 +38,6 @@ const WeekView: React.FC<WeekViewProps> = ({
   const [dragStart, setDragStart] = useState<{ day: number; slot: number; y: number } | null>(null);
   const [dragEnd, setDragEnd] = useState<{ day: number; slot: number; y: number } | null>(null);
   const [resizingAppointment, setResizingAppointment] = useState<number | null>(null);
-  const [resizeEdge, setResizeEdge] = useState<'top' | 'bottom' | null>(null);
 
   // Track if component is mounted to prevent stale events
   const isMountedRef = useRef(true);
@@ -52,7 +50,6 @@ const WeekView: React.FC<WeekViewProps> = ({
       setDragStart(null);
       setDragEnd(null);
       setResizingAppointment(null);
-      setResizeEdge(null);
     };
   }, []);
 
@@ -78,11 +75,6 @@ const WeekView: React.FC<WeekViewProps> = ({
     const minute = date.minute();
     const minuteSlot = Math.floor(minute / 15);
     return hour * 4 + minuteSlot;
-  };
-
-  // Get day index from date
-  const getDayIndex = (date: Dayjs): number => {
-    return date.diff(startOfWeek, 'day');
   };
 
   // Calculate appointment position and height
@@ -128,7 +120,7 @@ const WeekView: React.FC<WeekViewProps> = ({
   }, []);
 
   // Handle mouse down for drag start
-  const handleMouseDown = useCallback((e: React.MouseEvent, dayIndex: number, hourIndex: number) => {
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.target !== e.currentTarget) return;
     e.preventDefault();
 
@@ -152,7 +144,7 @@ const WeekView: React.FC<WeekViewProps> = ({
   }, [isDragging, dragStart, resizingAppointment, getSlotAndDayFromMouse]);
 
   // Handle mouse up for drag end
-  const handleMouseUp = useCallback((e: MouseEvent) => {
+  const handleMouseUp = useCallback(() => {
     if (!isMountedRef.current) return;
 
 
@@ -177,7 +169,6 @@ const WeekView: React.FC<WeekViewProps> = ({
     setDragStart(null);
     setDragEnd(null);
     setResizingAppointment(null);
-    setResizeEdge(null);
   }, [isDragging, dragStart, dragEnd, weekDays, onCreateAppointment]);
 
   // Add global mouse event listeners
@@ -325,7 +316,7 @@ const WeekView: React.FC<WeekViewProps> = ({
   };
 
   // Render appointment card
-  const renderAppointment = (apt: Appointment & { column: number; totalColumns: number }, dayIndex: number) => {
+  const renderAppointment = (apt: Appointment & { column: number; totalColumns: number }) => {
     const style = getAppointmentStyle(apt);
     const roomColor = getRoomColor(apt);
 
@@ -382,16 +373,6 @@ const WeekView: React.FC<WeekViewProps> = ({
       </Tooltip>
       </AppointmentStatusMenu>
     );
-  };
-
-  const getStatusColor = (status: string): string => {
-    const colors: Record<string, string> = {
-      scheduled: 'blue',
-      in_progress: 'orange',
-      completed: 'green',
-      cancelled: 'red',
-    };
-    return colors[status] || 'default';
   };
 
   return (
@@ -547,13 +528,13 @@ const WeekView: React.FC<WeekViewProps> = ({
                 <div
                   key={dayIndex}
                   className={`week-day-column week-cell ${isToday ? 'today-column' : ''} ${styles.relative}`}
-                  onMouseDown={(e) => handleMouseDown(e, dayIndex, hour.hour)}
+                  onMouseDown={handleMouseDown}
                 >
                   {/* Half-hour divider line */}
                   <div className="week-half-hour-line" />
 
                   {/* Appointments for this day */}
-                  {hour.hour === 0 && appointmentsWithLayout.map(apt => renderAppointment(apt, dayIndex))}
+                  {hour.hour === 0 && appointmentsWithLayout.map(apt => renderAppointment(apt))}
                 </div>
               );
             })}

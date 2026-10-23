@@ -25,66 +25,35 @@ function isPlainValueArray(arr: unknown[]): boolean {
   return arr.length > 0 && typeof arr[0] !== 'object' && arr.every(v => v === null || typeof v !== 'object');
 }
 
+/** Rename every key, recursively, through nested objects and arrays. */
+function renameKeys(value: unknown, rename: (key: string) => string): unknown {
+  if (value === null || value === undefined || typeof value !== 'object') {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return isPlainValueArray(value) ? value : value.map((item) => renameKeys(item, rename));
+  }
+
+  const source = value as Record<string, unknown>;
+  return Object.keys(source).reduce<Record<string, unknown>>((acc, key) => {
+    acc[rename(key)] = renameKeys(source[key], rename);
+    return acc;
+  }, {});
+}
+
 /**
  * Transform all keys of an object from snake_case to camelCase
  */
-export function snakeToCamelObject<T extends Record<string, any>>(obj: T): Record<string, any> {
-  if (obj === null || obj === undefined) {
-    return obj;
-  }
-
-  if (Array.isArray(obj)) {
-    return isPlainValueArray(obj) ? obj : obj.map(item => snakeToCamelObject(item)) as any;
-  }
-
-  if (typeof obj !== 'object') {
-    return obj;
-  }
-
-  return Object.keys(obj).reduce((acc, key) => {
-    const camelKey = snakeToCamel(key);
-    const value = obj[key];
-
-    // Recursively transform nested objects and arrays
-    if (value !== null && typeof value === 'object') {
-      acc[camelKey] = snakeToCamelObject(value);
-    } else {
-      acc[camelKey] = value;
-    }
-
-    return acc;
-  }, {} as Record<string, any>);
+export function snakeToCamelObject(obj: unknown): unknown {
+  return renameKeys(obj, snakeToCamel);
 }
 
 /**
  * Transform all keys of an object from camelCase to snake_case
  */
-export function camelToSnakeObject<T extends Record<string, any>>(obj: T): Record<string, any> {
-  if (obj === null || obj === undefined) {
-    return obj;
-  }
-
-  if (Array.isArray(obj)) {
-    return isPlainValueArray(obj) ? obj : obj.map(item => camelToSnakeObject(item)) as any;
-  }
-
-  if (typeof obj !== 'object') {
-    return obj;
-  }
-
-  return Object.keys(obj).reduce((acc, key) => {
-    const snakeKey = camelToSnake(key);
-    const value = obj[key];
-
-    // Recursively transform nested objects and arrays
-    if (value !== null && typeof value === 'object') {
-      acc[snakeKey] = camelToSnakeObject(value);
-    } else {
-      acc[snakeKey] = value;
-    }
-
-    return acc;
-  }, {} as Record<string, any>);
+export function camelToSnakeObject(obj: unknown): unknown {
+  return renameKeys(obj, camelToSnake);
 }
 
 /**
@@ -92,7 +61,7 @@ export function camelToSnakeObject<T extends Record<string, any>>(obj: T): Recor
  * Usage: const result = transformKeys<MyType>(apiResponse, 'snakeToCamel');
  */
 export function transformKeys<T>(
-  obj: Record<string, any>,
+  obj: unknown,
   direction: 'snakeToCamel' | 'camelToSnake'
 ): T {
   const transformer = direction === 'snakeToCamel' ? snakeToCamelObject : camelToSnakeObject;

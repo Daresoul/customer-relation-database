@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import { TemplateService } from '@/services/templateService';
 import { createMutationErrorHandler } from '@/utils/errors';
 import type {
-  RecordTemplate,
   CreateRecordTemplateInput,
   UpdateRecordTemplateInput,
   RecordType,

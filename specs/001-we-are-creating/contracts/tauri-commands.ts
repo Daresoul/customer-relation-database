@@ -166,7 +166,7 @@ export interface DatabaseCommands {
 export interface TauriError {
   message: string;
   code?: string;
-  details?: any;
+  details?: unknown;
 }
 
 /**
@@ -200,8 +200,8 @@ export interface TauriCommands
  * Use this in the frontend to ensure type safety
  */
 export async function invokeCommand<K extends keyof TauriCommands>(
-  cmd: K,
-  args?: Parameters<TauriCommands[K]>[0]
+  _cmd: K,
+  _args?: Parameters<TauriCommands[K]>[0]
 ): Promise<ReturnType<TauriCommands[K]>> {
   // This will be implemented in the actual service layer
   // using @tauri-apps/api/tauri invoke

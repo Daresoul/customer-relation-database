@@ -11,7 +11,6 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Tabs, Form, Input, Typography, Badge } from 'antd';
-import type { FormInstance } from 'antd';
 import {
   FileTextOutlined,
   MedicineBoxOutlined,
@@ -45,12 +44,8 @@ const FIELD_TO_TAB: Readonly<Record<string, TabKey>> = {
 /** Order tabs are visited for "switch to the first one with errors". */
 const TAB_ORDER: TabKey[] = ['standard', 'prescriptions', 'lineItems'];
 
-/**
- * Compute which tabs currently have validation errors.
- * Exported so the parent can pre-check before deciding to call
- * onFinishFailed (rarely needed, but useful for tests).
- */
-export function tabsWithErrors(errorFields: readonly string[]): Set<TabKey> {
+/** Compute which tabs currently have validation errors. */
+function tabsWithErrors(errorFields: readonly string[]): Set<TabKey> {
   const result = new Set<TabKey>();
   for (const f of errorFields) {
     const tab = FIELD_TO_TAB[f];
@@ -122,7 +117,6 @@ export const TabbedMedicalRecordFields: React.FC<TabbedMedicalRecordFieldsProps>
   titlePlaceholder,
   defaultActiveTab = 'standard',
   onTabChange,
-  prescriptionNotesValue,
   showPrescriptionBadge = false,
   showLineItemsBadge = false,
   lineItemsCount = 0,
@@ -160,7 +154,7 @@ export const TabbedMedicalRecordFields: React.FC<TabbedMedicalRecordFieldsProps>
       setActiveTab(first);
       onTabChange?.(first);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- switch tabs when the error set changes, not when the user picks a tab
   }, [errorKey]);
 
   const handleTabChange = (key: string) => {

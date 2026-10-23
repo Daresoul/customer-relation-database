@@ -6,7 +6,7 @@
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { knownErrorMessage } from '@/utils/errors';
+import { knownErrorMessage, messageOf } from '@/utils/errors';
 import {
   Form,
   Select,
@@ -36,6 +36,7 @@ import { CreateBreedModal } from '../../components/CreateBreedModal';
 import { PatientFieldGroup } from './fieldGroups';
 import { CreateHouseholdModal } from './CreateHouseholdModal';
 import type { CreatedHousehold } from './CreateHouseholdInline';
+import type { HouseholdSearchResult } from '@/types/generated/HouseholdSearchResult';
 import styles from './Forms.module.css';
 
 const { Option } = Select;
@@ -130,7 +131,7 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
     if (!hideHouseholdPicker) searchHouseholdsRaw('');
     // Intentionally empty deps — fire once on mount. Subsequent searches
     // happen via the Select's onSearch event.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load the recent households once on open
   }, []);
 
   // Search households with debouncing.
@@ -143,17 +144,17 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
   //
   // The backend caps results at `limit: 20` regardless, so empty-query is
   // bounded.
-  const searchHouseholdsRaw = async (query: string) => {
+  const searchHouseholdsRaw = useCallback(async (query: string) => {
     setSearchingHouseholds(true);
     setHouseholdSearchFailed(false);
     try {
-      const result = await invoke<any>('search_households', { query: query || '', limit: 20 });
+      const result = await invoke<{ results?: HouseholdSearchResult[] } | Household[]>('search_households', { query: query || '', limit: 20 });
 
-      let householdList = [];
+      let householdList: Household[] = [];
 
-      if (result?.results && Array.isArray(result.results)) {
-        householdList = result.results.map((item: any) => {
-          const primaryPerson = item.people?.find((p: any) => p.is_primary) || item.people?.[0];
+      if (!Array.isArray(result) && result?.results && Array.isArray(result.results)) {
+        householdList = result.results.map((item) => {
+          const primaryPerson = item.people?.find((p) => p.is_primary) || item.people?.[0];
           const householdName = item.household_name ||
                                (primaryPerson ? primaryPerson.last_name : null) ||
                                t('households:unnamedHousehold');
@@ -162,8 +163,8 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
             id: item.id,
             lastName: householdName,
             primaryContact: primaryPerson ? `${primaryPerson.first_name} ${primaryPerson.last_name}` : null,
-            phone: primaryPerson?.contacts?.find((c: any) => c.contact_type === 'phone')?.contact_value || null,
-            email: primaryPerson?.contacts?.find((c: any) => c.contact_type === 'email')?.contact_value || null,
+            phone: primaryPerson?.contacts?.find((c) => c.contact_type === 'phone')?.contact_value || null,
+            email: primaryPerson?.contacts?.find((c) => c.contact_type === 'email')?.contact_value || null,
             address: item.address,
             household_name: householdName
           };
@@ -184,7 +185,7 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
     } finally {
       setSearchingHouseholds(false);
     }
-  };
+  }, [t]);
 
   const searchHouseholds = useCallback((query: string) => {
     if (searchTimeoutRef.current) {
@@ -194,7 +195,7 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
     searchTimeoutRef.current = setTimeout(() => {
       searchHouseholdsRaw(query);
     }, 300);
-  }, []);
+  }, [searchHouseholdsRaw]);
 
   // Handle form submission
   const handleSubmit = async () => {
@@ -223,13 +224,14 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
       // points at a real row.
       await onSubmit(formData);
       form.resetFields();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Form submission error:', error);
-      if (error?.errorFields) {
-        const firstError = error.errorFields[0]?.errors[0];
+      const { errorFields } = (error ?? {}) as { errorFields?: Array<{ errors: string[] }> };
+      if (errorFields) {
+        const firstError = errorFields[0]?.errors[0];
         setFormError(firstError || t('forms:validation.checkRequired'));
       } else {
-        setFormError(knownErrorMessage(error, t) || error?.message || t('forms:errors.saveFailed'));
+        setFormError(knownErrorMessage(error, t) || messageOf(error) || t('forms:errors.saveFailed'));
       }
     } finally {
       setSubmitting(false);

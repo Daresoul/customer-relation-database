@@ -60,7 +60,7 @@ export interface DeletePatientResponse {
 export interface ValidationError {
   field: string;
   message: string;
-  value?: any;
+  value?: unknown;
 }
 
 export interface ValidationErrorResponse {

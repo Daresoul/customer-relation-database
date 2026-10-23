@@ -31,6 +31,7 @@ import {
 } from '../../types/appointments';
 import { useQuery } from '@tanstack/react-query';
 import { useRooms } from '../../hooks/useRooms';
+import type { Room } from '../../types/rooms';
 import appointmentService from '../../services/appointmentService';
 import { invoke } from '../../services/invoke';
 import { usePatients } from '../../hooks/usePatients';
@@ -55,7 +56,7 @@ interface AppointmentModalProps {
   onCancel: () => void;
   onSave: (data: CreateAppointmentInput | UpdateAppointmentInput) => Promise<void>;
   mode?: 'create' | 'edit';
-  rooms?: any[];
+  rooms?: Room[];
 }
 
 const EDIT_STATUSES: AppointmentStatus[] = ['scheduled', 'checked_in', 'in_progress', 'completed', 'cancelled', 'no_show'];
@@ -106,7 +107,6 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
   const [loading, setLoading] = useState(false);
   const [conflicts, setConflicts] = useState<Appointment[]>([]);
   const [patientConflicts, setPatientConflicts] = useState<Appointment[]>([]);
-  const [checkingConflicts, setCheckingConflicts] = useState(false);
   const [checkFailed, setCheckFailed] = useState(false);
   const watchedDate = Form.useWatch('date', form) as Dayjs | undefined;
   const watchedStart = Form.useWatch('startTime', form) as Dayjs | undefined;
@@ -133,12 +133,6 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
         return { value: patient.id, label: extra ? `${who} — ${extra}` : who };
       }),
     [patients, householdNames, mode, appointment?.patientId, t],
-  );
-
-  // Time slot options (15-minute intervals)
-  const timeSlots = useMemo(
-    () => appointmentService.generateTimeSlots(7, 20, 15),
-    []
   );
 
   // Initialize form values
@@ -188,7 +182,6 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
       return;
     }
 
-    setCheckingConflicts(true);
     try {
       const startDateTime = dayjs(values.date)
         .hour(values.startTime.hour())
@@ -215,8 +208,6 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
       setConflicts([]);
       setPatientConflicts([]);
       setCheckFailed(true);
-    } finally {
-      setCheckingConflicts(false);
     }
   };
 
@@ -293,7 +284,7 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
         }
       }
 
-      const data: any = {
+      const data: UpdateAppointmentInput = {
         patientId: values.patientId,
         title: values.title,
         description: values.description,

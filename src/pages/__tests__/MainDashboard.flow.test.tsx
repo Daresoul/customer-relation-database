@@ -40,7 +40,7 @@ vi.mock('../../services/api.integration', () => ({
 
 vi.mock('../../hooks/useLabInbox', () => ({ useLabInboxCount: () => ({ data: 0 }) }));
 vi.mock('../../components/LabInbox/LabInboxList', () => ({ default: () => <div>lab inbox list</div> }));
-vi.mock('../../contexts/ViewContext', () => ({
+vi.mock('../../contexts/useViewContext', () => ({
   useViewContext: () => ({ currentView: 'animal', setCurrentView: vi.fn() }),
 }));
 vi.mock('../../utils/themeStyles', () => ({ useThemeColors: () => ({}) }));

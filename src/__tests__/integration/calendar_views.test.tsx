@@ -1,37 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter } from 'react-router-dom';
-import userEvent from '@testing-library/user-event';
 
 // These imports will fail - components don't exist yet
 // import { AppointmentsPage } from '../../pages/Appointments/Appointments';
 
 describe('Calendar View Switching Integration', () => {
-  let queryClient: QueryClient;
-
   beforeEach(() => {
-    queryClient = new QueryClient({
-      defaultOptions: {
-        queries: { retry: false },
-      },
-    });
-
     // Mock Tauri API
     vi.mock('@tauri-apps/api/tauri', () => ({
       invoke: vi.fn(),
     }));
   });
-
-  const renderWithProviders = (component: React.ReactNode) => {
-    return render(
-      <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
-          {component}
-        </BrowserRouter>
-      </QueryClientProvider>
-    );
-  };
 
   it('should switch between calendar and list views', async () => {
     // This will fail - AppointmentsPage doesn't exist

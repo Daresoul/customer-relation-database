@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactNode } from 'react';
 
@@ -36,7 +36,7 @@ describe.skip('useAppointments Hook', () => {
   it('should fetch appointments with default parameters', async () => {
     // This will fail - hook doesn't exist
     expect(() => {
-      const { result } = renderHook(() => useAppointments(), { wrapper });
+      renderHook(() => useAppointments(), { wrapper });
     }).toThrow('useAppointments hook not implemented');
   });
 
@@ -51,7 +51,7 @@ describe.skip('useAppointments Hook', () => {
 
     // Expected: Hook accepts and uses filters
     expect(() => {
-      const { result } = renderHook(() => useAppointments(filters), { wrapper });
+      renderHook(() => useAppointments(filters), { wrapper });
     }).toThrow('Filter parameters not implemented');
   });
 
@@ -63,7 +63,7 @@ describe.skip('useAppointments Hook', () => {
 
     // Expected: Hook manages pagination state
     expect(() => {
-      const { result } = renderHook(
+      renderHook(
         () => useAppointments({}, pagination),
         { wrapper }
       );
@@ -86,7 +86,7 @@ describe.skip('useAppointments Hook', () => {
 
     // Expected: Should catch and expose error
     expect(() => {
-      const { result } = renderHook(() => useAppointments(), { wrapper });
+      renderHook(() => useAppointments(), { wrapper });
     }).toThrow('Error handling not implemented');
   });
 
@@ -101,8 +101,8 @@ describe.skip('useAppointments Hook', () => {
   it('should cache appointments data', async () => {
     // Expected: Use React Query caching
     expect(() => {
-      const { result: result1 } = renderHook(() => useAppointments(), { wrapper });
-      const { result: result2 } = renderHook(() => useAppointments(), { wrapper });
+      renderHook(() => useAppointments(), { wrapper });
+      renderHook(() => useAppointments(), { wrapper });
       // Second call should use cache
     }).toThrow('Caching not implemented');
   });
@@ -110,7 +110,7 @@ describe.skip('useAppointments Hook', () => {
   it('should invalidate cache after mutations', async () => {
     // Expected: Invalidate after create/update/delete
     expect(() => {
-      const { result } = renderHook(() => useAppointments(), { wrapper });
+      renderHook(() => useAppointments(), { wrapper });
       // After mutation, cache should be invalidated
     }).toThrow('Cache invalidation not implemented');
   });
@@ -127,14 +127,14 @@ describe.skip('useAppointments Hook', () => {
   it('should exclude soft-deleted appointments by default', async () => {
     // Expected: Don't return deleted appointments unless requested
     expect(() => {
-      const { result } = renderHook(() => useAppointments(), { wrapper });
+      renderHook(() => useAppointments(), { wrapper });
     }).toThrow('Soft delete filtering not implemented');
   });
 
   it('should include deleted when specified', async () => {
     // Expected: Include deleted when includeDeleted: true
     expect(() => {
-      const { result } = renderHook(
+      renderHook(
         () => useAppointments({ includeDeleted: true }),
         { wrapper }
       );
@@ -144,7 +144,7 @@ describe.skip('useAppointments Hook', () => {
   it('should sort appointments by start time', async () => {
     // Expected: Return appointments in chronological order
     expect(() => {
-      const { result } = renderHook(() => useAppointments(), { wrapper });
+      renderHook(() => useAppointments(), { wrapper });
     }).toThrow('Sorting not implemented');
   });
 
@@ -159,7 +159,7 @@ describe.skip('useAppointments Hook', () => {
   it('should support real-time updates', async () => {
     // Expected: Update when appointments change
     expect(() => {
-      const { result } = renderHook(() => useAppointments(), { wrapper });
+      renderHook(() => useAppointments(), { wrapper });
       // Should update when new appointment is created
     }).toThrow('Real-time updates not implemented');
   });

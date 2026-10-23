@@ -5,8 +5,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { knownErrorMessage } from '@/utils/errors';
-import { Form, Input, Select, DatePicker, Button, Space, Row, Col, Segmented, Alert, Collapse, Tag, App, Divider, InputNumber } from 'antd';
+import { knownErrorMessage, messageOf } from '@/utils/errors';
+import { Form, Input, Select, DatePicker, Button, Space, Row, Col, Segmented, Alert, Tag, App, InputNumber } from 'antd';
 import { PlusOutlined, UserAddOutlined, CloseOutlined, WarningOutlined, HomeOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
@@ -89,7 +89,7 @@ export const CreatePatientSection: React.FC<CreatePatientSectionProps> = ({
     appliedPrefillRef.current = prefillKey;
     const untouched = Object.entries(prefillValues()).filter(([field]) => !form.isFieldTouched(field));
     form.setFieldsValue(Object.fromEntries(untouched));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- prefill once per distinct device data (prefillKey), not per render
   }, [fillMode, hasDeviceData, isLoadingSpecies, prefillKey]);
 
   const handleFillModeChange = (mode: FillMode) => {
@@ -107,10 +107,10 @@ export const CreatePatientSection: React.FC<CreatePatientSectionProps> = ({
     if (prefillMicrochipId) {
       form.setFieldValue('microchipId', prefillMicrochipId);
     }
-  }, [prefillMicrochipId]);
+  }, [prefillMicrochipId, form]);
 
   // Handle form submission
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: Omit<CreatePatientInput, 'dateOfBirth'> & { dateOfBirth?: Dayjs }) => {
     setIsSubmitting(true);
 
     try {
@@ -124,7 +124,7 @@ export const CreatePatientSection: React.FC<CreatePatientSectionProps> = ({
         breedId: values.breedId || undefined,
         gender: values.gender || undefined,
         dateOfBirth: values.dateOfBirth
-          ? (values.dateOfBirth as Dayjs).format('YYYY-MM-DD')
+          ? values.dateOfBirth.format('YYYY-MM-DD')
           : undefined,
         weight: values.weight || undefined,
         color: values.color || undefined,
@@ -148,11 +148,11 @@ export const CreatePatientSection: React.FC<CreatePatientSectionProps> = ({
       // Reset form and collapse
       form.resetFields();
       onToggleExpand(false);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to create patient:', error);
       notification.error({
         message: t('forms:error.create', { entity: t('entities:patient.singular') }),
-        description: knownErrorMessage(error, t) || error?.message || t('forms:messages.unknownError'),
+        description: knownErrorMessage(error, t) || messageOf(error) || t('forms:messages.unknownError'),
         placement: 'bottomRight',
         duration: 5,
       });

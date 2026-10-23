@@ -2,9 +2,8 @@ import React, { useState } from 'react';
 import { Card, Form, Input, Button, Table, Space, Modal, Popconfirm, InputNumber, Switch } from 'antd';
 import { HomeOutlined, PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { useThemeColors } from '../../../utils/themeStyles';
 import styles from '../Settings.module.css';
-import { useRooms, useCreateRoom, useUpdateRoom, useDeleteRoom } from '../../../hooks/useRooms';
+import { useRooms, useCreateRoom, useUpdateRoom } from '../../../hooks/useRooms';
 import { Room, CreateRoomInput, UpdateRoomInput } from '../../../types/rooms';
 
 const { TextArea } = Input;
@@ -14,9 +13,8 @@ interface RoomsSettingsProps {
   isUpdating: boolean;
 }
 
-const RoomsSettings: React.FC<RoomsSettingsProps> = ({ isUpdating }) => {
+const RoomsSettings: React.FC<RoomsSettingsProps> = () => {
   const { t } = useTranslation(['common', 'forms', 'settings']);
-  const themeColors = useThemeColors();
   const [roomModalVisible, setRoomModalVisible] = useState(false);
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
   const [roomForm] = Form.useForm();
@@ -26,7 +24,6 @@ const RoomsSettings: React.FC<RoomsSettingsProps> = ({ isUpdating }) => {
 
   const createRoomMutation = useCreateRoom();
   const updateRoomMutation = useUpdateRoom();
-  const deleteRoomMutation = useDeleteRoom();
 
   const handleAddRoom = () => {
     setEditingRoom(null);
@@ -66,7 +63,13 @@ const RoomsSettings: React.FC<RoomsSettingsProps> = ({ isUpdating }) => {
     }
   };
 
-  const handleRoomSubmit = async (values: any) => {
+  const handleRoomSubmit = async (values: {
+    name: string;
+    description?: string;
+    capacity?: number;
+    color?: string;
+    isActive?: boolean;
+  }) => {
     try {
       const roomData = {
         name: values.name,
@@ -135,7 +138,7 @@ const RoomsSettings: React.FC<RoomsSettingsProps> = ({ isUpdating }) => {
     {
       title: t('common:actionsLabel'),
       key: 'actions',
-      render: (_: any, record: Room) => (
+      render: (_: unknown, record: Room) => (
         <Space>
           <Button
             icon={<EditOutlined />}

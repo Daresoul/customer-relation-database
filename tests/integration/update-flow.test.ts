@@ -121,7 +121,7 @@ describe('T007: Update Flow Integration Test', () => {
   });
 
   it('should handle updater events (PENDING, DONE, ERROR)', async () => {
-    const eventHandlers: ((event: any) => void)[] = [];
+    const eventHandlers: Parameters<typeof onUpdaterEvent>[0][] = [];
 
     // Mock onUpdaterEvent to capture handlers
     vi.mocked(onUpdaterEvent).mockImplementation((handler) => {

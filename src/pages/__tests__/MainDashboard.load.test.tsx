@@ -28,7 +28,7 @@ vi.mock('../../services/api.integration', () => ({
 const countWaiting = vi.fn().mockResolvedValue(0);
 vi.mock('../../services/labInboxService', () => ({ labInboxService: { countWaiting: () => countWaiting() } }));
 vi.mock('../../components/LabInbox/LabInboxList', () => ({ default: () => <div>lab inbox list</div> }));
-vi.mock('../../contexts/ViewContext', () => ({
+vi.mock('../../contexts/useViewContext', () => ({
   useViewContext: () => ({ currentView: 'animal', setCurrentView: vi.fn() }),
 }));
 vi.mock('../../utils/themeStyles', () => ({ useThemeColors: () => ({}) }));

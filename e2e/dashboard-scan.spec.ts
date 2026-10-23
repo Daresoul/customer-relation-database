@@ -10,7 +10,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { installTauriMock, makeBackupConfig, makeDefaultSettings } from './helpers/mockInvoke';
+import { installTauriMock, type MockedTauriWindow } from './helpers/mockInvoke';
 
 test.describe('Main Dashboard — microchip scan', () => {
   test.beforeEach(async ({ page }) => {
@@ -81,7 +81,7 @@ test.describe('Main Dashboard — microchip scan', () => {
 
     // Verify a search invocation reached the mock backend with the
     // normalized 15-digit code.
-    const calls = await page.evaluate(() => (window as any).__INVOKE_CALLS__ as any[]);
+    const calls = await page.evaluate(() => (window as unknown as MockedTauriWindow).__INVOKE_CALLS__);
     const searchCalls = calls.filter((c) => c.cmd === 'search_patients');
     expect(searchCalls.length).toBeGreaterThan(0);
     const lastSearch = searchCalls[searchCalls.length - 1];

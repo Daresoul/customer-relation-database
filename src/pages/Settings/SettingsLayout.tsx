@@ -19,7 +19,8 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAppSettings } from '../../hooks/useAppSettings';
-import { useTheme } from '../../contexts/ThemeContext';
+import type { UpdateSettingsRequest } from '../../services/settingsService';
+import { useTheme } from '../../contexts/useTheme';
 import styles from './Settings.module.css';
 
 // Import category components
@@ -50,7 +51,7 @@ interface MenuItem {
   key: SettingsCategory;
   icon: React.ReactNode;
   label: string;
-  component: React.ComponentType<any>;
+  component: React.ComponentType<{ isUpdating: boolean }>;
 }
 
 const SettingsLayout: React.FC = () => {
@@ -170,7 +171,7 @@ const SettingsLayout: React.FC = () => {
     }
   }, [settings, form]);
 
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: Partial<UpdateSettingsRequest>) => {
 
     // Ensure all values are sent, not just changed ones
     const completeValues = {

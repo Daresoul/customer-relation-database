@@ -20,7 +20,8 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-import { DeviceImportProvider, useDeviceImport } from '../../contexts/DeviceImportContext';
+import { DeviceImportProvider } from '../../contexts/DeviceImportContext';
+import { useDeviceImport } from '../../contexts/useDeviceImport';
 import { useDeviceDataListener } from '../useDeviceDataListener';
 
 let ctx: ReturnType<typeof useDeviceImport>;

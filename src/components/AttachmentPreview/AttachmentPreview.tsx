@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Button, Space, Spin, Typography } from 'antd';
 import { ExportOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
@@ -94,6 +94,9 @@ interface TextAttachmentPreviewProps {
  */
 export const TextAttachmentPreview: React.FC<TextAttachmentPreviewProps> = ({ blob, kind }) => {
   const { t } = useTranslation(['medical']);
+  // Async work reads the current t without re-running when the language changes.
+  const tRef = useRef(t);
+  tRef.current = t;
   const [content, setContent] = useState<React.ReactNode>(null);
   const [loading, setLoading] = useState(true);
 
@@ -114,6 +117,7 @@ export const TextAttachmentPreview: React.FC<TextAttachmentPreviewProps> = ({ bl
       })
       .catch((error) => {
         console.error('Failed to load file content:', error);
+        const t = tRef.current;
         if (!cancelled) setContent(t('medical:detail.fileContentLoadFailed'));
       })
       .finally(() => {

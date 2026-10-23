@@ -37,7 +37,7 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
   // Clear stale breed cache on mount to prevent showing wrong breeds
   useEffect(() => {
     queryClient.invalidateQueries({ queryKey: ['breeds'] });
-  }, []); // Only run once on mount
+  }, [queryClient]);
 
   // Update selected species when patient data changes
   useEffect(() => {
@@ -91,7 +91,7 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
     });
   }, [patient.name, patient.breed, patient.color, patient.microchipId, patient.dateOfBirth]);
 
-  const handleFieldUpdate = async (field: string, value: any) => {
+  const handleFieldUpdate = async (field: string, value: string | number | null) => {
 
     // Optimistic update for text fields
     if (field in localValues) {
@@ -120,15 +120,6 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
     validate: (value) => {
       if (!value || value.trim().length === 0) return t('detail.patientInfo.validation.nameRequired');
       if (value.length > PATIENT_FIELD_RULES.name.max) return t('detail.patientInfo.validation.nameTooLong', { max: PATIENT_FIELD_RULES.name.max });
-      return true;
-    }
-  });
-
-  const breedEdit = useInlineEdit({
-    value: localValues.breed || '',
-    onSave: (value) => handleFieldUpdate('breed', value),
-    validate: (value) => {
-      if (value && value.length > PATIENT_FIELD_RULES.breed.max) return t('detail.patientInfo.validation.breedTooLong', { max: PATIENT_FIELD_RULES.breed.max });
       return true;
     }
   });

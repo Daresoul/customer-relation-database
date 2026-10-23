@@ -1,13 +1,13 @@
 import { useCallback, useRef, useEffect } from 'react';
 import { debounce } from 'lodash';
 
-interface UseAutoSaveOptions {
-  onSave: (value: any) => void | Promise<void>;
+interface UseAutoSaveOptions<T> {
+  onSave: (value: T) => void | Promise<void>;
   delay?: number;
   enabled?: boolean;
 }
 
-export function useAutoSave({ onSave, delay = 500, enabled = true }: UseAutoSaveOptions) {
+export function useAutoSave<T>({ onSave, delay = 500, enabled = true }: UseAutoSaveOptions<T>) {
   const saveRef = useRef(onSave);
 
   // Update ref on every render to get latest onSave
@@ -16,7 +16,7 @@ export function useAutoSave({ onSave, delay = 500, enabled = true }: UseAutoSave
   });
 
   const debouncedSave = useRef(
-    debounce((value: any) => {
+    debounce((value: T) => {
       if (enabled) {
         saveRef.current(value);
       }
@@ -24,7 +24,7 @@ export function useAutoSave({ onSave, delay = 500, enabled = true }: UseAutoSave
   ).current;
 
   const triggerSave = useCallback(
-    (value: any) => {
+    (value: T) => {
       if (enabled) {
         debouncedSave(value);
       }

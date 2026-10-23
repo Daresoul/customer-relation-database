@@ -172,7 +172,7 @@ export interface SearchAnimalsResponse {
 export interface TauriError {
   code: string;
   message: string;
-  details?: any;
+  details?: unknown;
 }
 
 export type CommandResult<T> =

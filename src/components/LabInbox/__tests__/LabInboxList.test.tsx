@@ -42,7 +42,8 @@ vi.mock('@/hooks/useMedicalRecords', () => ({
   useMedicalRecords: () => ({ data: { records: [] }, isLoading: false, isError: false }),
 }));
 
-import { DeviceImportProvider, useDeviceImport } from '@/contexts/DeviceImportContext';
+import { DeviceImportProvider } from '@/contexts/DeviceImportContext';
+import { useDeviceImport } from '@/contexts/useDeviceImport';
 import LabInboxList from '../LabInboxList';
 
 let importCtx: ReturnType<typeof useDeviceImport>;

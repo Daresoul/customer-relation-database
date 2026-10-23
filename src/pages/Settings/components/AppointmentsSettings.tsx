@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Card, Form, Switch, Button, Typography, Alert, Space, App } from 'antd';
 import { CalendarOutlined, GoogleOutlined, LinkOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { useThemeColors } from '../../../utils/themeStyles';
 import { invoke } from '@/services/invoke';
 import { formatDateTime } from '../../../utils/dateFormatter';
 import styles from '../Settings.module.css';
@@ -33,7 +32,6 @@ const fromSqliteUtc = (value: string) => (/[zZ]|[+-]\d\d:\d\d$/.test(value) ? va
 
 const AppointmentsSettings: React.FC<AppointmentsSettingsProps> = ({ isUpdating }) => {
   const { t } = useTranslation(['common', 'forms', 'settings']);
-  const themeColors = useThemeColors();
   const { notification } = App.useApp();
   const [settings, setSettings] = useState<GoogleCalendarSettings>({
     connected: false,

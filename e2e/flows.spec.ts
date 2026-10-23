@@ -11,7 +11,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { installTauriMock, defaultMocks } from './helpers/mockInvoke';
+import { installTauriMock, defaultMocks, type MockedTauriWindow } from './helpers/mockInvoke';
 
 async function waitForBoot(page: import('@playwright/test').Page) {
   await page.goto('/');
@@ -19,12 +19,12 @@ async function waitForBoot(page: import('@playwright/test').Page) {
   // Drain initial-load invoke calls so test-specific calls are easy to spot.
   await page.waitForTimeout(200);
   await page.evaluate(() => {
-    (window as any).__INVOKE_CALLS__ = [];
+    (window as unknown as MockedTauriWindow).__INVOKE_CALLS__ = [];
   });
 }
 
 async function getCalls(page: import('@playwright/test').Page) {
-  return await page.evaluate(() => (window as any).__INVOKE_CALLS__ as any[]);
+  return await page.evaluate(() => (window as unknown as MockedTauriWindow).__INVOKE_CALLS__);
 }
 
 // ---------------------------------------------------------------------------
@@ -42,7 +42,7 @@ test.describe('Scan microchip — patient exists', () => {
         microchipId: '807010000007678', medicalNotes: null, isActive: true,
         householdId: null, createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z',
       }],
-      search_patients: (args: any) => {
+      search_patients: (args: { query?: string }) => {
         // Returns the matching patient when the chip query comes in
         if (args && args.query === '807010000007678') {
           return [{
@@ -76,7 +76,6 @@ test.describe('Scan microchip — patient exists', () => {
 
 test.describe('Scan microchip — no patient match', () => {
   test('scan with unknown chip triggers search that returns empty', async ({ page }) => {
-    let searchedCode: string | null = null;
     await installTauriMock(page, {
       ...defaultMocks(),
       // Return empty for the unknown chip
@@ -198,7 +197,7 @@ test.describe('Backup flow', () => {
 
     // Drain pre-existing calls
     await page.evaluate(() => {
-      (window as any).__INVOKE_CALLS__ = [];
+      (window as unknown as MockedTauriWindow).__INVOKE_CALLS__ = [];
     });
 
     const backupNowBtn = page.getByRole('button', { name: /backup now/i });

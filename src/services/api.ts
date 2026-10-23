@@ -7,7 +7,7 @@
 // via the Rust-side log_event command (which feeds vet-clinic.log → Loki).
 // Reporting lives in one place (services/invoke.ts) to avoid double-capture.
 import { invoke } from './invoke';
-import { ApiError, TauriError } from '../types/api';
+import { ApiError } from '../types/api';
 import { camelToSnakeObject, snakeToCamelObject } from '../utils/caseTransform';
 
 export class ApiService {
@@ -40,11 +40,11 @@ export class ApiService {
    * the outgoing transformation entirely and add `rename_all = "camelCase"`
    * to the remaining snake_case Rust DTOs.
    */
-  static async invoke<T>(command: string, args?: any): Promise<T> {
+  static async invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
     try {
       // Transform args from camelCase to snake_case for backend
-      const transformedArgs = args ? camelToSnakeObject(args) : undefined;
-      const result = await invoke<any>(command, transformedArgs);
+      const transformedArgs = args ? (camelToSnakeObject(args) as Record<string, unknown>) : undefined;
+      const result = await invoke<unknown>(command, transformedArgs);
       // Transform response from snake_case to camelCase for frontend
       return snakeToCamelObject(result) as T;
     } catch (error) {
@@ -67,9 +67,9 @@ export class ApiService {
    * camelCase object is a no-op, so this is safe for response structs
    * that DO have the rename too.
    */
-  static async invokeRaw<T>(command: string, args?: any): Promise<T> {
+  static async invokeRaw<T>(command: string, args?: Record<string, unknown>): Promise<T> {
     try {
-      const result = await invoke<any>(command, args);
+      const result = await invoke<unknown>(command, args);
       return snakeToCamelObject(result) as T;
     } catch (error) {
       console.error(`Tauri command failed: ${command}`, error);
@@ -80,7 +80,7 @@ export class ApiService {
   /**
    * Handle and normalize errors from Tauri commands
    */
-  private static handleError(error: any): ApiError {
+  private static handleError(error: unknown): ApiError {
     if (typeof error === 'string') {
       return {
         message: error,
@@ -89,12 +89,13 @@ export class ApiService {
     }
 
     if (error && typeof error === 'object') {
+      const tauriError = error as Partial<ApiError>;
       // Handle Tauri error format
-      if (error.message) {
+      if (tauriError.message) {
         return {
-          message: error.message,
-          code: error.code || 'TAURI_ERROR',
-          details: error.details
+          message: tauriError.message,
+          code: tauriError.code || 'TAURI_ERROR',
+          details: tauriError.details
         };
       }
 
@@ -116,14 +117,14 @@ export class ApiService {
   /**
    * Check if an error is a specific type
    */
-  static isApiError(error: any): error is ApiError {
-    return error && typeof error === 'object' && 'message' in error;
+  static isApiError(error: unknown): error is ApiError {
+    return !!error && typeof error === 'object' && 'message' in error;
   }
 
   /**
    * Create a standardized API error
    */
-  static createError(message: string, code?: string, details?: any): ApiError {
+  static createError(message: string, code?: string, details?: unknown): ApiError {
     return {
       message,
       code: code || 'API_ERROR',

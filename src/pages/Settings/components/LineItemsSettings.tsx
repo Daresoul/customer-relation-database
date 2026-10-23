@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Card, Form, Input, Button, Table, Space, Modal, Popconfirm, InputNumber, Select } from 'antd';
 import { DollarOutlined, PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { useThemeColors } from '../../../utils/themeStyles';
 import styles from '../Settings.module.css';
 import {
   useLineItemTemplates,
@@ -24,9 +23,8 @@ interface LineItemsSettingsProps {
   isUpdating: boolean;
 }
 
-const LineItemsSettings: React.FC<LineItemsSettingsProps> = ({ isUpdating }) => {
+const LineItemsSettings: React.FC<LineItemsSettingsProps> = () => {
   const { t } = useTranslation(['common', 'forms', 'settings']);
-  const themeColors = useThemeColors();
   const [modalVisible, setModalVisible] = useState(false);
   const [editingItem, setEditingItem] = useState<LineItemTemplate | null>(null);
   const [form] = Form.useForm();
@@ -109,7 +107,13 @@ const LineItemsSettings: React.FC<LineItemsSettingsProps> = ({ isUpdating }) => 
     }
   };
 
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: {
+    name: string;
+    description?: string;
+    defaultPrice: number;
+    currencyId: number;
+    defaultTaxRateId?: number | null;
+  }) => {
     try {
       const itemData = {
         name: values.name,
@@ -173,7 +177,7 @@ const LineItemsSettings: React.FC<LineItemsSettingsProps> = ({ isUpdating }) => 
       title: t('common:actionsLabel', 'Actions'),
       key: 'actions',
       width: 200,
-      render: (_: any, record: LineItemTemplate) => (
+      render: (_: unknown, record: LineItemTemplate) => (
         <Space>
           <Button
             icon={<EditOutlined />}

@@ -6,7 +6,7 @@
  * They MUST FAIL until the Tauri commands are registered in main.rs
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { invoke } from '@tauri-apps/api/tauri';
 
 describe('Update Commands - Contract Tests', () => {

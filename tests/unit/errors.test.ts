@@ -35,7 +35,6 @@ import {
   getErrorReporter,
   // Types
   type AppError,
-  type ErrorCategory,
 } from '../../src/utils/errors';
 
 describe('Error Utility', () => {

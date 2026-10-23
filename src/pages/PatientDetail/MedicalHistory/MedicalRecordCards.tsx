@@ -182,7 +182,7 @@ const MedicalRecordCards: React.FC<MedicalRecordCardsProps> = ({
               documents from device data. */}
           {(() => {
             const visibleAttachments = (record.attachments || []).filter(
-              (a: any) => a.attachmentType !== 'test_result',
+              (a) => a.attachmentType !== 'test_result',
             );
             if (visibleAttachments.length === 0) return null;
             return (

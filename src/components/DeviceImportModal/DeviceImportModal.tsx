@@ -34,13 +34,11 @@ import {
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { useDeviceImport } from '@/contexts/DeviceImportContext';
-import type { GroupedDeviceFile } from '@/contexts/DeviceImportContext';
+import { useDeviceImport } from '@/contexts/useDeviceImport';
 import { usePatients } from '@/hooks/usePatients';
 import { useCreateMedicalRecord, useUploadAttachment } from '@/hooks/useMedicalRecords';
 import type { SavedRecordDocuments } from '@/hooks/useDocumentStatusNotice';
 import { useSearchRecordTemplates } from '@/hooks/useRecordTemplates';
-import { useAppSettings } from '@/hooks/useAppSettings';
 import { useDebounce } from '@/hooks/useDebounce';
 import { CreateMedicalRecordInput } from '@/types/medical';
 import { Patient } from '@/types';
@@ -55,10 +53,10 @@ import dayjs from 'dayjs';
 import RecentDeviceFiles from '../RecentDeviceFiles';
 import CreatePatientSection from './CreatePatientSection';
 import { TabbedMedicalRecordFields } from '@/components/forms/fieldGroups';
-import type { RecordType, RecordTemplate } from '@/components/forms/fieldGroups';
-import styles from './DeviceImportModal.module.css';
+import type { RecordType } from '@/components/forms/fieldGroups';
 import { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
-import { listen } from '@tauri-apps/api/event';
+import { useTauriEvent } from '@/hooks/useTauriEvent';
+import { messageOf } from '@/utils/errors';
 import { validatePatientSelection, getMatchStrength } from '@/utils/deviceDataValidation';
 import type { MatchStrength } from '@/utils/deviceDataValidation';
 import type { ValidationWarning } from '@/types/deviceImport';
@@ -174,7 +172,6 @@ const DeviceImportDialog: React.FC = () => {
   const matchStrength = getMatchStrength(pendingFiles, pickedForCheck);
   const mismatches = pickedForCheck ? validatePatientSelection(pickedForCheck, pendingFiles).warnings : [];
 
-  const { settings } = useAppSettings();
   const createMutation = useCreateMedicalRecord();
   const uploadMutation = useUploadAttachment();
   const { data: searchedTemplates, isLoading: isSearchingTemplates } = useSearchRecordTemplates(debouncedSearchTerm, recordType);
@@ -230,36 +227,22 @@ const DeviceImportDialog: React.FC = () => {
     onScan: handleScanCode,
   });
 
-  // React to HID scan events (both wake-from-tray and scanner:barcode)
-  useEffect(() => {
-    let unlistenWake: (() => void) | undefined;
-    let unlistenBarcode: (() => void) | undefined;
-    const setup = async () => {
-      // wake-from-tray fires when the window was hidden and a scan brought it back
-      unlistenWake = await listen<any>('wake-from-tray', (event) => {
-        const payload = event.payload || {};
-        if (payload.cause === 'scan' && payload.code) {
-          handleScanCode(String(payload.code));
-        }
-      });
-      // scanner:barcode fires for every HID scan regardless of window visibility
-      unlistenBarcode = await listen<any>('scanner:barcode', (event) => {
-        const payload = event.payload || {};
-        if (payload.code) {
-          handleScanCode(String(payload.code));
-        }
-      });
-    };
-    setup();
-    return () => {
-      if (unlistenWake) unlistenWake();
-      if (unlistenBarcode) unlistenBarcode();
-    };
-  }, [patients, form]);
+  // wake-from-tray fires when the window was hidden and a scan brought it back
+  useTauriEvent<{ cause?: string; code?: unknown } | null>('wake-from-tray', (payload) => {
+    if (payload?.cause === 'scan' && payload.code) {
+      handleScanCode(String(payload.code));
+    }
+  });
+  // scanner:barcode fires for every HID scan regardless of window visibility
+  useTauriEvent<{ code?: unknown } | null>('scanner:barcode', (payload) => {
+    if (payload?.code) {
+      handleScanCode(String(payload.code));
+    }
+  });
 
   // Compute default form values based on device data
   const getDefaultFormValues = () => {
-    const defaults: any = {
+    const defaults: Record<string, unknown> = {
       recordType: 'test_result',
     };
 
@@ -286,7 +269,7 @@ const DeviceImportDialog: React.FC = () => {
     if (modalOpen) {
       refreshPatients();
     }
-  }, [modalOpen]);
+  }, [modalOpen, refreshPatients]);
 
   // Defaults for this result. A field only follows a new default while it still holds
   // the previous one (antd counts setFieldsValue as "touched", so that flag can't tell).
@@ -300,17 +283,12 @@ const DeviceImportDialog: React.FC = () => {
     );
     appliedDefaultsRef.current = { ...appliedDefaultsRef.current, ...updates };
     form.setFieldsValue(updates);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- defaults follow a new patient or file, not every render
   }, [suggestedPatientId, pendingFiles.length]);
 
   const handleRecordTypeChange = (value: RecordType) => {
     setRecordType(value);
     setTitleSearchTerm('');
-  };
-
-  const handleTemplateSelect = (template: RecordTemplate) => {
-    // Template fields are already set by MedicalRecordFieldGroup
-    // This callback is for any additional logic if needed
   };
 
   const handleRemoveFile = (fileId: string) => {
@@ -407,11 +385,11 @@ const DeviceImportDialog: React.FC = () => {
         duration: 3,
       });
       setRecentFilesDrawerOpen(false);
-    } catch (e: any) {
+    } catch (e) {
       console.error('Add recent file failed:', e);
       notification.error({
         message: t('common:error'),
-        description: e?.message || t('medical:deviceImport.addFailed', { name: originalName }),
+        description: messageOf(e) || t('medical:deviceImport.addFailed', { name: originalName }),
         placement: 'bottomRight',
       });
     }
@@ -443,12 +421,13 @@ const DeviceImportDialog: React.FC = () => {
             attachmentType: 'test_result',
             sourceFileId: file.sourceFileId,
           })
-          .then((res: any) => ({ status: 'fulfilled' as const, file, fileName: file.fileName, value: res }))
-          .catch((err: any) => ({ status: 'rejected' as const, file, fileName: file.fileName, reason: err }))
+          .then((res) => ({ status: 'fulfilled' as const, file, fileName: file.fileName, value: res }))
+          .catch((err: unknown) => ({ status: 'rejected' as const, file, fileName: file.fileName, reason: err }))
       )
     );
-    const successes = results.filter(r => r.status === 'fulfilled') as Array<{status: 'fulfilled'; file: GroupedDeviceFile; fileName: string; value: any}>;
-    const failures = results.filter(r => r.status === 'rejected') as Array<{status: 'rejected'; fileName: string; reason: any}>;
+    type Outcome = (typeof results)[number];
+    const successes = results.filter((r): r is Extract<Outcome, { status: 'fulfilled' }> => r.status === 'fulfilled');
+    const failures = results.filter((r): r is Extract<Outcome, { status: 'rejected' }> => r.status === 'rejected');
 
     if (successes.length > 0) {
       notification.success({
@@ -459,7 +438,7 @@ const DeviceImportDialog: React.FC = () => {
       });
     }
     if (failures.length > 0) {
-      const lines = failures.slice(0, 5).map(f => `• ${f.fileName}: ${f?.reason?.message || String(f.reason)}`).join('\n');
+      const lines = failures.slice(0, 5).map(f => `• ${f.fileName}: ${messageOf(f.reason) || String(f.reason)}`).join('\n');
       notification.warning({
         message: t('medical:deviceImport.partialSuccess', 'Some files failed to upload'),
         description: lines,
@@ -532,18 +511,19 @@ const DeviceImportDialog: React.FC = () => {
       await attachToExisting();
       return;
     }
-    let values: any;
+    let values: Pick<CreateMedicalRecordInput, 'patientId' | 'recordType' | 'name' | 'description' | 'prescriptionNotes'>;
     try {
       values = await form.validateFields();
-    } catch (err: any) {
+    } catch (err) {
       // AntD rejects with { errorFields: [{ name: ['fieldName'], errors: [...] }] }
       // on validation failure. Capture the field names so the tabbed
       // component can flag the right tab and switch to it — otherwise
       // the user clicks Create on (say) Line Items, the validation
       // error is on Description over in Standard, and nothing visible
       // happens.
-      if (err?.errorFields && Array.isArray(err.errorFields)) {
-        const names = err.errorFields.map((e: any) =>
+      const { errorFields: failedFields } = (err ?? {}) as { errorFields?: Array<{ name: (string | number)[] | string }> };
+      if (failedFields && Array.isArray(failedFields)) {
+        const names = failedFields.map((e) =>
           Array.isArray(e.name) ? e.name.join('.') : String(e.name),
         );
         setErrorFields(names);
@@ -761,7 +741,7 @@ const DeviceImportDialog: React.FC = () => {
             notFoundContent={patientsLoading ? t('medical:deviceImport.loadingPatients') : patientsError ? t('common:pickerLoadFailed') : t('medical:deviceImport.noPatientsFound')}
             data-testid="device-import-patient-select"
           >
-            {patients?.map((patient: any) => {
+            {patients?.map((patient) => {
               const main = `${patient.name} - ${patient.species}`;
               const hints = patientHints(patient, t);
               return (
@@ -826,7 +806,6 @@ const DeviceImportDialog: React.FC = () => {
           templates={searchedTemplates}
           isSearchingTemplates={isSearchingTemplates}
           onTemplateSearch={setTitleSearchTerm}
-          onTemplateSelect={handleTemplateSelect}
           hideRecordType={false}
           lineItems={lineItems}
           onLineItemsChange={setLineItems}

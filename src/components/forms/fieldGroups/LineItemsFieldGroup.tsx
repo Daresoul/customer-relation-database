@@ -36,7 +36,7 @@ import { useLineItemTemplates, useCreateLineItemTemplate } from '../../../hooks/
 import { formatMoney } from '@/utils/money';
 import { useCurrencies } from '../../../hooks/useCurrencies';
 import { useAppSettings } from '../../../hooks/useAppSettings';
-import type { LineItemTemplate, MedicalRecordLineItem, CreateLineItemInput } from '../../../types/lineItem';
+import type { MedicalRecordLineItem } from '../../../types/lineItem';
 import type { Currency } from '../../../types/medical';
 import { localeMoneyParser, localeNumberParser } from '../../../utils/localeNumber';
 import { useTaxRates, useInvoiceTotals } from '../../../hooks/useClinic';
@@ -45,6 +45,16 @@ import styles from '../Forms.module.css';
 
 const { Text, Title } = Typography;
 const { TextArea } = Input;
+
+/** The custom line item form. */
+interface CustomItemValues {
+  name: string;
+  description?: string;
+  unitPrice: number;
+  currencyId: number;
+  quantity?: number;
+  taxRateId?: number | null;
+}
 
 export interface LineItemsFieldGroupProps {
   /** Current line items */
@@ -186,7 +196,7 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
   /** Add (or update, in edit mode) a line item from validated form
    *  values. Does NOT touch the templates table — that's the
    *  "Save as template & add" path's job. */
-  const applyCustomFormValues = (values: any) => {
+  const applyCustomFormValues = (values: CustomItemValues) => {
     const existing = editingItemIndex !== null ? lineItems[editingItemIndex] : undefined;
     const base: MedicalRecordLineItem = {
       templateId: existing?.templateId,
@@ -232,7 +242,7 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
    *  If the template save fails (e.g. duplicate name), keep the modal
    *  open so the user can fix the name or fall back to "Add only". */
   const handleSaveAndAdd = async () => {
-    let values: any;
+    let values: CustomItemValues;
     try {
       values = await customForm.validateFields();
     } catch {
@@ -368,7 +378,7 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
       title: t('medical:lineItems.subtotal', 'Subtotal'),
       key: 'subtotal',
       width: 120,
-      render: (_: any, record: MedicalRecordLineItem, index: number) => (
+      render: (_: unknown, record: MedicalRecordLineItem, index: number) => (
         <Text strong>
           {formatPrice(totals?.lineAmounts[index] ?? record.unitPrice * record.quantity, record.currencyId)}
         </Text>
@@ -378,7 +388,7 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
       title: '',
       key: 'actions',
       width: 80,
-      render: (_: any, __: MedicalRecordLineItem, index: number) => (
+      render: (_: unknown, __: MedicalRecordLineItem, index: number) => (
         <Space>
           <Tooltip title={t('common:edit', 'Edit')}>
             <Button

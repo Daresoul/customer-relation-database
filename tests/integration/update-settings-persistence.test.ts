@@ -6,7 +6,7 @@
  * Verifies that update preferences persist across app restarts (simulated)
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { invoke } from '@tauri-apps/api/tauri';
 
 describe('T008: Update Settings Persistence', () => {

@@ -1,12 +1,10 @@
 import React from 'react';
-import { Card, Form, Select, Typography } from 'antd';
+import { Card, Form, Select } from 'antd';
 import { DollarOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { useThemeColors } from '../../../utils/themeStyles';
 import styles from '../Settings.module.css';
 import { useCurrencies } from '../../../hooks/useCurrencies';
 
-const { Text } = Typography;
 const { Option } = Select;
 
 interface BusinessSettingsProps {
@@ -15,7 +13,6 @@ interface BusinessSettingsProps {
 
 const BusinessSettings: React.FC<BusinessSettingsProps> = ({ isUpdating }) => {
   const { t } = useTranslation(['common', 'forms']);
-  const themeColors = useThemeColors();
   const { data: currencies, isLoading: currenciesLoading } = useCurrencies();
 
   return (

@@ -16,8 +16,7 @@
  *   - patients section missing in edit mode (the bug we just fixed).
  */
 
-import React from 'react';
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup, waitFor } from '@testing-library/react';
 
 // Mock the invoke service BEFORE the component imports it. Patient list
@@ -118,7 +117,7 @@ describe('HouseholdForm — patient association (create mode)', () => {
         initialValues={{
           lastName: 'NoId Household',
           contacts: [],
-        } as any}
+        }}
         onSubmit={vi.fn()}
         onCancel={vi.fn()}
       />,

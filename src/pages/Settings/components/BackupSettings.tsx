@@ -4,7 +4,7 @@
  * app startup if a destination is configured.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Card, Button, Typography, Space, App, Tag, Alert } from 'antd';
 import { FolderOpenOutlined, SaveOutlined, ClockCircleOutlined, WarningOutlined } from '@ant-design/icons';
 import { invoke } from '@/services/invoke';
@@ -24,26 +24,30 @@ interface BackupConfig {
 const BackupSettings: React.FC = () => {
   const { t } = useTranslation(['settings', 'common']);
   const { notification } = App.useApp();
+  // Async work reads the current t without re-running when the language changes.
+  const tRef = useRef(t);
+  tRef.current = t;
   const [config, setConfig] = useState<BackupConfig>({});
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
 
-  const reload = async () => {
+  const reload = useCallback(async () => {
     try {
       const c = await invoke<BackupConfig>('get_backup_config');
       setConfig(c || {});
-    } catch (e: any) {
+    } catch (e) {
+      const t = tRef.current;
       notification.error({
         message: t('common:error'),
         description: backupErrorText(e, t),
         placement: 'bottomRight',
       });
     }
-  };
+  }, [notification]);
 
   useEffect(() => {
     reload();
-  }, []);
+  }, [reload]);
 
   const handleChooseDirectory = async () => {
     try {
@@ -62,7 +66,7 @@ const BackupSettings: React.FC = () => {
         description: t('settings:backups.directorySaved', 'Backup destination saved'),
         placement: 'bottomRight',
       });
-    } catch (e: any) {
+    } catch (e) {
       notification.error({
         message: t('common:error'),
         description: backupErrorText(e, t),
@@ -83,7 +87,7 @@ const BackupSettings: React.FC = () => {
         description: t('settings:backups.runSuccess', 'Backup completed'),
         placement: 'bottomRight',
       });
-    } catch (e: any) {
+    } catch (e) {
       notification.error({
         message: t('common:error'),
         description: backupErrorText(e, t),

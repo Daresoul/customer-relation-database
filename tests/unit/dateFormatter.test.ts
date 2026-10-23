@@ -35,8 +35,7 @@ describe('dateFormatter Utility', () => {
 
   beforeEach(() => {
     localStorageMock = {};
-    // @ts-ignore - mocking global localStorage
-    global.localStorage = mockLocalStorage;
+    (globalThis as unknown as { localStorage: typeof mockLocalStorage }).localStorage = mockLocalStorage;
   });
 
   afterEach(() => {

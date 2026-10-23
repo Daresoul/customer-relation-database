@@ -9,7 +9,7 @@ export interface DeviceFileDownload {
   deviceType: string;
   deviceName: string;
   connectionMethod?: string | null;
-  testResults?: unknown;
+  testResults?: Record<string, unknown>;
 }
 
 export const fileHistoryService = {

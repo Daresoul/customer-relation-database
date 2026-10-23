@@ -9,7 +9,6 @@ import { isClosedStatus, statusColor, statusLabelKey } from '../../utils/appoint
 import { AppointmentStatusMenu } from './AppointmentStatusMenu';
 import cardStyles from './AppointmentCard.module.css';
 import { useRooms } from '../../hooks/useRooms';
-import { useThemeColors } from '../../utils/themeStyles';
 import WeekView from './WeekView';
 import DayViewSimple from './DayViewSimple';
 import { useTranslation } from 'react-i18next';
@@ -47,7 +46,6 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
 }) => {
   const { t } = useTranslation('appointments');
   const [selectedDate, setSelectedDate] = useState<Dayjs>(dayjs());
-  const themeColors = useThemeColors();
   const statusLabel = (status: AppointmentStatus) => t(statusLabelKey(status));
 
 
@@ -244,11 +242,6 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
     if (view === 'month') {
       onViewChange('day');
     }
-  };
-
-  // Handle date cell click for creating appointments
-  const handleDateClick = (date: Dayjs) => {
-    onCreateAppointment(date.toDate());
   };
 
   // Navigation handlers

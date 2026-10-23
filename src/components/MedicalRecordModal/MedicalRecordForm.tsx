@@ -105,7 +105,11 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
   // that contain failing fields and auto-switch to the first one.
   const [errorFields, setErrorFields] = useState<string[]>([]);
 
+  // The form resets when another record loads, not when the same record is refetched.
+  const initialValuesRef = useRef(initialValues);
+  initialValuesRef.current = initialValues;
   useEffect(() => {
+    const initialValues = initialValuesRef.current;
     if (initialValues) {
       form.setFieldsValue({
         recordType: initialValues.recordType,
@@ -235,7 +239,7 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
     setManualTotal(value);
   };
 
-  const handleFinish = (values: any) => {
+  const handleFinish = (values: Pick<CreateMedicalRecordInput, 'recordType' | 'name' | 'description'> & { visitWeight?: number | null }) => {
     // Convert MedicalRecordLineItem to CreateLineItemInput for submission
     // Cleared values go out as [] / null: a missing field means "unchanged"
     // to the backend, so leaving them out would keep the old ones.

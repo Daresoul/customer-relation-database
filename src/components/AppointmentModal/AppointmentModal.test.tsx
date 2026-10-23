@@ -1,11 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import * as appointmentHooks from '../../hooks/useAppointments';
 import AppointmentModal from './AppointmentModal';
 
 // Mock Ant Design components
 vi.mock('antd', () => ({
-  Modal: ({ open, onCancel, onOk, title, children }: any) => (
+  Modal: ({ open, onCancel, onOk, title, children }: {
+    open?: boolean;
+    onCancel?: () => void;
+    onOk?: () => void;
+    title?: React.ReactNode;
+    children?: React.ReactNode;
+  }) => (
     <div data-testid="modal" style={{ display: open ? 'block' : 'none' }}>
       <div data-testid="modal-title">{title}</div>
       <div data-testid="modal-content">{children}</div>
@@ -17,23 +24,32 @@ vi.mock('antd', () => ({
       </button>
     </div>
   ),
-  Form: ({ children, form, onFinish, initialValues }: any) => (
+  Form: ({ children, onFinish }: { children?: React.ReactNode; onFinish?: React.FormEventHandler<HTMLFormElement> }) => (
     <form data-testid="appointment-form" onSubmit={onFinish}>
       {children}
     </form>
   ),
-  'Form.Item': ({ children, label, name, rules }: any) => (
+  'Form.Item': ({ children, label, name, rules }: {
+    children?: React.ReactNode;
+    label?: React.ReactNode;
+    name?: string;
+    rules?: Array<{ required?: boolean }>;
+  }) => (
     <div data-testid={`form-item-${name}`}>
       <label data-testid={`label-${name}`}>{label}</label>
       {children}
-      {rules?.some((rule: any) => rule.required) && (
+      {rules?.some((rule) => rule.required) && (
         <span data-testid={`required-${name}`} aria-label="required">
           *
         </span>
       )}
     </div>
   ),
-  Input: ({ placeholder, value, onChange }: any) => (
+  Input: ({ placeholder, value, onChange }: {
+    placeholder?: string;
+    value?: string;
+    onChange?: React.ChangeEventHandler<HTMLInputElement>;
+  }) => (
     <input
       data-testid="input-field"
       placeholder={placeholder}
@@ -41,7 +57,12 @@ vi.mock('antd', () => ({
       onChange={onChange}
     />
   ),
-  'Input.TextArea': ({ placeholder, value, onChange, rows }: any) => (
+  'Input.TextArea': ({ placeholder, value, onChange, rows }: {
+    placeholder?: string;
+    value?: string;
+    onChange?: React.ChangeEventHandler<HTMLTextAreaElement>;
+    rows?: number;
+  }) => (
     <textarea
       data-testid="textarea-field"
       placeholder={placeholder}
@@ -50,7 +71,12 @@ vi.mock('antd', () => ({
       rows={rows}
     />
   ),
-  Select: ({ children, placeholder, value, onChange, loading, onSearch }: any) => (
+  Select: ({ children, placeholder, value, onChange }: {
+    children?: React.ReactNode;
+    placeholder?: string;
+    value?: string;
+    onChange?: (value: string) => void;
+  }) => (
     <select
       data-testid="select-field"
       value={value}
@@ -60,10 +86,15 @@ vi.mock('antd', () => ({
       {children}
     </select>
   ),
-  'Select.Option': ({ children, value }: any) => (
+  'Select.Option': ({ children, value }: { children?: React.ReactNode; value?: string | number }) => (
     <option value={value}>{children}</option>
   ),
-  TimePicker: ({ value, onChange, format, minuteStep }: any) => (
+  TimePicker: ({ value, onChange, format, minuteStep }: {
+    value?: string;
+    onChange?: (value: string) => void;
+    format?: string;
+    minuteStep?: number;
+  }) => (
     <input
       data-testid="time-picker"
       type="time"
@@ -73,7 +104,11 @@ vi.mock('antd', () => ({
       data-format={format}
     />
   ),
-  DatePicker: ({ value, onChange, placeholder }: any) => (
+  DatePicker: ({ value, onChange, placeholder }: {
+    value?: string;
+    onChange?: (value: string) => void;
+    placeholder?: string;
+  }) => (
     <input
       data-testid="date-picker"
       type="date"
@@ -82,7 +117,7 @@ vi.mock('antd', () => ({
       placeholder={placeholder}
     />
   ),
-  Alert: ({ message, type, showIcon }: any) => (
+  Alert: ({ message, type, showIcon }: { message?: React.ReactNode; type?: string; showIcon?: boolean }) => (
     <div data-testid="alert" data-type={type}>
       {showIcon && <span data-testid="alert-icon">!</span>}
       {message}
@@ -157,11 +192,12 @@ const createWrapper = () => {
     },
   });
 
-  return ({ children }: { children: React.ReactNode }) => (
+  const Wrapper = ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={queryClient}>
       {children}
     </QueryClientProvider>
   );
+  return Wrapper;
 };
 
 // TDD scaffold from appointments feature branch — stale antd mock
@@ -290,7 +326,7 @@ describe.skip('AppointmentModal', () => {
       },
     ]);
 
-    vi.mocked(require('../../hooks/useAppointments').useCheckConflicts).mockReturnValue({
+    vi.mocked(appointmentHooks.useCheckConflicts).mockReturnValue({
       mutate: mockCheckConflicts,
       data: [
         {
@@ -318,7 +354,7 @@ describe.skip('AppointmentModal', () => {
 
   it('saves appointment when form is submitted with valid data', async () => {
     const mockCreate = vi.fn();
-    vi.mocked(require('../../hooks/useAppointments').useCreateAppointment).mockReturnValue({
+    vi.mocked(appointmentHooks.useCreateAppointment).mockReturnValue({
       mutate: mockCreate,
       isPending: false,
     });
@@ -419,7 +455,7 @@ describe.skip('AppointmentModal', () => {
   });
 
   it('shows loading state while saving', () => {
-    vi.mocked(require('../../hooks/useAppointments').useCreateAppointment).mockReturnValue({
+    vi.mocked(appointmentHooks.useCreateAppointment).mockReturnValue({
       mutate: vi.fn(),
       isPending: true,
     });
@@ -437,7 +473,7 @@ describe.skip('AppointmentModal', () => {
   });
 
   it('disables save button during conflict check', () => {
-    vi.mocked(require('../../hooks/useAppointments').useCheckConflicts).mockReturnValue({
+    vi.mocked(appointmentHooks.useCheckConflicts).mockReturnValue({
       mutate: vi.fn(),
       data: null,
       isPending: true,

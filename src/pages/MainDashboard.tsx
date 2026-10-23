@@ -21,18 +21,20 @@ import { PageLoader } from '../components/common/Loading';
 import { NoPatientsFound, NoHouseholdsFound } from '../components/common/EmptyState';
 import { LoadError } from '../components/common/LoadError';
 import AppointmentsTab from './Appointments/AppointmentsTab';
-import { useViewContext } from '../contexts/ViewContext';
+import { useViewContext } from '../contexts/useViewContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { invalidatePatientData, invalidateHouseholdData } from '../hooks/invalidation';
 import api, { setAppInstance } from '../services/api.integration';
 import { PatientService } from '../services';
 import type { PatientWithHousehold } from '../types';
-import type { HouseholdTableRecord } from '../types/ui.types';
+import type { CreatePatientInput } from '../types';
+import type { HouseholdFormValues, HouseholdTableRecord } from '../types/ui.types';
 import { normalizeMicrochip } from '@/hooks/useBarcodeScanner';
 import { useTauriEvent } from '../hooks/useTauriEvent';
 import { BackupWarning } from '../components/BackupWarning';
 import { TodayStrip } from '../components/TodayStrip';
 import type { NewPatientFromScan } from '../layouts/ChipScanHandler';
+import { messageOf } from '../utils/errors';
 import styles from './MainDashboard.module.css';
 
 // Removed TabPane - using items prop instead
@@ -157,8 +159,8 @@ export const MainDashboard: React.FC = () => {
       app.notification.success({ message: res || `Seeded ${households} households` });
       setSeedOpen(false);
       await loadData();
-    } catch (e: any) {
-      app.notification.error({ message: e?.message || 'Failed to seed database' });
+    } catch (e) {
+      app.notification.error({ message: messageOf(e) || 'Failed to seed database' });
     } finally {
       setSeeding(false);
     }
@@ -170,7 +172,7 @@ export const MainDashboard: React.FC = () => {
   });
 
   // The dashboard only adds; editing happens on the patient and household pages.
-  const handleSavePatient = async (values: any) => {
+  const handleSavePatient = async (values: CreatePatientInput) => {
     const created = await api.patient.create(values);
     invalidatePatientData(queryClient);
     setShowPatientForm(false);
@@ -183,7 +185,7 @@ export const MainDashboard: React.FC = () => {
     }
   };
 
-  const handleSaveHousehold = async (values: any) => {
+  const handleSaveHousehold = async (values: HouseholdFormValues) => {
     await api.household.create(values);
     invalidateHouseholdData(queryClient);
     setShowHouseholdForm(false);

@@ -3,7 +3,7 @@
  * These tests verify that Ant Design components meet our application requirements
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ConfigProvider, Form, Table, Button, Input, Modal } from 'antd';
 import type { ThemeConfig } from 'antd/es/config-provider/context';
@@ -54,7 +54,7 @@ describe('Ant Design Component Contracts', () => {
 
   describe('Layout Components', () => {
     it('should render header with navigation tabs', () => {
-      const { container } = render(
+      render(
         <div className="app-header">
           <div className="logo">VetClinic Pro</div>
           <div className="navigation">
@@ -69,7 +69,7 @@ describe('Ant Design Component Contracts', () => {
     });
 
     it('should render toolbar with context actions', () => {
-      const { container } = render(
+      render(
         <div className="app-toolbar">
           <Button type="primary" data-testid="create-patient">
             Create New Patient
@@ -87,7 +87,7 @@ describe('Ant Design Component Contracts', () => {
     it('should validate patient form fields', async () => {
       const onSubmit = vi.fn();
 
-      const { container } = render(
+      render(
         <Form onFinish={onSubmit}>
           <Form.Item
             name="name"
@@ -117,7 +117,7 @@ describe('Ant Design Component Contracts', () => {
     });
 
     it('should validate microchip format', async () => {
-      const { container } = render(
+      render(
         <Form>
           <Form.Item
             name="microchip"
@@ -166,7 +166,7 @@ describe('Ant Design Component Contracts', () => {
         { key: '2', name: 'Max', species: 'dog' },
       ];
 
-      const { container } = render(
+      render(
         <Table columns={columns} dataSource={data} />
       );
 
@@ -203,7 +203,7 @@ describe('Ant Design Component Contracts', () => {
     it('should show confirmation modal', async () => {
       const onConfirm = vi.fn();
 
-      const { container } = render(
+      render(
         <Modal
           title="Confirm Action"
           open={true}
@@ -241,7 +241,7 @@ describe('Ant Design Component Contracts', () => {
 
   describe('Empty States', () => {
     it('should show empty state message', () => {
-      const { container } = render(
+      render(
         <div className="ant-empty">
           <div className="ant-empty-description">No patients found</div>
         </div>
@@ -253,7 +253,7 @@ describe('Ant Design Component Contracts', () => {
 
   describe('Accessibility', () => {
     it('should support keyboard navigation', () => {
-      const { container } = render(
+      render(
         <Form>
           <Form.Item>
             <Input data-testid="input1" />
@@ -266,8 +266,6 @@ describe('Ant Design Component Contracts', () => {
       );
 
       const input1 = screen.getByTestId('input1');
-      const input2 = screen.getByTestId('input2');
-      const button = screen.getByTestId('submit');
 
       // Verify tab order
       input1.focus();
@@ -279,7 +277,7 @@ describe('Ant Design Component Contracts', () => {
     });
 
     it('should have proper ARIA labels', () => {
-      const { container } = render(
+      render(
         <Form>
           <Form.Item label="Patient Name">
             <Input aria-label="Patient Name" />
@@ -332,7 +330,7 @@ describe('Performance Contracts', () => {
   });
 
   it('should validate form fields within 50ms', async () => {
-    const { container } = render(
+    render(
       <Form>
         <Form.Item
           name="test"

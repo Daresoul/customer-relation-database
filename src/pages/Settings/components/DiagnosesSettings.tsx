@@ -8,7 +8,7 @@
  * error if the diagnosis is still referenced by any medical record.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Card,
   Form,
@@ -68,6 +68,9 @@ const DEFAULT_TAG_COLOR = '#2f54eb';
 const DiagnosesSettings: React.FC = () => {
   const { t } = useTranslation(['settings', 'common']);
   const { notification } = App.useApp();
+  // Async work reads the current t without re-running when the language changes.
+  const tRef = useRef(t);
+  tRef.current = t;
   const [rows, setRows] = useState<Diagnosis[]>([]);
   const [loading, setLoading] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
@@ -75,14 +78,15 @@ const DiagnosesSettings: React.FC = () => {
   const [editing, setEditing] = useState<Diagnosis | null>(null);
   const [form] = Form.useForm();
 
-  const reload = async () => {
+  const reload = useCallback(async () => {
     setLoading(true);
     try {
       const data = await invoke<Diagnosis[]>('get_diagnoses', {
         activeOnly: !showInactive,
       });
       setRows(data || []);
-    } catch (e: any) {
+    } catch (e) {
+      const t = tRef.current;
       notification.error({
         message: t('common:error', 'Error'),
         description: errorText(e, t),
@@ -91,13 +95,12 @@ const DiagnosesSettings: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showInactive, notification]);
 
+  // showInactive change re-fetches so the table reflects the current filter.
   useEffect(() => {
     reload();
-    // showInactive change re-fetches so the table reflects the current filter.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showInactive]);
+  }, [reload]);
 
   const handleAddClick = () => {
     setEditing(null);
@@ -116,7 +119,7 @@ const DiagnosesSettings: React.FC = () => {
     setModalOpen(true);
   };
 
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: { name: string; description?: string; color?: string | { toHexString: () => string } }) => {
     // Ant's ColorPicker passes a Color object when interacted with; if
     // untouched it stays as the string we seeded. Normalize both forms
     // to a hex string for the backend.
@@ -155,7 +158,7 @@ const DiagnosesSettings: React.FC = () => {
           : t('settings:diagnoses.created', 'Diagnosis created'),
         placement: 'bottomRight',
       });
-    } catch (e: any) {
+    } catch (e) {
       notification.error({
         message: t('common:error', 'Error'),
         description: errorText(e, t),
@@ -168,7 +171,7 @@ const DiagnosesSettings: React.FC = () => {
     try {
       await invoke('delete_diagnosis', { id: d.id, hardDelete: false });
       await reload();
-    } catch (e: any) {
+    } catch (e) {
       notification.error({
         message: t('common:error', 'Error'),
         description: errorText(e, t),
@@ -184,7 +187,7 @@ const DiagnosesSettings: React.FC = () => {
         input: { isActive: true },
       });
       await reload();
-    } catch (e: any) {
+    } catch (e) {
       notification.error({
         message: t('common:error', 'Error'),
         description: errorText(e, t),

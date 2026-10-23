@@ -9,10 +9,8 @@ import {
   CloseCircleOutlined,
   ExclamationCircleOutlined,
   InfoCircleOutlined,
-  QuestionCircleOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import i18n from 'i18next';
 import styles from './Common.module.css';
 
 export interface ModalProps extends AntModalProps {
@@ -67,79 +65,6 @@ export const Modal: React.FC<ModalProps> = ({
   );
 };
 
-// Confirmation modal utilities
-export const confirm = AntModal.confirm;
-export const info = AntModal.info;
-export const success = AntModal.success;
-export const warning = AntModal.warning;
-export const error = AntModal.error;
-
-// Custom confirmation dialogs
-export const confirmDelete = ({
-  title = i18n.t('common:confirmDialog.deleteTitle'),
-  content = i18n.t('common:confirmDialog.deleteContent'),
-  onOk,
-  onCancel,
-  ...props
-}: Omit<Parameters<typeof confirm>[0], 'icon'>) => {
-  return confirm({
-    title,
-    icon: <ExclamationCircleOutlined className={styles.modalIconError} />,
-    content,
-    okText: i18n.t('common:delete'),
-    okType: 'danger',
-    cancelText: i18n.t('common:cancel'),
-    onOk,
-    onCancel,
-    ...props,
-  });
-};
-
-export const confirmAction = ({
-  title = i18n.t('common:confirmDialog.actionTitle'),
-  content = i18n.t('common:confirmDialog.actionContent'),
-  onOk,
-  onCancel,
-  ...props
-}: Omit<Parameters<typeof confirm>[0], 'icon'>) => {
-  return confirm({
-    title,
-    icon: <QuestionCircleOutlined className={styles.modalIconInfo} />,
-    content,
-    okText: i18n.t('common:confirm'),
-    cancelText: i18n.t('common:cancel'),
-    onOk,
-    onCancel,
-    ...props,
-  });
-};
-
-// Alert modal (simplified)
-export const alert = ({
-  title,
-  content,
-  type = 'info',
-  ...props
-}: {
-  title: string;
-  content: React.ReactNode;
-  type?: 'info' | 'success' | 'warning' | 'error';
-} & Partial<Parameters<typeof info>[0]>) => {
-  const modalFunctions = {
-    info,
-    success,
-    warning,
-    error,
-  };
-
-  return modalFunctions[type]({
-    title,
-    content,
-    ...props,
-  });
-};
-
-// Form Modal Component
 export interface FormModalProps extends ModalProps {
   submitText?: string;
   cancelText?: string;

@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Table, Button, Tag, Space, Typography, Tooltip, App, Modal } from 'antd';
-import { ClockCircleOutlined, CheckCircleOutlined, WarningOutlined, EyeOutlined, PlusOutlined, FileSearchOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, WarningOutlined, EyeOutlined, PlusOutlined, FileSearchOutlined } from '@ant-design/icons';
 import { fileHistoryService } from '../services/fileHistoryService';
 import type { FileAccessHistoryWithRecord } from '../types/fileHistory';
 import { getDeviceTypeDisplayName } from '../types/deviceIntegration';
@@ -42,18 +42,23 @@ const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, da
     }
   };
 
+  // The refresh handed out stays the same function and always loads with the current props.
+  const loadRef = useRef(loadRecentFiles);
+  loadRef.current = loadRecentFiles;
+  const refresh = useCallback(() => {
+    void loadRef.current();
+  }, []);
+
   useEffect(() => {
-    loadRecentFiles();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [days]);
+    refresh();
+  }, [days, refresh]);
 
   // Expose refresh function to parent
   useEffect(() => {
     if (onRefreshNeeded) {
-      onRefreshNeeded(loadRecentFiles);
+      onRefreshNeeded(refresh);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onRefreshNeeded]);
+  }, [onRefreshNeeded, refresh]);
 
   const handleAddToRecord = (file: FileAccessHistoryWithRecord) => {
     if (onAddToRecord) {
@@ -159,7 +164,7 @@ const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, da
       key: 'status',
       width: 100,
       align: 'center' as const,
-      render: (_: any, record: FileAccessHistoryWithRecord) => {
+      render: (_: unknown, record: FileAccessHistoryWithRecord) => {
         if (record.status === 'failed') {
           return (
             <Tooltip title={`${t('recentFiles.couldNotReadHint')}${record.error ? ` (${record.error})` : ''}`}>
@@ -187,7 +192,7 @@ const RecentDeviceFiles: React.FC<RecentDeviceFilesProps> = ({ onAddToRecord, da
       key: 'actions',
       width: 210,
       fixed: 'right' as const,
-      render: (_: any, record: FileAccessHistoryWithRecord) => (
+      render: (_: unknown, record: FileAccessHistoryWithRecord) => (
         <Space size="small">
           <Tooltip title={t('medical:recentFiles.fileDetailsTooltip')}>
             <Button

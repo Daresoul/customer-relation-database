@@ -19,7 +19,30 @@ import type { AppSettings } from '../../src/types/generated/AppSettings';
 import type { SettingsResponse } from '../../src/types/generated/SettingsResponse';
 
 /** A handler returns the value the Tauri command would return. */
-export type CommandHandler<TArgs = any, TResult = any> = (args: TArgs) => TResult | Promise<TResult>;
+export type CommandHandler<TArgs = never, TResult = unknown> = (args: TArgs) => TResult | Promise<TResult>;
+
+/** One recorded invoke. */
+export interface InvokeCall {
+  cmd: string;
+  args: Record<string, unknown>;
+}
+
+/** The IPC message @tauri-apps/api sends: the command, its callback ids and its args. */
+interface IpcMessage {
+  cmd: string;
+  callback: number;
+  error: number;
+  [arg: string]: unknown;
+}
+
+/** The window as the init script leaves it. */
+export interface MockedTauriWindow {
+  __INVOKE_CALLS__: InvokeCall[];
+  __TAURI_IPC__: (message: IpcMessage) => void;
+  __TAURI__: unknown;
+  __TAURI_METADATA__: unknown;
+  [callback: `_${number}`]: ((value: unknown) => void) | undefined;
+}
 
 /** Map of command name → handler. Each test composes the subset it needs. */
 export type CommandMap = Record<string, CommandHandler>;
@@ -30,22 +53,22 @@ export type CommandMap = Record<string, CommandHandler>;
  */
 export async function installTauriMock(page: Page, handlers: CommandMap): Promise<void> {
   await page.addInitScript((serializedHandlers) => {
-    const commandHandlers: Record<string, (args: any) => any> = {};
+    const w = window as unknown as MockedTauriWindow;
+    const commandHandlers: Record<string, (args: Record<string, unknown>) => unknown> = {};
     for (const [name, body] of Object.entries(serializedHandlers as Record<string, string>)) {
-      // eslint-disable-next-line no-new-func
-      commandHandlers[name] = new Function('args', `return (${body})(args);`) as any;
+      commandHandlers[name] = new Function('args', `return (${body})(args);`) as (args: Record<string, unknown>) => unknown;
     }
 
-    (window as any).__INVOKE_CALLS__ = [];
+    w.__INVOKE_CALLS__ = [];
 
     // Tauri 1.x IPC entry. The @tauri-apps/api invoke calls this internally.
-    (window as any).__TAURI_IPC__ = function (message: any) {
+    w.__TAURI_IPC__ = function (message: IpcMessage) {
       const { cmd, callback, error, ...args } = message;
-      (window as any).__INVOKE_CALLS__.push({ cmd, args });
+      w.__INVOKE_CALLS__.push({ cmd, args });
 
       const handler = commandHandlers[cmd];
-      const respond = (key: number, value: any) => {
-        const cb = (window as any)[`_${key}`];
+      const respond = (key: number, value: unknown) => {
+        const cb = w[`_${key}`];
         if (typeof cb === 'function') cb(value);
       };
 
@@ -57,8 +80,8 @@ export async function installTauriMock(page: Page, handlers: CommandMap): Promis
 
       try {
         const result = handler(args);
-        if (result && typeof (result as any).then === 'function') {
-          (result as Promise<any>).then(
+        if (result && typeof (result as Promise<unknown>).then === 'function') {
+          (result as Promise<unknown>).then(
             (v) => respond(callback, v),
             (e) => respond(error, e instanceof Error ? e.message : String(e)),
           );
@@ -72,8 +95,8 @@ export async function installTauriMock(page: Page, handlers: CommandMap): Promis
 
     // Identify ourselves as a Tauri context so the frontend's environment
     // checks pass.
-    (window as any).__TAURI__ = { invoke: () => { throw new Error('use @tauri-apps/api/tauri'); } };
-    (window as any).__TAURI_METADATA__ = { __currentWindow: { label: 'main' }, __windows: [] };
+    w.__TAURI__ = { invoke: () => { throw new Error('use @tauri-apps/api/tauri'); } };
+    w.__TAURI_METADATA__ = { __currentWindow: { label: 'main' }, __windows: [] };
   }, serializeHandlers(handlers));
 }
 

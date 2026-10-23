@@ -13,7 +13,7 @@ interface SpeciesSettingsProps {
   isUpdating: boolean;
 }
 
-const SpeciesSettings: React.FC<SpeciesSettingsProps> = ({ isUpdating }) => {
+const SpeciesSettings: React.FC<SpeciesSettingsProps> = () => {
   const { t } = useTranslation(['common', 'forms', 'settings', 'entities']);
   const [speciesModalVisible, setSpeciesModalVisible] = useState(false);
   const [editingSpecies, setEditingSpecies] = useState<Species | null>(null);
@@ -69,7 +69,7 @@ const SpeciesSettings: React.FC<SpeciesSettingsProps> = ({ isUpdating }) => {
     }
   };
 
-  const handleSpeciesSubmit = async (values: any) => {
+  const handleSpeciesSubmit = async (values: { name: string; active?: boolean }) => {
     try {
       const speciesData = {
         name: toTitleCase(values.name.trim()),
@@ -135,7 +135,7 @@ const SpeciesSettings: React.FC<SpeciesSettingsProps> = ({ isUpdating }) => {
     }
   };
 
-  const handleBreedSubmit = async (values: any) => {
+  const handleBreedSubmit = async (values: { name: string; speciesId: number; active?: boolean }) => {
     try {
       const breedData = {
         name: toTitleCase(values.name.trim()),
@@ -201,7 +201,7 @@ const SpeciesSettings: React.FC<SpeciesSettingsProps> = ({ isUpdating }) => {
       title: t('common:actionsLabel'),
       key: 'actions',
       width: 150,
-      render: (_: any, record: Breed) => (
+      render: (_: unknown, record: Breed) => (
         <Space>
           <Button
             icon={<EditOutlined />}
@@ -262,7 +262,7 @@ const SpeciesSettings: React.FC<SpeciesSettingsProps> = ({ isUpdating }) => {
       title: t('common:actionsLabel'),
       key: 'actions',
       width: 250,
-      render: (_: any, record: Species) => (
+      render: (_: unknown, record: Species) => (
         <Space>
           <Button
             icon={<PlusOutlined />}
@@ -329,7 +329,7 @@ const SpeciesSettings: React.FC<SpeciesSettingsProps> = ({ isUpdating }) => {
             expandedRowKeys,
             onExpandedRowsChange: (keys) => setExpandedRowKeys(keys as number[]),
             expandedRowRender: (species: Species) => {
-              const speciesBreeds = allBreeds.filter((breed: any) => breed.speciesId === species.id);
+              const speciesBreeds = allBreeds.filter((breed) => breed.speciesId === species.id);
 
               if (speciesBreeds.length === 0) {
                 return (

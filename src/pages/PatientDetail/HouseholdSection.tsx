@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Card, Typography, Descriptions, Tag, Space, Button, Select, App } from 'antd';
-import { HomeOutlined, UserOutlined, PhoneOutlined, MailOutlined, PlusOutlined, SwapOutlined, DisconnectOutlined } from '@ant-design/icons';
+import { HomeOutlined, UserOutlined, PhoneOutlined, MailOutlined, PlusOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -13,6 +13,7 @@ import { invalidatePatientData, invalidateHouseholdData } from '../../hooks/inva
 import { useThemeColors } from '../../utils/themeStyles';
 import styles from './PatientDetail.module.css';
 import { errorText } from '@/utils/notifyError';
+import type { HouseholdWithPeople } from '@/types/generated/HouseholdWithPeople';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -56,7 +57,7 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({
   // renders the read-only summary instead and we never reach here.)
   const { data: allHouseholds = [], isLoading: isLoadingHouseholds } = useQuery({
     queryKey: ['all-households'],
-    queryFn: () => invoke<any[]>('get_all_households', {}),
+    queryFn: () => invoke<HouseholdWithPeople[]>('get_all_households', {}),
     enabled: !household && !loadFailed && mode === 'pick',
   });
 
@@ -123,32 +124,6 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({
     }
   };
 
-  const handleUnlinkHousehold = async () => {
-    if (!patientId) return;
-
-    setIsLoading(true);
-    try {
-      await PatientService.updatePatientHousehold(patientId, null);
-      notification.success({
-        message: t('detail.householdInfo.unlinkSuccess'),
-        placement: 'bottomRight',
-        duration: 3,
-      });
-      invalidatePatientData(queryClient);
-      invalidateHouseholdData(queryClient);
-      onHouseholdChanged?.();
-    } catch (error) {
-      notification.error({
-        message: t('detail.householdInfo.unlinkFailed'),
-        description: errorText(error, t),
-        placement: 'bottomRight',
-        duration: 5,
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   if (loadFailed) {
     return (
       <Card
@@ -191,9 +166,9 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({
               value={selectedHouseholdId}
               allowClear
             >
-              {allHouseholds.map((h: any) => (
-                <Option key={h.household?.id || h.id} value={h.household?.id || h.id}>
-                  {h.household?.householdName || h.householdName || h.household?.household_name || t('entities:defaults.unknown')}
+              {allHouseholds.map((h) => (
+                <Option key={h.household.id} value={h.household.id}>
+                  {h.household.household_name || t('entities:defaults.unknown')}
                 </Option>
               ))}
             </Select>

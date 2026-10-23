@@ -5,7 +5,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { invoke } from '@/services/invoke';
 import { DeviceIntegrationService } from '../services/deviceIntegrationService';
-import { DeviceIntegration, CreateDeviceIntegrationInput, UpdateDeviceIntegrationInput, DeviceConnectionStatus, FileWatcherStatus } from '../types/deviceIntegration';
+import { CreateDeviceIntegrationInput, UpdateDeviceIntegrationInput, DeviceConnectionStatus, FileWatcherStatus } from '../types/deviceIntegration';
 import { createMutationErrorHandler, type MutationOperation } from '../utils/errors';
 import { portInUseBy } from '../utils/deviceErrors';
 

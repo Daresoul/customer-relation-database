@@ -88,7 +88,7 @@ export const PatientFieldGroup: React.FC<PatientFieldGroupProps> = ({
     : !!selectedSpeciesValue;
 
   // Validate date of birth is not in the future
-  const validateAge = (_: any, value: Dayjs | null) => {
+  const validateAge = (_: unknown, value: Dayjs | null) => {
     if (!value) {
       return Promise.resolve();
     }

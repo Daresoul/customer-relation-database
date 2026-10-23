@@ -36,6 +36,7 @@ import {
 import type { HouseholdFormValues, ContactFormValues } from '../../types/ui.types';
 import { invoke } from '@/services/invoke';
 import { DuplicateHouseholdWarning } from './DuplicateHouseholdWarning';
+import { messageOf } from '../../utils/errors';
 import styles from './Forms.module.css';
 
 /** Subset of the Patient model that's enough to render the
@@ -49,7 +50,7 @@ interface PatientLite {
   householdId?: number | null;
 }
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 interface HouseholdFormProps {
   initialValues?: HouseholdFormValues;
@@ -67,6 +68,9 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
   mode = 'create',
 }) => {
   const { t } = useTranslation(['households', 'patients', 'forms', 'common', 'entities']);
+  // Async work reads the current t without re-running when the language changes.
+  const tRef = useRef(t);
+  tRef.current = t;
   const [form] = Form.useForm();
   const [duplicateCount, setDuplicateCount] = useState(0);
   const watchedName = Form.useWatch('lastName', form) as string | undefined;
@@ -110,6 +114,7 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
       setHouseholdPatients(pets || []);
     } catch (err) {
       console.error('Failed to load household patients:', err);
+      const t = tRef.current;
       message.error(t('form.loadPatientsFailed'));
     } finally {
       setLoadingPatients(false);
@@ -161,9 +166,9 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
       setSearchValue('');
       setSearchResults([]);
       await refreshHouseholdPatients();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Add patient failed:', err);
-      message.error(t('form.addPatientFailed', { error: err?.message || err }));
+      message.error(t('form.addPatientFailed', { error: messageOf(err) || err }));
     }
   };
 
@@ -173,9 +178,9 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
       await invoke('unlink_patient_from_household', { patientId, householdId });
       message.success(t('form.patientRemoved'));
       await refreshHouseholdPatients();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Remove patient failed:', err);
-      message.error(t('form.removePatientFailed', { error: err?.message || err }));
+      message.error(t('form.removePatientFailed', { error: messageOf(err) || err }));
     }
   };
 
@@ -313,7 +318,7 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
                         name={[name, 'phone']}
                         label={t('entities:contactTypes.phone')}
                         rules={[
-                          { pattern: /^[\d\s\-\+\(\)]+$/, message: t('form.invalidPhone') },
+                          { pattern: /^[\d\s\-+()]+$/, message: t('form.invalidPhone') },
                         ]}
                       >
                         <Input placeholder={t('form.phonePlaceholder')} prefix={<PhoneOutlined />} />

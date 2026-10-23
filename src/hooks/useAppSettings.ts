@@ -1,10 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { SettingsService, UpdateSettingsRequest } from '../services/settingsService';
+import { SettingsService } from '../services/settingsService';
 import { useTranslation } from 'react-i18next';
 import { useEffect } from 'react';
 import { App } from 'antd';
 import { updateDateFormatInStorage } from '../utils/dateFormatter';
-import { useTheme } from '../contexts/ThemeContext';
+import { useTheme } from '../contexts/useTheme';
 import { createMutationErrorHandler } from '../utils/errors';
 
 export const useAppSettings = () => {

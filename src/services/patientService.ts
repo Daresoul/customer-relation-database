@@ -53,16 +53,16 @@ export class PatientService {
       dateOfBirth: input.dateOfBirth || null,
       weight: input.weight || null,
       medicalNotes: input.notes || null,
-      householdId: input.householdId || null
+      householdId: input.householdId || null,
+      // Include color and microchipId in DTO now that backend supports them
+      ...(input.color !== undefined ? { color: input.color || null } : {}),
+      ...(input.microchipId !== undefined ? { microchipId: input.microchipId || null } : {}),
     };
 
     // Use raw invoke to preserve camelCase DTO expected by backend
-    // Include color and microchipId in DTO now that backend supports them
-    if (input.color !== undefined) (dto as any).color = input.color || null;
-    if (input.microchipId !== undefined) (dto as any).microchipId = input.microchipId || null;
 
     const created = await ApiService.invokeRaw<Patient>('create_patient', { dto });
-    try { await emit('patient-created', created as any); } catch {}
+    try { await emit('patient-created', created); } catch { /* the event is a hint; the patient is saved */ }
     return created;
   }
 

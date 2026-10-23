@@ -1,19 +1,19 @@
-import React, { useMemo, useState, useEffect, useRef } from 'react';
+import React, { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Layout, Card, Typography, Space, Button, Alert, Spin, Table, Tag, Descriptions, App, Switch, Breadcrumb, Drawer, Popconfirm } from 'antd';
-import { invoke, convertFileSrc } from '@/services/invoke';
+import { invoke } from '@/services/invoke';
 import { useTranslation } from 'react-i18next';
 import PdfInlineViewer from '@/components/PdfInlineViewer';
 import PdfMultiPagePreview from '@/components/PdfMultiPagePreview';
 import { getAttachmentPreviewKind, HtmlAttachmentNotice, TextAttachmentPreview } from '@/components/AttachmentPreview';
 import RecentDeviceFiles from '@/components/RecentDeviceFiles';
-import { HomeOutlined, ArrowLeftOutlined, EditOutlined, SaveOutlined, CloseOutlined, ReloadOutlined, HistoryOutlined, PrinterOutlined } from '@ant-design/icons';
+import { HomeOutlined, ArrowLeftOutlined, EditOutlined, ReloadOutlined, HistoryOutlined, PrinterOutlined } from '@ant-design/icons';
 import { useMedicalRecord, useUpdateMedicalRecord, useCurrencies } from '@/hooks/useMedicalRecords';
 import { usePatientDetail } from '@/hooks/usePatient';
 import { MedicalService } from '@/services/medicalService';
 import { isTauri as detectTauri } from '@/utils/isTauri';
 import PrintReportModal from '@/components/PrintReportModal';
-import type { PatientOverrides, PatientInfo } from '@/types/report';
+import type { PatientInfo } from '@/types/report';
 import type { MedicalAttachment } from '@/types/medical';
 import MedicalRecordForm from '@/components/MedicalRecordModal/MedicalRecordForm';
 import DiagnosisTagList from '@/components/DiagnosisTagList';
@@ -29,6 +29,7 @@ import { labInboxService } from '@/services/labInboxService';
 import { invalidateLabInboxData } from '@/hooks/invalidation';
 import { InvoiceSummaryRows } from '@/components/InvoiceSummaryRows';
 import { formatMoney } from '@/utils/money';
+import { messageOf } from '@/utils/errors';
 import styles from './MedicalRecordDetailPage.module.css';
 import DocumentUpload from './DocumentUpload';
 import { invalidateRecordFiles } from '@/hooks/invalidation';
@@ -57,7 +58,6 @@ export const MedicalRecordDetailPage: React.FC = () => {
   }, [isEditing]);
   const confirmLeave = useUnsavedChangesGuard(isEditing && editDirty);
   const [selectedVersion, setSelectedVersion] = useState<number | null>(null);
-  const [selectedHistory, setSelectedHistory] = useState<MedicalRecordHistory | null>(null);
   const [showDiffs, setShowDiffs] = useState(false);
   const [displayRecord, setDisplayRecord] = useState<MedicalRecord | null>(null);
   const [regeneratingId, setRegeneratingId] = useState<number | null>(null);
@@ -68,8 +68,8 @@ export const MedicalRecordDetailPage: React.FC = () => {
   const [printReportModalOpen, setPrintReportModalOpen] = useState(false);
 
   const record = data?.record;
-  const history = (data?.history || []) as MedicalRecordHistory[];
-  const attachments = (data as any)?.attachments || [];
+  const history = useMemo(() => data?.history || [], [data?.history]);
+  const attachments = useMemo(() => data?.attachments || [], [data?.attachments]);
 
   // Split attachments into two groups so the user can find documents
   // and raw device data separately:
@@ -84,11 +84,11 @@ export const MedicalRecordDetailPage: React.FC = () => {
   // Both groups render in the same kind of table so behaviour is
   // consistent; they just sit in two separate cards.
   const documentAttachments = useMemo(
-    () => attachments.filter((a: any) => a.attachmentType !== 'test_result'),
+    () => attachments.filter((a) => a.attachmentType !== 'test_result'),
     [attachments],
   );
   const deviceDataAttachments = useMemo(
-    () => attachments.filter((a: any) => a.attachmentType === 'test_result'),
+    () => attachments.filter((a) => a.attachmentType === 'test_result'),
     [attachments],
   );
 
@@ -144,43 +144,34 @@ export const MedicalRecordDetailPage: React.FC = () => {
       });
   }, [history]);
 
-  function parseMaybeJson(v: any): any | null {
+  function parseMaybeJson(v: unknown): Record<string, unknown> | null {
     if (!v) return null;
     if (typeof v === 'string') {
       try { return JSON.parse(v); } catch { return null; }
     }
-    if (typeof v === 'object') return v;
+    if (typeof v === 'object') return v as Record<string, unknown>;
     return null;
   }
 
-  const buildSnapshotForVersion = (targetVersion: number | null) => {
+  const currentTargetVersion = selectedVersion ?? record?.version ?? null;
+  const snapshot = useMemo(() => {
     if (!record) return null;
-    if (!targetVersion) return record;
-    let snap: any = { ...record };
-    const withDiffs = sortedHistory.filter(h => (h as any).oldValues || (h as any).newValues);
-    if (withDiffs.length === 0) return snap;
+    if (!currentTargetVersion) return record;
+    const snap: Record<string, unknown> = { ...record };
+    const withDiffs = sortedHistory.filter(h => h.oldValues || h.newValues);
+    if (withDiffs.length === 0) return record;
     for (const h of withDiffs) {
-      if (h.version > targetVersion) {
-        const oldVals = parseMaybeJson((h as any).oldValues);
+      if (h.version > currentTargetVersion) {
+        const oldVals = parseMaybeJson(h.oldValues);
         if (oldVals) {
           Object.keys(oldVals).forEach(k => {
-            (snap as any)[camelize(k)] = oldVals[k];
+            snap[camelize(k)] = oldVals[k];
           });
         }
       }
     }
-    return snap as MedicalRecord;
-  };
-
-  const currentTargetVersion = selectedVersion ?? record?.version ?? null;
-  const prevVersion = useMemo(() => {
-    if (!currentTargetVersion) return null;
-    const lower = sortedHistory.find(h => h.version < currentTargetVersion);
-    return lower ? lower.version : null;
-  }, [sortedHistory, currentTargetVersion]);
-
-  const snapshot = useMemo(() => buildSnapshotForVersion(currentTargetVersion), [currentTargetVersion, sortedHistory]);
-  const prevSnapshot = useMemo(() => buildSnapshotForVersion(prevVersion), [prevVersion, sortedHistory]);
+    return snap as unknown as MedicalRecord;
+  }, [record, currentTargetVersion, sortedHistory]);
   // When the record's version increases (= an update just happened and
   // refetch brought back a new version), clear the manual version selection
   // so the auto-select effect below re-picks the new latest. Without this,
@@ -188,20 +179,19 @@ export const MedicalRecordDetailPage: React.FC = () => {
   // the rendered description would not reflect the just-saved value until
   // the user reloads. Track via ref to detect monotonic increases.
   const lastSeenVersion = useRef<number | null>(null);
+  const recordVersion = record?.version;
   useEffect(() => {
-    if (!record) return;
-    if (lastSeenVersion.current !== null && record.version > lastSeenVersion.current) {
+    if (recordVersion == null) return;
+    if (lastSeenVersion.current !== null && recordVersion > lastSeenVersion.current) {
       setSelectedVersion(null);
-      setSelectedHistory(null);
     }
-    lastSeenVersion.current = record.version;
-  }, [record?.version]);
+    lastSeenVersion.current = recordVersion;
+  }, [recordVersion]);
 
   // Auto-select the latest version on first load (or after a reset above)
   useEffect(() => {
     if (!selectedVersion && sortedHistory.length > 0) {
       setSelectedVersion(sortedHistory[0].version);
-      setSelectedHistory(sortedHistory[0] as any);
     }
   }, [sortedHistory, selectedVersion]);
   useEffect(() => {
@@ -243,8 +233,6 @@ export const MedicalRecordDetailPage: React.FC = () => {
     if (!selectedVersion) return null;
     return sortedHistory.find(h => h.version === selectedVersion) || null;
   }, [sortedHistory, selectedVersion]);
-  const selectedOld = useMemo(() => parseMaybeJson((selectedEntry as any)?.oldValues), [selectedEntry]);
-  const selectedNew = useMemo(() => parseMaybeJson((selectedEntry as any)?.newValues), [selectedEntry]);
 
   // useEffect removed - was only used for debug logging
 
@@ -263,7 +251,6 @@ export const MedicalRecordDetailPage: React.FC = () => {
 
   const backToCurrent = () => {
     setSelectedVersion(null);
-    setSelectedHistory(null);
   };
 
   const columns = [
@@ -272,8 +259,8 @@ export const MedicalRecordDetailPage: React.FC = () => {
       dataIndex: 'version',
       key: 'version',
       width: 120,
-      render: (_: any, row: any) => (
-        <Button type="link" size="small" onClick={() => { setSelectedVersion(row.version); setSelectedHistory(row as any); setShowDiffs(true); }}>
+      render: (_: unknown, row: MedicalRecordHistory) => (
+        <Button type="link" size="small" onClick={() => { setSelectedVersion(row.version); setShowDiffs(true); }}>
           v{row.version}
         </Button>
       )
@@ -281,8 +268,8 @@ export const MedicalRecordDetailPage: React.FC = () => {
     { title: t('medical:detail.changedAt'), dataIndex: 'changedAt', key: 'changedAt', render: (v: string) => new Date(v).toLocaleString() },
     { title: t('medical:detail.changedBy'), dataIndex: 'changedBy', key: 'changedBy', render: (v: string) => v || '-' },
     {
-      title: t('medical:detail.fields'), key: 'fields', render: (_: any, row: any) => {
-        const cf = (row as any).changedFields;
+      title: t('medical:detail.fields'), key: 'fields', render: (_: unknown, row: MedicalRecordHistory) => {
+        const cf: unknown = row.changedFields;
         let fields: string[] = [];
         if (Array.isArray(cf)) fields = cf;
         else if (typeof cf === 'string' && cf.trim().length > 0) fields = cf.split(',').map((s: string) => s.trim());
@@ -335,7 +322,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
 
       // Refresh the medical record to show the new attachment
       await refetch();
-    } catch (error: any) {
+    } catch (error) {
       console.error('❌ Failed to regenerate PDF:', error);
       notification.error({
         message: t('medical:detail.pdfRegenerationFailed'),
@@ -391,7 +378,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
     }
   };
 
-  const onExpand = async (expanded: boolean, row: any) => {
+  const onExpand = useCallback(async (expanded: boolean, row: MedicalAttachment) => {
     const key = String(row.id);
     if (expanded) {
       if (!isPreviewable(row.mimeType, row.originalName)) {
@@ -411,7 +398,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
               const pngPath = await MedicalService.renderPdfAttachmentThumbnail(row.id, 1, 900);
               const { readBinaryFile } = await import('@tauri-apps/api/fs');
               const bytes = await readBinaryFile(pngPath);
-              const blob = new Blob([new Uint8Array(bytes as any)], { type: 'image/png' });
+              const blob = new Blob([new Uint8Array(bytes)], { type: 'image/png' });
               const dataUrl: string = await new Promise((resolve, reject) => {
                 const fr = new FileReader();
                 fr.onerror = () => reject(fr.error);
@@ -421,7 +408,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
               setPreviewUrls(prev => ({ ...prev, [key]: dataUrl }));
               setPreviewKinds(prev => ({ ...prev, [key]: 'pdfium' }));
               return;
-            } catch (pdfiumErr: any) {
+            } catch {
               // Fall through to pdf.js path
             }
           }
@@ -430,8 +417,8 @@ export const MedicalRecordDetailPage: React.FC = () => {
           setPreviewUrls(prev => ({ ...prev, [key]: url }));
           setPreviewBlobs(prev => ({ ...prev, [key]: blob }));
           setPreviewKinds(prev => ({ ...prev, [key]: 'blob' }));
-        } catch (e: any) {
-          notification.error({ message: t('common:error'), description: e?.message || t('medical:detail.previewLoadFailed'), placement: "bottomRight", duration: 5 });
+        } catch (e) {
+          notification.error({ message: t('common:error'), description: messageOf(e) || t('medical:detail.previewLoadFailed'), placement: "bottomRight", duration: 5 });
         }
       }
     } else {
@@ -461,17 +448,17 @@ export const MedicalRecordDetailPage: React.FC = () => {
         });
       }
     }
-  };
+  }, [previewUrls, previewBlobs, previewKinds, notification, t]);
 
   // Auto-expand attachment if specified in URL
   useEffect(() => {
     if (attachmentIdToExpand && attachments.length > 0 && shouldAutoExpand) {
-      const attachmentExists = attachments.some((att: any) => String(att.id) === attachmentIdToExpand);
+      const attachmentExists = attachments.some((att) => String(att.id) === attachmentIdToExpand);
       if (attachmentExists) {
         // Set expanded keys to include this attachment
         setExpandedRowKeys([attachmentIdToExpand]);
         // Find the attachment and trigger the expand
-        const attachment = attachments.find((att: any) => String(att.id) === attachmentIdToExpand);
+        const attachment = attachments.find((att) => String(att.id) === attachmentIdToExpand);
         if (attachment) {
           onExpand(true, attachment);
         }
@@ -479,7 +466,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
         setShouldAutoExpand(false);
       }
     }
-  }, [attachmentIdToExpand, attachments, shouldAutoExpand]);
+  }, [attachmentIdToExpand, attachments, shouldAutoExpand, onExpand]);
 
   if (!id || isNaN(recordId)) {
     return (
@@ -520,7 +507,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
    * lives here in one place. Both calls share the expanded-row /
    * preview state by attachment id.
    */
-  const handleDeleteAttachment = async (row: any) => {
+  const handleDeleteAttachment = async (row: MedicalAttachment) => {
     setDeletingAttachmentId(row.id);
     try {
       const labReport = await MedicalService.deleteAttachment(row.id);
@@ -545,10 +532,10 @@ export const MedicalRecordDetailPage: React.FC = () => {
         duration: 3,
       });
       await refetch();
-    } catch (e: any) {
+    } catch (e) {
       notification.error({
         message: t('common:error'),
-        description: e?.message || t('medical:detail.attachmentDeleteFailed', 'Failed to delete the file.'),
+        description: messageOf(e) || t('medical:detail.attachmentDeleteFailed', 'Failed to delete the file.'),
         placement: 'bottomRight',
         duration: 5,
       });
@@ -602,14 +589,14 @@ export const MedicalRecordDetailPage: React.FC = () => {
   const isPdf = (row: MedicalAttachment) =>
     (row.mimeType || '').toLowerCase() === 'application/pdf' || String(row.originalName).toLowerCase().endsWith('.pdf');
 
-  const renderAttachmentsTable = (dataSource: any[], emptyText: string) => (
+  const renderAttachmentsTable = (dataSource: MedicalAttachment[], emptyText: string) => (
     <Table
       size="small"
-      rowKey={(r: any) => String(r.id)}
+      rowKey={(r) => String(r.id)}
       dataSource={dataSource}
       pagination={false}
       locale={{ emptyText }}
-      onRow={(record: any) => ({
+      onRow={(record) => ({
         onClick: () => {
           if (isPreviewable(record.mimeType, record.originalName)) {
             const open = expandedRowKeys.includes(String(record.id));
@@ -622,7 +609,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
         expandedRowKeys,
         onExpand,
         showExpandColumn: false,
-        expandedRowRender: (row: any) => {
+        expandedRowRender: (row) => {
           const key = String(row.id);
           const url = previewUrls[key];
           const pblob = previewBlobs[key];
@@ -663,7 +650,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
           title: t('medical:detail.file'),
           dataIndex: 'originalName',
           key: 'originalName',
-          render: (v: string, row: any) => (
+          render: (v: string, row: MedicalAttachment) => (
             <span className={styles.attachmentLink} style={{
               textDecoration: isPreviewable(row.mimeType, row.originalName) ? 'underline' : 'none'
             }}>
@@ -689,7 +676,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
           title: t('common:actions.actions', { defaultValue: t('common:actionsLabel') }),
           key: 'actions',
           width: 250,
-          render: (_: any, row: any) => (
+          render: (_: unknown, row: MedicalAttachment) => (
             <Space>
               <Button
                 size="small"
@@ -755,7 +742,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
             </Space>
           )
         }
-      ] as any}
+      ]}
     />
   );
 
@@ -899,13 +886,13 @@ export const MedicalRecordDetailPage: React.FC = () => {
                       <Descriptions.Item label={t('medical:fields.procedureName')}>{procVal}</Descriptions.Item>
                     )}
                     <Descriptions.Item label={t('medical:fields.createdAt')}>{new Date(record.createdAt).toLocaleString()}</Descriptions.Item>
-                    <Descriptions.Item label={t('medical:fields.updatedAt')}>{new Date(((selectedEntry as any)?.changedAt) || record.updatedAt).toLocaleString()}</Descriptions.Item>
+                    <Descriptions.Item label={t('medical:fields.updatedAt')}>{new Date(selectedEntry?.changedAt || record.updatedAt).toLocaleString()}</Descriptions.Item>
                     <Descriptions.Item label={t('medical:fields.version')}>{isOldVersion ? selectedVersion : latestVersion ?? record.version}</Descriptions.Item>
                   </Descriptions>
 
                   <div className={styles.marginTop16}>
                     <Text type="secondary" className={styles.descriptionLabel}>{t('medical:fields.description')}</Text>
-                    <Paragraph className={styles.descriptionText}>{descVal as any}</Paragraph>
+                    <Paragraph className={styles.descriptionText}>{descVal}</Paragraph>
                   </div>
 
                   {/* Prescription Notes - only show if there's content */}
@@ -979,7 +966,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
                               key: 'subtotal',
                               width: 120,
                               align: 'right' as const,
-                              render: (_: any, item: MedicalRecordLineItem) => (
+                              render: (_: unknown, item: MedicalRecordLineItem) => (
                                 <Text strong>{formatMoney(item.unitPrice * item.quantity, currency)}</Text>
                               ),
                             },
@@ -1157,9 +1144,9 @@ export const MedicalRecordDetailPage: React.FC = () => {
         <Table
           dataSource={sortedHistory}
           rowKey={(r) => String(r.id)}
-          columns={columns as any}
+          columns={columns}
           size="small"
-          onRow={(row) => ({ onClick: () => { setSelectedVersion(row.version); setSelectedHistory(row as any); } })}
+          onRow={(row) => ({ onClick: () => { setSelectedVersion(row.version); } })}
           pagination={false}
         />
         {sortedHistory.length === 0 && (
@@ -1219,7 +1206,7 @@ export const MedicalRecordDetailPage: React.FC = () => {
             if (newAttachment?.id) {
               MedicalService.openAttachmentExternally(newAttachment.id);
             }
-          } catch (error: any) {
+          } catch (error) {
             console.error('Failed to generate report:', error);
             throw error;
           }

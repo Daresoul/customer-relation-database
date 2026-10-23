@@ -72,7 +72,7 @@ describe('wrapped invoke', () => {
 
   it('returns the resolved value unchanged on success', async () => {
     mocks.tauriInvoke.mockResolvedValue([{ name: 'A' }, { name: 'B' }]);
-    const result = await invoke<any[]>('get_patients');
+    const result = await invoke<Array<{ name: string }>>('get_patients');
     expect(result).toEqual([{ name: 'A' }, { name: 'B' }]);
   });
 

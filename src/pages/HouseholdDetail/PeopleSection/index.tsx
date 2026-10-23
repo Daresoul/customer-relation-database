@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Button, Space, Typography, Empty, App } from 'antd';
+import { Button, Typography, Empty, App } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { PersonWithContacts, CreatePersonWithContactsDto } from '../../../types/household';

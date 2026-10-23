@@ -30,7 +30,7 @@ export const CreateBreedModal: React.FC<CreateBreedModalProps> = ({
 
   useEffect(() => {
     if (open) {
-      const initialValues: any = {};
+      const initialValues: { name?: string; speciesId?: number } = {};
       if (initialName) {
         initialValues.name = initialName;
       }

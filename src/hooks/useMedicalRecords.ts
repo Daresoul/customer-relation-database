@@ -134,7 +134,6 @@ export function useArchiveMedicalRecord() {
     mutationFn: ({
       recordId,
       archive,
-      patientId
     }: {
       recordId: number;
       archive: boolean;
@@ -230,7 +229,6 @@ export function useDeleteAttachment() {
   return useMutation({
     mutationFn: ({
       attachmentId,
-      medicalRecordId
     }: {
       attachmentId: number;
       medicalRecordId: number;

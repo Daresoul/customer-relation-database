@@ -6,8 +6,8 @@
  * They should FAIL initially (TDD approach)
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
-import { invoke } from '@tauri-apps/api';
+import { describe, it, expect } from 'vitest';
+import { invoke } from '../../../src/services/invoke';
 import type {
   GetViewPreferenceResponse,
   SetViewPreferenceCommand,

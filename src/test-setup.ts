@@ -62,7 +62,7 @@ class ResizeObserverStub {
   unobserve() {}
   disconnect() {}
 }
-(globalThis as any).ResizeObserver = ResizeObserverStub;
+globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
 
 // antd injects ~2000 CSS-in-JS rules into <head>, and jsdom re-matches every
 // rule on each getComputedStyle call (20-65 ms per call). ByRole queries and
