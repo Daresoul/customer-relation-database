@@ -190,13 +190,17 @@ pub async fn download_medical_attachment(
 }
 
 // T038: Implement delete_medical_attachment command (soft delete — the row and
-// the blob on disk are kept; the attachment just stops appearing on the record)
+// the blob on disk are kept; the attachment just stops appearing on the record).
+// Deleting a lab result rebuilds or retires the record's lab report; the
+// status says how that went (null when there was nothing to rebuild).
 #[tauri::command]
 pub async fn delete_medical_attachment(
+    app_handle: AppHandle,
     pool: State<'_, SeaOrmPool>,
     attachment_id: i64,
-) -> Result<(), String> {
-    FileStorageService::delete_user_attachment(&pool, attachment_id).await
+) -> Result<Option<PdfStatus>, String> {
+    let env = PdfEnv::from_app(&app_handle);
+    crate::services::lab_inbox::delete_and_refresh_lab_report(env.as_ref().map_err(|e| e.clone()), &pool, attachment_id).await
 }
 
 // Get attachment content for text file viewer
@@ -680,22 +684,19 @@ pub async fn generate_configured_report(
     .map_err(|e| format!("Failed to fetch patient: {}", e))?
     .ok_or("Patient not found".to_string())?;
 
-    let owner_name = lookup_owner_name(&pool, patient_id).await.unwrap_or_else(|e| {
-        log::error!("{} (patient {}); the PDF is printed without an owner", e, patient_id);
-        String::new()
-    });
+    let owner_name = lookup_owner_name(&pool, patient_id).await?;
 
     // 3. Build patient data, applying overrides if provided
     let overrides = patient_overrides.unwrap_or_default();
     let patient_data = PatientData {
         name: overrides.patient_name.unwrap_or_else(||
-            patient_row.try_get("", "name").unwrap_or_else(|_| "Unknown Patient".to_string())),
+            patient_row.try_get("", "name").unwrap_or_else(|_| crate::services::medical_record::UNKNOWN_PATIENT.to_string())),
         owner: overrides.owner.unwrap_or(owner_name),
         species: overrides.species.unwrap_or_else(||
-            patient_row.try_get("", "species_name").unwrap_or_else(|_| "Unknown Species".to_string())),
+            patient_row.try_get("", "species_name").unwrap_or_else(|_| crate::services::medical_record::UNKNOWN_SPECIES.to_string())),
         microchip_id: overrides.microchip_id.or_else(|| patient_row.try_get("", "microchip_id").ok()),
         gender: overrides.gender.unwrap_or_else(||
-            patient_row.try_get("", "gender").unwrap_or_else(|_| "Unknown".to_string())),
+            patient_row.try_get("", "gender").unwrap_or_else(|_| crate::services::medical_record::UNKNOWN_GENDER.to_string())),
         date_of_birth: overrides.date_of_birth.or_else(|| patient_row.try_get("", "date_of_birth").ok()),
     };
 

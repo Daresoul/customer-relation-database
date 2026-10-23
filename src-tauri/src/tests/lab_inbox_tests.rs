@@ -594,7 +594,7 @@ async fn deleting_the_last_lab_result_retires_the_lab_report_built_from_it() {
     .await
     .unwrap();
 
-    let pdf = lab_inbox::delete_and_refresh_lab_report(&broken_env(&dir), &db, attachment).await.unwrap();
+    let pdf = lab_inbox::delete_and_refresh_lab_report(Ok(&broken_env(&dir)), &db, attachment).await.unwrap();
 
     assert!(pdf.is_none());
     assert!(live_lab_reports(&db, record).await.is_empty());
@@ -613,7 +613,7 @@ async fn deleting_one_of_two_lab_results_rebuilds_the_lab_report_from_the_other(
     lab_inbox::attach_to_record(&db, dir.path(), "r2", record).await.unwrap();
     let old_report = lab_inbox::regenerate_lab_report(&env, &db, record).await.unwrap();
 
-    let pdf = lab_inbox::delete_and_refresh_lab_report(&env, &db, first).await.unwrap();
+    let pdf = lab_inbox::delete_and_refresh_lab_report(Ok(&env), &db, first).await.unwrap();
 
     assert!(pdf.as_ref().is_some_and(|p| p.ok), "{:?}", pdf);
     let live = live_lab_reports(&db, record).await;
@@ -637,7 +637,7 @@ async fn deleting_a_plain_file_leaves_the_lab_report_alone() {
     db.execute(insert("lab-pdf", "Device Report.pdf", "application/pdf", "generated_pdf")).await.unwrap();
     let photo = db.execute(insert("photo", "xray.png", "image/png", "file")).await.unwrap().last_insert_id() as i64;
 
-    let pdf = lab_inbox::delete_and_refresh_lab_report(&broken_env(&dir), &db, photo).await.unwrap();
+    let pdf = lab_inbox::delete_and_refresh_lab_report(Ok(&broken_env(&dir)), &db, photo).await.unwrap();
 
     assert!(pdf.is_none());
     assert_eq!(live_lab_reports(&db, record).await.len(), 1);

@@ -703,13 +703,52 @@ pub async fn move_result(
     Ok(MoveOutcome { attachment_id: new_id, from_record_id, to_record_id: target_record_id, pdfs })
 }
 
+/// The record page's Delete. When the file was a lab result, the record's lab
+/// report is rebuilt from the lab results left, or retired when none are
+/// left; the returned status says how the rebuild went (None: nothing to build).
 pub async fn delete_and_refresh_lab_report(
-    _env: &PdfEnv,
+    env: Result<&PdfEnv, String>,
     db: &DatabaseConnection,
     attachment_id: i64,
 ) -> Result<Option<PdfStatus>, String> {
+    let row = db
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "SELECT medical_record_id, device_type, device_name, attachment_type, mime_type \
+             FROM medical_attachments WHERE id = ? AND deleted_at IS NULL",
+            [attachment_id.into()],
+        ))
+        .await
+        .map_err(|e| format!("Failed to read the attachment: {}", e))?
+        .ok_or_else(|| "Attachment not found".to_string())?;
+    let text = |c: &str| row.try_get::<Option<String>>("", c).ok().flatten();
+    let record_id: i64 = row.try_get("", "medical_record_id").map_err(|e| e.to_string())?;
+    let was_lab = text("device_type").is_some()
+        && text("device_name").is_some()
+        && (text("attachment_type").as_deref() == Some("test_result")
+            || (text("attachment_type").as_deref() != Some("generated_pdf")
+                && text("mime_type").as_deref() != Some("application/pdf")));
+
     crate::services::file_storage::FileStorageService::delete_user_attachment(db, attachment_id).await?;
-    Ok(None)
+    if !was_lab {
+        return Ok(None);
+    }
+    let left = db
+        .query_all(Statement::from_sql_and_values(DbBackend::Sqlite, LAB_ATTACHMENTS_SQL, [record_id.into()]))
+        .await
+        .map_err(|e| format!("Failed to read the record's lab results: {}", e))?;
+    if left.is_empty() {
+        retire_lab_reports(db, record_id, None).await?;
+        return Ok(None);
+    }
+    let rebuilt = match env {
+        Ok(env) => regenerate_lab_report(env, db, record_id).await,
+        Err(e) => Err(e),
+    };
+    if let Err(e) = &rebuilt {
+        log::warn!("Lab report of record {} not rebuilt after a delete: {}", record_id, e);
+    }
+    Ok(Some(pdf_status("device_report", rebuilt)))
 }
 
 /// Soft-delete an attachment (see `FileStorageService::delete_attachment`).
