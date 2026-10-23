@@ -76,15 +76,3 @@
   border-radius: 50%;
   display: inline-block;
 }
-
-.dotOk {
-  background: #52c41a;
-}
-
-.dotWarn {
-  background: #faad14;
-}
-
-.dotFailed {
-  background: #ff4d4f;
-}
