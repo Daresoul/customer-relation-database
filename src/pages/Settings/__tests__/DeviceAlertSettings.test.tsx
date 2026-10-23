@@ -59,7 +59,7 @@ describe('lab machine notification settings', () => {
     expect(screen.getByRole('checkbox', { name: 'alerts.days.7' })).not.toBeChecked();
     expect(screen.getByRole('switch', { name: 'alerts.quietFor {"name":"Exigo"}' })).toBeChecked();
     expect(screen.getByRole('switch', { name: 'alerts.quietFor {"name":"PointCare"}' })).not.toBeChecked();
-    expect(screen.getByDisplayValue('3')).toBeInTheDocument();
+    expect(screen.getByRole('spinbutton', { name: 'alerts.quietHours {"name":"Exigo"}' })).toHaveValue('3');
   });
 
   it('saves what was changed', async () => {
