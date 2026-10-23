@@ -200,15 +200,6 @@ impl FileStorageService {
         }
     }
 
-    /// Clean up orphaned files (files in storage but not in database)
-    pub async fn cleanup_orphaned_files(
-        _app_handle: &AppHandle,
-        _db: &DatabaseConnection,
-    ) -> Result<usize, String> {
-        // Temporary stub - return 0 files cleaned
-        Ok(0)
-    }
-
     /// Validate file before upload
     pub fn validate_file(
         file_data: &[u8],

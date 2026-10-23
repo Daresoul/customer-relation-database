@@ -697,17 +697,6 @@ impl JavaPdfService {
         }
     }
 
-    /// Generate a PDF using the Java JAR (iText 5) with a single device sample
-    /// Convenience wrapper for generate_pdf_multi
-    pub fn generate_pdf(
-        app_handle: &tauri::AppHandle,
-        output_path: &str,
-        patient: &crate::services::device_pdf_service::PatientData,
-        device_data: &crate::services::device_pdf_service::DeviceTestData,
-    ) -> Result<(), String> {
-        Self::generate_pdf_multi(app_handle, output_path, patient, &[device_data.clone()])
-    }
-
     /// The sample number printed on a lab report.
     /// Exigo's SNO is the analyzer's serial, the same on every sample of the
     /// day; its run number is SEQ.
