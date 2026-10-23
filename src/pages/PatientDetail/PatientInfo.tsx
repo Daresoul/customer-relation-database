@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Descriptions, Typography, Spin, App, Select, DatePicker, InputNumber } from 'antd';
+import { Descriptions, Typography, App, Select, DatePicker } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { knownErrorMessage } from '@/utils/errors';
 import { useQueryClient } from '@tanstack/react-query';
@@ -15,7 +15,6 @@ import dayjs from 'dayjs';
 import { formatDateTime, getDatePickerFormat } from '../../utils/dateFormatter';
 import { useThemeColors } from '../../utils/themeStyles';
 import styles from './PatientDetail.module.css';
-import { localeNumberParser } from '@/utils/localeNumber';
 
 const { Text } = Typography;
 
@@ -316,20 +315,6 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
           <Text className={styles.textPrimary}>{patient.age?.display || '-'}</Text>
         </Descriptions.Item>
 
-        <Descriptions.Item label={t('detail.patientInfo.labels.weight')} span={1}>
-          <InputNumber
-            value={patient.weight}
-            onChange={(value) => handleFieldUpdate('weight', value)}
-            min={0.01}
-            max={500}
-            precision={2}
-            parser={localeNumberParser}
-            className={styles.fullWidth}
-            disabled={isSaving}
-            addonAfter={t('units.kg')}
-          />
-        </Descriptions.Item>
-
         <Descriptions.Item label={t('detail.patientInfo.labels.color')} span={1}>
           <Text
             editable={{
@@ -368,10 +353,25 @@ export const PatientInfo: React.FC<PatientInfoProps> = ({ patient }) => {
           </Text>
         </Descriptions.Item>
 
-        <Descriptions.Item label={t('detail.patientInfo.labels.status')} span={1}>
-          <Text style={{ color: patient.isActive ? '#52c41a' : '#ff4d4f' }}>
-            {patient.isActive ? t('detail.patientInfo.status.active') : t('detail.patientInfo.status.inactive')}
-          </Text>
+        <Descriptions.Item label={t('patients:chart.neutered.label')} span={1}>
+          <Select
+            value={patient.neutered === true ? 'yes' : patient.neutered === false ? 'no' : 'unknown'}
+            onChange={(value: string) =>
+              updatePatient
+                .mutateAsync({
+                  patientId: patient.id,
+                  updates: { neutered: value === 'yes' ? true : value === 'no' ? false : null },
+                })
+                .catch(() => {})
+            }
+            options={[
+              { value: 'yes', label: t('patients:chart.neutered.yes') },
+              { value: 'no', label: t('patients:chart.neutered.no') },
+              { value: 'unknown', label: t('patients:chart.neutered.unknown') },
+            ]}
+            className={styles.fullWidth}
+            disabled={isSaving}
+          />
         </Descriptions.Item>
 
         <Descriptions.Item label={t('detail.patientInfo.labels.created')} span={1}>
