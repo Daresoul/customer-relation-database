@@ -1,5 +1,6 @@
 use crate::entities::app_settings::{self, Entity as AppSettingsEntity};
 use crate::entities::currency::{self, Entity as CurrencyEntity};
+use crate::models::dto::MaybeNull;
 use crate::models::{Currency, SettingsResponse, UpdateSettingsRequest};
 use crate::models::settings::{ClinicProfile, CreateTaxRateInput, TaxRate, UpdateClinicProfileInput, UpdateTaxRateInput};
 use chrono::Utc;
@@ -99,7 +100,7 @@ impl SettingsService {
             }
         }
 
-        if let Some(currency_id) = request.currency_id {
+        if let MaybeNull::Value(currency_id) = request.currency_id {
             // Validate currency exists
             let currency_exists = CurrencyEntity::find_by_id(currency_id)
                 .one(db)
@@ -161,8 +162,7 @@ impl SettingsService {
             settings_model.language = Set(language);
         }
 
-        if let Some(currency_id) = request.currency_id {
-            log::debug!("Updating currency_id to: {}", currency_id);
+        if let MaybeNull::Value(currency_id) = request.currency_id {
             settings_model.currency_id = Set(Some(currency_id));
         }
 

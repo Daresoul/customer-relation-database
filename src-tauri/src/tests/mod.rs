@@ -123,3 +123,6 @@ pub mod record_template_tests;
 
 #[cfg(test)]
 pub mod appointment_arrival_tests;
+
+#[cfg(test)]
+pub mod master_data_names_tests;
