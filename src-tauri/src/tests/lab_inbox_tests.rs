@@ -419,7 +419,7 @@ async fn a_second_result_on_a_record_gives_one_lab_report_for_both() {
     let db = create_test_db_with_migrations().await;
     let dir = tempfile::tempdir().unwrap();
     let Some(env) = jar_env(&dir) else { return };
-    let patient = seed_patient(&db, "Koko", None).await;
+    let patient = seed_patient(&db, "Bella", None).await;
     let record = seed_record(&db, patient, "Consult").await;
     receive(&db, dir.path(), "r1", &koko_xml(), "ok", "2026-10-23T08:00:00+00:00").await;
     receive(&db, dir.path(), "r2", &koko_xml(), "ok", "2026-10-23T08:10:00+00:00").await;
