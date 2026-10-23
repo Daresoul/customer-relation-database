@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import dayjs from 'dayjs';
-import { formatPatientAge, patientStatus, visiblePatients, alertColor, sexLabel } from '../patientChart';
+import { formatPatientAge, patientStatus, visiblePatients, alertColor, sexLabel, bookablePatients } from '../patientChart';
 
 const t = (key: string, opts?: Record<string, unknown>) =>
   opts && 'count' in opts ? `${key}:${opts.count}` : key;
@@ -67,5 +67,18 @@ describe('sexLabel', () => {
     expect(sexLabel('Male', false, t)).toBe('patients:chart.sex.maleIntact');
     expect(sexLabel('Female', null, t)).toBe('entities:gender.female');
     expect(sexLabel(null, null, t)).toBeNull();
+  });
+});
+
+describe('bookablePatients', () => {
+  const list = [
+    { id: 1, isActive: true },
+    { id: 2, isActive: false, deceasedAt: '2026-01-05' },
+    { id: 3, isActive: false },
+  ];
+
+  it('offers active patients only, plus the one an existing appointment already has', () => {
+    expect(bookablePatients(list).map((p) => p.id)).toEqual([1]);
+    expect(bookablePatients(list, 3).map((p) => p.id)).toEqual([1, 3]);
   });
 });

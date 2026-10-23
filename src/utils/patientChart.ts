@@ -38,6 +38,10 @@ export function visiblePatients<P extends StatusFields>(list: P[], showInactive:
   return showInactive ? list : list.filter((p) => patientStatus(p) === 'active');
 }
 
+export function bookablePatients<P extends StatusFields & { id: number }>(_list: P[], _keepId?: number): P[] {
+  return [];
+}
+
 export function alertColor(type: string): string {
   switch (type) {
     case 'allergy':

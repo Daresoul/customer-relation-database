@@ -138,6 +138,47 @@ describe('MedicalRecordForm: an edit sends cleared values explicitly', () => {
   });
 });
 
+describe('MedicalRecordForm: weight taken during the visit', () => {
+  function renderCreate() {
+    const onSubmit = vi.fn();
+    render(
+      <App>
+        <MedicalRecordForm
+          initialValues={{ ...record, id: 0 } as MedicalRecord}
+          onSubmit={onSubmit}
+          onCancel={vi.fn()}
+          loading={false}
+          isEdit={false}
+          patientId={3}
+          recordId={null}
+        />
+      </App>,
+    );
+    return { onSubmit };
+  }
+
+  it('hands a typed weight to the save, read with a decimal comma', async () => {
+    mockDiagnoses(() => Promise.resolve([]));
+    const { onSubmit } = renderCreate();
+
+    fireEvent.change(screen.getByLabelText('patients:chart.weights.recordField'), { target: { value: '12,5' } });
+    fireEvent.click(submitButton());
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(onSubmit.mock.calls[0][5]).toBe(12.5);
+  });
+
+  it('hands no weight when none was typed', async () => {
+    mockDiagnoses(() => Promise.resolve([]));
+    const { onSubmit } = renderCreate();
+
+    fireEvent.click(submitButton());
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(onSubmit.mock.calls[0][5]).toBeUndefined();
+  });
+});
+
 describe('MedicalRecordForm: unsaved changes', () => {
   it('reports itself dirty once the user types', async () => {
     mockDiagnoses(() => Promise.resolve([]));

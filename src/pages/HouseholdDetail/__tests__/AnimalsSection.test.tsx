@@ -70,3 +70,32 @@ describe('AnimalsSection add pet', () => {
     expect(screen.getByText('stub-submit')).toBeInTheDocument();
   });
 });
+
+describe('AnimalsSection pet status', () => {
+  afterEach(() => {
+    cleanup();
+    document.body.innerHTML = '';
+  });
+
+  it('shows a deceased pet greyed, with its status', () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter>
+          <App>
+            <AnimalsSection
+              householdId={12}
+              patients={[
+                { id: 1, name: 'Rex', species: 'Dog', status: 'active' },
+                { id: 2, name: 'Gone', species: 'Cat', status: 'deceased', deceasedAt: '2026-01-05' },
+              ]}
+            />
+          </App>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByText('patients:chart.status.deceased')).toBeInTheDocument();
+    expect(screen.getByText('Gone').closest('tr')).toHaveStyle({ opacity: '0.55' });
+    expect(screen.getByText('Rex').closest('tr')).not.toHaveStyle({ opacity: '0.55' });
+  });
+});
