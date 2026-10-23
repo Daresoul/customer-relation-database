@@ -20,6 +20,7 @@ import { useDeviceEvents } from './hooks/useDeviceEvents';
 import { appRoutes } from './layouts/routes';
 import { useLabInboxLiveUpdates } from './hooks/useLabInbox';
 import { invoke } from '@/services/invoke';
+import { applyAutostartDefault } from './utils/autostart';
 
 // Import global styles
 import './styles/globals.css';
@@ -58,19 +59,8 @@ function AppContent() {
     setLocale(currentLang === 'mk' ? mkMK : enUS);
   }, [i18n.language]);
 
-  // Ensure autostart enabled (can be toggled from Settings later)
   useEffect(() => {
-    const ensureAutostart = async () => {
-      try {
-        const enabled = await invoke<boolean>('plugin:autostart|is_enabled');
-        if (!enabled) {
-          await invoke('plugin:autostart|enable');
-        }
-      } catch (_) {
-        // plugin may be unavailable in dev; ignore
-      }
-    };
-    ensureAutostart();
+    applyAutostartDefault(invoke);
   }, []);
 
   return (
