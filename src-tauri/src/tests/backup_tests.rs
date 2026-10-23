@@ -544,3 +544,112 @@ fn a_config_save_that_cannot_finish_keeps_the_old_file() {
 
     assert_eq!(BackupService::load_config(dir.path()).directory.as_deref(), Some("D:/Backup"));
 }
+
+// lifecycle.md #10: a copy cut off mid-way (Quit, shutdown) was newer than
+// the source, so every later mirror skipped it and the backup kept a broken
+// file.
+#[tokio::test]
+async fn mirror_copies_again_when_the_backup_copy_has_another_size() {
+    let fx = setup().await;
+    BackupService::set_directory(fx.app_dir.path(), fx.dest_dir.path().to_str().unwrap()).unwrap();
+    let src_file = fx.app_dir.path().join("files/medical/note.pdf");
+    let dest_file = fx.dest_dir.path().join("files/medical/note.pdf");
+    write(&src_file, "the whole pharmacy note");
+    set_mtime_days_ago(&src_file, 1);
+    write(&dest_file, "the who");
+
+    BackupService::run_backup(fx.app_dir.path(), &fx.test_db).await.unwrap();
+
+    assert_eq!(fs::read_to_string(&dest_file).unwrap(), "the whole pharmacy note");
+}
+
+#[tokio::test]
+async fn mirror_leaves_no_temporary_files_behind() {
+    let fx = setup().await;
+    BackupService::set_directory(fx.app_dir.path(), fx.dest_dir.path().to_str().unwrap()).unwrap();
+    write(&fx.app_dir.path().join("files/medical/a.pdf"), "pdf-a");
+    write(&fx.app_dir.path().join("files/medical/sub/b.bin"), "bin-b");
+    // A leftover from an interrupted run.
+    write(&fx.dest_dir.path().join("files/medical/a.pdf.part"), "pd");
+
+    BackupService::run_backup(fx.app_dir.path(), &fx.test_db).await.unwrap();
+
+    let mut leftovers = Vec::new();
+    let mut stack = vec![fx.dest_dir.path().join("files")];
+    while let Some(dir) = stack.pop() {
+        for entry in fs::read_dir(dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.to_string_lossy().ends_with(".part") {
+                leftovers.push(path);
+            }
+        }
+    }
+    assert!(leftovers.is_empty(), "{leftovers:?}");
+    assert_eq!(fs::read_to_string(fx.dest_dir.path().join("files/medical/a.pdf")).unwrap(), "pdf-a");
+}
+
+// database.md L2: a lost backup stick carried a working Google login.
+async fn google_connected(db: &sea_orm::DatabaseConnection) {
+    use sea_orm::ConnectionTrait;
+    db.execute_unprepared(
+        "UPDATE google_calendar_settings SET access_token = 'ya29.secret', refresh_token = '1//refresh', \
+         calendar_id = 'cal', sync_enabled = 1, needs_reauth = 0 WHERE user_id = 'default'",
+    )
+    .await
+    .unwrap();
+}
+
+fn todays_snapshot(fx: &BackupFixture) -> std::path::PathBuf {
+    fx.dest_dir.path().join("db").join(snapshot_file_name(&SnapshotKind::Daily, Local::now()))
+}
+
+async fn open_snapshot(fx: &BackupFixture) -> sea_orm::DatabaseConnection {
+    let url = format!("sqlite://{}?mode=ro", todays_snapshot(fx).display());
+    sea_orm::Database::connect(url).await.unwrap()
+}
+
+#[tokio::test]
+async fn the_snapshot_carries_no_google_login() {
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    let fx = setup().await;
+    BackupService::set_directory(fx.app_dir.path(), fx.dest_dir.path().to_str().unwrap()).unwrap();
+    google_connected(&fx.test_db).await;
+
+    BackupService::run_backup(fx.app_dir.path(), &fx.test_db).await.unwrap();
+
+    let copy = open_snapshot(&fx).await;
+    let row = copy
+        .query_one(Statement::from_string(
+            DbBackend::Sqlite,
+            "SELECT access_token, refresh_token, needs_reauth FROM google_calendar_settings".to_string(),
+        ))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(row.try_get::<Option<String>>("", "access_token").unwrap(), None);
+    assert_eq!(row.try_get::<Option<String>>("", "refresh_token").unwrap(), None);
+    assert_eq!(row.try_get::<i64>("", "needs_reauth").unwrap(), 1);
+    let bytes = fs::read(todays_snapshot(&fx)).unwrap();
+    let text = String::from_utf8_lossy(&bytes);
+    assert!(!text.contains("ya29.secret") && !text.contains("1//refresh"), "token bytes left in the file");
+
+    let live = crate::services::google_calendar::load_sync_status(&fx.test_db).await.unwrap();
+    assert!(live.connected, "the running app keeps its login");
+}
+
+#[tokio::test]
+async fn a_restored_snapshot_asks_to_reconnect_google() {
+    let fx = setup().await;
+    BackupService::set_directory(fx.app_dir.path(), fx.dest_dir.path().to_str().unwrap()).unwrap();
+    google_connected(&fx.test_db).await;
+
+    BackupService::run_backup(fx.app_dir.path(), &fx.test_db).await.unwrap();
+
+    let status = crate::services::google_calendar::load_sync_status(&open_snapshot(&fx).await)
+        .await
+        .unwrap();
+    assert!(!status.connected);
+    assert!(status.needs_reauth, "Settings shows Reconnect");
+}
