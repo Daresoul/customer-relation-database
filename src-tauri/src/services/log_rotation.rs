@@ -110,6 +110,26 @@ pub fn rotate_main_log_at_startup(dir: &Path) {
 /// date suffix are ignored (including the live current-day log).
 ///
 /// Silently no-ops if `dir` doesn't exist.
+/// How often the running app prunes old logs. It lives in the tray for
+/// weeks, so a start-only prune never runs on a PC that only sleeps.
+pub const LOG_PRUNE_INTERVAL: std::time::Duration = std::time::Duration::from_secs(24 * 3600);
+
+/// [`prune_old_logs`] over each folder.
+pub fn prune_log_dirs(dirs: &[std::path::PathBuf], days_to_keep: i64) {
+    for dir in dirs {
+        prune_old_logs(dir, days_to_keep);
+    }
+}
+
+/// Prunes once a day while the app runs (the start pass happens in `main`).
+pub async fn run_log_prune_schedule(dirs: Vec<std::path::PathBuf>, days_to_keep: i64) {
+    loop {
+        tokio::time::sleep(LOG_PRUNE_INTERVAL).await;
+        prune_log_dirs(&dirs, days_to_keep);
+        log::info!("Log prune: archives older than {} days removed", days_to_keep);
+    }
+}
+
 pub fn prune_old_logs(dir: &Path, days_to_keep: i64) {
     let entries = match std::fs::read_dir(dir) {
         Ok(e) => e,
