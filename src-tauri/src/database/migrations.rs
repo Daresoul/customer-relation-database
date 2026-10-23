@@ -67,6 +67,7 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, "049_fix_medical_records_fts_triggers", fix_medical_records_fts_triggers).await?;
     run_migration(pool, "050_add_invoice_date", add_invoice_date_column).await?;
     run_migration(pool, "051_add_attachment_purged_at", add_attachment_purged_at_column).await?;
+    run_migration(pool, "05x_household_merge", add_household_merge).await?;
 
     Ok(())
 }
@@ -3081,6 +3082,45 @@ fn add_attachment_purged_at_column(pool: &SqlitePool) -> std::pin::Pin<Box<dyn s
                 .execute(pool)
                 .await?;
         }
+        Ok(())
+    })
+}
+
+/// A merged-away household keeps its row with `merged_into_id` set, so old
+/// links still resolve; lists and search hide it. `household_merges` logs
+/// each merge. Plain integers, no foreign keys: deleting a kept household
+/// removes its merged shells in code.
+fn add_household_merge(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        let exists: (i32,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM pragma_table_info('households') WHERE name = 'merged_into_id'"
+        )
+        .fetch_one(pool)
+        .await?;
+        if exists.0 == 0 {
+            sqlx::query("ALTER TABLE households ADD COLUMN merged_into_id INTEGER")
+                .execute(pool)
+                .await?;
+        }
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_households_merged_into ON households(merged_into_id)")
+            .execute(pool)
+            .await?;
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS household_merges (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                kept_household_id INTEGER NOT NULL,
+                merged_household_id INTEGER NOT NULL,
+                merged_household_name TEXT,
+                details_from_household_id INTEGER NOT NULL,
+                people_moved INTEGER NOT NULL DEFAULT 0,
+                people_folded INTEGER NOT NULL DEFAULT 0,
+                contacts_dropped INTEGER NOT NULL DEFAULT 0,
+                pets_moved INTEGER NOT NULL DEFAULT 0,
+                merged_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        "#)
+        .execute(pool)
+        .await?;
         Ok(())
     })
 }
