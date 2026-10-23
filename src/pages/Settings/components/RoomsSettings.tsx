@@ -73,7 +73,7 @@ const RoomsSettings: React.FC<RoomsSettingsProps> = ({ isUpdating }) => {
         description: values.description || null,
         capacity: values.capacity || 1,
         color: values.color || '#1890ff',
-        isActive: values.isActive !== undefined ? values.isActive : true,
+        isActive: values.isActive ?? editingRoom?.isActive ?? true,
       };
 
       if (editingRoom) {
@@ -256,6 +256,9 @@ const RoomsSettings: React.FC<RoomsSettingsProps> = ({ isUpdating }) => {
             />
           </Form.Item>
 
+          <Form.Item name="isActive" label={t('common:active')} valuePropName="checked">
+            <Switch aria-label={t('common:active')} />
+          </Form.Item>
         </Form>
       </Modal>
     </div>
