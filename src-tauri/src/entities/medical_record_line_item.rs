@@ -18,6 +18,10 @@ pub struct Model {
     pub unit_price: f64,
     pub currency_id: i64,
     pub quantity: i32,
+    pub tax_rate_id: Option<i64>,
+    pub vat_name: Option<String>,
+    #[sea_orm(column_type = "Double", nullable)]
+    pub vat_percent: Option<f64>,
     pub created_at: ChronoDateTimeUtc,
 }
 

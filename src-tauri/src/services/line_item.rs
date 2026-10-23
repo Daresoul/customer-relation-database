@@ -4,6 +4,9 @@ use crate::models::{
     LineItemTemplate, CreateLineItemTemplateInput, UpdateLineItemTemplateInput,
     MedicalRecordLineItem, CreateLineItemInput
 };
+use crate::models::dto::MaybeNull;
+use crate::models::settings::TaxRate;
+use crate::services::settings::SettingsService;
 use chrono::Utc;
 use sea_orm::*;
 
@@ -20,7 +23,7 @@ impl LineItemService {
             currency_id: model.currency_id,
             display_order: model.display_order,
             is_active: model.is_active,
-            default_tax_rate_id: None,
+            default_tax_rate_id: model.default_tax_rate_id,
             created_at: model.created_at,
             updated_at: model.updated_at,
         }
@@ -37,9 +40,9 @@ impl LineItemService {
             unit_price: model.unit_price,
             currency_id: model.currency_id,
             quantity: model.quantity,
-            tax_rate_id: None,
-            vat_name: None,
-            vat_percent: None,
+            tax_rate_id: model.tax_rate_id,
+            vat_name: model.vat_name,
+            vat_percent: model.vat_percent,
             created_at: model.created_at,
         }
     }
@@ -93,6 +96,9 @@ impl LineItemService {
         if input.default_price < 0.0 {
             return Err("Default price cannot be negative".to_string());
         }
+        if let Some(rate_id) = input.default_tax_rate_id {
+            Self::require_tax_rate(db, rate_id).await?;
+        }
 
         // Get the next display_order
         let highest_order = LineItemTemplateEntity::find()
@@ -114,6 +120,7 @@ impl LineItemService {
             currency_id: Set(input.currency_id),
             display_order: Set(display_order),
             is_active: Set(true),
+            default_tax_rate_id: Set(input.default_tax_rate_id),
             created_at: Set(now),
             updated_at: Set(now),
             ..Default::default()
@@ -147,6 +154,7 @@ impl LineItemService {
             && input.currency_id.is_none()
             && input.is_active.is_none()
             && input.display_order.is_none()
+            && matches!(input.default_tax_rate_id, MaybeNull::Undefined)
         {
             return Ok(Self::template_to_api_model(existing));
         }
@@ -185,6 +193,14 @@ impl LineItemService {
         }
         if let Some(display_order) = input.display_order {
             template_model.display_order = Set(display_order);
+        }
+        match input.default_tax_rate_id {
+            MaybeNull::Undefined => {}
+            MaybeNull::Null => template_model.default_tax_rate_id = Set(None),
+            MaybeNull::Value(rate_id) => {
+                Self::require_tax_rate(db, rate_id).await?;
+                template_model.default_tax_rate_id = Set(Some(rate_id));
+            }
         }
         template_model.updated_at = Set(now);
 
@@ -272,9 +288,10 @@ impl LineItemService {
             }
         }
 
-        let new_items: Vec<medical_record_line_item::ActiveModel> = items
-            .into_iter()
-            .map(|item| medical_record_line_item::ActiveModel {
+        let mut new_items: Vec<medical_record_line_item::ActiveModel> = Vec::with_capacity(items.len());
+        for item in items {
+            let rate = Self::rate_for_line(db, &item).await?;
+            new_items.push(medical_record_line_item::ActiveModel {
                 medical_record_id: Set(medical_record_id),
                 template_id: Set(item.template_id),
                 name: Set(item.name.trim().to_string()),
@@ -282,10 +299,13 @@ impl LineItemService {
                 unit_price: Set(item.unit_price),
                 currency_id: Set(item.currency_id),
                 quantity: Set(item.quantity),
+                tax_rate_id: Set(rate.as_ref().map(|r| r.id)),
+                vat_name: Set(rate.as_ref().map(|r| r.name.clone())),
+                vat_percent: Set(rate.as_ref().map(|r| r.percent)),
                 created_at: Set(now),
                 ..Default::default()
-            })
-            .collect();
+            });
+        }
 
         if !new_items.is_empty() {
             MedicalRecordLineItemEntity::insert_many(new_items)
@@ -295,6 +315,33 @@ impl LineItemService {
         }
 
         Self::get_line_items_for_record_in(db, medical_record_id).await
+    }
+
+    /// The VAT rate a new line is saved with: the one sent, none for null,
+    /// and when nothing is sent the template's default (none for a custom line).
+    async fn rate_for_line<C: ConnectionTrait>(db: &C, item: &CreateLineItemInput) -> Result<Option<TaxRate>, String> {
+        let rate_id = match item.tax_rate_id {
+            MaybeNull::Value(id) => Some(id),
+            MaybeNull::Null => None,
+            MaybeNull::Undefined => match item.template_id {
+                Some(template_id) => LineItemTemplateEntity::find_by_id(template_id)
+                    .one(db)
+                    .await
+                    .map_err(|e| format!("Failed to fetch line item template: {}", e))?
+                    .and_then(|t| t.default_tax_rate_id),
+                None => None,
+            },
+        };
+        match rate_id {
+            Some(id) => Ok(Some(Self::require_tax_rate(db, id).await?)),
+            None => Ok(None),
+        }
+    }
+
+    async fn require_tax_rate<C: ConnectionTrait>(db: &C, id: i64) -> Result<TaxRate, String> {
+        SettingsService::find_tax_rate(db, id)
+            .await?
+            .ok_or_else(|| format!("Unknown VAT rate {}", id))
     }
 
     /// Replace all line items for a medical record
