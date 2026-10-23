@@ -8,16 +8,46 @@ import type { Patient } from '../types';
 import type { HouseholdTableRecord } from '../types/ui.types';
 import i18n from 'i18next';
 import { errorText } from '@/utils/notifyError';
+import type { App } from 'antd';
+
+type AppApi = ReturnType<typeof App.useApp>;
+
+// Household rows as the backend sends them (snake_case).
+interface RawContact {
+  contact_type: string;
+  contact_value: string;
+  is_primary?: boolean;
+}
+interface RawPerson {
+  first_name: string;
+  last_name: string;
+  is_primary?: boolean;
+  contacts?: RawContact[];
+}
+interface RawHousehold {
+  id: number;
+  household_name?: string | null;
+  name?: string;
+  last_name?: string;
+  address?: string;
+  updated_at?: string;
+  created_at?: string;
+}
+interface RawHouseholdWithPeople {
+  household?: RawHousehold;
+  people?: RawPerson[];
+  pet_count?: number;
+}
 
 // Create a holder for the App instance
-let appInstance: any = null;
+let appInstance: AppApi | null = null;
 
-export const setAppInstance = (app: any) => {
+export const setAppInstance = (app: AppApi) => {
   appInstance = app;
 };
 
 // Error handler with Ant Design notifications
-const handleApiError = (error: any, operation: string) => {
+const handleApiError = (error: unknown, operation: string): never => {
   console.error(`API Error in ${operation}:`, error);
 
   const errorMessage = errorText(error, (key: string) => i18n.t(key));
@@ -66,7 +96,7 @@ export const patientApi = {
       const result = await invoke<Patient>('create_patient', { dto: patient });
       hide();
       showSuccess(i18n.t('common:api.success.patientCreated'), i18n.t('common:api.success.patientCreatedDesc', { name: patient.name }));
-      try { await emit('patient-created', result as any); } catch { /* the event is a hint; the patient is saved */ }
+      try { await emit('patient-created', result); } catch { /* the event is a hint; the patient is saved */ }
       return result;
     } catch (error) {
       hide();
@@ -95,25 +125,25 @@ export const householdApi = {
     // Empty query: list every household (no limit unless the caller pages).
     // A failure is a page-load error the caller shows inline, so no toast here.
     if (!query || query.trim().length === 0) {
-      const results = await invoke<any[]>('get_all_households', { limit });
+      const results = await invoke<Array<RawHouseholdWithPeople | HouseholdTableRecord>>('get_all_households', { limit });
       // Transform nested household data to flat structure
-      return results.map(r => {
-        if (r.household) {
-          const primaryPerson = r.people?.find((p: any) => p.is_primary) || r.people?.[0];
+      return results.map((r): HouseholdTableRecord => {
+        if ('household' in r && r.household) {
+          const primaryPerson = r.people?.find((p) => p.is_primary) || r.people?.[0];
 
           return {
             id: r.household.id,
             lastName: r.household.household_name || r.household.name,
             primaryContact: primaryPerson ? `${primaryPerson.first_name} ${primaryPerson.last_name}` : null,
-            phone: primaryPerson?.contacts?.find((c: any) => c.contact_type === 'phone')?.contact_value || null,
+            phone: primaryPerson?.contacts?.find((c) => c.contact_type === 'phone')?.contact_value || null,
             phones: allPhones(r.people),
-            email: primaryPerson?.contacts?.find((c: any) => c.contact_type === 'email')?.contact_value || null,
+            email: primaryPerson?.contacts?.find((c) => c.contact_type === 'email')?.contact_value || null,
             address: r.household.address,
             petCount: r.pet_count || 0,
             lastActivity: r.household.updated_at || r.household.created_at
           };
         }
-        return r; // Return as-is if not nested
+        return r as HouseholdTableRecord; // Return as-is if not nested
       });
     }
 
@@ -123,20 +153,20 @@ export const householdApi = {
         return [];
       }
 
-      const result = await invoke<any>('search_households', { query, limit });
+      const result = await invoke<{ results?: RawHouseholdWithPeople[] } | HouseholdTableRecord[]>('search_households', { query, limit });
 
       // Transform the response similar to get_all_households
-      if (result?.results && Array.isArray(result.results)) {
-        return result.results.map((item: any) => {
-          const household = item.household || {};
-          const primaryPerson = item.people?.find((p: any) => p.is_primary) || item.people?.[0];
+      if (!Array.isArray(result) && result?.results && Array.isArray(result.results)) {
+        return result.results.map((item) => {
+          const household: Partial<RawHousehold> = item.household || {};
+          const primaryPerson = item.people?.find((p) => p.is_primary) || item.people?.[0];
 
           return {
             id: household.id,
             lastName: household.household_name || household.name || household.last_name || i18n.t('common:api.unnamed'),
             primaryContact: primaryPerson ? `${primaryPerson.first_name} ${primaryPerson.last_name}` : null,
-            phone: primaryPerson?.contacts?.find((c: any) => c.contact_type === 'phone')?.contact_value || null,
-            email: primaryPerson?.contacts?.find((c: any) => c.contact_type === 'email')?.contact_value || null,
+            phone: primaryPerson?.contacts?.find((c) => c.contact_type === 'phone')?.contact_value || null,
+            email: primaryPerson?.contacts?.find((c) => c.contact_type === 'email')?.contact_value || null,
             address: household.address,
             petCount: item.pet_count || 0,
             lastActivity: household.updated_at || household.created_at
@@ -164,7 +194,7 @@ export const householdApi = {
         if (typeof household.address === 'string') {
           addressString = household.address;
         } else if (typeof household.address === 'object') {
-          const addr = household.address as any;
+          const addr = household.address as { street?: string; city?: string; state?: string; zipCode?: string };
           const parts = [addr.street, addr.city, addr.state, addr.zipCode].filter(Boolean);
           addressString = parts.length > 0 ? parts.join(', ') : null;
         }
@@ -198,14 +228,14 @@ export const householdApi = {
         })) || []
       };
 
-      const result = await invoke<any>('create_household_with_people', { dto });
+      const result = await invoke<RawHouseholdWithPeople>('create_household_with_people', { dto });
       hide();
       showSuccess(i18n.t('common:api.success.householdCreated'), i18n.t('common:api.success.householdCreatedDesc', { name: household.lastName }));
 
       // Transform the nested result to flat HouseholdTableRecord
       if (result.household) {
-        const primaryPerson = result.people?.find((p: any) => p.is_primary) || result.people?.[0];
-        const primaryContact = primaryPerson?.contacts?.find((c: any) => c.is_primary) || primaryPerson?.contacts?.[0];
+        const primaryPerson = result.people?.find((p) => p.is_primary) || result.people?.[0];
+        const primaryContact = primaryPerson?.contacts?.find((c) => c.is_primary) || primaryPerson?.contacts?.[0];
 
         return {
           id: result.household.id,
@@ -216,16 +246,17 @@ export const householdApi = {
           address: result.household.address,
           petCount: result.pet_count || 0,
           lastActivity: result.household.updated_at || result.household.created_at,
-          contacts: result.people?.map((p: any) => ({
+          contacts: result.people?.map((p) => ({
+            name: `${p.first_name} ${p.last_name}`,
             firstName: p.first_name,
             lastName: p.last_name,
-            phone: p.contacts?.find((c: any) => c.contact_type === 'phone')?.contact_value,
-            email: p.contacts?.find((c: any) => c.contact_type === 'email')?.contact_value,
+            phone: p.contacts?.find((c) => c.contact_type === 'phone')?.contact_value,
+            email: p.contacts?.find((c) => c.contact_type === 'email')?.contact_value,
             isPrimary: p.is_primary
           })) || []
         };
       }
-      return result;
+      return result as unknown as HouseholdTableRecord;
     } catch (error) {
       hide();
       return handleApiError(error, 'createHousehold');
