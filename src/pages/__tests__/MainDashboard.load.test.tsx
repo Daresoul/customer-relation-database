@@ -25,9 +25,9 @@ vi.mock('../../services/api.integration', () => ({
   setAppInstance: vi.fn(),
 }));
 
-vi.mock('../../services/fileHistoryService', () => ({
-  fileHistoryService: { listPendingDeviceEntries: vi.fn().mockResolvedValue([]) },
-}));
+const countWaiting = vi.fn().mockResolvedValue(0);
+vi.mock('../../services/labInboxService', () => ({ labInboxService: { countWaiting: () => countWaiting() } }));
+vi.mock('../../components/LabInbox/LabInboxList', () => ({ default: () => <div>lab inbox list</div> }));
 vi.mock('../../contexts/ViewContext', () => ({
   useViewContext: () => ({ currentView: 'animal', setCurrentView: vi.fn() }),
 }));
@@ -39,7 +39,6 @@ vi.mock('../../components/tables/PatientTable', () => ({
   ),
 }));
 vi.mock('../../components/tables/HouseholdTable', () => ({ HouseholdTable: () => null }));
-vi.mock('../../components/PendingDeviceTable', () => ({ default: () => null }));
 vi.mock('../Appointments/AppointmentsTab', () => ({ default: () => null }));
 vi.mock('../../components/forms/PatientFormWithOwner', () => ({
   PatientFormWithOwner: ({ onSubmit }: { onSubmit: (d: unknown) => Promise<void> }) => (
@@ -92,6 +91,19 @@ describe('MainDashboard load', () => {
 
     await waitFor(() => expect(screen.getByText('Bella')).toBeInTheDocument());
     expect(screen.queryByText('patients:dashboard.loadFailed')).not.toBeInTheDocument();
+  });
+
+  it('has a Lab inbox tab that says how many results wait', async () => {
+    invokeMock.mockResolvedValue(stats);
+    getPatients.mockResolvedValue([]);
+    householdSearch.mockResolvedValue([]);
+    countWaiting.mockResolvedValue(4);
+    renderDashboard();
+
+    const tab = await screen.findByText('devices:inbox.title');
+    await waitFor(() => expect(tab.closest('[role="tab"]')?.textContent).toContain('4'));
+    fireEvent.click(tab);
+    expect(await screen.findByText('lab inbox list')).toBeInTheDocument();
   });
 
   it('a patient added on the dashboard shows up in the other pickers', async () => {

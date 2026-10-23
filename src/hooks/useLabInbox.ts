@@ -49,3 +49,5 @@ export function useMoveLabResult() {
     onSuccess: () => invalidateLabResultRecords(queryClient),
   });
 }
+
+export function useLabInboxLiveUpdates(): void {}
