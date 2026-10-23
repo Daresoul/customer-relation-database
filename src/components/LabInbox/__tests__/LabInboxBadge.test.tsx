@@ -30,7 +30,9 @@ function renderBadge() {
   );
 }
 
-beforeEach(() => mocks.count.mockReset());
+beforeEach(() => {
+  mocks.count.mockReset();
+});
 
 describe('LabInboxBadge', () => {
   it('says how many lab results are waiting and opens the inbox', async () => {
