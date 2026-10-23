@@ -168,7 +168,6 @@ const SettingsLayout: React.FC = () => {
         currencyId: settings.currencyId,
         theme: settings.theme,
         dateFormat: settings.dateFormat,
-        googleCalendarSync: settings.googleCalendarSync || false,
       });
     }
   }, [settings, form]);
@@ -181,7 +180,6 @@ const SettingsLayout: React.FC = () => {
       currencyId: values.currencyId !== undefined ? values.currencyId : settings?.currencyId,
       theme: values.theme !== undefined ? values.theme : (settings?.theme || 'light'),
       dateFormat: values.dateFormat !== undefined ? values.dateFormat : (settings?.dateFormat || 'DD/MM/YYYY'),
-      googleCalendarSync: values.googleCalendarSync || false,
     };
 
 

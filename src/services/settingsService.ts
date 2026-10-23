@@ -7,7 +7,6 @@ export interface AppSettings {
   currencyId: number | null;
   theme: 'light' | 'dark';
   dateFormat: string;
-  googleCalendarSync?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -29,7 +28,6 @@ export interface UpdateSettingsRequest {
   currencyId?: number;
   theme?: 'light' | 'dark';
   dateFormat?: string;
-  googleCalendarSync?: boolean;
 }
 
 export class SettingsService {
