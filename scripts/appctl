@@ -5,6 +5,7 @@
 #   appctl config <host> <user>         where the lab is (Tailscale name or LAN IP)
 #   appctl connect | disconnect         SSH tunnels: 9222 (app DevTools), 8787 (agent)
 #   appctl provision                    copy agent, simulator, fixtures, demo clinic
+#   appctl build                        send this branch (git bundle) and build the installer on the lab
 #   appctl install <setup.exe|.msi>     install a build
 #   appctl reset | start [--hidden] | stop | status
 #   appctl sim <scenario> | sim list    play lab machine data
@@ -92,9 +93,20 @@ case "$cmd" in
     lab_ssh "Push-Location '$WIN_LAB\\clinic-sim'; & 'C:\\Program Files\\nodejs\\npm.cmd' install --omit=dev --no-audit --no-fund; Pop-Location; Start-ScheduledTask -TaskName ArkivetLabAgent"
     echo "provisioned; agent started in the logged-in session"
     ;;
+  build)
+    need_conf
+    mkdir -p "$OUT"
+    branch=$(git -C "$ROOT" rev-parse --abbrev-ref HEAD)
+    git -C "$ROOT" bundle create "$OUT/src.bundle" "$branch" 2>/dev/null
+    lab_scp "$OUT/src.bundle" "$(remote "$WIN_LAB\\builds\\src.bundle")"
+    lab_scp "$LAB_DIR/build.ps1" "$(remote "$WIN_LAB\\build.ps1")"
+    lab_ssh "if (-not (Test-Path '$WIN_LAB\\src')) { git clone -q -b $branch '$WIN_LAB\\builds\\src.bundle' '$WIN_LAB\\src' } else { git -C '$WIN_LAB\\src' fetch -q '$WIN_LAB\\builds\\src.bundle' ${branch}:refs/remotes/bundle/head; git -C '$WIN_LAB\\src' checkout -q -f -B $branch refs/remotes/bundle/head }; git -C '$WIN_LAB\\src' log --oneline -1"
+    lab_ssh "powershell -NoProfile -ExecutionPolicy Bypass -File '$WIN_LAB\\build.ps1'" | tee "$OUT/build.log" | tail -1
+    ;;
   install)
-    [[ $# -eq 1 && -f "$1" ]] || die "usage: appctl install <setup.exe|.msi>"
-    lab_scp "$1" "$(remote "$WIN_LAB\\builds\\")"
+    # A path on this Mac is copied over; a bare name is a build already on the lab.
+    [[ $# -eq 1 ]] || die "usage: appctl install <setup.exe|.msi>"
+    [[ -f "$1" ]] && lab_scp "$1" "$(remote "$WIN_LAB\\builds\\")"
     agent install "{\"file\":$(json_str "$(basename "$1")")}"
     ;;
   reset | stop | status) agent "$cmd" ;;
