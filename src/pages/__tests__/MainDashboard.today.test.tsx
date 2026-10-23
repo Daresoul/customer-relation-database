@@ -105,3 +105,27 @@ describe('MainDashboard today', () => {
     expect(useBarcodeScanner).not.toHaveBeenCalled();
   });
 });
+
+// dashboard.md #15: the Add button followed the remembered view, not the
+// open tab, so the Lab inbox tab offered "Add patient".
+describe('MainDashboard Add button', () => {
+  beforeEach(() => {
+    getPatients.mockResolvedValue([]);
+    householdSearch.mockResolvedValue([]);
+  });
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  it('is not offered on the Lab inbox tab', async () => {
+    renderDashboard();
+    expect(await screen.findByTestId('add-patient-btn')).toBeVisible();
+
+    fireEvent.click(await screen.findByText('today strip, 2 lab results waiting'));
+    await screen.findByText('lab inbox list');
+
+    expect(screen.queryByTestId('add-patient-btn')).toBeNull();
+    expect(screen.queryByTestId('add-household-btn')).toBeNull();
+  });
+});
