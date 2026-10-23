@@ -175,7 +175,8 @@
   },
   "general": {
     "launchAtLogin": "Launch at Login",
-    "launchAtLoginHint": "Start the app minimized to tray on system startup"
+    "launchAtLoginHint": "Start the app minimized to tray on system startup",
+    "launchAtLoginFailed": "Couldn't change launch at login on this computer. Try again, or ask support to check the app's permissions."
   },
   "business": {
     "currencyHint": "Default currency for new procedures"

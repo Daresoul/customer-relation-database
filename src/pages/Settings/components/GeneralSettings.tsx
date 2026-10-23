@@ -1,10 +1,11 @@
 import React from 'react';
-import { Card, Form, Select, Typography } from 'antd';
+import { App, Card, Form, Select, Switch, Typography } from 'antd';
 import { GlobalOutlined, BgColorsOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useThemeColors } from '../../../utils/themeStyles';
 import styles from '../Settings.module.css';
 import { invoke } from '@/services/invoke';
+import { markAutostartDefaultApplied } from '../../../utils/autostart';
 
 const { Text } = Typography;
 const { Option } = Select;
@@ -16,6 +17,7 @@ interface GeneralSettingsProps {
 const GeneralSettings: React.FC<GeneralSettingsProps> = ({ isUpdating }) => {
   const { t } = useTranslation(['common', 'forms']);
   const themeColors = useThemeColors();
+  const { message } = App.useApp();
   const [launchAtLogin, setLaunchAtLogin] = React.useState<boolean>(false);
 
   React.useEffect(() => {
@@ -32,13 +34,11 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ isUpdating }) => {
   const onToggleLaunchAtLogin = async (checked: boolean) => {
     setLaunchAtLogin(checked);
     try {
-      if (checked) {
-        await invoke('plugin:autostart|enable');
-      } else {
-        await invoke('plugin:autostart|disable');
-      }
+      await invoke(checked ? 'plugin:autostart|enable' : 'plugin:autostart|disable');
+      markAutostartDefaultApplied();
     } catch (_) {
-      // ignore
+      setLaunchAtLogin(!checked);
+      message.error(t('settings:general.launchAtLoginFailed'));
     }
   };
 
@@ -54,11 +54,11 @@ const GeneralSettings: React.FC<GeneralSettingsProps> = ({ isUpdating }) => {
       >
         <Form.Item label={<span className={styles.formLabel}>{t('settings:general.launchAtLogin')}</span>}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <input
-              type="checkbox"
+            <Switch
               checked={launchAtLogin}
-              onChange={(e) => onToggleLaunchAtLogin(e.target.checked)}
+              onChange={onToggleLaunchAtLogin}
               disabled={isUpdating}
+              aria-label={t('settings:general.launchAtLogin')}
             />
             <Text type="secondary">{t('settings:general.launchAtLoginHint')}</Text>
           </div>
