@@ -35,12 +35,18 @@ pub fn startup_failure_message(error: &str, log_dir: Option<&Path>, backup_dir: 
     )
 }
 
-/// Log the failure, show it in a native dialog, and return. The caller exits.
+/// Log the failure, push the log to Loki (at most 5 s; nothing when Loki is
+/// not set up), show it in a native dialog, and return. The caller exits.
 ///
 /// Runs on the main thread after `tauri::Builder::run` returned, so it uses
 /// `rfd` directly: Tauri's dialog helpers hop to another thread and wait,
 /// which can deadlock on macOS when the main thread is the one waiting.
-pub fn report(error: &str, log_dir: Option<&Path>, app_data_dir: Option<&Path>) {
+pub fn report(
+    error: &str,
+    log_dir: Option<&Path>,
+    app_data_dir: Option<&Path>,
+    shipper: Option<crate::services::loki_shipper::ShipperConfig>,
+) {
     crate::services::telemetry::event(
         log::Level::Error,
         "app.lifecycle",
@@ -49,6 +55,7 @@ pub fn report(error: &str, log_dir: Option<&Path>, app_data_dir: Option<&Path>) 
     );
     log::logger().flush();
     eprintln!("Startup failed: {error}");
+    crate::services::loki_shipper::push_pending_now(shipper, std::time::Duration::from_secs(5));
 
     let backup_dir = app_data_dir
         .and_then(|d| crate::services::backup::BackupService::load_config(d).directory);
