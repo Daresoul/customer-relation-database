@@ -101,7 +101,7 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
 
   const { data: hookRooms } = useRooms({ activeOnly: true });
   const rooms = propsRooms ?? hookRooms ?? [];
-  const { patients } = usePatients();
+  const { patients, error: patientsError } = usePatients();
   const householdNames = useHouseholdNames();
 
   const patientOptions = useMemo(
@@ -363,6 +363,7 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
                 optionFilterProp="label"
                 suffixIcon={<UserOutlined />}
                 options={patientOptions}
+                notFoundContent={patientsError ? t('common:pickerLoadFailed') : undefined}
                 onChange={checkConflicts}
                 popupMatchSelectWidth={false}
               />
