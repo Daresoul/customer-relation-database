@@ -67,10 +67,27 @@ export function useDocumentStatusNotice() {
     });
   };
 
-  return (saved: SavedRecordDocuments, successMessage: string) => {
+  return (saved: SavedRecordDocuments, successMessage: string, onOpenRecord?: (recordId: number) => void) => {
     const failed = (saved.pdfs ?? []).filter((p) => !p.ok);
     if (failed.length === 0) {
-      notification.success({ message: successMessage, placement: 'bottomRight', duration: 3 });
+      const key = `record-${saved.id}-saved`;
+      notification.success({
+        key,
+        message: successMessage,
+        placement: 'bottomRight',
+        duration: onOpenRecord ? 6 : 3,
+        actions: onOpenRecord ? (
+          <Button
+            size="small"
+            onClick={() => {
+              notification.destroy(key);
+              onOpenRecord(saved.id);
+            }}
+          >
+            {t('medical:actions.openRecord')}
+          </Button>
+        ) : undefined,
+      });
       return;
     }
     failed.forEach((status) => warn(saved.id, status));
