@@ -80,6 +80,38 @@
   in the last 72 h while the app was closed are offered. The first time a
   folder is watched, what is already in it is recorded, not offered.
 
+### Lab inbox (`services/lab_inbox.rs`, page `/lab-inbox`, dashboard tab)
+- Every result row in `file_access_history` (one per result or Exigo sample)
+  has `inbox_state`: `waiting`, `attached` or `discarded` (migration
+  `05x_lab_inbox`). A new result and a failed read start as `waiting`.
+  "Save for later" and its typed serial are gone; `pending_device_entries`
+  keeps its rows but nothing writes it. On upgrade, results already attached
+  became `attached`, saved-for-later ones `waiting`, and all other older
+  results `discarded` with reason `before_inbox` (Restore brings one back).
+- The inbox lists each result with the machine, the machine's patient ID, the
+  match (chip, name guess, several, none), and the values with unit, range
+  and H/L flag (Exigo: the machine's `_L`/`_H` range and the PDF's units;
+  HL7: the machine's unit, range and flag). A result waiting over 24 h is
+  highlighted. Actions: Attach… (opens the import), Discard with a reason
+  (`qc`, `test`, `duplicate`, `other`, optional note), Restore, and Move.
+  The badge component `components/LabInbox/LabInboxBadge` shows the
+  waiting count (`get_lab_inbox_count`).
+- Attaching marks the row `attached` with `attached_record_id`; the lab
+  attachment stores the result's `source_file_id`. The import can add a
+  result to an existing record of the picked patient (today's record is
+  preselected) instead of making a new one; the record page's Recent files
+  Add does the same. Either way the attachment is a `test_result` with its
+  device type, and the record's lab report is rebuilt from all its lab
+  results (`regenerate_pdf_from_medical_record`, which retires the old one).
+- Move to another patient (record page lab row, or an attached inbox row):
+  the attachment and the old record's lab report are soft-deleted, a copy is
+  attached to the chosen record, both lab reports are rebuilt, and the move
+  is logged in `lab_result_moves` (from/to attachment and record, `moved_at`,
+  `moved_by` = the computer's login name). A failed rebuild keeps the move
+  and says so.
+- Deleting a lab attachment on the record page puts its result back in
+  `waiting`.
+
 ## Medical records and invoices
 - A record, its line items and its history row are saved in one transaction
   (`MedicalRecordService::save_new_record` / `save_record_changes`). An edit
