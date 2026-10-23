@@ -35,6 +35,7 @@ import {
 } from '@ant-design/icons';
 import type { HouseholdFormValues, ContactFormValues } from '../../types/ui.types';
 import { invoke } from '@/services/invoke';
+import { DuplicateHouseholdWarning } from './DuplicateHouseholdWarning';
 import styles from './Forms.module.css';
 
 /** Subset of the Patient model that's enough to render the
@@ -67,6 +68,16 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
 }) => {
   const { t } = useTranslation(['households', 'patients', 'forms', 'common', 'entities']);
   const [form] = Form.useForm();
+  const [duplicateCount, setDuplicateCount] = useState(0);
+  const watchedName = Form.useWatch('lastName', form) as string | undefined;
+  const watchedContacts = (Form.useWatch('contacts', form) ?? []) as ContactFormValues[];
+  const duplicateCheck = {
+    householdName: watchedName ?? '',
+    firstName: watchedContacts[0]?.firstName ?? '',
+    lastName: watchedContacts[0]?.lastName ?? '',
+    phones: watchedContacts.map((c) => c?.phone ?? '').filter(Boolean),
+    emails: watchedContacts.map((c) => c?.email ?? '').filter(Boolean),
+  };
 
   // Patient-association state. Only meaningful in edit mode (need the
   // household's id to assign patients to it via update_patient). For
@@ -95,10 +106,8 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
     if (!householdId) return;
     setLoadingPatients(true);
     try {
-      const all = await invoke<PatientLite[]>('get_patients');
-      setHouseholdPatients(
-        (all || []).filter((p) => p.householdId === householdId),
-      );
+      const pets = await invoke<PatientLite[]>('get_household_patients', { householdId });
+      setHouseholdPatients(pets || []);
     } catch (err) {
       console.error('Failed to load household patients:', err);
       message.error(t('form.loadPatientsFailed'));
@@ -142,16 +151,12 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
     patientSearchTimeout.current = setTimeout(() => runPatientSearch(value), 250);
   };
 
-  // Adding / removing a patient is a single update_patient call with the
-  // new householdId (or null for remove). The patient model already has
-  // a nullable household_id so no schema change needed.
+  // Adding moves the pet here from any other household; removing unlinks it
+  // from this one.
   const handleAddPatient = async (patientId: number) => {
     if (!householdId) return;
     try {
-      await invoke('update_patient', {
-        id: patientId,
-        dto: { householdId },
-      });
+      await invoke('update_patient_household', { patientId, householdId });
       message.success(t('form.patientAdded'));
       setSearchValue('');
       setSearchResults([]);
@@ -163,11 +168,9 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
   };
 
   const handleRemovePatient = async (patientId: number) => {
+    if (!householdId) return;
     try {
-      await invoke('update_patient', {
-        id: patientId,
-        dto: { householdId: null },
-      });
+      await invoke('unlink_patient_from_household', { patientId, householdId });
       message.success(t('form.patientRemoved'));
       await refreshHouseholdPatients();
     } catch (err: any) {
@@ -550,6 +553,10 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
           </>
         )}
 
+        {mode === 'create' && (
+          <DuplicateHouseholdWarning check={duplicateCheck} onMatchesChange={setDuplicateCount} />
+        )}
+
         <Form.Item style={{ marginTop: 24 }}>
           <Space>
             <Button
@@ -559,7 +566,11 @@ export const HouseholdForm: React.FC<HouseholdFormProps> = ({
               loading={loading}
               size="large"
             >
-              {mode === 'create' ? t('form.createHousehold') : t('common:saveChanges')}
+              {mode === 'create'
+                ? duplicateCount > 0
+                  ? t('duplicates.createAnyway')
+                  : t('form.createHousehold')
+                : t('common:saveChanges')}
             </Button>
             <Button
               type="default"

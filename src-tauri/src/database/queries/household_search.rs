@@ -45,7 +45,7 @@ pub(crate) fn index_rows_sql(filter: &str) -> String {
 // matches "070 123 456" and "Петровска-Николовска" matches as a phrase. A
 // word made only of digit groups also matches the digits run together.
 // Words are OR-ed; bm25 ranks households matching more words first.
-fn sanitize_fts5_query(query: &str) -> String {
+pub(crate) fn sanitize_fts5_query(query: &str) -> String {
     query
         .split_whitespace()
         .filter_map(|word| {
@@ -83,7 +83,7 @@ async fn get_all_households_internal(
             id,
             household_name,
             address
-        FROM households
+        FROM households WHERE merged_into_id IS NULL
         ORDER BY household_name, id
         LIMIT ? OFFSET ?
         "#,
@@ -97,7 +97,7 @@ async fn get_all_households_internal(
         DbBackend::Sqlite,
         r#"
         SELECT COUNT(*) as count
-        FROM households
+        FROM households WHERE merged_into_id IS NULL
         "#,
         []
     ))
@@ -255,7 +255,7 @@ pub async fn search_households(
             snippet(household_search, -1, '<mark>', '</mark>', '...', 32) as snippet
         FROM household_search
         JOIN households h ON household_search.household_id = h.id
-        WHERE household_search MATCH ?
+        WHERE household_search MATCH ? AND h.merged_into_id IS NULL
         ORDER BY relevance_score
         LIMIT ? OFFSET ?
         "#,
@@ -270,7 +270,8 @@ pub async fn search_households(
         r#"
         SELECT COUNT(*) as count
         FROM household_search
-        WHERE household_search MATCH ?
+        JOIN households h ON household_search.household_id = h.id
+        WHERE household_search MATCH ? AND h.merged_into_id IS NULL
         "#,
         [fts_query.into()]
     ))
@@ -407,7 +408,8 @@ pub async fn quick_search_households(
             household_id,
             display_name
         FROM household_search
-        WHERE household_search MATCH ?
+        JOIN households h ON household_search.household_id = h.id
+        WHERE household_search MATCH ? AND h.merged_into_id IS NULL
         ORDER BY bm25(household_search)
         LIMIT ?
         "#,

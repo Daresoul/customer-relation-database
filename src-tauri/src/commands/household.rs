@@ -2,7 +2,7 @@ use tauri::State;
 use serde::Deserialize;
 use crate::database::SeaOrmPool;
 use crate::models::household::*;
-use crate::database::queries::{household, household_search};
+use crate::database::queries::{household, household_duplicates, household_merge, household_search};
 use sea_orm::{ConnectionTrait, Statement, DbBackend, Value};
 
 #[allow(dead_code)]
@@ -157,6 +157,14 @@ pub async fn search_households(
 }
 
 #[tauri::command]
+pub async fn find_household_duplicates(
+    pool: State<'_, SeaOrmPool>,
+    check: household_duplicates::DuplicateCheck,
+) -> Result<Vec<household_duplicates::DuplicateMatch>, String> {
+    household_duplicates::find_household_duplicates(&pool, &check).await
+}
+
+#[tauri::command]
 pub async fn get_household_with_people(
     pool: State<'_, SeaOrmPool>,
     household_id: i32,
@@ -260,10 +268,11 @@ pub async fn get_household_detail(
     pool: State<'_, SeaOrmPool>,
     household_id: i32,
 ) -> Result<serde_json::Value, String> {
-    // Get household with people
+    // Get household with people (a merged-away id opens the kept household)
     let household_with_people = household::get_household_with_people(&pool, household_id)
         .await?
         .ok_or_else(|| format!("Household {} not found", household_id))?;
+    let household_id = household_with_people.household.id;
 
     // Get associated patients - CAST weight to REAL to avoid type conversion issues
     let patients = pool.query_all(Statement::from_sql_and_values(
@@ -444,11 +453,6 @@ pub async fn update_person(
         params.push(last_name.to_string().into());
     }
 
-    if let Some(is_primary) = updates.get("isPrimary").and_then(|v| v.as_bool()) {
-        query_parts.push("is_primary = ?");
-        params.push(is_primary.into());
-    }
-
     if !query_parts.is_empty() {
         let sql = format!(
             "UPDATE people SET {}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
@@ -462,6 +466,12 @@ pub async fn update_person(
             .map_err(|e| format!("Failed to update person: {}", e))?;
     }
 
+    // One primary per household: true moves it here; false is ignored, since
+    // the household would be left without one (make someone else primary).
+    if updates.get("isPrimary").and_then(|v| v.as_bool()) == Some(true) {
+        household_merge::set_primary_person(&pool, person_id).await?;
+    }
+
     // Return updated person with contacts
     household::get_person_with_contacts(&pool, person_id)
         .await?
@@ -473,45 +483,34 @@ pub async fn delete_person(
     pool: State<'_, SeaOrmPool>,
     person_id: i32,
 ) -> Result<(), String> {
-    // Check if this is the last person in the household
-    let row = pool.query_one(Statement::from_sql_and_values(
-        DbBackend::Sqlite,
-        "SELECT household_id FROM people WHERE id = ?",
-        [person_id.into()]
-    ))
-    .await
-    .map_err(|e| format!("Failed to find person: {}", e))?
-    .ok_or("Person not found")?;
+    household_merge::delete_person(&pool, person_id).await
+}
 
-    let household_id: i32 = row.try_get("", "household_id")
-        .map_err(|e| format!("Failed to get household_id: {}", e))?;
+#[tauri::command]
+pub async fn set_primary_person(
+    pool: State<'_, SeaOrmPool>,
+    person_id: i32,
+) -> Result<(), String> {
+    household_merge::set_primary_person(&pool, person_id).await
+}
 
-    let count_row = pool.query_one(Statement::from_sql_and_values(
-        DbBackend::Sqlite,
-        "SELECT COUNT(*) as count FROM people WHERE household_id = ?",
-        [household_id.into()]
-    ))
-    .await
-    .map_err(|e| format!("Failed to count people: {}", e))?
-    .ok_or("Failed to count people")?;
+#[tauri::command]
+pub async fn get_household_merge_preview(
+    pool: State<'_, SeaOrmPool>,
+    keep_id: i32,
+    merge_id: i32,
+) -> Result<household_merge::HouseholdMergePreview, String> {
+    household_merge::merge_preview(&pool, keep_id, merge_id).await
+}
 
-    let person_count: i32 = count_row.try_get("", "count")
-        .map_err(|e| format!("Failed to get count: {}", e))?;
-
-    if person_count <= 1 {
-        return Err("Cannot delete the last person in a household".to_string());
-    }
-
-    // Delete the person (contacts will cascade)
-    pool.execute(Statement::from_sql_and_values(
-        DbBackend::Sqlite,
-        "DELETE FROM people WHERE id = ?",
-        [person_id.into()]
-    ))
-    .await
-    .map_err(|e| format!("Failed to delete person: {}", e))?;
-
-    Ok(())
+#[tauri::command]
+pub async fn merge_households(
+    pool: State<'_, SeaOrmPool>,
+    keep_id: i32,
+    merge_id: i32,
+    details_from: i32,
+) -> Result<(), String> {
+    household_merge::merge_households(&pool, keep_id, merge_id, details_from).await
 }
 
 #[tauri::command]
@@ -566,6 +565,9 @@ pub async fn get_household_patients(
     pool: State<'_, SeaOrmPool>,
     household_id: i32,
 ) -> Result<Vec<serde_json::Value>, String> {
+    let household_id = household_merge::resolve_household_id(&pool, household_id)
+        .await?
+        .unwrap_or(household_id);
     // Debug: First check what's in patient_households table
     let debug_relationships = pool.query_all(Statement::from_sql_and_values(
         DbBackend::Sqlite,
@@ -754,44 +756,7 @@ pub async fn update_patient_household(
     patient_id: i64,
     household_id: Option<i32>,
 ) -> Result<(), String> {
-    // First, remove all existing household links for this patient
-    pool.execute(Statement::from_sql_and_values(
-        DbBackend::Sqlite,
-        "DELETE FROM patient_households WHERE patient_id = ?",
-        [patient_id.into()]
-    ))
-    .await
-    .map_err(|e| format!("Failed to remove existing household links: {}", e))?;
-
-    // If a household_id is provided, create a new link
-    if let Some(hh_id) = household_id {
-        // Check if household exists
-        let row = pool.query_one(Statement::from_sql_and_values(
-            DbBackend::Sqlite,
-            "SELECT COUNT(*) as count FROM households WHERE id = ?",
-            [hh_id.into()]
-        ))
-        .await
-        .map_err(|e| format!("Failed to check household: {}", e))?
-        .ok_or("Failed to check household")?;
-
-        let household_exists: i64 = row.try_get("", "count")
-            .map_err(|e| format!("Failed to get count: {}", e))?;
-
-        if household_exists == 0 {
-            return Err(format!("Household {} not found", hh_id));
-        }
-
-        pool.execute(Statement::from_sql_and_values(
-            DbBackend::Sqlite,
-            "INSERT INTO patient_households (patient_id, household_id, relationship_type, is_primary) VALUES (?, ?, 'Pet', 1)",
-            [patient_id.into(), hh_id.into()]
-        ))
-        .await
-        .map_err(|e| format!("Failed to link patient to household: {}", e))?;
-    }
-
-    Ok(())
+    household_merge::set_patient_household(&pool, patient_id, household_id).await
 }
 
 // Helper function to map SeaORM row to Household

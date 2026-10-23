@@ -10,6 +10,8 @@ export interface CreateHouseholdModalProps {
    *  automatically after this returns. */
   onCreated: (household: CreatedHousehold) => void | Promise<void>;
   onCancel: () => void;
+  /** Picks an existing household from the duplicate warning instead. */
+  onUseExisting?: (household: CreatedHousehold) => void | Promise<void>;
 }
 
 /**
@@ -27,6 +29,7 @@ export const CreateHouseholdModal: React.FC<CreateHouseholdModalProps> = ({
   open,
   onCreated,
   onCancel,
+  onUseExisting,
 }) => {
   const { t } = useTranslation('patients');
 
@@ -52,6 +55,7 @@ export const CreateHouseholdModal: React.FC<CreateHouseholdModalProps> = ({
         <CreateHouseholdInline
           onCreated={handleCreated}
           onCancel={onCancel}
+          onUseExisting={onUseExisting}
         />
       )}
     </Modal>

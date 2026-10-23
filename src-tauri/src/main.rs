@@ -514,6 +514,10 @@ fn main() {
             commands::link_patient_to_household,
             commands::unlink_patient_from_household,
             commands::update_patient_household,
+            commands::set_primary_person,
+            commands::get_household_merge_preview,
+            commands::merge_households,
+            commands::find_household_duplicates,
             // Medical history commands
             commands::get_medical_records,
             commands::get_medical_record,

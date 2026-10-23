@@ -439,6 +439,14 @@ export const CreatePatientSection: React.FC<CreatePatientSectionProps> = ({
         <CreateHouseholdModal
           open={createHouseholdOpen}
           onCancel={() => setCreateHouseholdOpen(false)}
+          onUseExisting={(existing: CreatedHousehold) => {
+            const label = existing.householdName || t('households:unnamedHousehold');
+            setHouseholdOptions((prev) =>
+              prev.some((o) => o.value === existing.id) ? prev : [{ value: existing.id, label }, ...prev],
+            );
+            form.setFieldValue('householdId', existing.id);
+            setCreateHouseholdOpen(false);
+          }}
           onCreated={async (newHousehold: CreatedHousehold) => {
             const label =
               (typeof newHousehold.householdName === 'string' && newHousehold.householdName) ||

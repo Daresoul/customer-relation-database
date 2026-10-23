@@ -292,7 +292,11 @@ pub async fn get_household_with_people(
     db: &DatabaseConnection,
     household_id: i32,
 ) -> Result<Option<HouseholdWithPeople>, String> {
-    // Get household
+    let household_id = match super::household_merge::resolve_household_id(db, household_id).await? {
+        Some(id) => id,
+        None => return Ok(None),
+    };
+
     let household_row = db.query_one(Statement::from_sql_and_values(
         DbBackend::Sqlite,
         "SELECT id, household_name, address, city, postal_code, notes, created_at, updated_at FROM households WHERE id = ?",
@@ -422,18 +426,33 @@ pub async fn update_household(
     Ok(())
 }
 
-// Delete household (cascades to people and contacts)
+// Delete household (cascades to people and contacts). Refused while pets
+// belong to it, since their links would cascade away; households merged
+// into it go too.
 pub async fn delete_household(
     db: &DatabaseConnection,
     household_id: i32,
 ) -> Result<(), String> {
-    db.execute(Statement::from_sql_and_values(
+    let txn = db.begin().await.map_err(|e| format!("Failed to begin transaction: {}", e))?;
+    let pets: i64 = txn.query_one(Statement::from_sql_and_values(
         DbBackend::Sqlite,
-        "DELETE FROM households WHERE id = ?",
+        "SELECT COUNT(*) AS count FROM patient_households WHERE household_id = ?",
         [household_id.into()]
     ))
     .await
-    .map_err(|e| format!("Failed to delete household: {}", e))?;
+    .map_err(|e| format!("Failed to count pets: {}", e))?
+    .and_then(|row| row.try_get("", "count").ok())
+    .unwrap_or(0);
+    if pets > 0 {
+        return Err(format!("HOUSEHOLD_HAS_PETS: {} pets", pets));
+    }
+
+    for sql in ["DELETE FROM households WHERE merged_into_id = ?", "DELETE FROM households WHERE id = ?"] {
+        txn.execute(Statement::from_sql_and_values(DbBackend::Sqlite, sql, [household_id.into()]))
+            .await
+            .map_err(|e| format!("Failed to delete household: {}", e))?;
+    }
+    txn.commit().await.map_err(|e| format!("Failed to commit: {}", e))?;
 
     Ok(())
 }

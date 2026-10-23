@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Table, Typography, Tag, Empty, Button, Modal, App, Skeleton } from 'antd';
+import { Table, Typography, Tag, Empty, Button, Modal, App, Skeleton, Dropdown, Space } from 'antd';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { invalidatePatientData } from '../../hooks/invalidation';
 import { useTranslation } from 'react-i18next';
 import { Patient } from '../../types/household';
-import { PlusOutlined } from '@ant-design/icons';
+import { PlusOutlined, MoreOutlined, LinkOutlined } from '@ant-design/icons';
+import { MovePetModal, LinkPetModal } from './MovePetModal';
 import PatientFormWithOwner from '../../components/forms/PatientFormWithOwner';
 import { LoadError } from '../../components/common/LoadError';
 import { PatientService } from '../../services/patientService';
@@ -37,6 +38,8 @@ export const AnimalsSection: React.FC<AnimalsSectionProps> = ({
   const queryClient = useQueryClient();
   const [isPatientModalOpen, setIsPatientModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [movingPet, setMovingPet] = useState<{ id: number; name: string } | null>(null);
+  const [isLinkOpen, setIsLinkOpen] = useState(false);
 
   // A failure goes back to PatientFormWithOwner, which keeps the input and shows why.
   const handleCreatePatient = async (data: CreatePatientInput | UpdatePatientInput) => {
@@ -130,20 +133,44 @@ export const AnimalsSection: React.FC<AnimalsSectionProps> = ({
         );
       },
     },
+    {
+      title: '',
+      key: 'actions',
+      width: 56,
+      render: (record: Patient) => (
+        <Dropdown
+          trigger={['click']}
+          menu={{
+            items: [{ key: 'move', label: t('detail.animals.moveToAnother') }],
+            onClick: () => setMovingPet({ id: record.id, name: record.name }),
+          }}
+        >
+          <Button type="text" icon={<MoreOutlined />} aria-label={t('detail.animals.actions')} />
+        </Dropdown>
+      ),
+    },
   ];
 
   return (
     <div className={styles.sectionContainer}>
       <div className={styles.sectionHeaderRow}>
         <Title level={4}>{t('detail.animals.title')}</Title>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => setIsPatientModalOpen(true)}
-        >
-          {t('detail.animals.registerNewPet')}
-        </Button>
+        <Space>
+          <Button icon={<LinkOutlined />} onClick={() => setIsLinkOpen(true)}>
+            {t('detail.animals.linkExisting')}
+          </Button>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => setIsPatientModalOpen(true)}
+          >
+            {t('detail.animals.registerNewPet')}
+          </Button>
+        </Space>
       </div>
+
+      <MovePetModal pet={movingPet} householdId={householdId} onClose={() => setMovingPet(null)} />
+      <LinkPetModal open={isLinkOpen} householdId={householdId} onClose={() => setIsLinkOpen(false)} />
 
       {loadFailed ? (
         <LoadError

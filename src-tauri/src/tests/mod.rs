@@ -93,3 +93,9 @@ pub mod record_money_tests;
 
 #[cfg(test)]
 pub mod attachment_purge_tests;
+
+#[cfg(test)]
+pub mod household_merge_tests;
+
+#[cfg(test)]
+pub mod household_duplicate_tests;

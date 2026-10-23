@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { invalidateHouseholdData } from '../../hooks/invalidation';
 import { invoke } from '@/services/invoke';
 import { HouseholdService } from '../../services/householdService';
+import { DuplicateHouseholdWarning } from './DuplicateHouseholdWarning';
 import type {
   CreateContactDto,
   CreateHouseholdWithPeopleDto,
@@ -36,6 +37,9 @@ export interface CreateHouseholdInlineProps {
   autoFocus?: boolean;
   /** External disable signal — usually for parent-controlled loading states. */
   disabled?: boolean;
+  /** Picks an existing household from the duplicate warning instead of
+   *  creating one. Without it the warning offers only Open. */
+  onUseExisting?: (household: CreatedHousehold) => void | Promise<void>;
 }
 
 interface FormValues {
@@ -84,12 +88,22 @@ export const CreateHouseholdInline: React.FC<CreateHouseholdInlineProps> = ({
   submitLabel,
   autoFocus = true,
   disabled = false,
+  onUseExisting,
 }) => {
   const { t } = useTranslation(['patients', 'forms', 'common']);
   const { notification } = App.useApp();
   const queryClient = useQueryClient();
   const [form] = Form.useForm<FormValues>();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [duplicateCount, setDuplicateCount] = React.useState(0);
+  const watched = Form.useWatch([], form) as Partial<FormValues> | undefined;
+  const duplicateCheck = {
+    householdName: watched?.householdName ?? '',
+    firstName: watched?.firstName ?? '',
+    lastName: watched?.lastName ?? '',
+    phones: watched?.phone ? [watched.phone] : [],
+    emails: watched?.email ? [watched.email] : [],
+  };
 
   const handleSubmit = async (values: FormValues) => {
     const householdName = values.householdName.trim();
@@ -323,9 +337,21 @@ export const CreateHouseholdInline: React.FC<CreateHouseholdInlineProps> = ({
         </Col>
       </Row>
 
+      <DuplicateHouseholdWarning
+        check={duplicateCheck}
+        onMatchesChange={setDuplicateCount}
+        onUseExisting={
+          onUseExisting
+            ? (match) => onUseExisting({ id: match.householdId, householdName: match.householdName ?? undefined })
+            : undefined
+        }
+      />
+
       <Space>
         <Button type="primary" htmlType="submit" loading={isSubmitting}>
-          {submitLabel ?? t('patients:detail.householdInfo.create', 'Create')}
+          {duplicateCount > 0
+            ? t('households:duplicates.createAnyway')
+            : submitLabel ?? t('patients:detail.householdInfo.create', 'Create')}
         </Button>
         <Button onClick={onCancel} disabled={isSubmitting}>
           {t('common:cancel')}
