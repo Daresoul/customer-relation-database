@@ -143,6 +143,11 @@ describe('a connected machine that sends nothing', () => {
     });
   });
 
+  it('counts only what came in since the last connect', () => {
+    const before = serial({ status: 'Connected', last_connected: at(9, 12), last_byte_at: at(8, 30) });
+    expect(describeSerialStatus(before, t, now).text).toBe('status.connectedSilent {"time":"09:12"}');
+  });
+
   it('stays quiet when it sent something, or connected only a moment ago', () => {
     expect(describeSerialStatus(serial({ status: 'Connected', last_connected: at(9, 12), last_byte_at: at(9, 40) }), t, now)).toEqual({ text: 'status.connected' });
     expect(describeSerialStatus(serial({ status: 'Connected', last_connected: at(9, 45), last_byte_at: undefined }), t, now)).toEqual({ text: 'status.connected' });
