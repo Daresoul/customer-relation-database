@@ -237,6 +237,10 @@ impl BackupService {
         ))
         .await
         .map_err(|e| format!("VACUUM INTO failed: {}", e))?;
+        if let Err(e) = remove_google_login(&db_part).await {
+            let _ = std::fs::remove_file(&db_part);
+            return Err(format!("Remove Google login from snapshot: {}", e));
+        }
         std::fs::rename(&db_part, &db_target).map_err(|e| format!("Replace snapshot: {}", e))?;
 
         // Mirror files directory (additive; never deletes from destination)
@@ -288,6 +292,40 @@ fn copy_dir_additive(src: &Path, dest: &Path) -> std::io::Result<()> {
         }
     }
     Ok(())
+}
+
+/// Backups go to USB sticks and cloud folders, so the Google login is
+/// removed from the copy. `needs_reauth` makes a restored copy show
+/// Reconnect in Settings. `secure_delete` overwrites the old bytes.
+async fn remove_google_login(snapshot: &Path) -> Result<(), String> {
+    use sqlx::{ConnectOptions, Connection};
+    let mut conn = sqlx::sqlite::SqliteConnectOptions::new()
+        .filename(snapshot)
+        .disable_statement_logging()
+        .connect()
+        .await
+        .map_err(|e| e.to_string())?;
+    let result = async {
+        sqlx::query("PRAGMA secure_delete = ON").execute(&mut conn).await?;
+        let has_table: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'google_calendar_settings'",
+        )
+        .fetch_one(&mut conn)
+        .await?;
+        if has_table > 0 {
+            sqlx::query(
+                "UPDATE google_calendar_settings SET access_token = NULL, refresh_token = NULL, \
+                 token_expires_at = NULL, needs_reauth = 1",
+            )
+            .execute(&mut conn)
+            .await?;
+        }
+        Ok::<_, sqlx::Error>(())
+    }
+    .await;
+    let closed = conn.close().await;
+    result.map_err(|e| e.to_string())?;
+    closed.map_err(|e| e.to_string())
 }
 
 /// Keeps the newest `keep` snapshots of one kind: pre-update snapshots when
