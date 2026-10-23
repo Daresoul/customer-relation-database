@@ -214,3 +214,22 @@ describe('MedicalRecordForm: unsaved changes', () => {
     expect(onDirtyChange).toHaveBeenLastCalledWith(true);
   });
 });
+
+describe('MedicalRecordForm: new record from an appointment', () => {
+  it('starts with the given title', async () => {
+    mockDiagnoses(() => Promise.resolve([]));
+    render(
+      <App>
+        <MedicalRecordForm
+          onSubmit={vi.fn()}
+          onCancel={vi.fn()}
+          loading={false}
+          patientId={3}
+          defaultTitle="Vaccination"
+        />
+      </App>,
+    );
+
+    expect(await screen.findByDisplayValue('Vaccination')).toBeInTheDocument();
+  });
+});

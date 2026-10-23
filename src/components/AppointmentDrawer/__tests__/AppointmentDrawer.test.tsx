@@ -14,7 +14,17 @@ vi.mock('@/services/invoke', () => ({ invoke: (...a: unknown[]) => invokeMock(..
 // way it does (same mutation key, same variables) so the link can be checked.
 vi.mock('@/components/MedicalRecordModal/MedicalRecordModal', async () => {
   const { CREATE_RECORD_MUTATION_KEY } = await import('@/hooks/useMedicalRecords');
-  function StubRecordModal({ open, patientId, patientName }: { open: boolean; patientId: number; patientName: string }) {
+  function StubRecordModal({
+    open,
+    patientId,
+    patientName,
+    defaultTitle,
+  }: {
+    open: boolean;
+    patientId: number;
+    patientName: string;
+    defaultTitle?: string;
+  }) {
     const save = useMutation({
       mutationKey: CREATE_RECORD_MUTATION_KEY,
       mutationFn: async (_v: { patientId: number }) => ({ id: 55 }),
@@ -22,6 +32,7 @@ vi.mock('@/components/MedicalRecordModal/MedicalRecordModal', async () => {
     return open ? (
       <div data-testid="record-modal">
         record for {patientName}
+        <span data-testid="record-default-title">{defaultTitle}</span>
         <button onClick={() => save.mutate({ patientId })}>stub-save-record</button>
       </div>
     ) : null;
@@ -183,6 +194,14 @@ describe('Appointment panel', () => {
     fireEvent.click(await screen.findByRole('button', { name: /appointments:actions.openPatient/ }));
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/patients/21'));
+  });
+
+  it('starts the record titled with the visit reason', async () => {
+    renderDrawer();
+
+    fireEvent.click(await screen.findByRole('button', { name: /appointments:actions.startRecord/ }));
+
+    expect(await screen.findByTestId('record-default-title')).toHaveTextContent('Vaccination');
   });
 
   it('starts a record: the visit goes to in consult, the record modal opens, and the saved record is linked', async () => {
