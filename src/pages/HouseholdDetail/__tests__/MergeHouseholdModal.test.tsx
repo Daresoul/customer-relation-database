@@ -124,7 +124,8 @@ describe('MergeHouseholdModal', () => {
     const { onMerged } = renderModal();
 
     await pickHousehold('Петровски 2');
-    fireEvent.click(await screen.findByText('detail.merge.confirm'));
+    await screen.findByText('detail.merge.thisHousehold');
+    fireEvent.click(screen.getByText('detail.merge.confirm'));
 
     expect(await screen.findByText('detail.merge.failed')).toBeInTheDocument();
     expect(onMerged).not.toHaveBeenCalled();
