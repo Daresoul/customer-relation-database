@@ -778,7 +778,7 @@ async fn check_once(
 
     let summary = tray_summary(&observed.problems, devices.len(), now, lang, day_month);
     if shown.as_ref() != Some(&summary) {
-        show_in_tray(app, &summary);
+        show_in_tray(app, &summary, lang);
         *shown = Some(summary);
     }
     for alert in &observed.alerts {
@@ -796,12 +796,18 @@ async fn check_once(
 }
 
 /// The tray menu's items (id, title) in the app language.
-pub fn tray_menu_titles(_lang: Lang) -> [(&'static str, &'static str); 3] {
-    [("show", "Show"), ("hide", "Hide"), ("quit", "Quit")]
+pub fn tray_menu_titles(lang: Lang) -> [(&'static str, &'static str); 3] {
+    match lang {
+        Lang::En => [("show", "Show"), ("hide", "Hide"), ("quit", "Quit")],
+        Lang::Mk => [("show", "Прикажи"), ("hide", "Сокриј"), ("quit", "Излез")],
+    }
 }
 
-fn show_in_tray(app: &tauri::AppHandle, summary: &TraySummary) {
+fn show_in_tray(app: &tauri::AppHandle, summary: &TraySummary, lang: Lang) {
     let tray = app.tray_handle();
+    for (id, title) in tray_menu_titles(lang) {
+        let _ = tray.get_item(id).set_title(title);
+    }
     if let Err(e) = tray.set_tooltip(&summary.tooltip) {
         log::debug!("Tray tooltip not set: {e}");
     }
