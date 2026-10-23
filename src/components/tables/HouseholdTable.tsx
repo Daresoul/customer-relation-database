@@ -25,6 +25,7 @@ import {
 } from '@ant-design/icons';
 import type { HouseholdTableRecord } from '../../types/ui.types';
 import styles from './Tables.module.css';
+import { phoneMatches } from '../../utils/phone';
 
 const { Text, Link } = Typography;
 
@@ -58,7 +59,7 @@ export const HouseholdTable: React.FC<HouseholdTableProps> = ({
     return households.filter(household =>
       household.lastName?.toLowerCase().includes(searchLower) ||
       household.primaryContact?.toLowerCase().includes(searchLower) ||
-      household.phone?.toLowerCase().includes(searchLower) ||
+      phoneMatches(searchText, household.phones ?? [household.phone]) ||
       household.email?.toLowerCase().includes(searchLower) ||
       household.address?.toLowerCase().includes(searchLower)
     );

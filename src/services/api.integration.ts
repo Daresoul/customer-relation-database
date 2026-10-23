@@ -77,6 +77,19 @@ export const patientApi = {
 
 };
 
+const PHONE_TYPES = ['phone', 'mobile', 'work_phone'];
+
+interface ListedPerson {
+  contacts?: Array<{ contact_type: string; contact_value: string }>;
+}
+
+/** Every phone of every person, for the household list search. */
+function allPhones(people: ListedPerson[] | undefined): string[] {
+  return (people ?? []).flatMap((p) =>
+    (p.contacts ?? []).filter((c) => PHONE_TYPES.includes(c.contact_type)).map((c) => c.contact_value),
+  );
+}
+
 // Household API methods
 export const householdApi = {
   search: async (query: string, limit?: number): Promise<HouseholdTableRecord[]> => {
@@ -94,6 +107,7 @@ export const householdApi = {
             lastName: r.household.household_name || r.household.name,
             primaryContact: primaryPerson ? `${primaryPerson.first_name} ${primaryPerson.last_name}` : null,
             phone: primaryPerson?.contacts?.find((c: any) => c.contact_type === 'phone')?.contact_value || null,
+            phones: allPhones(r.people),
             email: primaryPerson?.contacts?.find((c: any) => c.contact_type === 'email')?.contact_value || null,
             address: r.household.address,
             petCount: r.pet_count || 0,
