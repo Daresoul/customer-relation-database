@@ -211,6 +211,8 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
       unitPrice: item.unitPrice,
       currencyId: item.currencyId,
       quantity: item.quantity,
+      // null: no rate. A missing field would give the line its item's default rate.
+      taxRateId: item.taxRateId ?? null,
     }));
     // The manual total stands in for line items; with items it no longer applies.
     const manualTotalInput = lineItems.length > 0 ? null : manualTotal;

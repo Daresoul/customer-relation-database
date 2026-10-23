@@ -108,3 +108,9 @@ pub mod shell_search_tests;
 
 #[cfg(test)]
 pub mod lab_inbox_tests;
+
+#[cfg(test)]
+pub mod invoice_totals_tests;
+
+#[cfg(test)]
+pub mod clinic_vat_tests;

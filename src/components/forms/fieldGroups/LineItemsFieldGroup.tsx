@@ -38,6 +38,8 @@ import { useAppSettings } from '../../../hooks/useAppSettings';
 import type { LineItemTemplate, MedicalRecordLineItem, CreateLineItemInput } from '../../../types/lineItem';
 import type { Currency } from '../../../types/medical';
 import { localeMoneyParser, localeNumberParser } from '../../../utils/localeNumber';
+import { useTaxRates, useInvoiceTotals } from '../../../hooks/useClinic';
+import { toMoneyLines, withRate, rateForTemplate, defaultRate } from '../../../utils/invoiceLines';
 import styles from '../Forms.module.css';
 
 const { Text, Title } = Typography;
@@ -107,17 +109,19 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
     return price.toFixed(2);
   };
 
-  // Calculate subtotal (before discount)
-  const subtotal = useMemo(() => {
-    return lineItems.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
-  }, [lineItems]);
+  // VAT rates offered for lines, and the totals as the invoice PDF will print them.
+  const { data: taxRates = [] } = useTaxRates(true);
+  const moneyLines = useMemo(() => toMoneyLines(lineItems), [lineItems]);
+  const { data: totals } = useInvoiceTotals(moneyLines, discountPercent);
 
-  // Calculate total (after discount)
-  const calculatedTotal = useMemo(() => {
-    if (lineItems.length === 0) return manualTotal || 0;
-    const discountMultiplier = discountPercent ? (1 - discountPercent / 100) : 1;
-    return subtotal * discountMultiplier;
-  }, [subtotal, discountPercent, lineItems.length, manualTotal]);
+  // Active rates, plus a hidden one the line still has.
+  const rateOptions = (item?: MedicalRecordLineItem) => {
+    const options = taxRates.map(r => ({ value: r.id, label: r.name }));
+    if (item?.taxRateId != null && !taxRates.some(r => r.id === item.taxRateId)) {
+      options.push({ value: item.taxRateId, label: item.vatName ?? `${item.vatPercent ?? 0}%` });
+    }
+    return options;
+  };
 
   // Handle adding from template
   const handleTemplateSelect = (templateId: number | string) => {
@@ -130,14 +134,14 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
       return;
     }
 
-    const newItem: MedicalRecordLineItem = {
+    const newItem: MedicalRecordLineItem = withRate({
       templateId: template.id,
       name: template.name,
       description: template.description,
       unitPrice: template.defaultPrice,
       currencyId: template.currencyId,
       quantity: 1,
-    };
+    }, rateForTemplate(template, taxRates));
 
     const newLineItems = [...lineItems, newItem];
     onLineItemsChange(newLineItems);
@@ -154,6 +158,7 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
       quantity: 1,
       unitPrice: 0,
       currencyId: effectiveDefaultCurrencyId || currencies[0]?.id,
+      taxRateId: defaultRate(taxRates)?.id,
     });
     setCustomItemModalVisible(true);
   };
@@ -168,6 +173,7 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
       unitPrice: item.unitPrice,
       currencyId: item.currencyId,
       quantity: item.quantity,
+      taxRateId: item.taxRateId ?? undefined,
     });
     setCustomItemModalVisible(true);
   };
@@ -176,14 +182,19 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
    *  values. Does NOT touch the templates table — that's the
    *  "Save as template & add" path's job. */
   const applyCustomFormValues = (values: any) => {
-    const newItem: MedicalRecordLineItem = {
-      templateId: editingItemIndex !== null ? lineItems[editingItemIndex].templateId : undefined,
+    const existing = editingItemIndex !== null ? lineItems[editingItemIndex] : undefined;
+    const base: MedicalRecordLineItem = {
+      templateId: existing?.templateId,
       name: values.name,
       description: values.description || undefined,
       unitPrice: values.unitPrice,
       currencyId: values.currencyId,
       quantity: values.quantity || 1,
     };
+    const rateId = values.taxRateId ?? null;
+    const newItem = existing && rateId !== null && rateId === existing.taxRateId
+      ? { ...base, taxRateId: existing.taxRateId, vatName: existing.vatName, vatPercent: existing.vatPercent }
+      : withRate(base, taxRates.find(r => r.id === rateId));
 
     if (editingItemIndex !== null) {
       // Update existing item
@@ -248,6 +259,13 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
     if (quantity === null || quantity < 1) return;
     const updated = [...lineItems];
     updated[index] = { ...updated[index], quantity };
+    onLineItemsChange(updated);
+  };
+
+  // Handle inline VAT rate change; a cleared select removes the rate
+  const handleRateChange = (index: number, rateId: number | undefined) => {
+    const updated = [...lineItems];
+    updated[index] = withRate(updated[index], taxRates.find(r => r.id === rateId));
     onLineItemsChange(updated);
   };
 
@@ -324,12 +342,30 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
       ),
     },
     {
+      title: t('medical:lineItems.vat'),
+      key: 'vat',
+      width: 130,
+      render: (_: unknown, record: MedicalRecordLineItem, index: number) => (
+        <Select
+          size="small"
+          allowClear
+          value={record.taxRateId ?? undefined}
+          placeholder={t('medical:lineItems.noVat')}
+          options={rateOptions(record)}
+          onChange={(value) => handleRateChange(index, value)}
+          disabled={disabled}
+          aria-label={t('medical:lineItems.vat')}
+          style={{ width: 120 }}
+        />
+      ),
+    },
+    {
       title: t('medical:lineItems.subtotal', 'Subtotal'),
       key: 'subtotal',
       width: 120,
-      render: (_: any, record: MedicalRecordLineItem) => (
+      render: (_: any, record: MedicalRecordLineItem, index: number) => (
         <Text strong>
-          {formatPrice(record.unitPrice * record.quantity, record.currencyId)}
+          {formatPrice(totals?.lineAmounts[index] ?? record.unitPrice * record.quantity, record.currencyId)}
         </Text>
       ),
     },
@@ -367,6 +403,10 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
   const primaryCurrency = lineItems.length > 0
     ? getCurrency(lineItems[0].currencyId)
     : getCurrency(effectiveDefaultCurrencyId || currencies[0]?.id);
+
+  /** A total from the backend; a dash until it has arrived. */
+  const money = (amount: number | undefined) =>
+    amount === undefined ? '—' : formatPrice(amount, lineItems[0]?.currencyId || effectiveDefaultCurrencyId || 1);
 
   return (
     <div className={styles.tabContent}>
@@ -420,10 +460,10 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
           />
 
           {/* Totals Section */}
-          <Card size="small" style={{ maxWidth: 400, marginLeft: 'auto' }}>
+          <Card size="small" style={{ maxWidth: 400, marginLeft: 'auto' }} data-testid="line-items-totals">
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
               <Text>{t('medical:lineItems.subtotal', 'Subtotal')}:</Text>
-              <Text>{formatPrice(subtotal, lineItems[0]?.currencyId || effectiveDefaultCurrencyId || 1)}</Text>
+              <Text>{money(totals?.subtotal)}</Text>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <Text>{t('medical:lineItems.discountPercent', 'Discount %')}:</Text>
@@ -441,11 +481,40 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
                 style={{ width: 100 }}
               />
             </div>
+            {totals && totals.discountAmount > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <Text>{t('medical:lineItems.discount')}:</Text>
+                <Text type="danger">{money(-totals.discountAmount)}</Text>
+              </div>
+            )}
+            {totals && totals.vatGroups.length > 0 && (
+              <>
+                <Divider style={{ margin: '8px 0' }} />
+                {totals.vatGroups.map(group => (
+                  <div
+                    key={group.label}
+                    data-testid={`vat-group-${group.label}`}
+                    style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}
+                  >
+                    <Text type="secondary">{group.label}</Text>
+                    <Text type="secondary">
+                      {t('medical:lineItems.vatBase')} {money(group.net)} · {t('medical:lineItems.vatAmount')} {money(group.vat)}
+                    </Text>
+                  </div>
+                ))}
+                {!totals.pricesIncludeVat && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <Text>{t('medical:lineItems.vatAdded')}:</Text>
+                    <Text>{money(totals.vatTotal)}</Text>
+                  </div>
+                )}
+              </>
+            )}
             <Divider style={{ margin: '8px 0' }} />
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <Title level={5} style={{ margin: 0 }}>{t('medical:lineItems.total', 'Total')}:</Title>
               <Title level={5} style={{ margin: 0 }}>
-                {formatPrice(calculatedTotal, lineItems[0]?.currencyId || effectiveDefaultCurrencyId || 1)}
+                {money(totals?.total)}
               </Title>
             </div>
           </Card>
@@ -608,6 +677,14 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
               <InputNumber min={1} max={999} precision={0} parser={localeNumberParser} style={{ width: '100%' }} />
             </Form.Item>
           </Space>
+
+          <Form.Item name="taxRateId" label={t('medical:lineItems.vat')}>
+            <Select
+              allowClear
+              placeholder={t('medical:lineItems.noVat')}
+              options={rateOptions(editingItemIndex !== null ? lineItems[editingItemIndex] : undefined)}
+            />
+          </Form.Item>
         </Form>
       </Modal>
     </div>

@@ -11,6 +11,8 @@ export interface LineItemTemplate {
   currencyId: number;
   displayOrder: number;
   isActive: boolean;
+  /** VAT rate a new line from this item starts with. */
+  defaultTaxRateId?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -20,6 +22,7 @@ export interface CreateLineItemTemplateInput {
   description?: string;
   defaultPrice: number;
   currencyId: number;
+  defaultTaxRateId?: number | null;
 }
 
 export interface UpdateLineItemTemplateInput {
@@ -29,6 +32,8 @@ export interface UpdateLineItemTemplateInput {
   currencyId?: number;
   displayOrder?: number;
   isActive?: boolean;
+  /** null removes the default rate. */
+  defaultTaxRateId?: number | null;
 }
 
 // Medical Record Line Item (Per-Record Items)
@@ -40,6 +45,10 @@ export interface MedicalRecordLineItem {
   unitPrice: number;
   currencyId: number;
   quantity: number;
+  /** The line's VAT rate, and its name and percent when it was chosen. */
+  taxRateId?: number | null;
+  vatName?: string | null;
+  vatPercent?: number | null;
   createdAt?: string;
 }
 
@@ -51,4 +60,6 @@ export interface CreateLineItemInput {
   unitPrice: number;
   currencyId: number;
   quantity?: number;  // Default 1
+  /** Missing: the item's default rate; null: no rate. */
+  taxRateId?: number | null;
 }

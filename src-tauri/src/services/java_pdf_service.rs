@@ -8,6 +8,8 @@ use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::fs;
 use std::time::Duration;
+use crate::models::settings::ClinicProfile;
+use crate::services::money::InvoiceTotals;
 
 /// Longest a PDF job may run before Java is stopped.
 const JAVA_TIMEOUT: Duration = Duration::from_secs(60);
@@ -105,6 +107,18 @@ impl JavaPdfService {
         patient: &crate::services::device_pdf_service::PatientData,
         device_data_list: &[crate::services::device_pdf_service::DeviceTestData],
     ) -> Result<(), String> {
+        Self::generate_pdf_multi_with_clinic(jar_path, output_path, patient, device_data_list, None)
+    }
+
+    /// `generate_pdf_multi_with_jar` with the clinic profile for the
+    /// letterhead; without one the current letterhead is used.
+    pub fn generate_pdf_multi_with_clinic(
+        jar_path: &Path,
+        output_path: &str,
+        patient: &crate::services::device_pdf_service::PatientData,
+        device_data_list: &[crate::services::device_pdf_service::DeviceTestData],
+        clinic: Option<&ClinicProfile>,
+    ) -> Result<(), String> {
         log::info!("☕ Generating PDF using Java JAR (iText 5) with {} samples...", device_data_list.len());
 
         // A sample with no test results must never reach the renderer: Java
@@ -127,6 +141,7 @@ impl JavaPdfService {
 
         let input = serde_json::to_value(&java_input)
             .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
+        let input = Self::attach_clinic(input, clinic);
         Self::run_jar_job(jar_path, input, output_path, JAVA_TIMEOUT)?;
 
         log::info!("✅ Java PDF generated successfully");
@@ -356,6 +371,7 @@ impl JavaPdfService {
         let job_dir = Self::new_job_dir()?;
         let input_json_path = job_dir.path().join("input.json");
         let job_pdf = job_dir.path().join("out.pdf");
+        input = Self::attach_clinic(input, Self::current_letterhead().as_ref());
         input["output_path"] = Value::String(job_pdf.to_string_lossy().to_string());
         let json_str = serde_json::to_string_pretty(&input)
             .map_err(|e| format!("Failed to serialize JSON: {}", e))?;
@@ -670,6 +686,7 @@ impl JavaPdfService {
         title: &str,
         description: &str,
         patient_data: Option<&crate::services::device_pdf_service::PatientData>,
+        clinic: &ClinicProfile,
     ) -> Result<(), String> {
         log::info!("☕ Generating simple PDF report using Java JAR...");
 
@@ -678,7 +695,8 @@ impl JavaPdfService {
             "report_type": "simple",
             "title": title,
             "description": description,
-            "output_path": output_path
+            "output_path": output_path,
+            "clinic": Self::clinic_json(clinic),
         });
 
         // Add patient info if provided
@@ -699,45 +717,11 @@ impl JavaPdfService {
         Ok(())
     }
 
-    /// Generate an invoice PDF using the invoice.pdf template
-    /// Creates an invoice with dynamic line items table, totals, and form fields
-    pub fn generate_invoice(
-        jar_path: &Path,
-        output_path: &str,
-        date: &str,
-        invoice_number: &str,
-        recipient: &str,
-        line_items: &[InvoiceLineItem],
-        discount_percent: f64,
-        currency: &str,
-    ) -> Result<(), String> {
+    /// Generate an invoice PDF using the invoice.pdf template, from a job
+    /// built by `invoice_json`.
+    pub fn generate_invoice(jar_path: &Path, output_path: &str, job: Value) -> Result<(), String> {
         log::info!("☕ Generating invoice PDF using Java JAR...");
-
-        // Build line items JSON array
-        let items_json: Vec<serde_json::Value> = line_items
-            .iter()
-            .map(|item| {
-                serde_json::json!({
-                    "name": item.name,
-                    "quantity": item.quantity,
-                    "unit_price": item.unit_price
-                })
-            })
-            .collect();
-
-        let json_obj = serde_json::json!({
-            "report_type": "invoice",
-            "date": date,
-            "invoice_number": invoice_number,
-            "recipient": recipient,
-            "line_items": items_json,
-            "discount_percent": discount_percent,
-            "currency": currency,
-            "output_path": output_path
-        });
-
-        Self::run_jar_job(jar_path, json_obj, output_path, JAVA_TIMEOUT)?;
-
+        Self::run_jar_job(jar_path, job, output_path, JAVA_TIMEOUT)?;
         log::info!("✅ Invoice PDF generated successfully");
         Ok(())
     }
@@ -748,13 +732,15 @@ impl JavaPdfService {
         jar_path: &Path,
         output_path: &str,
         prescription_text: &str,
+        clinic: &ClinicProfile,
     ) -> Result<(), String> {
         log::info!("☕ Generating pharmacy note PDF using Java JAR...");
 
         let json_obj = serde_json::json!({
             "report_type": "pharmacy_note",
             "prescription_text": prescription_text,
-            "output_path": output_path
+            "output_path": output_path,
+            "clinic": Self::clinic_json(clinic),
         });
 
         Self::run_jar_job(jar_path, json_obj, output_path, JAVA_TIMEOUT)?;
@@ -764,13 +750,104 @@ impl JavaPdfService {
     }
 }
 
-/// Line item data for invoice generation
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct InvoiceLineItem {
-    pub name: String,
-    pub quantity: i32,
-    pub unit_price: f64,
+/// The clinic profile for jobs whose caller has no database at hand (lab
+/// reports made from a command). Kept current by the clinic profile commands.
+static LETTERHEAD: std::sync::RwLock<Option<ClinicProfile>> = std::sync::RwLock::new(None);
+
+impl JavaPdfService {
+    /// The `clinic` object of a job: the profile's letterhead fields, null
+    /// where blank (Java then keeps the template's own text).
+    pub fn clinic_json(clinic: &ClinicProfile) -> Value {
+        serde_json::json!({
+            "name": clinic.name,
+            "address": clinic.address,
+            "city": clinic.city,
+            "phone": clinic.phone,
+            "email": clinic.email,
+            "tax_number": clinic.tax_number,
+            "registration_number": clinic.registration_number,
+            "bank_account": clinic.bank_account,
+            "bank_name": clinic.bank_name,
+            "logo_path": clinic.logo_path,
+        })
+    }
+
+    /// Adds `clinic` to a job that has none.
+    pub fn attach_clinic(mut input: Value, clinic: Option<&ClinicProfile>) -> Value {
+        if let (Some(clinic), Some(obj)) = (clinic, input.as_object_mut()) {
+            obj.entry("clinic").or_insert_with(|| Self::clinic_json(clinic));
+        }
+        input
+    }
+
+    /// The profile used for jobs sent without one.
+    pub fn set_letterhead(clinic: Option<ClinicProfile>) {
+        if let Ok(mut current) = LETTERHEAD.write() {
+            *current = clinic;
+        }
+    }
+
+    fn current_letterhead() -> Option<ClinicProfile> {
+        LETTERHEAD.read().ok().and_then(|c| c.clone())
+    }
+
+    /// The invoice job: lines with their VAT rate, and the totals worked out
+    /// by `services::money`, which Java prints as they are.
+    #[allow(clippy::too_many_arguments)]
+    pub fn invoice_json(
+        date: &str,
+        invoice_number: &str,
+        recipient: &str,
+        line_items: &[crate::models::MedicalRecordLineItem],
+        discount_percent: f64,
+        currency: &str,
+        totals: &InvoiceTotals,
+        clinic: &ClinicProfile,
+    ) -> Value {
+        let items: Vec<Value> = line_items
+            .iter()
+            .map(|item| {
+                serde_json::json!({
+                    "name": item.name,
+                    "quantity": item.quantity,
+                    "unit_price": item.unit_price,
+                    "vat_label": item.vat_name,
+                    "vat_percent": item.vat_percent,
+                })
+            })
+            .collect();
+        let groups: Vec<Value> = totals
+            .vat_groups
+            .iter()
+            .map(|g| {
+                serde_json::json!({
+                    "label": g.label,
+                    "percent": g.percent,
+                    "net": g.net,
+                    "vat": g.vat,
+                    "gross": g.gross,
+                })
+            })
+            .collect();
+        serde_json::json!({
+            "report_type": "invoice",
+            "date": date,
+            "invoice_number": invoice_number,
+            "recipient": recipient,
+            "line_items": items,
+            "discount_percent": discount_percent,
+            "currency": currency,
+            "totals": {
+                "subtotal": totals.subtotal,
+                "discount_amount": totals.discount_amount,
+                "total": totals.total,
+                "vat_total": totals.vat_total,
+                "prices_include_vat": totals.prices_include_vat,
+                "vat_groups": groups,
+            },
+            "clinic": Self::clinic_json(clinic),
+        })
+    }
 }
 
 #[cfg(test)]

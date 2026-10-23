@@ -15,6 +15,8 @@ import { useAppSettings } from '../../../hooks/useAppSettings';
 import { LineItemTemplate, CreateLineItemTemplateInput, UpdateLineItemTemplateInput } from '../../../types/lineItem';
 import { Currency } from '../../../types/medical';
 import { localeMoneyParser } from '@/utils/localeNumber';
+import { useTaxRates } from '../../../hooks/useClinic';
+import { defaultRate } from '@/utils/invoiceLines';
 
 const { TextArea } = Input;
 
@@ -33,6 +35,16 @@ const LineItemsSettings: React.FC<LineItemsSettingsProps> = ({ isUpdating }) => 
   const { data: templates = [], isLoading, refetch } = useLineItemTemplates(false);
   const { data: currencies = [] } = useCurrencies();
   const { settings } = useAppSettings();
+  const { data: taxRates = [] } = useTaxRates(false);
+
+  const rateName = (id: number | null | undefined): string | undefined =>
+    taxRates.find(r => r.id === id)?.name;
+
+  // Active rates, plus a hidden one an item still uses.
+  const rateOptions = (currentId?: number | null) =>
+    taxRates
+      .filter(r => r.isActive || r.id === currentId)
+      .map(r => ({ value: r.id, label: r.name }));
 
   const createMutation = useCreateLineItemTemplate();
   const updateMutation = useUpdateLineItemTemplate();
@@ -59,6 +71,7 @@ const LineItemsSettings: React.FC<LineItemsSettingsProps> = ({ isUpdating }) => 
     form.setFieldsValue({
       defaultPrice: 0,
       currencyId: settings?.currencyId || currencies[0]?.id,
+      defaultTaxRateId: defaultRate(taxRates)?.id ?? null,
     });
     setModalVisible(true);
   };
@@ -70,6 +83,7 @@ const LineItemsSettings: React.FC<LineItemsSettingsProps> = ({ isUpdating }) => 
       description: item.description,
       defaultPrice: item.defaultPrice,
       currencyId: item.currencyId,
+      defaultTaxRateId: item.defaultTaxRateId ?? null,
     });
     setModalVisible(true);
   };
@@ -102,6 +116,7 @@ const LineItemsSettings: React.FC<LineItemsSettingsProps> = ({ isUpdating }) => 
         description: values.description || undefined,
         defaultPrice: values.defaultPrice,
         currencyId: values.currencyId,
+        defaultTaxRateId: values.defaultTaxRateId ?? null,
       };
 
       if (editingItem) {
@@ -140,6 +155,13 @@ const LineItemsSettings: React.FC<LineItemsSettingsProps> = ({ isUpdating }) => 
       key: 'defaultPrice',
       width: 150,
       render: (price: number, record: LineItemTemplate) => formatPrice(price, record.currencyId),
+    },
+    {
+      title: t('settings:lineItems.vat'),
+      dataIndex: 'defaultTaxRateId',
+      key: 'defaultTaxRateId',
+      width: 130,
+      render: (id: number | null | undefined) => rateName(id) ?? t('settings:lineItems.noVat'),
     },
     {
       title: t('settings:lineItems.descriptionLabel', 'Description'),
@@ -287,6 +309,14 @@ const LineItemsSettings: React.FC<LineItemsSettingsProps> = ({ isUpdating }) => 
                 value: c.id,
                 label: `${c.symbol || ''} ${c.code} - ${c.name}`.trim(),
               }))}
+            />
+          </Form.Item>
+
+          <Form.Item name="defaultTaxRateId" label={t('settings:lineItems.vat')}>
+            <Select
+              allowClear
+              placeholder={t('settings:lineItems.noVat')}
+              options={rateOptions(editingItem?.defaultTaxRateId)}
             />
           </Form.Item>
         </Form>

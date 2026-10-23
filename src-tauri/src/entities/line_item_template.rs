@@ -17,6 +17,7 @@ pub struct Model {
     pub currency_id: i64,
     pub display_order: i64,
     pub is_active: bool,
+    pub default_tax_rate_id: Option<i64>,
     pub created_at: ChronoDateTimeUtc,
     pub updated_at: ChronoDateTimeUtc,
 }

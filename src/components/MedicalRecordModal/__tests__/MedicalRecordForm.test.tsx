@@ -21,6 +21,10 @@ vi.mock('@/hooks/useCurrencies', () => ({
   useCurrencies: () => ({ data: [{ id: 1, code: 'MKD', name: 'Denar', symbol: 'ден' }] }),
 }));
 vi.mock('../../RecentDeviceFiles', () => ({ default: () => null }));
+vi.mock('@/hooks/useClinic', () => ({
+  useTaxRates: () => ({ data: [] }),
+  useInvoiceTotals: () => ({ data: undefined }),
+}));
 
 afterEach(cleanup);
 
@@ -135,6 +139,23 @@ describe('MedicalRecordForm: an edit sends cleared values explicitly', () => {
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
     expect(onSubmit.mock.calls[0][0]).toHaveProperty('manualTotal', null);
+  });
+
+  it("sends each line's VAT rate, and null for a line saved without one", async () => {
+    mockDiagnoses(() => Promise.resolve([]));
+    const { onSubmit } = renderEdit({
+      lineItems: [
+        { name: 'Exam', unitPrice: 1500, currencyId: 1, quantity: 1, templateId: 4 },
+        { name: 'Surgery', unitPrice: 1180, currencyId: 1, quantity: 1, taxRateId: 1, vatName: 'ДДВ 18%', vatPercent: 18 },
+      ],
+    } as Partial<MedicalRecord>);
+    await waitFor(() => expect(submitButton()).toBeEnabled());
+
+    fireEvent.click(submitButton());
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    const items = onSubmit.mock.calls[0][0].lineItems as Array<{ taxRateId: number | null }>;
+    expect(items.map((i) => i.taxRateId)).toEqual([null, 1]);
   });
 });
 

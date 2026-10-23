@@ -71,6 +71,7 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     run_migration(pool, "053_patient_status_and_alerts", add_patient_status_and_alerts).await?;
     run_migration(pool, WEIGHT_LOG_MIGRATION, create_patient_weight_log).await?;
     run_migration(pool, "055_lab_inbox", add_lab_inbox).await?;
+    run_migration(pool, "056_clinic_profile_and_vat", add_clinic_profile_and_vat).await?;
 
     Ok(())
 }
@@ -3283,6 +3284,82 @@ fn add_lab_inbox(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future
         .execute(pool)
         .await?;
 
+        Ok(())
+    })
+}
+
+
+/// Migration 056: the clinic profile (one row) printed on PDF letterheads,
+/// VAT rates, a default rate per price-list item, and the rate each record
+/// line was saved with. Existing lines keep no rate, which totals exactly as
+/// before. The seeded rates are offered; none is the default.
+fn add_clinic_profile_and_vat(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS clinic_profile (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                name TEXT,
+                address TEXT,
+                city TEXT,
+                phone TEXT,
+                email TEXT,
+                tax_number TEXT,
+                registration_number TEXT,
+                bank_account TEXT,
+                bank_name TEXT,
+                logo_path TEXT,
+                prices_include_vat INTEGER NOT NULL DEFAULT 1,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )",
+        )
+        .execute(pool)
+        .await?;
+        sqlx::query("INSERT OR IGNORE INTO clinic_profile (id) VALUES (1)")
+            .execute(pool)
+            .await?;
+
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS tax_rates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                percent REAL NOT NULL CHECK (percent >= 0 AND percent <= 100),
+                is_default INTEGER NOT NULL DEFAULT 0,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                display_order INTEGER NOT NULL DEFAULT 0,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )",
+        )
+        .execute(pool)
+        .await?;
+        let rates: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM tax_rates").fetch_one(pool).await?;
+        if rates.0 == 0 {
+            sqlx::query(
+                "INSERT INTO tax_rates (name, percent, display_order) VALUES \
+                 ('ДДВ 18%', 18, 0), ('ДДВ 5%', 5, 1), ('0%', 0, 2)",
+            )
+            .execute(pool)
+            .await?;
+        }
+
+        let columns = [
+            ("line_item_templates", "default_tax_rate_id", "INTEGER REFERENCES tax_rates(id)"),
+            ("medical_record_line_items", "tax_rate_id", "INTEGER REFERENCES tax_rates(id)"),
+            ("medical_record_line_items", "vat_name", "TEXT"),
+            ("medical_record_line_items", "vat_percent", "REAL"),
+        ];
+        for (table, column, definition) in columns {
+            let exists: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?")
+                .bind(table)
+                .bind(column)
+                .fetch_one(pool)
+                .await?;
+            if exists.0 == 0 {
+                sqlx::query(&format!("ALTER TABLE {table} ADD COLUMN {column} {definition}"))
+                    .execute(pool)
+                    .await?;
+            }
+        }
         Ok(())
     })
 }

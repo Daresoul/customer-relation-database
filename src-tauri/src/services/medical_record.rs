@@ -799,12 +799,14 @@ impl MedicalRecordService {
 
         // Generate simple report PDF
         log::info!("📄 Calling Java to generate simple report PDF for record {}...", medical_record_id);
+        let clinic = crate::services::settings::SettingsService::get_clinic_profile(db).await?;
         JavaPdfService::generate_simple_report(
             &env.jar_path,
             pdf_path.to_str().ok_or("Invalid PDF path")?,
             &record.name,
             &record.description,
             Some(&patient_data),
+            &clinic,
         )?;
 
         // Save PDF as attachment
@@ -862,10 +864,12 @@ impl MedicalRecordService {
         let pdf_path = reports_dir.join(&pdf_filename);
 
         log::info!("📄 Calling Java to generate pharmacy note PDF for record {}...", medical_record_id);
+        let clinic = crate::services::settings::SettingsService::get_clinic_profile(db).await?;
         JavaPdfService::generate_pharmacy_note(
             &env.jar_path,
             pdf_path.to_str().ok_or("Invalid PDF path")?,
             &prescription_text,
+            &clinic,
         )?;
 
         // Save PDF as attachment
@@ -886,21 +890,58 @@ impl MedicalRecordService {
         Ok(attachment_id)
     }
 
-    /// Generate an invoice PDF from medical record line items
-    async fn generate_invoice_pdf(
-        env: &PdfEnv,
+    /// The record's invoice totals, as on its invoice PDF: the saved lines
+    /// and rates, the record's discount and the clinic's price mode.
+    pub async fn invoice_totals_for_record(
         db: &DatabaseConnection,
-        medical_record_id: i64,
+        record_id: i64,
+    ) -> Result<crate::services::money::InvoiceTotals, String> {
+        let lines = crate::services::line_item::LineItemService::get_line_items_for_record(db, record_id).await?;
+        let discount = db
+            .query_one(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "SELECT discount_percent FROM medical_records WHERE id = ?",
+                [record_id.into()],
+            ))
+            .await
+            .map_err(|e| format!("Failed to read the discount: {}", e))?
+            .and_then(|row| row_f64(&row, "discount_percent"));
+        let clinic = crate::services::settings::SettingsService::get_clinic_profile(db).await?;
+        Ok(Self::totals_of(&lines, discount, clinic.prices_include_vat))
+    }
+
+    fn totals_of(
+        lines: &[crate::models::MedicalRecordLineItem],
+        discount_percent: Option<f64>,
+        prices_include_vat: bool,
+    ) -> crate::services::money::InvoiceTotals {
+        let money: Vec<crate::services::money::MoneyLine> = lines
+            .iter()
+            .map(|item| crate::services::money::MoneyLine {
+                unit_price: item.unit_price,
+                quantity: item.quantity,
+                vat_percent: item.vat_percent,
+                vat_label: item.vat_name.clone(),
+            })
+            .collect();
+        crate::services::money::invoice_totals(&money, discount_percent, prices_include_vat)
+    }
+
+    /// The JSON job the JAR renders the record's invoice from. Assigns the
+    /// invoice number and date on first use.
+    #[cfg(test)]
+    pub async fn invoice_job(db: &DatabaseConnection, record: &MedicalRecord) -> Result<serde_json::Value, String> {
+        Ok(Self::invoice_job_parts(db, record).await?.0)
+    }
+
+    async fn invoice_job_parts(
+        db: &DatabaseConnection,
         record: &MedicalRecord,
-    ) -> Result<i64, String> {
-        use crate::services::java_pdf_service::{JavaPdfService, InvoiceLineItem};
+    ) -> Result<(serde_json::Value, Invoice, String), String> {
+        use crate::services::java_pdf_service::JavaPdfService;
         use crate::services::line_item::LineItemService;
 
-        // Get line items for this record
-        let line_items = LineItemService::get_line_items_for_record(db, medical_record_id)
-            .await
-            .unwrap_or_default();
-
+        let line_items = LineItemService::get_line_items_for_record(db, record.id).await?;
         if line_items.is_empty() {
             return Err("The record has no line items to invoice".to_string());
         }
@@ -913,25 +954,32 @@ impl MedicalRecordService {
             patient_data.owner.clone()
         };
 
-        // Convert line items to invoice format
-        let invoice_items: Vec<InvoiceLineItem> = line_items
-            .iter()
-            .map(|item| InvoiceLineItem {
-                name: item.name.clone(),
-                quantity: item.quantity,
-                unit_price: item.unit_price,
-            })
-            .collect();
+        let invoice = Self::assign_invoice(db, record.id, chrono::Local::now()).await?;
+        let clinic = crate::services::settings::SettingsService::get_clinic_profile(db).await?;
+        let totals = Self::totals_of(&line_items, record.discount_percent, clinic.prices_include_vat);
+        let job = JavaPdfService::invoice_json(
+            &invoice.date.format("%d/%m/%Y").to_string(),
+            &invoice.number,
+            &recipient,
+            &line_items,
+            record.discount_percent.unwrap_or(0.0),
+            "ден",
+            &totals,
+            &clinic,
+        );
+        Ok((job, invoice, recipient))
+    }
 
-        let invoice = Self::assign_invoice(db, medical_record_id, chrono::Local::now()).await?;
-        let invoice_number = invoice.number.clone();
-        let date = invoice.date.format("%d/%m/%Y").to_string();
+    /// Generate an invoice PDF from medical record line items
+    async fn generate_invoice_pdf(
+        env: &PdfEnv,
+        db: &DatabaseConnection,
+        medical_record_id: i64,
+        record: &MedicalRecord,
+    ) -> Result<i64, String> {
+        use crate::services::java_pdf_service::JavaPdfService;
 
-        // Discount from record
-        let discount = record.discount_percent.unwrap_or(0.0);
-
-        // Currency - default to "ден"
-        let currency = "ден";
+        let (job, invoice, recipient) = Self::invoice_job_parts(db, record).await?;
 
         // Create invoice directory
         let reports_dir = std::env::temp_dir().join("invoices");
@@ -944,7 +992,7 @@ impl MedicalRecordService {
         // form becomes "Invoice 042_2025 - John Petrov - 2026-05-24.pdf".
         // The original "042/2025" string is still what's stored in
         // medical_records.invoice_number and printed on the PDF body.
-        let invoice_part = Self::sanitize_filename_part(&invoice_number);
+        let invoice_part = Self::sanitize_filename_part(&invoice.number);
         let recipient_part = Self::sanitize_filename_part(&recipient);
         let pdf_filename = format!(
             "Invoice {} - {} - {}.pdf",
@@ -958,12 +1006,7 @@ impl MedicalRecordService {
         JavaPdfService::generate_invoice(
             &env.jar_path,
             pdf_path.to_str().ok_or("Invalid PDF path")?,
-            &date,
-            &invoice_number,
-            &recipient,
-            &invoice_items,
-            discount,
-            currency,
+            job,
         )?;
 
         // Save PDF as attachment
@@ -1099,11 +1142,13 @@ impl MedicalRecordService {
 
         // Generate Java PDF with all devices
         log::debug!("Generating combined PDF report using Java...");
-        JavaPdfService::generate_pdf_multi_with_jar(
+        let clinic = crate::services::settings::SettingsService::get_clinic_profile(db).await?;
+        JavaPdfService::generate_pdf_multi_with_clinic(
             &env.jar_path,
             pdf_path.to_str().ok_or("Invalid PDF path")?,
             patient_data,
             device_data_list,
+            Some(&clinic),
         )?;
 
         // Determine device metadata for attachment (use first device for now)

@@ -12,7 +12,8 @@
     "lineItems": "Factura",
     "diagnoses": "Diagnoses",
     "backups": "Backups",
-    "updates": "Updates"
+    "updates": "Updates",
+    "clinic": "Clinic"
   },
   "deviceFiles": {
     "labInbox": "Lab inbox",
@@ -241,6 +242,49 @@
     "created": "Line item created successfully",
     "updated": "Line item updated successfully",
     "deleted": "Line item deleted successfully",
-    "confirmDelete": "Are you sure you want to deactivate this line item?"
+    "confirmDelete": "Are you sure you want to deactivate this line item?",
+    "vat": "VAT rate",
+    "noVat": "No VAT"
+  },
+  "clinic": {
+    "title": "Clinic profile",
+    "description": "Printed on medical reports, pharmacy notes, invoices and lab reports. A blank field keeps the text already printed on the document.",
+    "name": "Clinic name",
+    "nameHint": "Printed in the letterhead, for example Д-р Марин Величковски.",
+    "address": "Address",
+    "city": "City",
+    "phone": "Phone",
+    "email": "Email",
+    "taxNumber": "Tax number (ЕДБ)",
+    "registrationNumber": "Registration number (ЕМБС)",
+    "bankAccount": "Bank account",
+    "bankName": "Bank",
+    "save": "Save clinic profile",
+    "saved": "Clinic profile saved",
+    "logoTitle": "Logo",
+    "logoHint": "PNG or JPG, at most 2 MB. Printed in place of the logo on documents.",
+    "logoAlt": "Clinic logo",
+    "noLogo": "No logo yet. Documents keep their own logo.",
+    "chooseLogo": "Choose logo…",
+    "removeLogo": "Remove logo"
+  },
+  "vat": {
+    "title": "VAT",
+    "description": "Rates offered on price list items and record lines. A line without a rate is invoiced without VAT, as before.",
+    "priceMode": "Prices are entered",
+    "pricesGross": "with VAT included",
+    "pricesNet": "without VAT (VAT is added)",
+    "priceModeHint": "Applies to totals and to invoices made or reissued from now on.",
+    "name": "Name",
+    "percent": "Rate %",
+    "default": "Default",
+    "makeDefault": "Make default",
+    "add": "Add rate",
+    "createTitle": "New VAT rate",
+    "editTitle": "Edit VAT rate",
+    "hide": "Hide",
+    "show": "Show",
+    "hidden": "Hidden",
+    "percentChangeHint": "Lines already saved keep the rate they were saved with."
   }
 }

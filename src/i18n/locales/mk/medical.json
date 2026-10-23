@@ -81,7 +81,12 @@
     "namePlaceholder": "пр. Итна консултација",
     "descriptionPlaceholder": "Незадолжителен опис",
     "itemName": "Ставка",
-    "items": "ставки"
+    "items": "ставки",
+    "vat": "ДДВ",
+    "noVat": "Без ДДВ",
+    "vatBase": "основица",
+    "vatAmount": "ДДВ",
+    "vatAdded": "Додаден ДДВ"
   },
   "form": {
     "createTitle": "Создај медицински запис",

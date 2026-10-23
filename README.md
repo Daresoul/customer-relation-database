@@ -226,6 +226,34 @@
   repeated; long item names wrap.
 - An edit waits for the record's diagnoses to load before it can be saved, and
   the record modal and page ask before discarding typed text.
+- Invoice totals are worked out in one place, `services/money.rs`, in integer
+  cents: each line is price × quantity; lines are grouped by VAT rate; the
+  discount comes off each group, rounded half-up once; the group is then split
+  into net and VAT, half-up. The record form and page ask the backend
+  (`calculate_invoice_totals`) and the invoice PDF prints the same numbers.
+- VAT: Settings › Clinic holds the rates (seeded "ДДВ 18%", "ДДВ 5%", "0%",
+  none the default) and whether prices are entered with VAT included (the
+  default) or without. A price-list item has a default rate; a record line
+  keeps the rate's id, name and percent as they were when it was saved
+  (`tax_rate_id`, `vat_name`, `vat_percent`). A line sent without
+  `taxRateId` takes its price-list item's default; `null` means no rate.
+  Lines saved before VAT have no rate: they count as 0%, the invoice shows no
+  VAT section, and the total is exactly what it was.
+- Clinic profile (Settings › Clinic, table `clinic_profile`): name, address,
+  city, phone, email, ЕДБ, ЕМБС, bank account, bank and a logo (PNG/JPG up to
+  2 MB, copied to `<app data>/clinic/`). It is printed over the templates'
+  letterhead on reports, pharmacy notes, invoices and lab reports; a part is
+  redrawn only when the profile fills it, and a blank field keeps the
+  template's text. The template's own text stays under the cover in the
+  PDF's text layer.
+- Rust → Java job JSON (additive): every job may carry `clinic` {`name`,
+  `address`, `city`, `phone`, `email`, `tax_number`, `registration_number`,
+  `bank_account`, `bank_name`, `logo_path`}, null where blank; a job without
+  it gets the profile last loaded by the app (`JavaPdfService::set_letterhead`).
+  An invoice line may carry `vat_label` and `vat_percent`, and an invoice
+  `totals` {`subtotal`, `discount_amount`, `total`, `vat_total`,
+  `prices_include_vat`, `vat_groups`: [{`label`, `percent`, `net`, `vat`,
+  `gross`}]}; Java prints these instead of computing its own.
 - Number inputs read "," or "." as the decimal mark (`src/utils/localeNumber.ts`):
   "4,5" is 4.5 and "1.500,50" is 1500.5. A single mark is decimal in weights
   and doses ("1.500" is 1.5). Price fields (`localeMoneyParser`) read one mark
