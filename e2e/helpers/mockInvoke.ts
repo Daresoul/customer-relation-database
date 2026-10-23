@@ -32,7 +32,6 @@ export async function installTauriMock(page: Page, handlers: CommandMap): Promis
   await page.addInitScript((serializedHandlers) => {
     const commandHandlers: Record<string, (args: any) => any> = {};
     for (const [name, body] of Object.entries(serializedHandlers as Record<string, string>)) {
-      // eslint-disable-next-line no-new-func
       commandHandlers[name] = new Function('args', `return (${body})(args);`) as any;
     }
 
