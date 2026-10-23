@@ -402,7 +402,8 @@
     "todayLabel": "Денес",
     "downSince": "Без врска од {{time}}",
     "attempts": "{{count}} обиди",
-    "nextTry": "следен обид {{time}}"
+    "nextTry": "следен обид {{time}}",
+    "resultsToday": "денес: {{count}} резултати"
   },
   "alerts": {
     "title": "Известувања",

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { App, Button, Descriptions, Drawer, Segmented, Space, Switch, Typography, theme } from 'antd';
+import { App, Button, Descriptions, Drawer, Space, Switch, Typography, theme } from 'antd';
 import {
   CheckCircleFilled,
   CloseCircleFilled,
@@ -16,11 +16,13 @@ import { DeviceDetails, DeviceType, getDeviceTypeDisplayName } from '../../types
 import { describeFolderStatus, describeSerialStatus, folderLevel, formatDownSince, formatLastResult, formatToday, HealthLevel, serialDownSince, serialLevel } from './deviceHealth';
 import { errorText } from '@/utils/notifyError';
 import { formatDayMonth } from '@/utils/dateFormatter';
+import styles from './DeviceOverview.module.css';
 
 const { Text, Title } = Typography;
 
 /** How often the drawer refreshes the byte counter and last message while open. */
 const REFRESH_MS = 2000;
+const RESULTS_REFRESH_MS = 30_000;
 
 const LOG_LABELS = [
   'Connected',
@@ -92,6 +94,24 @@ export const DeviceDetailsDrawer: React.FC<DeviceDetailsDrawerProps> = ({ open, 
     };
   }, [open, selectedId]);
 
+  const [resultsToday, setResultsToday] = useState<Record<string, number>>({});
+  useEffect(() => {
+    if (!open) return undefined;
+    let cancelled = false;
+    const load = () =>
+      invoke<Record<string, number>>('get_results_today')
+        .then((r) => {
+          if (!cancelled) setResultsToday(r ?? {});
+        })
+        .catch(() => {});
+    load();
+    const timer = setInterval(load, RESULTS_REFRESH_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [open]);
+
   const devices = (integrations ?? []).filter(
     (i) => i.enabled && (i.connectionType === 'serial_port' || i.connectionType === 'file_watch'),
   );
@@ -159,13 +179,30 @@ export const DeviceDetailsDrawer: React.FC<DeviceDetailsDrawerProps> = ({ open, 
       }
     >
       {devices.length > 1 && (
-        <Segmented
-          block
-          style={{ marginBottom: 16 }}
-          value={selectedId ?? undefined}
-          onChange={(value) => setSelectedId(Number(value))}
-          options={devices.map((d) => ({ label: d.name, value: d.id }))}
-        />
+        <div className={styles.list}>
+          {devices.map((d) => {
+            const serial = d.connectionType === 'serial_port' ? getSerialStatus(d.id) : undefined;
+            const folder = d.connectionType === 'file_watch' ? getFolderStatus(d.id) : undefined;
+            const rowLevel = serial || d.connectionType === 'serial_port' ? serialLevel(serial, serialDownSince(serial)) : folderLevel(folder);
+            const last = formatLastResult(serial?.last_result_at ?? folder?.last_result_at, new Date(), t) ?? t('drawer.noResultYet');
+            return (
+              <button
+                key={d.id}
+                type="button"
+                className={styles.row}
+                aria-pressed={d.id === selectedId}
+                onClick={() => setSelectedId(d.id)}
+              >
+                <span className={styles.icon}><HealthIcon level={rowLevel} /></span>
+                <span className={styles.name}>{d.name}</span>
+                <span className={styles.state}>{t(`chip.state.${rowLevel}`)}</span>
+                <span className={styles.facts}>
+                  {last} · <span>{t('drawer.resultsToday', { count: resultsToday[d.id] ?? 0 })}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
       )}
       {!device ? (
         <Text type="secondary">{t('drawer.noDevice')}</Text>

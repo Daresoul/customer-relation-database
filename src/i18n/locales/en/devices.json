@@ -402,7 +402,8 @@
     "todayLabel": "Today",
     "downSince": "Without connection since {{time}}",
     "attempts": "{{count}} attempts",
-    "nextTry": "next try {{time}}"
+    "nextTry": "next try {{time}}",
+    "resultsToday": "{{count}} results today"
   },
   "alerts": {
     "title": "Notifications",
