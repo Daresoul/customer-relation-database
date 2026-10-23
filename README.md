@@ -167,6 +167,9 @@
 - Folder watchers (`services/file_watcher.rs`) follow the settings: they
   restart after any device integration change or Reconnect, a missing folder
   is checked every 30 s, and a folder that disappears turns the status red.
+  Every 2 minutes, files changed in the last 15 minutes are read again
+  (`rescan_recent`), so a lost folder event delays a result instead of losing
+  it; samples already offered are skipped.
 - An Exigo per-day file is split per `<sample>`; each sample is offered once,
   keyed by `SNO:SEQ` in `device_processed_samples`. A file is read only after
   its size and time stayed the same for 1 s. On start, results that arrived

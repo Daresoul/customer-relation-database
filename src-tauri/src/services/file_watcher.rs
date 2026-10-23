@@ -388,16 +388,7 @@ pub async fn catch_up(ctx: &WatchContext, sink: &dyn DeviceSink) -> Result<usize
     .and_then(|row| row.try_get("", "c").ok())
     .unwrap_or(0);
     let first_look = seen == 0;
-
-    let entries = std::fs::read_dir(&ctx.config.directory)
-        .map_err(|e| format!("Failed to list {}: {}", ctx.config.directory, e))?;
-    let mut files: Vec<(SystemTime, PathBuf)> = entries
-        .flatten()
-        .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
-        .filter(|e| pattern_matches(&ctx.config.pattern, &e.file_name().to_string_lossy()))
-        .filter_map(|e| Some((e.metadata().ok()?.modified().ok()?, e.path())))
-        .collect();
-    files.sort();
+    let files = matching_files(ctx)?;
 
     let now = SystemTime::now();
     let mut offered = 0;
@@ -426,8 +417,36 @@ pub const RESCAN_WINDOW: Duration = Duration::from_secs(15 * 60);
 /// Offer results in recently changed files that no folder event reported
 /// (events are lost on network shares, after sleep, or when the OS buffer
 /// overflows). Already-offered samples are skipped.
-pub async fn rescan_recent(_ctx: &WatchContext, _sink: &dyn DeviceSink) -> Result<usize, String> {
-    Ok(0)
+pub async fn rescan_recent(ctx: &WatchContext, sink: &dyn DeviceSink) -> Result<usize, String> {
+    let now = SystemTime::now();
+    let mut offered = 0;
+    for (modified, path) in matching_files(ctx)? {
+        if now.duration_since(modified).map_or(false, |age| age > RESCAN_WINDOW) {
+            continue;
+        }
+        match process_file(ctx, sink, &path, ProcessMode::Offer).await {
+            Ok(n) => offered += n,
+            Err(e) => log::warn!("Rescan skipped {}: {}", path.display(), e),
+        }
+    }
+    if offered > 0 {
+        log::warn!("📥 '{}': rescan found {} result(s) the folder events missed", ctx.config.name, offered);
+    }
+    Ok(offered)
+}
+
+/// The watched folder's files that match its pattern, oldest first.
+fn matching_files(ctx: &WatchContext) -> Result<Vec<(SystemTime, PathBuf)>, String> {
+    let entries = std::fs::read_dir(&ctx.config.directory)
+        .map_err(|e| format!("Failed to list {}: {}", ctx.config.directory, e))?;
+    let mut files: Vec<(SystemTime, PathBuf)> = entries
+        .flatten()
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
+        .filter(|e| pattern_matches(&ctx.config.pattern, &e.file_name().to_string_lossy()))
+        .filter_map(|e| Some((e.metadata().ok()?.modified().ok()?, e.path())))
+        .collect();
+    files.sort();
+    Ok(files)
 }
 
 struct ActiveWatcher {
@@ -642,6 +661,25 @@ pub async fn reload_file_watchers() {
     }
 }
 
+/// Rescan every 4th folder check, i.e. every 2 minutes.
+const RESCAN_EVERY_CHECKS: u32 = 4;
+
+async fn rescan_active_watchers() {
+    let Some(runtime) = RUNTIME.get() else { return };
+    let configs: Vec<WatchConfig> = active_watchers().values().map(|w| w.config.clone()).collect();
+    let sink = AppSink { app: runtime.app.clone() };
+    for config in configs {
+        let name = config.name.clone();
+        let result = match watch_context(runtime, config) {
+            Ok(ctx) => rescan_recent(&ctx, &sink).await,
+            Err(e) => Err(e),
+        };
+        if let Err(e) = result {
+            log::warn!("Rescan of '{}' failed: {}", name, e);
+        }
+    }
+}
+
 pub struct FileWatcherService {
     db: Arc<DatabaseConnection>,
     app_handle: Option<tauri::AppHandle>,
@@ -666,9 +704,14 @@ impl FileWatcherService {
 
         if first_start {
             tauri::async_runtime::spawn(async {
+                let mut checks: u32 = 0;
                 loop {
                     tokio::time::sleep(FOLDER_CHECK_INTERVAL).await;
                     reload_file_watchers().await;
+                    checks = checks.wrapping_add(1);
+                    if checks % RESCAN_EVERY_CHECKS == 0 {
+                        rescan_active_watchers().await;
+                    }
                 }
             });
         }
