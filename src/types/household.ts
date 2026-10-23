@@ -113,7 +113,8 @@ export interface Patient {
   dateOfBirth?: string;
   weight?: number;
   gender?: 'male' | 'female' | 'unknown';
-  status?: 'active' | 'inactive';
+  status?: 'active' | 'inactive' | 'deceased';
+  deceasedAt?: string | null;
 }
 
 // Household detail view with patients

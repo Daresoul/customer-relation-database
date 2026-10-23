@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Form, Button, Space, Divider, Typography, Upload, Drawer, App, Select, Tag, Alert } from 'antd';
+import { Form, Button, Space, Divider, Typography, Upload, Drawer, App, Select, Tag, Alert, InputNumber } from 'antd';
 import { SaveOutlined, CloseOutlined, InboxOutlined, HistoryOutlined, TagsOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@/services/invoke';
@@ -20,6 +20,7 @@ import type { MedicalRecordLineItem, CreateLineItemInput } from '@/types/lineIte
 import type { RecordType } from '@/components/forms/fieldGroups';
 import type { UploadFile } from 'antd';
 import styles from './MedicalRecordForm.module.css';
+import { localeNumberParser } from '@/utils/localeNumber';
 
 const { Text } = Typography;
 const { Dragger } = Upload;
@@ -46,6 +47,8 @@ interface MedicalRecordFormProps {
     fileSourceIds?: Map<string, string>,
     deviceDataList?: DeviceDataInput[],
     diagnosisIds?: number[],
+    /** Create only: a weight taken during the visit, for the patient's weight log. */
+    visitWeight?: number,
   ) => void;
   onCancel: () => void;
   loading: boolean;
@@ -254,6 +257,7 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
       // table and don't piggyback on the medical record's own update
       // command, which keeps both backend paths independently small.
       saveBlocked ? undefined : selectedDiagnosisIds,
+      !isEdit && typeof values.visitWeight === 'number' && values.visitWeight > 0 ? values.visitWeight : undefined,
     );
   };
 
@@ -389,6 +393,22 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
         errorFields={errorFields}
         standardTabExtras={
           <>
+            {!isEdit && (
+              <Form.Item
+                name="visitWeight"
+                label={t('patients:chart.weights.recordField')}
+                extra={t('patients:chart.weights.recordFieldHint')}
+              >
+                <InputNumber
+                  min={0.01}
+                  max={500}
+                  precision={2}
+                  parser={localeNumberParser}
+                  addonAfter={t('patients:units.kg')}
+                  style={{ width: 200 }}
+                />
+              </Form.Item>
+            )}
             <Divider />
 
             {/* Diagnoses (tag-style multi-select).

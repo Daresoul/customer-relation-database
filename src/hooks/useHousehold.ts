@@ -260,7 +260,8 @@ export function useHouseholdPatients(householdId: number) {
           dateOfBirth: patient.dateOfBirth,
           weight: patient.weight,
           gender: patient.gender,
-          status: patient.status || 'active'
+          status: patient.status || 'active',
+          deceasedAt: patient.deceasedAt ?? null,
         }));
 
         return transformed;

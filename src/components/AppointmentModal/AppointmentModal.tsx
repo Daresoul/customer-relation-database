@@ -32,6 +32,7 @@ import {
 import { useRooms } from '../../hooks/useRooms';
 import appointmentService from '../../services/appointmentService';
 import { usePatients } from '../../hooks/usePatients';
+import { bookablePatients } from '../../utils/patientChart';
 import { useTranslation } from 'react-i18next';
 import styles from './AppointmentModal.module.css';
 
@@ -311,7 +312,7 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
                 optionFilterProp="children"
                 suffixIcon={<UserOutlined />}
               >
-                {patients?.map((patient: any) => (
+                {bookablePatients(patients ?? [], mode === 'edit' ? appointment?.patientId : undefined).map((patient: any) => (
                   <Option key={patient.id} value={patient.id}>
                     {patient.name} - {patient.species}
                   </Option>

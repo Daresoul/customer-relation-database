@@ -15,6 +15,7 @@ import {
   Badge,
   Typography,
   Dropdown,
+  Switch,
 } from 'antd';
 import type { ColumnsType, TableProps } from 'antd/es/table';
 import {
@@ -34,6 +35,8 @@ import dayjs from 'dayjs';
 import { formatDate } from '../../utils/dateFormatter';
 import { useSpecies } from '../../hooks/useSpecies';
 import styles from './Tables.module.css';
+import { AlertChips } from '../patient/AlertChips';
+import { patientStatus, visiblePatients } from '../../utils/patientChart';
 
 const { Text } = Typography;
 
@@ -59,6 +62,7 @@ export const PatientTable: React.FC<PatientTableProps> = ({
   const { t } = useTranslation(['patients', 'entities', 'common']);
   const navigate = useNavigate();
   const [internalSearchText, setInternalSearchText] = useState('');
+  const [showInactive, setShowInactive] = useState(false);
   const isSearchControlled = controlledSearchText !== undefined;
   const searchText = isSearchControlled ? controlledSearchText : internalSearchText;
   const setSearchText = (text: string) => {
@@ -80,16 +84,17 @@ export const PatientTable: React.FC<PatientTableProps> = ({
 
   // Filter data based on search
   const filteredData = useMemo(() => {
-    if (!searchText) return patients;
+    const shown = visiblePatients(patients, showInactive);
+    if (!searchText) return shown;
 
     const searchLower = searchText.toLowerCase();
-    return patients.filter(patient =>
+    return shown.filter(patient =>
       patient.name?.toLowerCase().includes(searchLower) ||
       patient.species?.toLowerCase().includes(searchLower) ||
       patient.breed?.toLowerCase().includes(searchLower) ||
       patient.microchipId?.toLowerCase().includes(searchLower)
     );
-  }, [patients, searchText]);
+  }, [patients, searchText, showInactive]);
 
   // Get status color
   const getStatusColor = (isActive: boolean | undefined) => {
@@ -122,8 +127,9 @@ export const PatientTable: React.FC<PatientTableProps> = ({
         // chip number, since that's available in its own column.
         const hasName = !!text;
         const display = hasName ? text : t('entities:defaults.noName', 'No name');
+        const status = patientStatus(record);
         return (
-          <Space>
+          <Space size={4} wrap>
             <HeartOutlined className={styles.iconPink} />
             <Button
               type="link"
@@ -133,6 +139,10 @@ export const PatientTable: React.FC<PatientTableProps> = ({
             >
               {display}
             </Button>
+            {status !== 'active' && (
+              <Tag color="default">{t(`patients:chart.status.${status}`)}</Tag>
+            )}
+            <AlertChips alerts={record.alerts} compact />
           </Space>
         );
       },
@@ -319,7 +329,10 @@ export const PatientTable: React.FC<PatientTableProps> = ({
             className={styles.searchInput}
             allowClear
           />
-          {/* No bulk selection count */}
+          <Space size={6}>
+            <Switch size="small" checked={showInactive} onChange={setShowInactive} aria-label={t('patients:chart.list.showInactive')} />
+            <Text type="secondary">{t('patients:chart.list.showInactive')}</Text>
+          </Space>
         </Space>
       </div>
 
@@ -328,6 +341,7 @@ export const PatientTable: React.FC<PatientTableProps> = ({
         dataSource={filteredData}
         rowKey="id"
         loading={loading}
+        onRow={(record) => (patientStatus(record) === 'active' ? {} : { style: { opacity: 0.55 } })}
         pagination={{
           defaultPageSize: 10,
           showSizeChanger: true,

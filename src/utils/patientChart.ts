@@ -38,8 +38,9 @@ export function visiblePatients<P extends StatusFields>(list: P[], showInactive:
   return showInactive ? list : list.filter((p) => patientStatus(p) === 'active');
 }
 
-export function bookablePatients<P extends StatusFields & { id: number }>(_list: P[], _keepId?: number): P[] {
-  return [];
+/** Active patients, plus the one an existing appointment already has (`keepId`). */
+export function bookablePatients<P extends StatusFields & { id: number }>(list: P[], keepId?: number): P[] {
+  return list.filter((p) => p.id === keepId || patientStatus(p) === 'active');
 }
 
 export function alertColor(type: string): string {
