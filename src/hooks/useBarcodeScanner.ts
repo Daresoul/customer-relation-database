@@ -122,6 +122,10 @@ export function useBarcodeScanner(options: UseBarcodeScannerOptions) {
   const watchdogRef = useRef<number | null>(null);
   // Dedup: prevent the same code from firing twice within 500ms
   const lastScanRef = useRef<{ code: string; time: number } | null>(null);
+  // The listener is added once and reads the latest options: callers pass a new
+  // onScan each render, and re-adding the listener mid-burst would drop the scan.
+  const optionsRef = useRef({ onScan, prefix, suffixKey, minLength, interKeyDelay, finalizeTimeout, allowedLengths, digitsOnly });
+  optionsRef.current = { onScan, prefix, suffixKey, minLength, interKeyDelay, finalizeTimeout, allowedLengths, digitsOnly };
 
   useEffect(() => {
     const reset = () => {
@@ -160,6 +164,7 @@ export function useBarcodeScanner(options: UseBarcodeScannerOptions) {
 
     // The chip code in a buffered burst, or null when it isn't one.
     const chipCode = (raw: string): string | null => {
+      const { prefix, allowedLengths, digitsOnly, minLength } = optionsRef.current;
       if (!raw) return null;
       // Strip prefix if configured
       if (prefix) {
@@ -213,15 +218,16 @@ export function useBarcodeScanner(options: UseBarcodeScannerOptions) {
       // Always notify the consumer so it can run auto-select / prefill / search
       // logic. Consumers that care about which field was focused can inspect
       // document.activeElement themselves.
-      onScan(normalized);
+      optionsRef.current.onScan(normalized);
     };
 
     const scheduleFinalize = () => {
       if (timerRef.current) window.clearTimeout(timerRef.current);
-      timerRef.current = window.setTimeout(finalize, finalizeTimeout) as unknown as number;
+      timerRef.current = window.setTimeout(finalize, optionsRef.current.finalizeTimeout) as unknown as number;
     };
 
     const onKeyDown = (e: KeyboardEvent) => {
+      const { prefix, suffixKey, minLength, interKeyDelay } = optionsRef.current;
       // Ignore modifier keys and combinations
       if (e.altKey || e.ctrlKey || e.metaKey) return;
 
@@ -338,7 +344,7 @@ export function useBarcodeScanner(options: UseBarcodeScannerOptions) {
       window.removeEventListener('keydown', onKeyDown, { capture: true });
       reset();
     };
-  }, [onScan, prefix, suffixKey, minLength, interKeyDelay, finalizeTimeout]);
+  }, []);
 }
 
 export default useBarcodeScanner;
