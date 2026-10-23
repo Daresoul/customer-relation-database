@@ -10,10 +10,10 @@ vi.mock('@/services/invoke', () => ({ invoke: (...a: unknown[]) => invokeMock(..
 
 import GeneralSettings from '../components/GeneralSettings';
 
-function renderSettings() {
+function renderSettings(initialValues?: Record<string, unknown>) {
   return render(
     <App>
-      <Form>
+      <Form initialValues={initialValues}>
         <GeneralSettings isUpdating={false} />
       </Form>
     </App>,
@@ -55,5 +55,27 @@ describe('launch at login switch', () => {
     await waitFor(() => expect(box).toHaveAttribute('aria-checked', 'false'));
     expect(invokeMock).toHaveBeenCalledWith('plugin:autostart|disable');
     expect(localStorage.getItem('arkivet.autostartDefaultApplied')).toBe('1');
+  });
+});
+
+// settings.md #17 and #20: the clinic writes 31.01.2024, and the cards are
+// named for what they hold.
+describe('general settings layout', () => {
+  afterEach(() => {
+    cleanup();
+    invokeMock.mockReset();
+  });
+
+  it('offers the day.month.year format', async () => {
+    invokeMock.mockResolvedValue(false);
+    renderSettings({ dateFormat: 'DD.MM.YYYY' });
+    expect(await screen.findByText('DD.MM.YYYY (31.01.2024)')).toBeInTheDocument();
+  });
+
+  it('names the cards for what they hold', async () => {
+    invokeMock.mockResolvedValue(false);
+    renderSettings();
+    expect(await screen.findByText('settings:general.startupAndLanguage')).toBeInTheDocument();
+    expect(screen.getByText('settings:general.appearanceAndDates')).toBeInTheDocument();
   });
 });
