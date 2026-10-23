@@ -111,12 +111,21 @@ describe('outage wording', () => {
   });
 
   it('says since when it is down, how often it tried and when it tries next', () => {
-    const since = new Date(2026, 9, 23, 14, 3).toISOString();
-    const next = new Date(2026, 9, 23, 14, 57, 10).toISOString();
+    const today = (h: number, m: number, sec = 0) => {
+      const d = new Date();
+      d.setHours(h, m, sec, 0);
+      return d.toISOString();
+    };
+    const since = today(14, 3);
+    const next = today(14, 57, 10);
     expect(formatDownSince(since, 182, next, tt)).toBe(
       'drawer.downSince {"time":"14:03"} · drawer.attempts {"count":182} · drawer.nextTry {"time":"14:57:10"}',
     );
     expect(formatDownSince(since, 0, undefined, tt)).toBe('drawer.downSince {"time":"14:03"}');
     expect(formatDownSince(undefined, 3, undefined, tt)).toBeNull();
+    const earlier = new Date();
+    earlier.setDate(earlier.getDate() - 2);
+    earlier.setHours(18, 5, 0, 0);
+    expect(formatDownSince(earlier.toISOString(), 0, undefined, tt)).toMatch(/^drawer\.downSince \{"time":"\d\d[./-]\d\d 18:05"\}$/);
   });
 });
