@@ -5,7 +5,9 @@
 
 import { ApiService } from './api';
 import {
+  Household,
   HouseholdWithPeople,
+  PersonWithContacts,
   CreateHouseholdWithPeopleDto,
   CreatePatientWithHouseholdDto,
   CreatePatientWithHouseholdResponse,
@@ -13,7 +15,79 @@ import {
   validateHouseholdDto,
 } from '../types/household';
 
+/** What is known about a household about to be created. */
+export interface DuplicateCheckInput {
+  householdName?: string;
+  firstName?: string;
+  lastName?: string;
+  phones?: string[];
+  emails?: string[];
+}
+
+export type DuplicateReason = 'phone' | 'email' | 'name';
+
+export interface HouseholdDuplicate {
+  householdId: number;
+  householdName: string | null;
+  primaryPerson: string | null;
+  phone: string | null;
+  address: string | null;
+  city: string | null;
+  petCount: number;
+  reasons: DuplicateReason[];
+}
+
+export interface MergeSide {
+  household: Household;
+  people: PersonWithContacts[];
+  pets: { id: number; name: string }[];
+  recordCount: number;
+  appointmentCount: number;
+}
+
+export interface HouseholdMergePreview {
+  keep: MergeSide;
+  merge: MergeSide;
+}
+
 export class HouseholdService {
+  /**
+   * Households that look like the one being created (same phone, email or
+   * person name), best match first. Never throws for "no match".
+   */
+  static async findDuplicates(check: DuplicateCheckInput): Promise<HouseholdDuplicate[]> {
+    const result = await ApiService.invokeRaw<HouseholdDuplicate[] | null>('find_household_duplicates', {
+      check: {
+        household_name: check.householdName?.trim() || null,
+        first_name: check.firstName?.trim() || null,
+        last_name: check.lastName?.trim() || null,
+        phones: (check.phones ?? []).map((p) => p.trim()).filter(Boolean),
+        emails: (check.emails ?? []).map((e) => e.trim()).filter(Boolean),
+      },
+    });
+    return Array.isArray(result) ? result : [];
+  }
+
+  /** Both households side by side before a merge. */
+  static async getMergePreview(keepId: number, mergeId: number): Promise<HouseholdMergePreview> {
+    return ApiService.invokeRaw<HouseholdMergePreview>('get_household_merge_preview', { keepId, mergeId });
+  }
+
+  /** Merges `mergeId` into `keepId`; name and address come from `detailsFrom`. */
+  static async mergeHouseholds(keepId: number, mergeId: number, detailsFrom: number): Promise<void> {
+    await ApiService.invokeRaw('merge_households', { keepId, mergeId, detailsFrom });
+  }
+
+  /** Moves a pet to another household (its only household). */
+  static async movePatient(patientId: number, householdId: number): Promise<void> {
+    await ApiService.invokeRaw('update_patient_household', { patientId, householdId });
+  }
+
+  /** Makes this person the household's one primary contact. */
+  static async setPrimaryPerson(personId: number): Promise<void> {
+    await ApiService.invokeRaw('set_primary_person', { personId });
+  }
+
   /**
    * Create a new household with people
    */
