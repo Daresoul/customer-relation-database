@@ -1282,3 +1282,28 @@ mod parser_leftovers {
         assert!(r.is_err(), "{r:?}");
     }
 }
+
+/// wave2/parsers.md M8: the Exigo report printed the analyzer's serial (SNO,
+/// the same on every sample of the day) as the sample number.
+mod lab_report_sample_number {
+    use crate::services::java_pdf_service::JavaPdfService;
+    use serde_json::json;
+
+    #[test]
+    fn exigo_reports_print_the_run_number_not_the_analyzer_serial() {
+        let r = json!({ "SNO": "53672", "SEQ": "1219", "ID2": "REX" });
+        assert_eq!(JavaPdfService::sample_number("exigo_eos_vet", &r), "1219");
+    }
+
+    #[test]
+    fn exigo_without_a_run_number_falls_back_to_the_serial() {
+        let r = json!({ "SNO": "53672" });
+        assert_eq!(JavaPdfService::sample_number("exigo_eos_vet", &r), "53672");
+    }
+
+    #[test]
+    fn other_devices_keep_their_sample_id() {
+        let r = json!({ "sample_id": "45512-10-7", "SEQ": "9" });
+        assert_eq!(JavaPdfService::sample_number("mnchip_pointcare_chemistry", &r), "45512-10-7");
+    }
+}

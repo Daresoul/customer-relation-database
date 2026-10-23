@@ -179,12 +179,7 @@ impl JavaPdfService {
         let java_samples: Vec<JavaSample> = sorted_samples.iter().map(|device_data| {
             let test_results = Self::value_to_hashmap(&device_data.test_results);
 
-            let sample_id = device_data.test_results.get("SNO")
-                .or_else(|| device_data.test_results.get("ID1"))
-                .or_else(|| device_data.test_results.get("sample_id"))
-                .and_then(|v| v.as_str())
-                .unwrap_or("AUTO-GEN")
-                .to_string();
+            let sample_id = Self::sample_number(&device_data.device_type, &device_data.test_results);
 
             let patient_id = device_data.patient_identifier
                 .clone()
@@ -663,6 +658,16 @@ impl JavaPdfService {
         device_data: &crate::services::device_pdf_service::DeviceTestData,
     ) -> Result<(), String> {
         Self::generate_pdf_multi(app_handle, output_path, patient, &[device_data.clone()])
+    }
+
+    /// The sample number printed on a lab report.
+    pub(crate) fn sample_number(_device_type: &str, test_results: &serde_json::Value) -> String {
+        test_results.get("SNO")
+            .or_else(|| test_results.get("ID1"))
+            .or_else(|| test_results.get("sample_id"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("AUTO-GEN")
+            .to_string()
     }
 
     /// Map detailed device type names to Java-expected format
