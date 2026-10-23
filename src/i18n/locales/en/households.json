@@ -83,7 +83,10 @@
         },
         "addContactMethod": "Add Contact Method"
       },
-      "personUpdated": "Person updated successfully"
+      "personUpdated": "Person updated successfully",
+      "makePrimary": "Make primary",
+      "primaryChanged": "Primary contact changed",
+      "primaryFailed": "Could not change the primary contact"
     },
     "animals": {
       "title": "Associated Animals",
@@ -110,9 +113,64 @@
         "years_one": "{{count}} year",
         "years_other": "{{count}} years"
       },
-      "loadFailed": "Could not load this household's pets"
+      "loadFailed": "Could not load this household's pets",
+      "actions": "Actions",
+      "moveToAnother": "Move to another household…",
+      "linkExisting": "Link existing pet",
+      "move": {
+        "title": "Move {{name}}",
+        "pickLabel": "New household",
+        "confirmText": "{{name}} and its history move to the chosen household.",
+        "confirm": "Move",
+        "success": "{{name}} moved to {{household}}",
+        "failed": "Could not move the pet"
+      },
+      "link": {
+        "title": "Link an existing pet",
+        "searchPlaceholder": "Search pets by name or microchip",
+        "noMatches": "No pets match",
+        "searchFailed": "Search failed",
+        "inOtherHousehold": "Belongs to another household now; linking moves it here.",
+        "noHousehold": "Has no household yet.",
+        "confirm": "Link to this household",
+        "success": "{{name}} now belongs to this household",
+        "failed": "Could not link the pet"
+      }
     },
-    "unnamedTitle": "Household {{id}}"
+    "unnamedTitle": "Household {{id}}",
+    "actions": {
+      "more": "More",
+      "merge": "Merge with another household…",
+      "delete": "Delete household"
+    },
+    "merge": {
+      "title": "Merge households",
+      "pickLabel": "Household to merge into this one",
+      "explain": "Everything from the other household moves here: people, contacts, pets and their history. The other household disappears from lists, and its old links open this one.",
+      "sharedContacts": "Phones and emails both households have are kept once.",
+      "keepDetails": "Keep name and address from",
+      "thisHousehold": "This household",
+      "otherHousehold": "Other household",
+      "people": "People",
+      "pets": "Pets",
+      "records": "Medical records",
+      "appointments": "Appointments",
+      "none": "None",
+      "confirm": "Merge",
+      "success": "Households merged",
+      "failed": "Could not merge the households",
+      "previewFailed": "Could not load the two households"
+    },
+    "delete": {
+      "title": "Delete this household?",
+      "confirmText": "{{name}}, its people and their contacts are deleted. This can't be undone.",
+      "ok": "Delete",
+      "blockedTitle": "This household still has pets",
+      "blockedText": "Move its pets to another household, or merge this household into the right one, before deleting it.",
+      "mergeInstead": "Merge…",
+      "success": "Household deleted",
+      "failed": "Could not delete the household"
+    }
   },
   "unnamed": "Unnamed",
   "unnamedHousehold": "Unnamed Household",
@@ -176,5 +234,25 @@
     "addPet": "Add Pet",
     "viewFullDetails": "View Full Details",
     "total": "{{start}}-{{end}} of {{total}} households"
+  },
+  "duplicates": {
+    "title": "Possible existing client",
+    "description": "Check these before creating a new household.",
+    "open": "Open",
+    "useThis": "Use this household",
+    "createAnyway": "Create anyway",
+    "pets_one": "{{count}} pet",
+    "pets_other": "{{count}} pets",
+    "reasons": {
+      "phone": "Same phone",
+      "email": "Same email",
+      "name": "Same name"
+    }
+  },
+  "picker": {
+    "placeholder": "Search by name, phone or email",
+    "typeMore": "Type at least 2 characters",
+    "noMatches": "No households match",
+    "searchFailed": "Search failed"
   }
 }
