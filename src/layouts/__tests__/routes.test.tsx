@@ -85,3 +85,14 @@ describe('app routes (data router)', () => {
     expect(await screen.findByText('settings page')).toBeInTheDocument();
   });
 });
+
+// app-shell #17: the window title names the page.
+describe('page titles', () => {
+  it('every page has a title', () => {
+    const pages = appRoutes[0].children ?? [];
+    expect(pages.length).toBeGreaterThan(0);
+    for (const page of pages) {
+      expect((page.handle as { titleKey?: string } | undefined)?.titleKey, page.path).toMatch(/^shell:pageTitle\./);
+    }
+  });
+});
