@@ -492,7 +492,7 @@ impl FileStorageService {
 /// Returns the raw ShellExecute result code: > 32 means success, <= 32 is one
 /// of the SE_ERR_* failures (see `describe_shellexecute_code`).
 #[cfg(target_os = "windows")]
-fn windows_shell_execute(path: &str, verb: &str) -> i32 {
+pub(crate) fn windows_shell_execute(path: &str, verb: &str) -> i32 {
     use std::ffi::OsStr;
     use std::os::windows::ffi::OsStrExt;
     use windows::core::PCWSTR;
