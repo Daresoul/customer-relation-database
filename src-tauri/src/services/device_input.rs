@@ -944,6 +944,11 @@ pub fn scan_ports() -> Result<Vec<PortInfo>, String> {
     Ok(ports)
 }
 
+/// Whether a retry gets the normal log lines; the rest go to debug.
+pub(crate) fn log_this_attempt(_retry_count: u32) -> bool {
+    true
+}
+
 /// Calculate exponential backoff delay with jitter
 /// Formula: min((2^attempt * base_delay) + random_jitter, max_delay)
 /// Based on AWS best practices: https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/
@@ -1767,6 +1772,17 @@ mod listener_supervision_tests {
         assert!(!is_pty("/dev/cu.usbserial-1410"));
         assert!(!is_pty("/dev/ttyUSB0"));
         assert!(!is_pty("COM3"));
+    }
+
+    // Machine status #5: six log lines per retry, every ~15 s, all day.
+    #[test]
+    fn a_failing_port_is_logged_on_its_first_failure_then_every_ten_minutes() {
+        assert!(log_this_attempt(0));
+        assert!(log_this_attempt(1));
+        assert!((2..60).all(|n| !log_this_attempt(n)));
+        assert!(log_this_attempt(60));
+        assert!(!log_this_attempt(61));
+        assert!(log_this_attempt(120));
     }
 
     // A port back after an outage was found up to 65 s later.
