@@ -228,6 +228,14 @@ impl FileStorageService {
         Ok(())
     }
 
+    pub fn temp_copy_path(_file_id: &str, file_name: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join("vet-clinic-attachments").join(file_name)
+    }
+
+    pub fn preview_png_path(file_id: &str, page: u32, width: u32) -> std::path::PathBuf {
+        std::env::temp_dir().join("vet-clinic-attachments").join("previews").join(format!("attachment_{}_p{}_w{}.png", file_id, page, width))
+    }
+
     /// Materialize an attachment to a temporary path and return that path
     pub async fn materialize_attachment(
         app_handle: &AppHandle,

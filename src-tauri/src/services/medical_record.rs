@@ -59,6 +59,11 @@ pub(crate) const UNKNOWN_PATIENT: &str = "Непознат Пациент";
 pub(crate) const UNKNOWN_SPECIES: &str = "Непознат Вид";
 pub(crate) const UNKNOWN_GENDER: &str = "Непознат";
 
+/// A record PDF job's own folder.
+pub struct PdfJobFolder {
+    pub path: std::path::PathBuf,
+}
+
 /// An invoice's number and the date printed on it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Invoice {
@@ -778,6 +783,17 @@ impl MedicalRecordService {
     /// enough for human filenames.
     fn pdf_timestamp() -> String {
         chrono::Local::now().format("%Y-%m-%d %H-%M").to_string()
+    }
+
+    pub fn job_output(file_name: &str) -> Result<(PdfJobFolder, std::path::PathBuf), String> {
+        let dir = std::env::temp_dir().join("simple_reports");
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        Ok((PdfJobFolder { path: dir.clone() }, dir.join(file_name)))
+    }
+
+    #[cfg(test)]
+    pub async fn report_job(_db: &DatabaseConnection, record: &MedicalRecord) -> Result<serde_json::Value, String> {
+        Ok(json!({"report_type": "simple", "title": record.name}))
     }
 
     /// Generate a simple report PDF using the template with medical record title and description

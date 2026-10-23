@@ -412,6 +412,24 @@ impl JavaPdfService {
         Ok(())
     }
 
+    pub(crate) fn jar_failure_message(stdout: &str, stderr: &str) -> String {
+        format!("Java JAR failed:
+STDOUT: {}
+STDERR: {}", stdout, stderr)
+    }
+
+    pub(crate) fn pdf_warnings(_stderr: &str) -> Vec<&str> {
+        Vec::new()
+    }
+
+    pub(crate) fn pdf_is_complete(bytes: &[u8]) -> bool {
+        !bytes.is_empty()
+    }
+
+    pub(crate) fn copy_into_place(src: &Path, dest: &Path) -> Result<(), String> {
+        fs::copy(src, dest).map(|_| ()).map_err(|e| e.to_string())
+    }
+
     /// Ask the bundled JAR which app version it was built for (`java -jar … --version`,
     /// printing the manifest's Implementation-Version). Returns the trimmed string,
     /// or an Err if the JAR can't be located or Java can't run it.
@@ -1160,5 +1178,53 @@ mod tests {
             JavaPdfService::classify_jar_version("0.7.2", "dev"),
             JarVersionVerdict::SkipDev { .. }
         ));
+    }
+
+    #[test]
+    fn a_jar_failure_names_its_cause_on_the_first_line() {
+        let stderr = "PDF_WARN code=bad_detected_at value='x'\n\
+                      Error generating PDF: Template not found: invoice.pdf\n\
+                      java.io.IOException: Template not found: invoice.pdf\n\tat Foo.bar(Foo.java:1)\n";
+        let msg = JavaPdfService::jar_failure_message("starting", stderr);
+        assert_eq!(msg.lines().next(), Some("Error generating PDF: Template not found: invoice.pdf"));
+        assert!(msg.contains("Java JAR failed"), "{}", msg);
+
+        let bare = JavaPdfService::jar_failure_message("", "PDF_WARN code=x\nException in thread main: boom\n");
+        assert_eq!(bare.lines().next(), Some("Exception in thread main: boom"));
+
+        let silent = JavaPdfService::jar_failure_message("", "");
+        assert!(!silent.lines().next().unwrap_or("").trim().is_empty(), "{:?}", silent);
+    }
+
+    #[test]
+    fn pdf_warnings_are_picked_out_of_stderr() {
+        let warnings = JavaPdfService::pdf_warnings("noise\nPDF_WARN code=a\n  PDF_WARN code=b value='1'\nmore");
+        assert_eq!(warnings, ["PDF_WARN code=a", "PDF_WARN code=b value='1'"]);
+    }
+
+    #[test]
+    fn a_pdf_counts_only_with_its_end_of_file_marker() {
+        assert!(JavaPdfService::pdf_is_complete(b"%PDF-1.4\n1 0 obj\n%%EOF\n"));
+        assert!(JavaPdfService::pdf_is_complete(b"%PDF-1.4\n%%EOF"));
+        assert!(!JavaPdfService::pdf_is_complete(b"%PDF-1.4\n1 0 obj\n<< /Type"));
+        assert!(!JavaPdfService::pdf_is_complete(b""));
+    }
+
+    #[test]
+    fn a_copied_pdf_lands_whole_and_leaves_no_part_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("out.pdf");
+        let dest = dir.path().join("Invoice.pdf");
+        fs::write(&src, b"%PDF-new\n%%EOF").unwrap();
+        fs::write(&dest, b"%PDF-old\n%%EOF").unwrap();
+
+        JavaPdfService::copy_into_place(&src, &dest).unwrap();
+
+        assert_eq!(fs::read(&dest).unwrap(), b"%PDF-new\n%%EOF");
+        let names: Vec<String> = fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
+            .collect();
+        assert!(!names.iter().any(|n| n.ends_with(".part")), "{:?}", names);
     }
 }

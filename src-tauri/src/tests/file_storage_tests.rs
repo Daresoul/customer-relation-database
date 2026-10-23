@@ -328,3 +328,33 @@ async fn retiring_generated_pdfs_keeps_the_new_one_and_other_files() {
     assert!(is_live(&db, new_pdf).await, "the new PDF must survive");
     assert!(is_live(&db, upload).await, "uploaded files are not generated PDFs");
 }
+
+// ---------------------------------------------------------------------------
+// Temp copies and preview images are kept per stored file
+// ---------------------------------------------------------------------------
+
+#[test]
+fn two_files_with_the_same_name_get_their_own_temp_copy() {
+    let a = FileStorageService::temp_copy_path("uuid-a", "Report.pdf");
+    let b = FileStorageService::temp_copy_path("uuid-b", "Report.pdf");
+
+    assert_ne!(a, b);
+    assert_eq!(a.file_name().unwrap(), "Report.pdf");
+    assert!(a.to_string_lossy().contains("uuid-a"));
+}
+
+#[test]
+fn a_temp_copy_stays_inside_its_folder() {
+    let p = FileStorageService::temp_copy_path("uuid-a", "../../evil.pdf");
+    assert_eq!(p.file_name().unwrap(), "evil.pdf");
+    assert_eq!(p.parent().unwrap().file_name().unwrap(), "uuid-a");
+}
+
+#[test]
+fn a_preview_image_is_named_by_the_stored_file() {
+    let a = FileStorageService::preview_png_path("uuid-a", 1, 900);
+    let b = FileStorageService::preview_png_path("uuid-b", 1, 900);
+
+    assert_ne!(a, b);
+    assert!(a.file_name().unwrap().to_string_lossy().starts_with("uuid-a_p1_w900"));
+}

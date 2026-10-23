@@ -579,3 +579,98 @@ async fn an_old_version_shows_its_own_values_including_empty_ones() {
     assert_eq!(v1.manual_total, None);
     assert!(v1.line_items.is_none(), "a snapshot has no invoice lines");
 }
+
+// ---------------------------------------------------------------------------
+// PDF jobs: the report's date is the visit's, invoice lines carry their
+// description, each job writes to its own folder
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn the_report_job_carries_the_visits_local_date() {
+    let db = create_test_db_with_migrations().await;
+    let patient_id = seed_patient(&db).await;
+    let id = insert_record_with_invoice(&db, patient_id, "014/2026").await;
+    let record = MedicalRecordService::get_medical_record(&db, id, false).await.unwrap().record;
+
+    let job = MedicalRecordService::report_job(&db, &record).await.unwrap();
+
+    assert_eq!(job["report_type"], "simple");
+    let local = chrono::DateTime::parse_from_rfc3339("2026-10-20T10:00:00+00:00")
+        .unwrap()
+        .with_timezone(&chrono::Local)
+        .format("%d/%m/%Y")
+        .to_string();
+    assert_eq!(job["date"], local.as_str());
+}
+
+#[tokio::test]
+async fn the_invoice_job_carries_each_lines_description() {
+    let db = create_test_db_with_migrations().await;
+    let patient_id = seed_patient(&db).await;
+    let mut line = item("Vaccine", 800.0);
+    line.description = Some("Rabies, batch 42".to_string());
+    let record = MedicalRecordService::save_new_record(&db, new_record(patient_id, vec![line])).await.unwrap();
+
+    let job = MedicalRecordService::invoice_job(&db, &record).await.unwrap();
+
+    assert_eq!(job["line_items"][0]["description"], "Rabies, batch 42");
+}
+
+#[test]
+fn two_pdf_jobs_with_the_same_file_name_write_to_different_places() {
+    let (a_dir, a) = MedicalRecordService::job_output("Medical Report - Rex - Visit - 2026-10-20 10-00.pdf").unwrap();
+    let (_b_dir, b) = MedicalRecordService::job_output("Medical Report - Rex - Visit - 2026-10-20 10-00.pdf").unwrap();
+
+    assert_ne!(a, b);
+    assert_eq!(a.file_name(), b.file_name());
+    let folder = a.parent().unwrap().to_path_buf();
+    assert!(folder.is_dir());
+    drop(a_dir);
+    assert!(!folder.exists(), "the job folder is removed afterwards");
+}
+
+// ---------------------------------------------------------------------------
+// Files newest first; the history search also looks at prescriptions
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn a_records_files_are_listed_newest_first() {
+    let db = create_test_db_with_migrations().await;
+    let patient_id = seed_patient(&db).await;
+    let record = MedicalRecordService::save_new_record(&db, new_record(patient_id, vec![])).await.unwrap();
+    for (file_id, at) in [("older", "2026-10-20T09:00:00+00:00"), ("newest", "2026-10-22T09:00:00+00:00"), ("middle", "2026-10-21T09:00:00+00:00")] {
+        db.execute(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "INSERT INTO medical_attachments (medical_record_id, file_id, original_name, mime_type, uploaded_at, attachment_type) \
+             VALUES (?, ?, ?, 'application/pdf', ?, 'file')",
+            [record.id.into(), file_id.into(), format!("{}.pdf", file_id).into(), at.into()],
+        ))
+        .await
+        .unwrap();
+    }
+
+    let detail = MedicalRecordService::get_medical_record(&db, record.id, false).await.unwrap();
+
+    let order: Vec<&str> = detail.attachments.iter().map(|a| a.file_id.as_str()).collect();
+    assert_eq!(order, ["newest", "middle", "older"]);
+}
+
+#[tokio::test]
+async fn the_history_search_finds_words_in_the_prescription() {
+    let db = create_test_db_with_migrations().await;
+    let patient_id = seed_patient(&db).await;
+    let mut input = new_record(patient_id, vec![]);
+    input.prescription_notes = Some("Амоксицилин 2x дневно".to_string());
+    MedicalRecordService::save_new_record(&db, input).await.unwrap();
+
+    let found = MedicalRecordService::search_medical_records(&db, patient_id, "амоксицилин", false).await.unwrap();
+    assert_eq!(found.len(), 1);
+
+    let filter = crate::models::medical::MedicalRecordFilter {
+        record_type: None,
+        is_archived: Some(false),
+        search_term: Some("АМОКСИЦИЛИН".to_string()),
+    };
+    let listed = MedicalRecordService::get_medical_records(&db, patient_id, Some(filter), None).await.unwrap();
+    assert_eq!(listed.total, 1);
+}
