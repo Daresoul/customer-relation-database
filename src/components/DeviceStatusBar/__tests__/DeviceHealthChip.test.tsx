@@ -55,6 +55,12 @@ function renderIn(node: React.ReactNode, path = '/patients/1') {
 
 describe('lab machines chip in the header', () => {
   it('rolls up to the worst state and counts the machines that are down', async () => {
+    // The port has been failing for two minutes, past the one-minute grace.
+    const { serialDownSince } = await import('../deviceHealth');
+    serialDownSince(
+      { integration_id: 1, port_name: 'COM3', device_type: 'mnchip_pointcare_chemistry', status: 'Error', retry_count: 2 },
+      Date.now() - 120_000,
+    );
     const { DeviceHealthChip } = await import('../DeviceHealthChip');
     renderIn(<DeviceHealthChip />);
     const chip = screen.getByRole('button', { name: /chip.label/ });
