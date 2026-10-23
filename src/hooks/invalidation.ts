@@ -31,3 +31,24 @@ export function invalidatePatientData(queryClient: QueryClient): void {
 export function invalidateHouseholdData(queryClient: QueryClient): void {
   HOUSEHOLD_READERS.forEach((key) => queryClient.invalidateQueries({ queryKey: [key] }));
 }
+
+/**
+ * Lab results: a result arriving, discarded, restored, attached or moved.
+ *
+ *   lab-inbox, lab-inbox-count   lab inbox list and its "N waiting" badge
+ *   medical-record(s), medical-records-search
+ *                                record page attachments and record lists
+ *                                (a move or attach changes two records)
+ */
+const LAB_INBOX_READERS = ['lab-inbox', 'lab-inbox-count'];
+const LAB_RECORD_READERS = ['medical-record', 'medical-records', 'medical-records-search'];
+
+export function invalidateLabInboxData(queryClient: QueryClient): void {
+  LAB_INBOX_READERS.forEach((key) => queryClient.invalidateQueries({ queryKey: [key] }));
+}
+
+export function invalidateLabResultRecords(queryClient: QueryClient): void {
+  [...LAB_INBOX_READERS, ...LAB_RECORD_READERS].forEach((key) =>
+    queryClient.invalidateQueries({ queryKey: [key] }),
+  );
+}
