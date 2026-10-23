@@ -336,3 +336,55 @@ async fn quick_search_handles_dashes_and_empty_queries() {
     assert!(household_search::quick_search_households(&db, "", 10).await.unwrap().is_empty());
     assert!(household_search::quick_search_households(&db, "--", 10).await.unwrap().is_empty());
 }
+
+// ---------------------------------------------------------------------------
+// wave2/flow-frontdesk #5: Macedonian alphabetical order
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn household_list_follows_the_macedonian_alphabet_in_any_case() {
+    let db = create_test_db_with_migrations().await;
+    for name in ["Јованови", "Ѓорѓиеви", "ана", "Борисови", "Живкови", "Џамбазови", "Ѕвездини", "Andrews"] {
+        insert_household(&db, name).await;
+    }
+
+    let names: Vec<String> = household_search::list_households(&db, None, None)
+        .await
+        .unwrap()
+        .results
+        .into_iter()
+        .filter_map(|r| r.household_name)
+        .collect();
+    assert_eq!(
+        names,
+        ["Andrews", "ана", "Борисови", "Ѓорѓиеви", "Живкови", "Ѕвездини", "Јованови", "Џамбазови"]
+    );
+
+    let second_page: Vec<String> = household_search::list_households(&db, Some(3), Some(3))
+        .await
+        .unwrap()
+        .results
+        .into_iter()
+        .filter_map(|r| r.household_name)
+        .collect();
+    assert_eq!(second_page, ["Ѓорѓиеви", "Живкови", "Ѕвездини"]);
+}
+
+// ---------------------------------------------------------------------------
+// wave2/forms-validation #7: +389 and a leading 0 are the same phone
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn phone_search_reads_the_country_code_as_a_leading_zero() {
+    let db = create_test_db_with_migrations().await;
+    let local = household_with(&db, "Local", "A", "B", "070 123 456").await;
+    let international = household_with(&db, "Intl", "C", "D", "+389 71 987 654").await;
+
+    assert!(hits(&db, "+389 70 123 456").await.contains(&local));
+    assert!(hits(&db, "0038970123456").await.contains(&local));
+    assert!(hits(&db, "071987654").await.contains(&international));
+    assert!(hits(&db, "071 987 654").await.contains(&international));
+
+    let quick = household_search::quick_search_households(&db, "+38970123456", 10).await.unwrap();
+    assert!(quick.iter().any(|(id, _)| *id == local));
+}

@@ -39,3 +39,4 @@ pub mod device_health;
 pub mod app_launch;
 pub mod session_marker;
 pub mod temp_cleanup;
+pub mod names;

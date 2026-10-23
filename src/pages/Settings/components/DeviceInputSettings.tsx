@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Card, Table, Button, Typography, Space, Tag, Modal, Form, Input, Select, InputNumber, Switch, Popconfirm, AutoComplete } from 'antd';
 import { UsbOutlined, ReloadOutlined, ApiOutlined, PlusOutlined, EditOutlined, DeleteOutlined, PoweroffOutlined, FolderOpenOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { invoke } from '@tauri-apps/api';
+import { invoke } from '@/services/invoke';
 import { open } from '@tauri-apps/api/dialog';
 import styles from '../Settings.module.css';
 import { DeviceAlertSettings } from './DeviceAlertSettings';
@@ -705,7 +705,7 @@ const DeviceInputSettings: React.FC = () => {
         confirmLoading={createIntegrationMutation.isPending || updateIntegrationMutation.isPending}
         width={600}
       >
-        <Form
+        <Form scrollToFirstError={{ focus: true }}
           form={integrationForm}
           layout="vertical"
           onFinish={handleIntegrationSubmit}
@@ -714,7 +714,7 @@ const DeviceInputSettings: React.FC = () => {
           <Form.Item
             name="name"
             label={t('form.labels.integrationName')}
-            rules={[{ required: true, message: t('form.validation.nameRequired') }]}
+            rules={[{ required: true, whitespace: true, message: t('form.validation.nameRequired') }]}
           >
             <Input placeholder={t('form.placeholders.integrationName')} />
           </Form.Item>
@@ -789,7 +789,7 @@ const DeviceInputSettings: React.FC = () => {
                     <Form.Item
                       name="watch_directory"
                       label={t('form.labels.watchDirectory')}
-                      rules={[{ required: true, message: t('form.validation.directoryRequired') }]}
+                      rules={[{ required: true, whitespace: true, message: t('form.validation.directoryRequired') }]}
                     >
                       <Input
                         placeholder={t('form.placeholders.watchDirectory')}
@@ -871,7 +871,7 @@ const DeviceInputSettings: React.FC = () => {
                     <Form.Item
                       name="tcp_host"
                       label={t('form.labels.tcpHost')}
-                      rules={[{ required: true, message: t('form.validation.tcpHostRequired') }]}
+                      rules={[{ required: true, whitespace: true, message: t('form.validation.tcpHostRequired') }]}
                     >
                       <Input placeholder={t('form.placeholders.tcpHost')} />
                     </Form.Item>

@@ -11,7 +11,6 @@ vi.mock('react-i18next', () => ({
 
 const invokeMock = vi.fn();
 vi.mock('@/services/invoke', () => ({ invoke: (...a: unknown[]) => invokeMock(...a) }));
-vi.mock('@tauri-apps/api', () => ({ invoke: (...a: unknown[]) => invokeMock(...a) }));
 vi.mock('../../DevTools', () => ({ DevToolsDrawer: () => null }));
 
 const integrations = {

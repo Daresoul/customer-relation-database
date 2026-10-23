@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
-import { invoke } from '@tauri-apps/api';
+import { invoke } from '@/services/invoke';
 import { useTranslation } from 'react-i18next';
 import { useDeviceImport, PendingDeviceFile } from '../contexts/DeviceImportContext';
 import { App } from 'antd';

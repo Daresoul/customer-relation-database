@@ -1,11 +1,15 @@
 use crate::entities::app_settings::{self, Entity as AppSettingsEntity};
 use crate::entities::currency::{self, Entity as CurrencyEntity};
+use crate::models::dto::MaybeNull;
 use crate::models::{Currency, SettingsResponse, UpdateSettingsRequest};
 use crate::models::settings::{ClinicProfile, CreateTaxRateInput, TaxRate, UpdateClinicProfileInput, UpdateTaxRateInput};
 use chrono::Utc;
 use sea_orm::*;
 
 pub struct SettingsService;
+
+/// The clinic writes dates day first, with dots (31.01.2024).
+pub const DEFAULT_DATE_FORMAT: &str = "DD.MM.YYYY";
 
 impl SettingsService {
     /// Convert a SeaORM currency model to the API Currency model
@@ -51,7 +55,7 @@ impl SettingsService {
                     language: Set("en".to_string()),
                     currency_id: Set(None),
                     theme: Set("light".to_string()),
-                    date_format: Set("MM/DD/YYYY".to_string()),
+                    date_format: Set(DEFAULT_DATE_FORMAT.to_string()),
                     created_at: Set(now),
                     updated_at: Set(now),
                     ..Default::default()
@@ -99,7 +103,7 @@ impl SettingsService {
             }
         }
 
-        if let Some(currency_id) = request.currency_id {
+        if let MaybeNull::Value(currency_id) = request.currency_id {
             // Validate currency exists
             let currency_exists = CurrencyEntity::find_by_id(currency_id)
                 .one(db)
@@ -134,7 +138,7 @@ impl SettingsService {
                     language: Set("en".to_string()),
                     currency_id: Set(None),
                     theme: Set("light".to_string()),
-                    date_format: Set("MM/DD/YYYY".to_string()),
+                    date_format: Set(DEFAULT_DATE_FORMAT.to_string()),
                     created_at: Set(now),
                     updated_at: Set(now),
                     ..Default::default()
@@ -161,9 +165,10 @@ impl SettingsService {
             settings_model.language = Set(language);
         }
 
-        if let Some(currency_id) = request.currency_id {
-            log::debug!("Updating currency_id to: {}", currency_id);
-            settings_model.currency_id = Set(Some(currency_id));
+        match request.currency_id {
+            MaybeNull::Value(currency_id) => settings_model.currency_id = Set(Some(currency_id)),
+            MaybeNull::Null => settings_model.currency_id = Set(None),
+            MaybeNull::Undefined => {}
         }
 
         if let Some(theme) = request.theme {

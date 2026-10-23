@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { invoke } from '@/services/invoke';
 import type { PdfStatus } from '@/types/generated/PdfStatus';
+import { errorText } from '@/utils/notifyError';
 
 /** What create/update return: the record plus how each document fared. */
 export interface SavedRecordDocuments {
@@ -38,7 +39,7 @@ export function useDocumentStatusNotice() {
         status = await invoke<PdfStatus>('regenerate_record_document', { recordId, kind });
       }
     } catch (e) {
-      status = { kind, ok: false, error: String(e) };
+      status = { kind, ok: false, error: errorText(e, t) };
     }
     await queryClient.invalidateQueries({ queryKey: ['medical-record', recordId] });
     if (status.ok) {

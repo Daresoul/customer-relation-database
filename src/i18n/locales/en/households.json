@@ -2,6 +2,7 @@
   "title": "Households",
   "detail": {
     "invalidId": "Invalid Household ID",
+    "notes": "Notes",
     "invalidIdDescription": "The household ID provided is not valid.",
     "backToDashboard": "Back to Dashboard",
     "loading": "Loading household details...",
@@ -39,6 +40,9 @@
       }
     },
     "people": {
+      "preferredContact": "Preferred contact",
+      "preferred": "Preferred",
+      "removeContact": "Remove contact",
       "title": "People & Contacts",
       "addPerson": "Add Person",
       "addFirstPerson": "Add First Person",

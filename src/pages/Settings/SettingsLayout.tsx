@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Layout, Menu, Card, Form, Button, Space, Breadcrumb, App } from 'antd';
 import {
   SettingOutlined,
@@ -18,7 +18,6 @@ import {
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
-import { useThemeColors } from '../../utils/themeStyles';
 import { useAppSettings } from '../../hooks/useAppSettings';
 import { useTheme } from '../../contexts/ThemeContext';
 import styles from './Settings.module.css';
@@ -45,7 +44,7 @@ const { Content, Sider } = Layout;
 type SettingsCategory = 'general' | 'clinic' | 'business' | 'appointments' | 'rooms' | 'species' | 'devices' | 'managedScanners' | 'deviceFiles' | 'templates' | 'lineItems' | 'diagnoses' | 'backups' | 'updates';
 
 // Sections a link can open with `/settings?section=<key>`.
-const LINKABLE_SECTIONS: readonly string[] = ['general', 'business', 'appointments', 'rooms', 'species', 'devices', 'managedScanners', 'deviceFiles', 'templates', 'lineItems', 'diagnoses', 'backups', 'updates'];
+const LINKABLE_SECTIONS: readonly string[] = ['general', 'clinic', 'business', 'appointments', 'rooms', 'species', 'devices', 'managedScanners', 'deviceFiles', 'templates', 'lineItems', 'diagnoses', 'backups', 'updates'];
 
 interface MenuItem {
   key: SettingsCategory;
@@ -59,17 +58,16 @@ const SettingsLayout: React.FC = () => {
   const { t } = useTranslation(['common', 'entities', 'navigation', 'forms', 'settings']);
   const navigate = useNavigate();
   const { themeMode, setThemeMode } = useTheme();
-  const themeColors = useThemeColors();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const requested = searchParams.get('section');
-  const [selectedCategory, setSelectedCategory] = useState<SettingsCategory>(
-    requested && LINKABLE_SECTIONS.includes(requested) ? (requested as SettingsCategory) : 'general',
-  );
+  // The URL holds the section, so a link (the backup light) opens it even while Settings is open.
+  const selectedCategory: SettingsCategory =
+    requested && LINKABLE_SECTIONS.includes(requested) ? (requested as SettingsCategory) : 'general';
 
   // Only create form for tabs that need it (not for rooms tab which has its own form)
   const [form] = Form.useForm();
 
-  const { settings, updateSettings, isLoading, isUpdating, error: loadError, refetch, isRefetching } = useAppSettings();
+  const { settings, updateSettings, isUpdating, error: loadError, refetch, isRefetching } = useAppSettings();
 
   // Define menu items
   const menuItems: MenuItem[] = [
@@ -177,9 +175,10 @@ const SettingsLayout: React.FC = () => {
     // Ensure all values are sent, not just changed ones
     const completeValues = {
       language: values.language !== undefined ? values.language : (settings?.language || 'en'),
-      currencyId: values.currencyId !== undefined ? values.currencyId : settings?.currencyId,
+      // The currency field lives on the Business section; cleared there, it is undefined and saves as null.
+      currencyId: selectedCategory === 'business' ? (values.currencyId ?? null) : (settings?.currencyId ?? null),
       theme: values.theme !== undefined ? values.theme : (settings?.theme || 'light'),
-      dateFormat: values.dateFormat !== undefined ? values.dateFormat : (settings?.dateFormat || 'DD/MM/YYYY'),
+      dateFormat: values.dateFormat !== undefined ? values.dateFormat : (settings?.dateFormat || 'DD.MM.YYYY'),
     };
 
 
@@ -247,7 +246,7 @@ const SettingsLayout: React.FC = () => {
               <Menu
                 mode="inline"
                 selectedKeys={[selectedCategory]}
-                onClick={({ key }) => setSelectedCategory(key as SettingsCategory)}
+                onClick={({ key }) => setSearchParams({ section: key }, { replace: true })}
                 className={styles.sidebarMenu}
                 items={menuItems.map(item => ({
                   key: item.key,
@@ -266,7 +265,7 @@ const SettingsLayout: React.FC = () => {
                 // No made-up defaults: Save would write them over the real settings.
                 <LoadError title={t('settings:loadFailed')} onRetry={() => refetch?.()} retrying={isRefetching} />
               ) : (
-                <Form
+                <Form scrollToFirstError={{ focus: true }}
                   form={form}
                   layout="vertical"
                   onFinish={handleSubmit}

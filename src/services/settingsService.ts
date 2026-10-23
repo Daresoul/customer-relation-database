@@ -25,7 +25,8 @@ export interface SettingsResponse {
 
 export interface UpdateSettingsRequest {
   language?: 'en' | 'mk';
-  currencyId?: number;
+  /** null clears the currency; left out keeps it. */
+  currencyId?: number | null;
   theme?: 'light' | 'dark';
   dateFormat?: string;
 }

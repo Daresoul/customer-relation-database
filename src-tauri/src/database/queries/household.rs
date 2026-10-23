@@ -1,5 +1,6 @@
 use sea_orm::{DatabaseConnection, ConnectionTrait, Statement, DbBackend, TransactionTrait};
 use crate::models::household::*;
+use crate::services::names::required_name;
 
 // Create a new household with people and contacts in a transaction
 pub async fn create_household_with_people(
@@ -42,8 +43,8 @@ pub async fn create_household_with_people(
             "INSERT INTO people (household_id, first_name, last_name, is_primary) VALUES (?, ?, ?, ?)",
             [
                 household_id.into(),
-                person_dto.person.first_name.clone().into(),
-                person_dto.person.last_name.clone().into(),
+                person_dto.person.first_name.trim().to_string().into(),
+                person_dto.person.last_name.trim().to_string().into(),
                 is_primary.into(),
             ]
         ))
@@ -84,8 +85,8 @@ pub async fn create_household_with_people(
 
         people_with_contacts.push(PersonWithContacts {
             id: person_id as i32,
-            first_name: person_dto.person.first_name.clone(),
-            last_name: person_dto.person.last_name.clone(),
+            first_name: person_dto.person.first_name.trim().to_string(),
+            last_name: person_dto.person.last_name.trim().to_string(),
             is_primary,
             contacts,
         });
@@ -175,8 +176,8 @@ pub async fn create_patient_with_household(
             "INSERT INTO people (household_id, first_name, last_name, is_primary) VALUES (?, ?, ?, ?)",
             [
                 household_id.into(),
-                person_dto.person.first_name.clone().into(),
-                person_dto.person.last_name.clone().into(),
+                person_dto.person.first_name.trim().to_string().into(),
+                person_dto.person.last_name.trim().to_string().into(),
                 is_primary.into(),
             ]
         ))
@@ -215,8 +216,8 @@ pub async fn create_patient_with_household(
 
         people_with_contacts.push(PersonWithContacts {
             id: person_id as i32,
-            first_name: person_dto.person.first_name.clone(),
-            last_name: person_dto.person.last_name.clone(),
+            first_name: person_dto.person.first_name.trim().to_string(),
+            last_name: person_dto.person.last_name.trim().to_string(),
             is_primary,
             contacts,
         });
@@ -511,14 +512,16 @@ pub async fn add_person_with_contacts(
     household_id: i32,
     person: &CreatePersonWithContactsDto,
 ) -> Result<i32, String> {
+    let first_name = required_name(&person.person.first_name, "First name")?;
+    let last_name = required_name(&person.person.last_name, "Last name")?;
     let txn = db.begin().await.map_err(|e| format!("Failed to begin transaction: {}", e))?;
     let person_result = txn.execute(Statement::from_sql_and_values(
         DbBackend::Sqlite,
         "INSERT INTO people (household_id, first_name, last_name, is_primary) VALUES (?, ?, ?, ?)",
         [
             household_id.into(),
-            person.person.first_name.clone().into(),
-            person.person.last_name.clone().into(),
+            first_name.into(),
+            last_name.into(),
             person.person.is_primary.unwrap_or(false).into(),
         ]
     ))

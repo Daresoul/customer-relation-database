@@ -10,6 +10,7 @@ import type {
   CreateContactDto,
   CreateHouseholdWithPeopleDto,
 } from '../../types/household';
+import { errorText } from '@/utils/notifyError';
 
 const { Text } = Typography;
 
@@ -219,7 +220,7 @@ export const CreateHouseholdInline: React.FC<CreateHouseholdInlineProps> = ({
     } catch (error) {
       notification.error({
         message: t('patients:detail.householdInfo.createFailed', 'Failed to create household'),
-        description: String(error),
+        description: errorText(error, t),
         placement: 'bottomRight',
         duration: 5,
       });
@@ -231,7 +232,7 @@ export const CreateHouseholdInline: React.FC<CreateHouseholdInlineProps> = ({
   const busy = isSubmitting || disabled;
 
   return (
-    <Form<FormValues>
+    <Form<FormValues> scrollToFirstError={{ focus: true }}
       form={form}
       layout="vertical"
       onFinish={handleSubmit}
@@ -243,7 +244,7 @@ export const CreateHouseholdInline: React.FC<CreateHouseholdInlineProps> = ({
             name="householdName"
             label={t('patients:detail.householdInfo.householdName', 'Household Name')}
             rules={[
-              { required: true, message: t('patients:detail.householdInfo.householdNameRequired', 'Household name is required') },
+              { required: true, whitespace: true, message: t('patients:detail.householdInfo.householdNameRequired', 'Household name is required') },
               { max: 100, message: t('patients:detail.householdInfo.householdNameTooLong', 'Household name must be 100 characters or less') },
             ]}
           >
@@ -275,7 +276,13 @@ export const CreateHouseholdInline: React.FC<CreateHouseholdInlineProps> = ({
             name="lastName"
             label={t('forms:labels.lastName', 'Last Name')}
           >
-            <Input placeholder={t('forms:placeholders.enterName', 'Enter name')} />
+            <Input
+              placeholder={t('forms:placeholders.enterName', 'Enter name')}
+              onChange={(e) => {
+                // The household name follows the last name until someone types in it.
+                if (!form.isFieldTouched('householdName')) form.setFieldValue('householdName', e.target.value);
+              }}
+            />
           </Form.Item>
         </Col>
       </Row>

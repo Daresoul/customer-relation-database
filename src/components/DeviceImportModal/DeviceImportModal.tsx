@@ -164,7 +164,7 @@ const DeviceImportDialog: React.FC = () => {
 
   const pendingFiles = getGroupedFiles();
   const extractedPatientData = useMemo(() => getAggregatedPatientData(), [getAggregatedPatientData]);
-  const { patients, refreshPatients, loading: patientsLoading } = usePatients();
+  const { patients, refreshPatients, loading: patientsLoading, error: patientsError } = usePatients();
 
   const pickedPatientId = Form.useWatch('patientId', form);
   const pickedPatient = patients.find((p) => p.id === pickedPatientId);
@@ -758,7 +758,7 @@ const DeviceImportDialog: React.FC = () => {
             suffixIcon={<UserOutlined />}
             size="large"
             loading={patientsLoading}
-            notFoundContent={patientsLoading ? t('medical:deviceImport.loadingPatients') : t('medical:deviceImport.noPatientsFound')}
+            notFoundContent={patientsLoading ? t('medical:deviceImport.loadingPatients') : patientsError ? t('common:pickerLoadFailed') : t('medical:deviceImport.noPatientsFound')}
             data-testid="device-import-patient-select"
           >
             {patients?.map((patient: any) => {

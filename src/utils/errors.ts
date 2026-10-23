@@ -564,6 +564,7 @@ const ERROR_CODE_TO_TRANSLATION_KEY: Record<string, string> = {
   'DATABASE_ERROR': 'errors:database.error',
   'DATABASE_CONNECTION_FAILED': 'errors:database.connectionFailed',
   'DATABASE_LOCKED': 'errors:database.locked',
+  'NAME_TAKEN': 'errors:generic.nameTaken',
   'MIGRATION_FAILED': 'errors:database.migrationFailed',
   'DATA_INTEGRITY_ERROR': 'errors:database.integrityError',
   'FOREIGN_KEY_VIOLATION': 'errors:database.foreignKeyViolation',
@@ -631,6 +632,9 @@ const ERROR_PATTERN_MATCHERS: Array<{ pattern: RegExp; code: string }> = [
   { pattern: /room.*not found/i, code: 'ROOM_NOT_FOUND' },
   { pattern: /room.*already exists/i, code: 'ROOM_ALREADY_EXISTS' },
   { pattern: /cannot delete.*room.*appointment/i, code: 'ROOM_HAS_APPOINTMENTS' },
+
+  // Species, breeds, price list items: a name already used in another case
+  { pattern: /with this name already exists/i, code: 'NAME_TAKEN' },
 
   // Medical record patterns
   { pattern: /medical record.*not found/i, code: 'MEDICAL_RECORD_NOT_FOUND' },

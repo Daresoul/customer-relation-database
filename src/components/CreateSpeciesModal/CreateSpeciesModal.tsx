@@ -69,12 +69,12 @@ export const CreateSpeciesModal: React.FC<CreateSpeciesModalProps> = ({
       confirmLoading={createSpecies.isPending}
       okText={t('common:create')}
     >
-      <Form form={form} layout="vertical">
+      <Form scrollToFirstError={{ focus: true }} form={form} layout="vertical">
         <Form.Item
           name="name"
           label={t('settings:species.nameColumn')}
           rules={[
-            { required: true, message: t('settings:species.nameRequired') },
+            { required: true, whitespace: true, message: t('settings:species.nameRequired') },
             { max: 50, message: t('settings:species.nameMaxLength', { max: 50 }) },
           ]}
         >

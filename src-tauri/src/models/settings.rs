@@ -35,8 +35,10 @@ pub struct SettingsResponse {
 #[serde(rename_all = "camelCase")]
 pub struct UpdateSettingsRequest {
     pub language: Option<String>,
+    /// Missing: unchanged; null: no currency.
+    #[serde(default)]
     #[ts(type = "number | null")]
-    pub currency_id: Option<i64>,
+    pub currency_id: crate::models::dto::MaybeNull<i64>,
     pub theme: Option<String>,
     pub date_format: Option<String>,
 }

@@ -84,6 +84,19 @@ impl LineItemService {
         Ok(Self::template_to_api_model(template))
     }
 
+    /// Refuses a name another price list item already has, in any case.
+    async fn check_name_free(db: &DatabaseConnection, name: &str, except_id: Option<i64>) -> Result<(), String> {
+        let items = LineItemTemplateEntity::find()
+            .all(db)
+            .await
+            .map_err(|e| format!("Failed to check price list names: {}", e))?;
+        let names = items.iter().filter(|t| Some(t.id) != except_id).map(|t| t.name.as_str());
+        if crate::services::names::name_taken(names, name) {
+            return Err("A price list item with this name already exists".to_string());
+        }
+        Ok(())
+    }
+
     /// Create a new line item template
     pub async fn create_template(
         db: &DatabaseConnection,
@@ -93,6 +106,7 @@ impl LineItemService {
         if input.name.trim().is_empty() {
             return Err("Name cannot be empty".to_string());
         }
+        Self::check_name_free(db, &input.name, None).await?;
         if input.default_price < 0.0 {
             return Err("Default price cannot be negative".to_string());
         }
@@ -164,6 +178,7 @@ impl LineItemService {
             if name.trim().is_empty() {
                 return Err("Name cannot be empty".to_string());
             }
+            Self::check_name_free(db, name, Some(id)).await?;
         }
 
         // Validate price if provided

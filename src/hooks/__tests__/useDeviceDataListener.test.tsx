@@ -14,7 +14,7 @@ vi.mock('@tauri-apps/api/event', () => ({
   }),
 }));
 
-vi.mock('@tauri-apps/api', () => ({ invoke: mocks.invoke }));
+vi.mock('@/services/invoke', () => ({ invoke: mocks.invoke }));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),

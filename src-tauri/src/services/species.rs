@@ -1,12 +1,26 @@
 use crate::entities::species::{self, Entity as SpeciesEntity};
 use crate::entities::patient::{self, Entity as PatientEntity};
 use crate::models::{Species, CreateSpeciesInput, UpdateSpeciesInput};
+use crate::services::names::{name_taken, required_name};
 use chrono::Utc;
 use sea_orm::*;
 
 pub struct SpeciesService;
 
 impl SpeciesService {
+    /// Refuses a name another species already has, in any case.
+    async fn check_name_free(db: &DatabaseConnection, name: &str, except_id: Option<i64>) -> Result<(), String> {
+        let others = SpeciesEntity::find()
+            .all(db)
+            .await
+            .map_err(|e| format!("Failed to check species names: {}", e))?;
+        let names = others.iter().filter(|s| Some(s.id) != except_id).map(|s| s.name.as_str());
+        if name_taken(names, name) {
+            return Err("A species with this name already exists".to_string());
+        }
+        Ok(())
+    }
+
     /// Convert a SeaORM species model to the API Species model
     fn to_api_model(model: species::Model) -> Species {
         Species {
@@ -51,6 +65,8 @@ impl SpeciesService {
     /// Create a new species
     pub async fn create(db: &DatabaseConnection, input: CreateSpeciesInput) -> Result<Species, String> {
         let now = Utc::now().naive_utc();
+        let name = required_name(&input.name, "Species name")?;
+        Self::check_name_free(db, &name, None).await?;
 
         // Get the next display_order if not provided
         let display_order = if let Some(order) = input.display_order {
@@ -67,7 +83,7 @@ impl SpeciesService {
         };
 
         let new_species = species::ActiveModel {
-            name: Set(input.name),
+            name: Set(name),
             active: Set(true),
             display_order: Set(display_order),
             created_at: Set(now),
@@ -102,6 +118,8 @@ impl SpeciesService {
         let mut species_model: species::ActiveModel = existing.into();
 
         if let Some(name) = input.name {
+            let name = required_name(&name, "Species name")?;
+            Self::check_name_free(db, &name, Some(id)).await?;
             species_model.name = Set(name);
         }
         if let Some(active) = input.active {

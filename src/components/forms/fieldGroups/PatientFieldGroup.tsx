@@ -125,7 +125,7 @@ export const PatientFieldGroup: React.FC<PatientFieldGroupProps> = ({
             name="name"
             label={t('forms:labels.patientName', 'Patient Name')}
             rules={[
-              { required: true, message: t('forms:validation.required', 'This field is required') },
+              { required: true, whitespace: true, message: t('forms:validation.required', 'This field is required') },
               { max: 100, message: t('forms:validation.maxLength', { max: 100 }) },
             ]}
           >

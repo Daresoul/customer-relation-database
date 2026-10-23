@@ -20,7 +20,41 @@ function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/** localStorage key of the last automatic check that failed (this computer only). */
+const CHECK_FAILURE_KEY = 'arkivet.updateCheckFailure';
+
+export interface UpdateCheckFailure {
+  at: number;
+  message: string;
+}
+
 export const updateService = {
+  /** The last automatic check, when it failed; null after a check that worked. */
+  lastCheckFailure(): UpdateCheckFailure | null {
+    try {
+      const raw = localStorage.getItem(CHECK_FAILURE_KEY);
+      return raw ? (JSON.parse(raw) as UpdateCheckFailure) : null;
+    } catch {
+      return null;
+    }
+  },
+
+  recordCheckFailure(error: unknown): void {
+    try {
+      localStorage.setItem(CHECK_FAILURE_KEY, JSON.stringify({ at: Date.now(), message: errorText(error) }));
+    } catch {
+      // Storage full or blocked: the notice is a convenience only.
+    }
+  },
+
+  clearCheckFailure(): void {
+    try {
+      localStorage.removeItem(CHECK_FAILURE_KEY);
+    } catch {
+      // Same as above.
+    }
+  },
+
   /**
    * Get update preferences from database
    * ApiService automatically transforms snake_case response to camelCase

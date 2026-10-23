@@ -46,6 +46,7 @@ interface Household {
   primaryContact?: string;
   phone?: string;
   email?: string;
+  address?: string;
 }
 
 interface PatientFormWithOwnerProps {
@@ -63,6 +64,8 @@ interface PatientFormWithOwnerProps {
    * from the existing record).
    */
   defaultMicrochipId?: string;
+  /** On a household page the household is already known; don't ask for it. */
+  hideHouseholdPicker?: boolean;
 }
 
 export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
@@ -71,11 +74,13 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
   onCancel,
   loading = false,
   defaultMicrochipId,
+  hideHouseholdPicker = false,
 }) => {
   const { t } = useTranslation(['entities', 'forms']);
   const [form] = Form.useForm();
   const [households, setHouseholds] = useState<Household[]>([]);
   const [searchingHouseholds, setSearchingHouseholds] = useState(false);
+  const [householdSearchFailed, setHouseholdSearchFailed] = useState(false);
   const [createHouseholdOpen, setCreateHouseholdOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -122,7 +127,7 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
   // dropdown showed "No households found" until 2+ characters were typed,
   // which looked like there were no households at all.
   useEffect(() => {
-    searchHouseholdsRaw('');
+    if (!hideHouseholdPicker) searchHouseholdsRaw('');
     // Intentionally empty deps — fire once on mount. Subsequent searches
     // happen via the Select's onSearch event.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -140,6 +145,7 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
   // bounded.
   const searchHouseholdsRaw = async (query: string) => {
     setSearchingHouseholds(true);
+    setHouseholdSearchFailed(false);
     try {
       const result = await invoke<any>('search_households', { query: query || '', limit: 20 });
 
@@ -174,6 +180,7 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
     } catch (error) {
       console.error('Failed to search households:', error);
       setHouseholds([]);
+      setHouseholdSearchFailed(true);
     } finally {
       setSearchingHouseholds(false);
     }
@@ -281,6 +288,7 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
         layout="vertical"
         onFinish={handleSubmit}
         requiredMark={true}
+        scrollToFirstError={{ focus: true }}
       >
         {/* Patient Fields using shared component */}
         <PatientFieldGroup
@@ -298,6 +306,7 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
           showMicrochipId={true}
         />
 
+        {!hideHouseholdPicker && (<>
         <Divider orientation="left">
           <Space>
             <HomeOutlined />
@@ -319,7 +328,9 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
                 notFoundContent={
                   searchingHouseholds
                     ? t('forms:messages.searching')
-                    : t('forms:messages.noHouseholdsMatch')
+                    : householdSearchFailed
+                      ? t('forms:messages.householdSearchFailed')
+                      : t('forms:messages.noHouseholdsMatch')
                 }
                 className={styles.fullWidth}
               >
@@ -332,6 +343,11 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
                         <span>{household.lastName || t('entities:defaults.unknown')}</span>
                         {household.primaryContact && (
                           <span className={styles.householdOption}>({household.primaryContact})</span>
+                        )}
+                        {(household.phone || household.address) && (
+                          <span className={styles.householdOption}>
+                            {[household.phone, household.address].filter(Boolean).join(' · ')}
+                          </span>
                         )}
                       </Space>
                     </Option>
@@ -348,6 +364,7 @@ export const PatientFormWithOwner: React.FC<PatientFormWithOwnerProps> = ({
             </Button>
           </Col>
         </Row>
+        </>)}
 
         <CreateHouseholdModal
           open={createHouseholdOpen}

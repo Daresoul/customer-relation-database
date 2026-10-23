@@ -222,6 +222,9 @@ export const HouseholdDetail: React.FC = () => {
       )}
 
       <div className={styles.mainContainer}>
+        {data.household.notes?.trim() && (
+          <Alert type="info" showIcon message={t('detail.notes')} description={data.household.notes} />
+        )}
         <HouseholdInfo household={data.household} />
 
         <PeopleSection

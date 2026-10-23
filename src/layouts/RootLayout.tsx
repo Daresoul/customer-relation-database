@@ -8,11 +8,13 @@ import { DevSimulatorButton } from '../components/DeviceStatusBar/DevSimulatorBu
 import LabInboxBadge from '../components/LabInbox/LabInboxBadge';
 import { WakeFromTrayHandler } from './WakeFromTrayHandler';
 import { ChipScanHandler } from './ChipScanHandler';
+import { DocumentTitle } from './DocumentTitle';
 
 /** Every page renders inside this: header (lab machines chip, lab inbox badge), lab import, crash boundary. */
 export function RootLayout() {
   return (
     <GlobalSearchProvider>
+      <DocumentTitle />
       <WakeFromTrayHandler />
       <ChipScanHandler />
       <DeviceImportModal />

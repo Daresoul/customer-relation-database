@@ -136,6 +136,22 @@ describe('invalidation after saves', () => {
     fireEvent.click(screen.getByText('stub-create'));
 
     await waitFor(() => expect(roots()).toContain('all-households'));
-    expect(roots()).toContain('households');
+    expect(roots()).toContain('household');
+  });
+
+  // frontend-data #6: no query uses these keys, so naming them hid which
+  // lists really refresh.
+  it('names only cache keys that a query uses', async () => {
+    invokeMock.mockResolvedValue(null);
+    const { wrapper, roots } = setup();
+    const { result } = renderHook(() => useUpdateHousehold(), { wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync({ householdId: 12, updates: { address: 'Ulica 2' } });
+    });
+
+    for (const dead of ['households', 'household-search', 'household-quick-search']) {
+      expect(roots()).not.toContain(dead);
+    }
   });
 });

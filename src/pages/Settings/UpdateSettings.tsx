@@ -4,24 +4,26 @@
  * Displays update preferences and manual update check in Settings page
  */
 
-import React, { useState, useEffect } from 'react';
-import { Form, Switch, Button, Typography, Space, App } from 'antd';
+import { useState, useEffect } from 'react';
+import { Form, Switch, Button, Typography, Space, App, Alert } from 'antd';
 import { getVersion } from '@tauri-apps/api/app';
 import { useTranslation } from 'react-i18next';
 import { updateService, createBackupFailedConfirm } from '../../services/updateService';
 import { useUpdater } from '../../hooks/useUpdater';
 import { extractErrorMessage } from '../../utils/errors';
+import { formatDateTime } from '../../utils/dateFormatter';
 
 const { Text } = Typography;
 
 export function UpdateSettings() {
   const { t } = useTranslation('settings');
-  const { message, notification, modal } = App.useApp();
+  const { notification, modal } = App.useApp();
   const [autoCheckEnabled, setAutoCheckEnabled] = useState(true);
   const [lastCheck, setLastCheck] = useState<Date | null>(null);
   const [currentVersion, setCurrentVersion] = useState<string>('');
   const [loading, setLoading] = useState(false);
-  const { checkForUpdates, status } = useUpdater();
+  const { status } = useUpdater();
+  const [checkFailure, setCheckFailure] = useState(() => updateService.lastCheckFailure());
 
   // Load preferences and version on mount
   useEffect(() => {
@@ -94,8 +96,8 @@ export function UpdateSettings() {
 
       if (result.shouldUpdate && result.manifest) {
         // Update available
-        const description = result.manifest.notes
-          ? result.manifest.notes.split('\n')[0]
+        const description = result.manifest.body
+          ? result.manifest.body.split('\n')[0]
           : t('updates.newVersionAvailable');
 
         notification.info({
@@ -143,6 +145,9 @@ export function UpdateSettings() {
         await updateService.recordCheck();
       }
 
+      updateService.clearCheckFailure();
+      setCheckFailure(null);
+
       // Update last check timestamp
       const prefs = await updateService.getPreferences();
       if (prefs.lastCheckTimestamp) {
@@ -178,7 +183,16 @@ export function UpdateSettings() {
       </Form.Item>
 
       {lastCheck && (
-        <Text type="secondary">{t('updates.lastChecked')}: {lastCheck.toLocaleString()}</Text>
+        <Text type="secondary">{t('updates.lastChecked')}: {formatDateTime(lastCheck)}</Text>
+      )}
+
+      {checkFailure && (
+        <Alert
+          type="warning"
+          showIcon
+          message={t('updates.lastCheckFailed')}
+          description={t('updates.lastCheckFailedDescription', { time: formatDateTime(new Date(checkFailure.at)) })}
+        />
       )}
 
       <Button onClick={handleManualCheck} loading={loading || status === 'checking'} type="primary">

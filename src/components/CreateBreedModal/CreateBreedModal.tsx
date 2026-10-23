@@ -86,7 +86,7 @@ export const CreateBreedModal: React.FC<CreateBreedModalProps> = ({
       confirmLoading={createBreed.isPending}
       okText={t('common:create')}
     >
-      <Form form={form} layout="vertical">
+      <Form scrollToFirstError={{ focus: true }} form={form} layout="vertical">
         <Form.Item
           name="speciesId"
           label={t('patients:fields.species')}
@@ -106,7 +106,7 @@ export const CreateBreedModal: React.FC<CreateBreedModalProps> = ({
           name="name"
           label={t('patients:fields.breed')}
           rules={[
-            { required: true, message: t('forms:validation.required') },
+            { required: true, whitespace: true, message: t('forms:validation.required') },
             { max: 50, message: t('forms:validation.maxLength', { max: 50 }) },
           ]}
         >

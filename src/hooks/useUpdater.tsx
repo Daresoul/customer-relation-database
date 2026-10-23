@@ -1,11 +1,12 @@
 /**
  * useUpdater Hook
  * Feature: Auto-Update System
- * Manages update state and provides update checking/installation functions
+ * Manages update state and provides update checking/installation functions.
+ * The offer and the progress are shown by `UpdateBanner` (in `AppWrapper`).
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { App, Button } from 'antd';
+import { useState, useEffect, useCallback } from 'react';
+import { App } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { updateService, createBackupFailedConfirm } from '../services/updateService';
 import type { UpdateManifest, UpdateStatus } from '../types/update';
@@ -16,81 +17,44 @@ export function useUpdater() {
   const [status, setStatus] = useState<UpdateStatus>('idle');
   const [manifest, setManifest] = useState<UpdateManifest | null>(null);
 
-  /**
-   * Check for updates and show notification if available
-   */
-  const checkForUpdates = useCallback(async () => {
+  /** Checks for an update; resolves false when the check failed. */
+  const checkForUpdates = useCallback(async (): Promise<boolean> => {
     try {
       setStatus('checking');
-
       const result = await updateService.checkForUpdates();
+      updateService.clearCheckFailure();
 
       if (result.shouldUpdate && result.manifest) {
-        setManifest(result.manifest);
-        setStatus('ready');
-
-        // Record that we notified the user about this version
-        await updateService.recordCheck(result.manifest.version);
-
-        // Show non-intrusive notification with install button
-        const description = result.manifest.notes
-          ? result.manifest.notes.split('\n')[0]
-          : t('updates.newVersionAvailable');
-
-        notification.info({
-          message: `${t('updates.updateAvailable')}: ${result.manifest.version}`,
-          description,
-          duration: 0, // Don't auto-close
-          placement: 'topRight',
-          key: 'update-available',
-          actions: (
-            <Button
-              type="primary"
-              size="small"
-              onClick={async () => {
-                notification.destroy('update-available');
-                try {
-                  setStatus('installing');
-                  const installing = await updateService.installAndRestart(
-                    createBackupFailedConfirm(modal, t),
-                  );
-                  if (!installing) setStatus('ready');
-                } catch (error) {
-                  setStatus('error');
-                  console.error('Update installation failed:', error);
-                  notification.error({
-                    message: t('updates.updateInstallationFailed'),
-                    description: t('updates.messages.installFailed'),
-                    placement: 'topRight',
-                  });
-                }
-              }}
-            >
-              {t('updates.installAndRestart')}
-            </Button>
-          ),
+        // Tauri calls the release notes `body`.
+        setManifest({
+          version: result.manifest.version,
+          notes: result.manifest.body,
+          pub_date: result.manifest.date,
+          platforms: {},
         });
+        setStatus('ready');
+        await updateService.recordCheck(result.manifest.version);
       } else {
         setStatus('idle');
-        // Record check without version (no update available)
         await updateService.recordCheck();
       }
+      return true;
     } catch (error) {
       setStatus('error');
+      updateService.recordCheckFailure(error);
       console.error('Update check failed:', error);
+      return false;
     }
-  }, [notification, modal, t]);
+  }, []);
 
-  /**
-   * Install the downloaded update and restart the app
-   */
+  /** Install the downloaded update and restart the app. */
   const installUpdate = useCallback(async () => {
     try {
       setStatus('installing');
       const installing = await updateService.installAndRestart(createBackupFailedConfirm(modal, t));
       if (!installing) setStatus('ready');
     } catch (error) {
-      setStatus('error');
+      setStatus('ready');
       console.error('Update installation failed:', error);
       notification.error({
         message: t('updates.updateInstallationFailed'),
@@ -100,20 +64,12 @@ export function useUpdater() {
     }
   }, [notification, modal, t]);
 
-  /**
-   * Subscribe to updater events (PENDING, DONE, ERROR)
-   */
+  /** Updater events: PENDING while downloading, DONE, ERROR. */
   useEffect(() => {
     const unlisten = updateService.onUpdateEvent(({ status: eventStatus }) => {
-      if (eventStatus === 'PENDING') {
-        setStatus('downloading');
-      }
-      if (eventStatus === 'DONE') {
-        setStatus('ready');
-      }
-      if (eventStatus === 'ERROR') {
-        setStatus('error');
-      }
+      if (eventStatus === 'PENDING') setStatus('downloading');
+      if (eventStatus === 'DONE') setStatus('installing');
+      if (eventStatus === 'ERROR') setStatus('error');
     });
 
     return () => {

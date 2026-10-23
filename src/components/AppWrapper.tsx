@@ -2,43 +2,31 @@ import React, { useEffect } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useUpdater } from '../hooks/useUpdater';
 import { updateService } from '../services/updateService';
+import { scheduleUpdateChecks } from '../services/updateCheckSchedule';
+import { UpdateBanner } from './UpdateBanner';
 import styles from './AppWrapper.module.css';
 
 export const AppWrapper: React.FC<{ header?: React.ReactNode; children: React.ReactNode }> = ({ header, children }) => {
   const { themeMode } = useTheme();
   const backgroundColor = themeMode === 'light' ? '#f5f5f5' : '#141414';
-  const { checkForUpdates } = useUpdater();
+  const { checkForUpdates, status, manifest, installUpdate } = useUpdater();
 
-  // T025: Check for updates on app startup (10s delay)
+  // 10 s after start, retried after 5, 15 and 60 minutes when it fails, then daily.
   useEffect(() => {
-    // Skip update checks in dev mode
-    if (import.meta.env.DEV) {
-      console.log('Update checks disabled in dev mode');
-      return;
-    }
-
-    async function checkOnStartup() {
-      try {
-        const prefs = await updateService.getPreferences();
-
-        if (prefs.autoCheckEnabled) {
-          // Wait 10 seconds after app start, then check for updates
-          const timer = setTimeout(() => {
-            checkForUpdates();
-          }, 10000);
-
-          return () => clearTimeout(timer);
-        }
-      } catch (error) {
-        console.error('Failed to check update preferences on startup:', error);
-      }
-    }
-
-    checkOnStartup();
+    if (import.meta.env.DEV) return;
+    let stop: (() => void) | undefined;
+    let cancelled = false;
+    updateService
+      .getPreferences()
+      .then((prefs) => {
+        if (!cancelled && prefs.autoCheckEnabled) stop = scheduleUpdateChecks(checkForUpdates);
+      })
+      .catch((error) => console.error('Failed to read update preferences:', error));
+    return () => {
+      cancelled = true;
+      stop?.();
+    };
   }, [checkForUpdates]);
-
-  // Automatic update checks on focus and network reconnection removed
-  // Only checks on app startup and manual button click
 
   // Apply theme to document
   useEffect(() => {
@@ -55,7 +43,10 @@ export const AppWrapper: React.FC<{ header?: React.ReactNode; children: React.Re
         transition: 'background-color 0.3s ease'
       }}
     >
-      <div className={styles.shellTop}>{header}</div>
+      <div className={styles.shellTop}>
+        {header}
+        <UpdateBanner status={status} manifest={manifest} onInstall={installUpdate} />
+      </div>
       {children}
     </div>
   );

@@ -78,3 +78,34 @@ describe('HouseholdDetail pets list', () => {
     expect(screen.queryByText('detail.animals.noAnimals')).not.toBeInTheDocument();
   });
 });
+
+// household #8: the household's notes were saved but shown nowhere.
+describe('HouseholdDetail notes', () => {
+  afterEach(() => {
+    cleanup();
+    householdState.data = undefined;
+    patientsState.data = undefined;
+    document.body.innerHTML = '';
+  });
+
+  it('shows the notes at the top of the page', () => {
+    householdState.data = {
+      household: { id: 4, householdName: 'Petrovski', notes: 'Call the son, not the father.' },
+      people: [],
+      patients: [],
+    };
+    patientsState.data = [];
+    renderPage();
+
+    expect(screen.getByText('Call the son, not the father.')).toBeInTheDocument();
+    expect(screen.getByText('detail.notes')).toBeInTheDocument();
+  });
+
+  it('shows no notes box when there are none', () => {
+    householdState.data = { household: { id: 4, householdName: 'Petrovski', notes: '  ' }, people: [], patients: [] };
+    patientsState.data = [];
+    renderPage();
+
+    expect(screen.queryByText('detail.notes')).not.toBeInTheDocument();
+  });
+});

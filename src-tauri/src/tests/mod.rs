@@ -147,3 +147,6 @@ pub mod google_event_text_tests;
 
 #[cfg(test)]
 pub mod log_prune_tests;
+
+#[cfg(test)]
+pub mod master_data_names_tests;
