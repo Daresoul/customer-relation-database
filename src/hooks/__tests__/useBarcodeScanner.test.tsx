@@ -372,3 +372,41 @@ describe('useBarcodeScanner — focused field with text', () => {
     expect(search.value).toBe('807010000007678');
   });
 });
+
+// frontend-data.md #5 / serial-pipeline.md #7: typed digits kept piling up in
+// the scan buffer, so a number typed by hand plus Enter counted as a scan;
+// and a fast typist's Enter was swallowed even when no chip was read.
+describe('useBarcodeScanner — typing is not scanning', () => {
+  it('a number typed by hand and Enter is not a scan', async () => {
+    const onScan = vi.fn();
+    renderHook(() => useBarcodeScanner({ onScan, suffixKey: 'Enter' }));
+    render(<input data-testid="notes" />);
+    const input = screen.getByTestId('notes') as HTMLInputElement;
+    input.focus();
+
+    const human = userEvent.setup({ delay: 120 });
+    await human.keyboard('123456789{Enter}');
+
+    expect(onScan).not.toHaveBeenCalled();
+    expect(input.value).toBe('123456789');
+  });
+
+  it('Enter after fast typing that is no chip still submits the form', async () => {
+    const onScan = vi.fn();
+    const onSubmit = vi.fn((e: any) => e.preventDefault());
+    renderHook(() => useBarcodeScanner({ onScan, suffixKey: 'Enter' }));
+    render(
+      <form onSubmit={onSubmit}>
+        <input data-testid="search" />
+        <button type="submit">Go</button>
+      </form>,
+    );
+    (screen.getByTestId('search') as HTMLInputElement).focus();
+
+    const fast = userEvent.setup({ delay: 5 });
+    await fast.keyboard('rex{Enter}');
+
+    expect(onScan).not.toHaveBeenCalled();
+    expect(onSubmit).toHaveBeenCalled();
+  });
+});
