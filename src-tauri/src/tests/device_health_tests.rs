@@ -3,7 +3,7 @@
 use crate::commands::device_input::{fill_connection_health, fill_watcher_health};
 use crate::services::device_events::{note_bytes, note_result, DeviceErrorKind};
 use crate::services::device_input::{
-    classify_open_error, classify_read_error, next_retry_count, run_read_loop, ConnectionState,
+    classify_open_error, classify_read_error, next_retry_count, run_read_loop, run_read_loop_with_presence, ConnectionState,
     DeviceConnectionStatus, DeviceProtocol, FrameSink, ReadErrorAction, STABLE_CONNECTION,
 };
 use crate::services::file_watcher::{FileWatcherState, FileWatcherStatus};
@@ -146,6 +146,33 @@ fn noise_on_the_line_is_reported_and_the_result_after_it_still_read() {
     let _ = run_read_loop(&mut reader, &pointcare(), &rx, Duration::from_secs(5), &mut sink);
     assert_eq!(sink.frames, vec![b"MSH|ok".to_vec()]);
     assert_eq!(sink.unrecognized, vec![1200], "reported once it passes a kilobyte");
+}
+
+// Windows lab: after the port's device went away the app kept "Connected",
+// reading nothing forever. Some USB-serial drivers do the same on a pulled
+// cable: no error, just no data. A gone port ends the connection.
+#[test]
+fn a_port_that_is_gone_ends_the_connection_even_without_a_read_error() {
+    let mut reader = ScriptedReader::new(vec![Err(timed_out)]);
+    let (tx, rx) = mpsc::channel::<()>();
+    // Without the check the loop would read nothing forever; stop it after a second.
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_secs(1));
+        let _ = tx.send(());
+    });
+    let mut sink = RecordingSink::default();
+    let mut checks = 0;
+    let mut present = || {
+        checks += 1;
+        checks < 3
+    };
+    let started = Instant::now();
+    let result = run_read_loop_with_presence(
+        &mut reader, &pointcare(), &rx, Duration::from_secs(5), &mut sink, &mut present, Duration::from_millis(20),
+    );
+    assert!(result.is_err(), "a gone port must hand over to reconnect");
+    assert_eq!(checks, 3);
+    assert!(started.elapsed() < Duration::from_secs(2));
 }
 
 #[test]

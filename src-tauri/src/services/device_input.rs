@@ -1083,6 +1083,18 @@ const EMPTY_READ_PAUSE: Duration = Duration::from_millis(50);
 
 /// Read until shutdown (Ok) or a fatal read error (Err). A frame that stalls
 /// for `idle_flush` goes to `on_cut_off`, so it can't corrupt the next one.
+pub(crate) fn run_read_loop_with_presence<R: std::io::Read + ?Sized>(
+    reader: &mut R,
+    protocol: &DeviceProtocol,
+    shutdown_rx: &mpsc::Receiver<()>,
+    idle_flush: Duration,
+    sink: &mut dyn FrameSink,
+    _still_present: &mut dyn FnMut() -> bool,
+    _presence_every: Duration,
+) -> Result<(), String> {
+    run_read_loop(reader, protocol, shutdown_rx, idle_flush, sink)
+}
+
 pub(crate) fn run_read_loop<R: std::io::Read + ?Sized>(
     reader: &mut R,
     protocol: &DeviceProtocol,
