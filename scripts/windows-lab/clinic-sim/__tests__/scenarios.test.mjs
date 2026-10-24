@@ -20,6 +20,7 @@ describe('scenarios', () => {
         'pointcare-panel',
         'pointcare-twice',
         'pointcare-cut-frame',
+        'pointcare-slow',
         'healvet-result',
         'pcr-result',
         'exigo-day',

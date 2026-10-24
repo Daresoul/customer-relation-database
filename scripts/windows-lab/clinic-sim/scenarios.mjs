@@ -11,6 +11,8 @@ export const SCENARIOS = {
   'pointcare-panel': { kind: 'serial', port: 'pointcare', fixture: 'real_chem_pcv.bin', chunkSize: 64, gapMs: 15 },
   'pointcare-twice': { kind: 'serial', port: 'pointcare', fixture: 'real_chem_pcv.bin', chunkSize: 64, gapMs: 15, repeat: 2 },
   'pointcare-cut-frame': { kind: 'serial', port: 'pointcare', fixture: 'real_chem_pcv.bin', chunkSize: 64, gapMs: 15, cutAt: 0.5 },
+  // About 6 s on the wire, so the port can be pulled halfway (unplug tests).
+  'pointcare-slow': { kind: 'serial', port: 'pointcare', fixture: 'real_chem_pcv.bin', chunkSize: 64, gapMs: 200 },
   'healvet-result': { kind: 'serial', port: 'healvet', fixture: 'real_healvet_com12.bin', chunkSize: 16, gapMs: 25 },
   'pcr-result': { kind: 'serial', port: 'pcr', fixture: 'real_pcr_com13.bin', chunkSize: 64, gapMs: 15 },
   'exigo-day': { kind: 'exigo', mode: 'day' },
