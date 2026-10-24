@@ -1073,6 +1073,9 @@ pub(crate) trait FrameSink {
     fn on_unrecognized(&mut self, _bytes: usize) {}
 }
 
+/// How often a quiet port is checked to still exist.
+const PRESENCE_CHECK_EVERY: Duration = Duration::from_secs(5);
+
 /// Bytes outside any result before the panel hears about it.
 const NOISE_REPORT_BYTES: usize = 1024;
 
@@ -1083,18 +1086,6 @@ const EMPTY_READ_PAUSE: Duration = Duration::from_millis(50);
 
 /// Read until shutdown (Ok) or a fatal read error (Err). A frame that stalls
 /// for `idle_flush` goes to `on_cut_off`, so it can't corrupt the next one.
-pub(crate) fn run_read_loop_with_presence<R: std::io::Read + ?Sized>(
-    reader: &mut R,
-    protocol: &DeviceProtocol,
-    shutdown_rx: &mpsc::Receiver<()>,
-    idle_flush: Duration,
-    sink: &mut dyn FrameSink,
-    _still_present: &mut dyn FnMut() -> bool,
-    _presence_every: Duration,
-) -> Result<(), String> {
-    run_read_loop(reader, protocol, shutdown_rx, idle_flush, sink)
-}
-
 pub(crate) fn run_read_loop<R: std::io::Read + ?Sized>(
     reader: &mut R,
     protocol: &DeviceProtocol,
@@ -1102,6 +1093,22 @@ pub(crate) fn run_read_loop<R: std::io::Read + ?Sized>(
     idle_flush: Duration,
     sink: &mut dyn FrameSink,
 ) -> Result<(), String> {
+    run_read_loop_with_presence(reader, protocol, shutdown_rx, idle_flush, sink, &mut || true, Duration::MAX)
+}
+
+/// Some USB-serial drivers give no read error when the cable is pulled, only
+/// no data; so while the line is quiet, check every `presence_every` that the
+/// port still exists.
+pub(crate) fn run_read_loop_with_presence<R: std::io::Read + ?Sized>(
+    reader: &mut R,
+    protocol: &DeviceProtocol,
+    shutdown_rx: &mpsc::Receiver<()>,
+    idle_flush: Duration,
+    sink: &mut dyn FrameSink,
+    still_present: &mut dyn FnMut() -> bool,
+    presence_every: Duration,
+) -> Result<(), String> {
+    let mut last_presence_check = Instant::now();
     let mut assembler = FrameAssembler::new(protocol);
     let mut buffer = vec![0; 1024];
     let mut ignored = 0usize;
@@ -1148,6 +1155,17 @@ pub(crate) fn run_read_loop<R: std::io::Read + ?Sized>(
         };
 
         if no_data {
+            if last_presence_check.elapsed() >= presence_every {
+                last_presence_check = Instant::now();
+                if !still_present() {
+                    if assembler.partial_len() > 0 {
+                        if let Err(partial) = assembler.flush_idle(protocol) {
+                            sink.on_cut_off(partial);
+                        }
+                    }
+                    return Err("Connection lost: the port is no longer on this computer".to_string());
+                }
+            }
             if assembler.partial_len() > 0 && last_byte_at.elapsed() >= idle_flush {
                 match assembler.flush_idle(protocol) {
                     Ok(frame) => sink.on_frame(frame),
@@ -1509,7 +1527,15 @@ fn handle_listening_serial(
 
     log::info!("📖 Starting serial port read loop for {} ({})", device_type, port_name);
     let mut sink = SerialSink { app_handle, port_name, device_type, integration_id };
-    let result = run_read_loop(&mut *port, &protocol, shutdown_rx, INTER_FRAME_IDLE_FLUSH, &mut sink);
+    let result = run_read_loop_with_presence(
+        &mut *port,
+        &protocol,
+        shutdown_rx,
+        INTER_FRAME_IDLE_FLUSH,
+        &mut sink,
+        &mut || port_present(port_name),
+        PRESENCE_CHECK_EVERY,
+    );
     drop(port);
 
     result.map_err(|message| {
