@@ -370,6 +370,11 @@
 - Serial retries stay at about every 10 s (a reconnected machine is found
   quickly), but only the first failure and every 60th retry (~10 min) are
   logged at info/warn; the rest go to debug.
+- While a serial line is quiet the app checks every 5 s that the port still
+  exists (some USB-serial drivers return no data instead of an error when the
+  cable is pulled). A result cut by an unplug, a stall or the 64 kB size limit
+  reaches the lab inbox as cut off; bytes outside any result (wrong speed or
+  machine type) show in the machine's history, at most every 10 minutes.
 - A background monitor checks at start, 2 s after a status change and every
   30 s. It sends an OS notification (Tauri `notification` Cargo feature; the
   webview allowlist is unchanged) when a machine has been down longer than N
