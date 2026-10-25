@@ -251,14 +251,70 @@ pub struct Recovery {
 
 /// Results cut from the raw log, delivered unless an equal one was stored since `since`.
 pub async fn recover_frames(
-    _db: &DatabaseConnection,
-    _storage_dir: &Path,
-    _sink: &dyn DeviceSink,
-    _source: &ResultSource,
-    _frames: &[Vec<u8>],
-    _since: chrono::DateTime<Utc>,
+    db: &DatabaseConnection,
+    storage_dir: &Path,
+    sink: &dyn DeviceSink,
+    source: &ResultSource,
+    frames: &[Vec<u8>],
+    since: chrono::DateTime<Utc>,
 ) -> Recovery {
-    Recovery::default()
+    let source = &named_by_machine(db, source).await;
+    let mut known = stored_results(db, source, since).await;
+    let mut report = Recovery::default();
+    for frame in frames {
+        for part in result_parts(source, frame) {
+            let Ok(data) = DeviceParserService::parse_device_data(
+                &source.device_type, &source.device_name, "recovered.txt", &part, &source.connection_method,
+            ) else {
+                continue;
+            };
+            report.found += 1;
+            if known.contains(&data.test_results) {
+                continue;
+            }
+            let delivery = deliver_one(db, storage_dir, sink, source, "recovered.txt", &part).await;
+            if delivery.file_id.is_some() {
+                report.added += 1;
+                known.push(data.test_results);
+            }
+        }
+    }
+    report
+}
+
+/// The values of each readable result this machine stored since `since`.
+async fn stored_results(db: &DatabaseConnection, source: &ResultSource, since: chrono::DateTime<Utc>) -> Vec<serde_json::Value> {
+    let rows = db
+        .query_all(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "SELECT file_path FROM file_access_history \
+             WHERE device_type = ? AND device_name = ? AND status = 'ok' AND received_at >= ?",
+            [
+                source.device_type.clone().into(),
+                source.device_name.clone().into(),
+                since.format("%Y-%m-%d %H:%M:%S").to_string().into(),
+            ],
+        ))
+        .await
+        .unwrap_or_default();
+    rows.iter()
+        .filter_map(|row| row.try_get::<String>("", "file_path").ok())
+        .filter_map(|path| std::fs::read(path).ok())
+        .filter_map(|bytes| serde_json::from_slice(&bytes).ok())
+        .collect()
+}
+
+/// A Healvet stream can carry several samples: each is its own result.
+fn result_parts(source: &ResultSource, raw: &[u8]) -> Vec<Vec<u8>> {
+    let is_raw_healvet = source.device_type == "healvet_hv_fia_3000"
+        && !String::from_utf8_lossy(raw).trim_start().starts_with('{');
+    if is_raw_healvet {
+        let parts = DeviceParserService::split_healvet_samples(raw);
+        if parts.len() > 1 {
+            return parts;
+        }
+    }
+    vec![raw.to_vec()]
 }
 
 pub async fn deliver_result(

@@ -1180,13 +1180,30 @@ pub(crate) fn run_read_loop_with_presence<R: std::io::Read + ?Sized>(
 }
 
 /// The bytes of a raw serial log, one list per connection ("SESSION START").
-pub fn raw_log_sessions(_text: &str) -> Vec<Vec<u8>> {
-    Vec::new()
+pub fn raw_log_sessions(text: &str) -> Vec<Vec<u8>> {
+    let mut sessions: Vec<Vec<u8>> = Vec::new();
+    for line in text.lines() {
+        if line.contains("SESSION START") {
+            sessions.push(Vec::new());
+            continue;
+        }
+        let Some(hex) = line.split_once("HEX: ").map(|(_, rest)| rest.split(" | ASCII:").next().unwrap_or(rest)) else {
+            continue;
+        };
+        if sessions.is_empty() {
+            sessions.push(Vec::new());
+        }
+        let current = sessions.last_mut().expect("a session was just made");
+        current.extend(hex.split_whitespace().filter_map(|h| u8::from_str_radix(h, 16).ok()));
+    }
+    sessions.retain(|s| !s.is_empty());
+    sessions
 }
 
 /// The complete results in `bytes`, as the live reader would have cut them.
-pub fn complete_frames(_bytes: &[u8], _protocol: &DeviceProtocol) -> Vec<Vec<u8>> {
-    Vec::new()
+pub fn complete_frames(bytes: &[u8], protocol: &DeviceProtocol) -> Vec<Vec<u8>> {
+    let mut assembler = FrameAssembler::new(protocol);
+    bytes.iter().filter_map(|&b| assembler.push_byte(b, protocol)).collect()
 }
 
 /// Stop all active listeners - used for graceful shutdown
