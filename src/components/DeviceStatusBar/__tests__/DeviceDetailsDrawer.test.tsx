@@ -57,6 +57,7 @@ const details = {
   downSince: at(8, 57),
   outagesToday: 2,
   downMinutesToday: 35,
+  dropsLastHour: 4,
   lastRaw: { at: at(8, 55), byteCount: 14, text: 'MSH|1\nPID|Max\n', hex: '4D 53 48 7C 31 0D', truncated: false },
   log: [
     { at: at(9, 12), label: 'Error', errorKind: 'port_missing', isError: true },
@@ -162,6 +163,13 @@ describe('device details drawer', () => {
     fireEvent.click(await screen.findByRole('button', { name: /drawer\.recover/ }));
     await waitFor(() => expect(invokeMock).toHaveBeenCalledWith('recover_device_results', { integrationId: 1 }));
     expect(await screen.findByText('drawer.recovered {"found":5,"added":2}')).toBeInTheDocument();
+  });
+
+  // A USB adapter that keeps dropping briefly: usually Windows power saving.
+  it('explains what to change when a machine keeps dropping', async () => {
+    await renderDrawer();
+    expect(await screen.findByText('drawer.flaky.title {"count":4}')).toBeInTheDocument();
+    expect(screen.getByText('drawer.flaky.steps')).toBeInTheDocument();
   });
 
   it('copies the diagnostics text', async () => {
