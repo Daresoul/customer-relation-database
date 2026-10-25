@@ -38,6 +38,10 @@ export interface LabInboxItem {
   matchedPatientId?: number | null;
   matchedPatientName?: string | null;
   values: LabValue[];
+  /** The time the machine put on the result (its own clock). */
+  machineTime?: string | null;
+  /** That time is more than 10 minutes after arrival: the machine's clock is ahead. */
+  clockAhead?: boolean;
 }
 
 export interface LabMoveOutcome {

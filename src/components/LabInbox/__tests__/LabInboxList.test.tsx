@@ -127,6 +127,19 @@ describe('LabInboxList — waiting results', () => {
     expect(newRow).not.toHaveAttribute('data-overdue', 'true');
   });
 
+  // A machine whose clock runs ahead dates results in the future.
+  it('flags a result the machine dated in the future', async () => {
+    mocks.list.mockResolvedValue([
+      item({ fileId: 'ahead', machinePatientId: 'AHEAD', clockAhead: true, machineTime: '2026-10-25T14:30:00' }),
+      item({ fileId: 'fine', machinePatientId: 'FINE', clockAhead: false, machineTime: '2026-10-25T09:00:00' }),
+    ]);
+    renderList();
+    const ahead = (await screen.findByText('AHEAD')).closest('tr') as HTMLElement;
+    const fine = screen.getByText('FINE').closest('tr') as HTMLElement;
+    expect(within(ahead).getByText(/devices:inbox\.clockAhead/)).toBeInTheDocument();
+    expect(within(fine).queryByText(/devices:inbox\.clockAhead/)).not.toBeInTheDocument();
+  });
+
   it('says when a result could not be read and offers only Discard', async () => {
     mocks.list.mockResolvedValue([
       item({ status: 'failed', error: 'not xml', values: [], machinePatientId: null, matchMethod: 'none' }),
