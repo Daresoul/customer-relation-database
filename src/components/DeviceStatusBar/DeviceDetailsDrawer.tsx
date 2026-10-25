@@ -5,6 +5,7 @@ import {
   CloseCircleFilled,
   CopyOutlined,
   FolderOpenOutlined,
+  HistoryOutlined,
   MinusCircleFilled,
   ReloadOutlined,
 } from '@ant-design/icons';
@@ -145,6 +146,11 @@ export const DeviceDetailsDrawer: React.FC<DeviceDetailsDrawerProps> = ({ open, 
       message.success(t('drawer.copied'));
     });
   const openLogFolder = () => run('logs', () => invoke('open_device_log_folder'));
+  const recover = () =>
+    run('recover', async () => {
+      const r = await invoke<{ found: number; added: number }>('recover_device_results', { integrationId: selectedId });
+      message.success(r.added > 0 ? t('drawer.recovered', { found: r.found, added: r.added }) : t('drawer.recoveredNothing', { found: r.found }));
+    });
 
   const isSerial = device?.connectionType === 'serial_port';
   const serialStatus = device && isSerial ? getSerialStatus(device.id) : undefined;
@@ -182,6 +188,11 @@ export const DeviceDetailsDrawer: React.FC<DeviceDetailsDrawerProps> = ({ open, 
             <Button icon={<FolderOpenOutlined />} loading={busy === 'logs'} onClick={openLogFolder}>
               {t('drawer.openLogFolder')}
             </Button>
+            {device.connectionType === 'serial_port' && (
+              <Button icon={<HistoryOutlined />} loading={busy === 'recover'} onClick={recover}>
+                {t('drawer.recover')}
+              </Button>
+            )}
           </Space>
         )
       }

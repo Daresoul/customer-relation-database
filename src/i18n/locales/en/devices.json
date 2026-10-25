@@ -415,7 +415,10 @@
     "portsNow": "This computer has these ports now:",
     "noPortsNow": "This computer has no serial ports right now. Check that the cable is plugged in.",
     "usePort": "Use {{port}}",
-    "portSwitched": "Now using {{port}}. Connecting…"
+    "portSwitched": "Now using {{port}}. Connecting…",
+    "recover": "Read today again",
+    "recovered": "Found {{found}} results today; added {{added}} that were missing.",
+    "recoveredNothing": "Found {{found}} results today; all were already in the lab inbox."
   },
   "alerts": {
     "title": "Notifications",
