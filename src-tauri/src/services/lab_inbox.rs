@@ -68,6 +68,10 @@ pub struct LabInboxItem {
     pub matched_patient_id: Option<i64>,
     pub matched_patient_name: Option<String>,
     pub values: Vec<LabValue>,
+    /// The time the machine put on the result, as it wrote it.
+    pub machine_time: Option<String>,
+    /// That time is more than 10 minutes after the result arrived: its clock is ahead.
+    pub clock_ahead: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -135,8 +139,8 @@ pub(crate) fn is_analyte_key(key: &str) -> bool {
 
 /// The analytes in a parsed result, with unit, range and H/L flag.
 /// The machine dated the result more than 10 minutes after it arrived.
-pub fn machine_clock_ahead(_machine: chrono::NaiveDateTime, _received: chrono::DateTime<Utc>) -> bool {
-    false
+pub fn machine_clock_ahead(machine: chrono::NaiveDateTime, received: chrono::DateTime<Utc>) -> bool {
+    machine - received.with_timezone(&chrono::Local).naive_local() > chrono::Duration::minutes(10)
 }
 
 pub fn lab_values(device_type: &str, test_results: &serde_json::Value) -> Vec<LabValue> {
@@ -256,6 +260,11 @@ pub async fn list_inbox(db: &DatabaseConnection, state: Option<&str>) -> Result<
         } else {
             None
         };
+        let machine_time = parsed.as_ref().and_then(|d| crate::services::java_pdf_service::JavaPdfService::device_time(&d.test_results));
+        let received_at = as_utc(text("received_at").unwrap_or_default());
+        let clock_ahead = machine_time.is_some_and(|m| {
+            chrono::DateTime::parse_from_rfc3339(&received_at).is_ok_and(|r| machine_clock_ahead(m, r.with_timezone(&Utc)))
+        });
         let (values, machine_id) = match &parsed {
             Some(data) => (
                 lab_values(&device_type, &data.test_results),
@@ -269,7 +278,7 @@ pub async fn list_inbox(db: &DatabaseConnection, state: Option<&str>) -> Result<
             original_name,
             device_type,
             device_name,
-            received_at: as_utc(text("received_at").unwrap_or_default()),
+            received_at,
             status,
             error: text("error"),
             state: item_state,
@@ -289,6 +298,8 @@ pub async fn list_inbox(db: &DatabaseConnection, state: Option<&str>) -> Result<
             matched_patient_id: None,
             matched_patient_name: None,
             values,
+            machine_time: machine_time.map(|m| m.format("%Y-%m-%dT%H:%M:%S").to_string()),
+            clock_ahead,
         };
         if item.state == "waiting" {
             if let Some(id) = machine_id {
