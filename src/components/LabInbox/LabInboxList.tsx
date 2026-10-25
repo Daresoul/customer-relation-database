@@ -154,6 +154,11 @@ const LabInboxList: React.FC = () => {
         <Space direction="vertical" size={0}>
           <Text>{formatDateTime(item.receivedAt)}</Text>
           {isOverdue(item) && <Tag color="red">{t('devices:inbox.overdue')}</Tag>}
+          {item.clockAhead && (
+            <Tooltip title={t('devices:inbox.clockAheadHint')}>
+              <Tag color="orange">{t('devices:inbox.clockAhead', { time: formatDateTime(item.machineTime) })}</Tag>
+            </Tooltip>
+          )}
         </Space>
       ),
     },

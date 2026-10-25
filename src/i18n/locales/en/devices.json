@@ -279,7 +279,9 @@
       "cutOff": "The result stopped after {{bytes}} bytes (cable or machine interrupted). Send it again from the machine.",
       "unreadable": "The machine sent something Arkivet could not read. Send it again; if it keeps failing, copy the diagnostics for support.",
       "detail": "Technical details"
-    }
+    },
+    "clockAhead": "Machine says {{time}}",
+    "clockAheadHint": "The machine dated this result in the future, so its clock is ahead. Set the machine's date and time, and check the result belongs to the right day."
   },
   "portTypeTooltips": {
     "serialUsb": "Connected USB Serial Device",
