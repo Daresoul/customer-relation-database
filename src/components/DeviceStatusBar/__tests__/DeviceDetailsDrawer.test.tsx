@@ -72,6 +72,7 @@ beforeEach(() => {
   invokeMock.mockImplementation(async (cmd: string) => {
     if (cmd === 'get_device_details') return details;
     if (cmd === 'get_results_today') return { 1: 4, 2: 7 };
+    if (cmd === 'recover_device_results') return { found: 5, added: 2 };
     if (cmd === 'get_available_ports')
       return [
         { port_name: 'COM5', port_type: { USB: { vid: 0x1a86, pid: 0x7523, device_name: 'USB-SERIAL CH340' } } },
@@ -153,6 +154,14 @@ describe('device details drawer', () => {
   it('says when data arrives that is not a result', async () => {
     await renderDrawer();
     expect(await screen.findByText(/drawer\.log\.unrecognized_data/)).toBeInTheDocument();
+  });
+
+  // Recover from the raw log: today's results read again, the missing ones added.
+  it('reads today again from the raw log and says what it found', async () => {
+    await renderDrawer();
+    fireEvent.click(await screen.findByRole('button', { name: /drawer\.recover/ }));
+    await waitFor(() => expect(invokeMock).toHaveBeenCalledWith('recover_device_results', { integrationId: 1 }));
+    expect(await screen.findByText('drawer.recovered {"found":5,"added":2}')).toBeInTheDocument();
   });
 
   it('copies the diagnostics text', async () => {
