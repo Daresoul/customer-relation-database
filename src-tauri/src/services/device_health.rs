@@ -611,6 +611,7 @@ pub struct DeviceDetails {
     pub down_since: Option<String>,
     pub outages_today: u32,
     pub down_minutes_today: i64,
+    pub drops_last_hour: u32,
 }
 
 #[derive(Default)]
@@ -783,6 +784,7 @@ pub fn device_details(integration_id: i64, now: DateTime<FixedOffset>) -> Device
             down_since: rt.day.down_since.map(|at| at.to_rfc3339()),
             outages_today: outages,
             down_minutes_today: down_secs / 60,
+            drops_last_hour: 0,
         }
     })
 }
@@ -1437,6 +1439,19 @@ mod tests {
         let d = device_details(id, at(12).fixed_offset());
         assert_eq!(d.log.iter().filter(|e| e.label == "unrecognized_data").count(), 2);
         assert_eq!(d.errors_today, 0, "not an outage");
+    }
+
+    // A USB adapter that Windows powers down drops again and again for a moment.
+    #[test]
+    fn drops_in_the_last_hour_are_counted() {
+        let id = 9_100_013;
+        let at = |h: u32, m: u32| Utc.with_ymd_and_hms(2026, 10, 19, h, m, 0).unwrap();
+        for m in [0, 10, 20, 30] {
+            record_status_at(id, "Error", Some(DeviceErrorKind::Disconnected), Health::Down, at(9, m));
+            record_status_at(id, "Connected", None, Health::Working, at(9, m + 1));
+        }
+        assert_eq!(device_details(id, at(9, 45).fixed_offset()).drops_last_hour, 4);
+        assert_eq!(device_details(id, at(11, 0).fixed_offset()).drops_last_hour, 0);
     }
 
     #[test]
