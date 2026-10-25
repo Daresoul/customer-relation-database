@@ -632,6 +632,8 @@ struct OutageDay {
     events: u32,
     down_secs: i64,
     down_since: Option<DateTime<Utc>>,
+    /// When each recent outage began (for "drops in the last hour").
+    recent_drops: VecDeque<DateTime<Utc>>,
 }
 
 fn local_day(at: DateTime<Utc>) -> chrono::NaiveDate {
@@ -663,6 +665,10 @@ impl OutageDay {
         if self.down_since.is_none() {
             self.down_since = Some(at);
             self.outages += 1;
+            self.recent_drops.push_back(at);
+            while self.recent_drops.front().is_some_and(|t| at - *t > Duration::hours(1)) {
+                self.recent_drops.pop_front();
+            }
         }
     }
 
@@ -784,7 +790,7 @@ pub fn device_details(integration_id: i64, now: DateTime<FixedOffset>) -> Device
             down_since: rt.day.down_since.map(|at| at.to_rfc3339()),
             outages_today: outages,
             down_minutes_today: down_secs / 60,
-            drops_last_hour: 0,
+            drops_last_hour: rt.day.recent_drops.iter().filter(|t| now.with_timezone(&Utc) - **t <= Duration::hours(1)).count() as u32,
         }
     })
 }
