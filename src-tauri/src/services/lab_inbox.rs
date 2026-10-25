@@ -35,6 +35,8 @@ pub struct LabValue {
     pub range: Option<String>,
     /// "H" above the range, "L" below it, None inside or unknown.
     pub flag: Option<String>,
+    /// No animal has this value (negative, or 100× the top of the range): check on the machine.
+    pub implausible: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -139,8 +141,13 @@ pub(crate) fn is_analyte_key(key: &str) -> bool {
 
 /// The analytes in a parsed result, with unit, range and H/L flag.
 /// A value no animal can have: negative, or above a hundred times the top of its range.
-pub fn implausible(_value: &str, _range: Option<&str>) -> bool {
-    false
+pub fn implausible(value: &str, range: Option<&str>) -> bool {
+    use crate::services::lab_results::{parse_range, parse_value};
+    let Some(v) = parse_value(value) else { return false };
+    if v < 0.0 {
+        return true;
+    }
+    range.and_then(parse_range).is_some_and(|(_, high)| high > 0.0 && v > 100.0 * high)
 }
 
 /// The machine dated the result more than 10 minutes after it arrived.
@@ -173,6 +180,7 @@ pub fn lab_values(device_type: &str, test_results: &serde_json::Value) -> Vec<La
                     code: code.to_string(),
                     flag: flag_from_range(&value, low.as_deref(), high.as_deref()),
                     unit: crate::services::lab_reference::exigo(code).and_then(|(_, r)| r.unit).map(str::to_string),
+                    implausible: implausible(&value, high.as_deref().map(|h| format!("0-{h}")).as_deref()),
                     range,
                     value,
                 })
@@ -192,7 +200,8 @@ pub fn lab_values(device_type: &str, test_results: &serde_json::Value) -> Vec<La
                     flag_from_range(&value, low, high)
                 }),
             };
-            Some(LabValue { code: code.clone(), unit: get(&format!("{}_unit", code)), range, flag, value })
+            let implausible = implausible(&value, range.as_deref());
+            Some(LabValue { code: code.clone(), unit: get(&format!("{}_unit", code)), range, flag, value, implausible })
         })
         .collect()
 }

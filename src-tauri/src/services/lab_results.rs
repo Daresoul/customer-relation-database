@@ -120,7 +120,7 @@ pub fn classify(text: &str, low: Option<f64>, high: Option<f64>) -> &'static str
 }
 
 /// "low-high" as the machine sends it; none for "0-0" or anything else.
-fn parse_range(range: &str) -> Option<(f64, f64)> {
+pub(crate) fn parse_range(range: &str) -> Option<(f64, f64)> {
     let r = range.trim().replace('–', "-");
     let dash = r.get(1..)?.find('-')? + 1;
     let (low, high) = (plain_number(&r[..dash])?, plain_number(&r[dash + 1..])?);
