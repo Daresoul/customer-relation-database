@@ -83,7 +83,8 @@ describe('Today strip', () => {
     const end = new Date(filter.end_date);
     expect(start.getHours()).toBe(0);
     expect(start.toDateString()).toBe(new Date().toDateString());
-    expect(end.getTime() - start.getTime()).toBeLessThanOrEqual(24 * 3600_000);
+    // Same calendar day (a day with a clock change is 23 or 25 hours long).
+    expect(end.toDateString()).toBe(start.toDateString());
   });
 
   it('opens the appointment panel from an appointment (Open patient lives there)', async () => {
