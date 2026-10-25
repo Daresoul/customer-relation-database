@@ -414,7 +414,6 @@
     "downSince": "Без врска од {{time}}",
     "attempts": "{{count}} обиди",
     "nextTry": "следен обид {{time}}",
-    "resultsToday": "денес: {{count}} резултати",
     "portsNow": "Овој компјутер сега ги има овие порти:",
     "noPortsNow": "Овој компјутер сега нема сериски порти. Проверете дали кабелот е приклучен.",
     "usePort": "Користи {{port}}",
@@ -425,7 +424,9 @@
     "flaky": {
       "title": "Овој апарат ја загуби врската {{count}} пати во последниот час",
       "steps": "Тоа често е Windows што ја исклучува USB-портата за да штеди енергија. Во Device Manager → Universal Serial Bus controllers → секој „USB Root Hub\" → Power Management, отштиклирајте „Allow the computer to turn off this device to save power\". Проверете ги и кабелот и приклучокот."
-    }
+    },
+    "resultsToday_one": "денес: {{count}} резултат",
+    "resultsToday_other": "денес: {{count}} резултати"
   },
   "alerts": {
     "title": "Известувања",

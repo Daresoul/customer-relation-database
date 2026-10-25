@@ -414,7 +414,6 @@
     "downSince": "Without connection since {{time}}",
     "attempts": "{{count}} attempts",
     "nextTry": "next try {{time}}",
-    "resultsToday": "{{count}} results today",
     "portsNow": "This computer has these ports now:",
     "noPortsNow": "This computer has no serial ports right now. Check that the cable is plugged in.",
     "usePort": "Use {{port}}",
@@ -425,7 +424,9 @@
     "flaky": {
       "title": "This machine lost its connection {{count}} times in the last hour",
       "steps": "That is often Windows switching the USB port off to save power. In Device Manager → Universal Serial Bus controllers → each \"USB Root Hub\" → Power Management, untick \"Allow the computer to turn off this device to save power\". Also check the cable and plug."
-    }
+    },
+    "resultsToday_one": "{{count}} result today",
+    "resultsToday_other": "{{count}} results today"
   },
   "alerts": {
     "title": "Notifications",
