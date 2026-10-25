@@ -281,7 +281,8 @@
       "detail": "Technical details"
     },
     "clockAhead": "Machine says {{time}}",
-    "clockAheadHint": "The machine dated this result in the future, so its clock is ahead. Set the machine's date and time, and check the result belongs to the right day."
+    "clockAheadHint": "The machine dated this result in the future, so its clock is ahead. Set the machine's date and time, and check the result belongs to the right day.",
+    "implausible": "No animal has this value — check it on the machine"
   },
   "portTypeTooltips": {
     "serialUsb": "Connected USB Serial Device",
