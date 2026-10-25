@@ -418,7 +418,11 @@
     "portSwitched": "Now using {{port}}. Connecting…",
     "recover": "Read today again",
     "recovered": "Found {{found}} results today; added {{added}} that were missing.",
-    "recoveredNothing": "Found {{found}} results today; all were already in the lab inbox."
+    "recoveredNothing": "Found {{found}} results today; all were already in the lab inbox.",
+    "flaky": {
+      "title": "This machine lost its connection {{count}} times in the last hour",
+      "steps": "That is often Windows switching the USB port off to save power. In Device Manager → Universal Serial Bus controllers → each \"USB Root Hub\" → Power Management, untick \"Allow the computer to turn off this device to save power\". Also check the cable and plug."
+    }
   },
   "alerts": {
     "title": "Notifications",

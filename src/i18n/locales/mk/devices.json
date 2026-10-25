@@ -418,7 +418,11 @@
     "portSwitched": "Сега се користи {{port}}. Се поврзува…",
     "recover": "Прочитај го денешниот ден повторно",
     "recovered": "Пронајдени {{found}} резултати денес; додадени {{added}} што недостасуваа.",
-    "recoveredNothing": "Пронајдени {{found}} резултати денес; сите веќе се во лабораториското сандаче."
+    "recoveredNothing": "Пронајдени {{found}} резултати денес; сите веќе се во лабораториското сандаче.",
+    "flaky": {
+      "title": "Овој апарат ја загуби врската {{count}} пати во последниот час",
+      "steps": "Тоа често е Windows што ја исклучува USB-портата за да штеди енергија. Во Device Manager → Universal Serial Bus controllers → секој „USB Root Hub\" → Power Management, отштиклирајте „Allow the computer to turn off this device to save power\". Проверете ги и кабелот и приклучокот."
+    }
   },
   "alerts": {
     "title": "Известувања",

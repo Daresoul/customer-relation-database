@@ -157,6 +157,7 @@ export interface DeviceDetails {
   downSince?: string | null;
   outagesToday?: number;
   downMinutesToday?: number;
+  dropsLastHour?: number;
 }
 
 export interface DeviceQuietAlert {

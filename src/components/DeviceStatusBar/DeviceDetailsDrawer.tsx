@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { App, Button, Descriptions, Drawer, Space, Switch, Typography, theme } from 'antd';
+import { Alert, App, Button, Descriptions, Drawer, Space, Switch, Typography, theme } from 'antd';
 import {
   CheckCircleFilled,
   CloseCircleFilled,
@@ -25,6 +25,8 @@ const { Text, Title } = Typography;
 /** How often the drawer refreshes the byte counter and last message while open. */
 const REFRESH_MS = 2000;
 const RESULTS_REFRESH_MS = 30_000;
+/** Drops in an hour that point to USB power saving rather than a one-off. */
+const FLAKY_DROPS = 3;
 
 const LOG_LABELS = [
   'unrecognized_data',
@@ -264,6 +266,15 @@ export const DeviceDetailsDrawer: React.FC<DeviceDetailsDrawerProps> = ({ open, 
               </div>
             </Space>
           </div>
+
+          {isSerial && (details?.dropsLastHour ?? 0) >= FLAKY_DROPS && (
+            <Alert
+              type="warning"
+              showIcon
+              message={t('drawer.flaky.title', { count: details?.dropsLastHour })}
+              description={t('drawer.flaky.steps')}
+            />
+          )}
 
           {isSerial && serialStatus?.error_kind === 'port_missing' && device.serialPortName && (
             <PortMovedHint integrationId={device.id} missingPort={device.serialPortName} takenPorts={takenPorts} />
