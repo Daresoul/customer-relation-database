@@ -126,8 +126,6 @@
     "selectDirectory": "Изберете директориум за следење"
   },
   "messages": {
-    "detectedDevices": "Откриен {{count}} уред (сериски портови и HID уреди)",
-    "detectedDevices_plural": "Откриени {{count}} уреди (сериски портови и HID уреди)",
     "noPortsFound": "Нема пронајдени портови. Внесете сопствена патека.",
     "deleteConfirm": "Да ја избришам оваа интеграција на уред?",
     "statusUnknown": "Непознат статус",
@@ -136,7 +134,9 @@
     "deleteSuccess": "Интеграцијата на уредот е успешно избришана",
     "operationFailed": "Операцијата не успеа",
     "autoOpenReport": "Автоматски отвори го генерираниот извештај по зачувувањето",
-    "portInUse": "Овој порт веќе го користи {{device}}. Само еден вклучен апарат може да слуша на порт: исклучете го другиот или изберете друг порт."
+    "portInUse": "Овој порт веќе го користи {{device}}. Само еден вклучен апарат може да слуша на порт: исклучете го другиот или изберете друг порт.",
+    "detectedDevices_one": "Откриен {{count}} уред (сериски портови и HID уреди)",
+    "detectedDevices_other": "Откриени {{count}} уреди (сериски портови и HID уреди)"
   },
   "labels": {
     "devices": "Уреди:"
@@ -377,7 +377,6 @@
     "errorsLabel": "Проблеми",
     "errorsToday": "{{count}} денес",
     "liveLabel": "Во живо",
-    "bytesLastMinute": "{{count}} бајти во последната минута",
     "recentTitle": "Последни промени",
     "log": {
       "Connected": "Поврзан",
@@ -412,7 +411,6 @@
     },
     "todayLabel": "Денес",
     "downSince": "Без врска од {{time}}",
-    "attempts": "{{count}} обиди",
     "nextTry": "следен обид {{time}}",
     "portsNow": "Овој компјутер сега ги има овие порти:",
     "noPortsNow": "Овој компјутер сега нема сериски порти. Проверете дали кабелот е приклучен.",
@@ -426,7 +424,11 @@
       "steps": "Тоа често е Windows што ја исклучува USB-портата за да штеди енергија. Во Device Manager → Universal Serial Bus controllers → секој „USB Root Hub\" → Power Management, отштиклирајте „Allow the computer to turn off this device to save power\". Проверете ги и кабелот и приклучокот."
     },
     "resultsToday_one": "денес: {{count}} резултат",
-    "resultsToday_other": "денес: {{count}} резултати"
+    "resultsToday_other": "денес: {{count}} резултати",
+    "attempts_one": "{{count}} обид",
+    "attempts_other": "{{count}} обиди",
+    "bytesLastMinute_one": "{{count}} бајт во последната минута",
+    "bytesLastMinute_other": "{{count}} бајти во последната минута"
   },
   "alerts": {
     "title": "Известувања",

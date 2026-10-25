@@ -126,8 +126,6 @@
     "selectDirectory": "Select Directory to Watch"
   },
   "messages": {
-    "detectedDevices": "Detected {{count}} device (Serial Ports & HID Devices)",
-    "detectedDevices_plural": "Detected {{count}} devices (Serial Ports & HID Devices)",
     "noPortsFound": "No ports found. Type a custom path.",
     "deleteConfirm": "Delete this device integration?",
     "statusUnknown": "Status unknown",
@@ -136,7 +134,9 @@
     "deleteSuccess": "Device integration deleted successfully",
     "operationFailed": "Operation failed",
     "autoOpenReport": "Open generated report automatically after save",
-    "portInUse": "This port is already used by {{device}}. Only one enabled machine can listen on a port: switch that one off or pick another port."
+    "portInUse": "This port is already used by {{device}}. Only one enabled machine can listen on a port: switch that one off or pick another port.",
+    "detectedDevices_one": "Detected {{count}} device (Serial Ports & HID Devices)",
+    "detectedDevices_other": "Detected {{count}} devices (Serial Ports & HID Devices)"
   },
   "labels": {
     "devices": "Devices:"
@@ -377,7 +377,6 @@
     "errorsLabel": "Problems",
     "errorsToday": "{{count}} today",
     "liveLabel": "Live",
-    "bytesLastMinute": "{{count}} bytes in the last minute",
     "recentTitle": "Recent changes",
     "log": {
       "Connected": "Connected",
@@ -412,7 +411,6 @@
     },
     "todayLabel": "Today",
     "downSince": "Without connection since {{time}}",
-    "attempts": "{{count}} attempts",
     "nextTry": "next try {{time}}",
     "portsNow": "This computer has these ports now:",
     "noPortsNow": "This computer has no serial ports right now. Check that the cable is plugged in.",
@@ -426,7 +424,11 @@
       "steps": "That is often Windows switching the USB port off to save power. In Device Manager → Universal Serial Bus controllers → each \"USB Root Hub\" → Power Management, untick \"Allow the computer to turn off this device to save power\". Also check the cable and plug."
     },
     "resultsToday_one": "{{count}} result today",
-    "resultsToday_other": "{{count}} results today"
+    "resultsToday_other": "{{count}} results today",
+    "attempts_one": "{{count}} attempt",
+    "attempts_other": "{{count}} attempts",
+    "bytesLastMinute_one": "{{count}} byte in the last minute",
+    "bytesLastMinute_other": "{{count}} bytes in the last minute"
   },
   "alerts": {
     "title": "Notifications",

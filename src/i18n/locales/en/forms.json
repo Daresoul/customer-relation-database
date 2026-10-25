@@ -102,12 +102,13 @@
     "unsavedChanges": "You have unsaved changes. Are you sure you want to leave?",
     "confirmDelete": "Are you sure you want to delete this item?",
     "noResults": "No results found",
-    "searchResults": "{{count}} results found",
     "patientCreated": "Patient created successfully",
     "searching": "Searching...",
     "noHouseholdsMatch": "No households match this search. Use \"Create New Household\" below to add one.",
     "householdSearchFailed": "The household search failed. Type again to retry.",
-    "unknownError": "Unknown error"
+    "unknownError": "Unknown error",
+    "searchResults_one": "{{count}} result found",
+    "searchResults_other": "{{count}} results found"
   },
   "success": {
     "created": "{{entity}} created successfully"
