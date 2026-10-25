@@ -4,7 +4,7 @@
 use crate::commands::file_history::recent_device_files;
 use crate::models::device_integration::{ConnectionType, CreateDeviceIntegrationInput, DeviceType};
 use crate::services::device_events::{
-    classify_parse_error, deliver_result, report_cut_off, DeviceEvent, DeviceEventKind,
+    classify_parse_error, deliver_result, recover_frames, report_cut_off, DeviceEvent, DeviceEventKind, Recovery,
     DeviceSink, ResultSource,
 };
 use crate::services::device_integration::DeviceIntegrationService;
@@ -429,3 +429,30 @@ fn frame_repeats_are_remembered_for_ten_minutes() {
     assert!(!memory.seen_recently(1, b"abd", t0 + Duration::from_secs(9 * 60)));
     assert!(!memory.seen_recently(1, b"abc", t0 + Duration::from_secs(30 * 60)));
 }
+
+// Recover from the raw log: results already in the inbox are not added again,
+// a missing one is, and a second recovery adds nothing.
+#[tokio::test]
+async fn recovering_adds_only_the_results_that_are_missing() {
+    let db = create_test_db_with_migrations().await;
+    let dir = tempfile::tempdir().unwrap();
+    let sink = RecordingSink::new(dir.path());
+    let id = chem_integration(&db).await;
+    let source = ResultSource {
+        integration_id: id,
+        device_name: "COM3".to_string(),
+        device_type: "mnchip_pointcare_chemistry".to_string(),
+        connection_method: "serial_port".to_string(),
+    };
+    deliver_result(&db, dir.path(), &sink, &source, "chem.txt", &chem_frame()).await;
+
+    let other = String::from_utf8_lossy(&chem_frame()).replace("tesi", "zeko").into_bytes();
+    let since = chrono::Utc::now() - chrono::Duration::hours(1);
+    let frames = vec![chem_frame(), other, b"not a result".to_vec()];
+
+    let first = recover_frames(&db, dir.path(), &sink, &source, &frames, since).await;
+    assert_eq!(first, Recovery { found: 2, added: 1 });
+    let again = recover_frames(&db, dir.path(), &sink, &source, &frames, since).await;
+    assert_eq!(again, Recovery { found: 2, added: 0 });
+}
+

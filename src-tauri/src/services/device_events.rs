@@ -241,6 +241,26 @@ pub struct Delivery {
 /// the event can carry its `fileId`; attaching with that id marks the Recent
 /// Device Files row as attached. Bytes that don't parse are saved as they came
 /// in, with a "failed" row and a device event.
+/// What a recovery found in the raw log and how many were new.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Recovery {
+    pub found: usize,
+    pub added: usize,
+}
+
+/// Results cut from the raw log, delivered unless an equal one was stored since `since`.
+pub async fn recover_frames(
+    _db: &DatabaseConnection,
+    _storage_dir: &Path,
+    _sink: &dyn DeviceSink,
+    _source: &ResultSource,
+    _frames: &[Vec<u8>],
+    _since: chrono::DateTime<Utc>,
+) -> Recovery {
+    Recovery::default()
+}
+
 pub async fn deliver_result(
     db: &DatabaseConnection,
     storage_dir: &Path,

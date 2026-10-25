@@ -1179,6 +1179,16 @@ pub(crate) fn run_read_loop_with_presence<R: std::io::Read + ?Sized>(
     }
 }
 
+/// The bytes of a raw serial log, one list per connection ("SESSION START").
+pub fn raw_log_sessions(_text: &str) -> Vec<Vec<u8>> {
+    Vec::new()
+}
+
+/// The complete results in `bytes`, as the live reader would have cut them.
+pub fn complete_frames(_bytes: &[u8], _protocol: &DeviceProtocol) -> Vec<Vec<u8>> {
+    Vec::new()
+}
+
 /// Stop all active listeners - used for graceful shutdown
 /// Returns number of threads that were stopped
 pub fn stop_all_listeners() -> usize {
@@ -1711,6 +1721,30 @@ mod frame_assembler_tests {
         }
         assert_eq!(asm.take_ignored(), 3000);
         assert_eq!(asm.take_ignored(), 0);
+    }
+
+    // Recover from the raw log: the log is read back into the bytes each
+    // connection received, then cut into results like the live reader does.
+    #[test]
+    fn the_raw_log_reads_back_into_each_connections_bytes() {
+        let text = "\n========== SESSION START: 2026-10-24 09:00:00.000 ==========\n\
+            [2026-10-24 09:00:00.000] Port: COM3 | Device: x | Baud: 9600 | Integration ID: 1\n\
+            [2026-10-24 09:00:01.000] [3 bytes] HEX: 0B 4D 53 | ASCII: .MS\n\
+            [2026-10-24 09:00:01.100] [2 bytes] HEX: 48 1C | ASCII: H.\n\
+            \n========== SESSION START: 2026-10-24 10:00:00.000 ==========\n\
+            [2026-10-24 10:00:02.000] [1 bytes] HEX: 41 | ASCII: A\n";
+        assert_eq!(super::raw_log_sessions(text), vec![vec![0x0B, b'M', b'S', b'H', 0x1C], vec![b'A']]);
+    }
+
+    #[test]
+    fn complete_frames_skips_a_half_result() {
+        let p = pointcare();
+        let mut bytes = vec![0x0B];
+        bytes.extend_from_slice(b"MSH|one");
+        bytes.push(0x1C);
+        bytes.extend_from_slice(&[0x0B]);
+        bytes.extend_from_slice(b"MSH|half");
+        assert_eq!(super::complete_frames(&bytes, &p), vec![b"MSH|one".to_vec()]);
     }
 
     #[test]
