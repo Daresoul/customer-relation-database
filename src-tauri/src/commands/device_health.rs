@@ -18,6 +18,50 @@ pub fn get_device_details(integration_id: i64) -> DeviceDetails {
     device_health::device_details(integration_id, chrono::Local::now().fixed_offset())
 }
 
+/// Read today's raw serial log of a machine again and add the results the
+/// inbox is missing (a crash mid-save, a parser fixed later).
+#[tauri::command]
+pub async fn recover_device_results(
+    app: AppHandle,
+    pool: State<'_, SeaOrmPool>,
+    integration_id: i64,
+) -> Result<crate::services::device_events::Recovery, String> {
+    use crate::services::device_events::{recover_frames, AppSink, ResultSource};
+    use crate::services::device_input::{complete_frames, get_device_protocol, get_raw_log_path, raw_log_sessions};
+
+    let integration = DeviceIntegrationService::get_by_id(&pool, integration_id).await?;
+    let port = integration
+        .serial_port_name
+        .clone()
+        .filter(|_| integration.connection_type == ConnectionType::SerialPort)
+        .ok_or("Only serial machines have a raw log")?;
+    let path = get_raw_log_path(&app, &port).ok_or("No raw log folder")?;
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(_) => return Ok(Default::default()),
+    };
+    let device_type = integration.device_type.to_db_string();
+    let protocol = get_device_protocol(&device_type);
+    let frames: Vec<Vec<u8>> = raw_log_sessions(&text).iter().flat_map(|s| complete_frames(s, &protocol)).collect();
+
+    let now = chrono::Local::now();
+    let midnight = now
+        .date_naive()
+        .and_hms_opt(0, 0, 0)
+        .and_then(|m| m.and_local_timezone(chrono::Local).earliest())
+        .unwrap_or(now);
+    let storage = FileStorageService::get_storage_dir(&app)?;
+    let source = ResultSource {
+        integration_id,
+        device_name: port,
+        device_type: device_type.to_string(),
+        connection_method: "serial_port".to_string(),
+    };
+    let report = recover_frames(&pool, &storage, &AppSink { app: app.clone() }, &source, &frames, midnight.with_timezone(&chrono::Utc)).await;
+    log::info!("Recovered results for integration {integration_id}: {} found, {} added", report.found, report.added);
+    Ok(report)
+}
+
 /// Readable results per machine since local midnight, for the overview.
 #[tauri::command]
 pub async fn get_results_today(pool: State<'_, SeaOrmPool>) -> Result<std::collections::HashMap<i64, i64>, String> {

@@ -3,7 +3,7 @@
 use crate::commands::device_input::{fill_connection_health, fill_watcher_health};
 use crate::services::device_events::{note_bytes, note_result, DeviceErrorKind};
 use crate::services::device_input::{
-    classify_open_error, classify_read_error, next_retry_count, run_read_loop, run_read_loop_with_presence, ConnectionState,
+    classify_open_error, classify_read_error, next_retry_count, run_read_loop, run_read_loop_with_clock, run_read_loop_with_presence, ConnectionState,
     DeviceConnectionStatus, DeviceProtocol, FrameSink, ReadErrorAction, STABLE_CONNECTION,
 };
 use crate::services::file_watcher::{FileWatcherState, FileWatcherStatus};
@@ -173,6 +173,30 @@ fn a_port_that_is_gone_ends_the_connection_even_without_a_read_error() {
     assert!(result.is_err(), "a gone port must hand over to reconnect");
     assert_eq!(checks, 3);
     assert!(started.elapsed() < Duration::from_secs(2));
+}
+
+// Some USB-serial ports are dead after the PC wakes from sleep, yet still
+// listed and giving no error. A jump in the clock means the PC slept: reopen.
+#[test]
+fn after_the_computer_slept_the_port_is_opened_again() {
+    let mut reader = ScriptedReader::new(vec![Err(timed_out)]);
+    let (tx, rx) = mpsc::channel::<()>();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_secs(1));
+        let _ = tx.send(());
+    });
+    let mut sink = RecordingSink::default();
+    let start = std::time::SystemTime::now();
+    let mut calls = 0u64;
+    // Normal turns, then eight hours later.
+    let mut clock = || {
+        calls += 1;
+        start + if calls < 5 { Duration::from_millis(10 * calls) } else { Duration::from_secs(8 * 3600) }
+    };
+    let result = run_read_loop_with_clock(
+        &mut reader, &pointcare(), &rx, Duration::from_secs(5), &mut sink, &mut || true, Duration::MAX, &mut clock,
+    );
+    assert!(result.is_err(), "a slept PC must reopen the port");
 }
 
 #[test]

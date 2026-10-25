@@ -62,7 +62,7 @@ const MAX_RETRY_DELAY_SECS: u64 = 10;  // Opening a port is cheap; a port back i
 /// fresh (see [`write_raw_log`]), and once the wall clock crosses midnight
 /// the next write naturally lands in a new dated file. Old archives are
 /// pruned by [`crate::services::log_rotation::prune_old_logs`] at startup.
-fn get_raw_log_path(app_handle: &AppHandle, port_name: &str) -> Option<std::path::PathBuf> {
+pub(crate) fn get_raw_log_path(app_handle: &AppHandle, port_name: &str) -> Option<std::path::PathBuf> {
     // Get the app data directory
     let app_data_dir = app_handle.path_resolver().app_data_dir()?;
     let log_dir = app_data_dir.join("raw_serial_logs");
@@ -1094,6 +1094,20 @@ pub(crate) fn run_read_loop<R: std::io::Read + ?Sized>(
     sink: &mut dyn FrameSink,
 ) -> Result<(), String> {
     run_read_loop_with_presence(reader, protocol, shutdown_rx, idle_flush, sink, &mut || true, Duration::MAX)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn run_read_loop_with_clock<R: std::io::Read + ?Sized>(
+    reader: &mut R,
+    protocol: &DeviceProtocol,
+    shutdown_rx: &mpsc::Receiver<()>,
+    idle_flush: Duration,
+    sink: &mut dyn FrameSink,
+    still_present: &mut dyn FnMut() -> bool,
+    presence_every: Duration,
+    _wall_clock: &mut dyn FnMut() -> std::time::SystemTime,
+) -> Result<(), String> {
+    run_read_loop_with_presence(reader, protocol, shutdown_rx, idle_flush, sink, still_present, presence_every)
 }
 
 /// Some USB-serial drivers give no read error when the cable is pulled, only
