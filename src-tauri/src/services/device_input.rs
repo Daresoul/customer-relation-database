@@ -1073,6 +1073,10 @@ pub(crate) trait FrameSink {
     fn on_unrecognized(&mut self, _bytes: usize) {}
 }
 
+/// A turn of the read loop takes well under a second; a longer gap in the
+/// wall clock means the PC was asleep.
+const SLEEP_GAP: Duration = Duration::from_secs(60);
+
 /// How often a quiet port is checked to still exist.
 const PRESENCE_CHECK_EVERY: Duration = Duration::from_secs(5);
 
@@ -1096,20 +1100,6 @@ pub(crate) fn run_read_loop<R: std::io::Read + ?Sized>(
     run_read_loop_with_presence(reader, protocol, shutdown_rx, idle_flush, sink, &mut || true, Duration::MAX)
 }
 
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn run_read_loop_with_clock<R: std::io::Read + ?Sized>(
-    reader: &mut R,
-    protocol: &DeviceProtocol,
-    shutdown_rx: &mpsc::Receiver<()>,
-    idle_flush: Duration,
-    sink: &mut dyn FrameSink,
-    still_present: &mut dyn FnMut() -> bool,
-    presence_every: Duration,
-    _wall_clock: &mut dyn FnMut() -> std::time::SystemTime,
-) -> Result<(), String> {
-    run_read_loop_with_presence(reader, protocol, shutdown_rx, idle_flush, sink, still_present, presence_every)
-}
-
 /// Some USB-serial drivers give no read error when the cable is pulled, only
 /// no data; so while the line is quiet, check every `presence_every` that the
 /// port still exists.
@@ -1122,6 +1112,26 @@ pub(crate) fn run_read_loop_with_presence<R: std::io::Read + ?Sized>(
     still_present: &mut dyn FnMut() -> bool,
     presence_every: Duration,
 ) -> Result<(), String> {
+    run_read_loop_with_clock(
+        reader, protocol, shutdown_rx, idle_flush, sink, still_present, presence_every, &mut std::time::SystemTime::now,
+    )
+}
+
+/// Some USB-serial ports are dead after the PC wakes from sleep while still
+/// listed and giving no error; a jump in the wall clock between two turns of
+/// the loop means the PC slept, so the port is opened again.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn run_read_loop_with_clock<R: std::io::Read + ?Sized>(
+    reader: &mut R,
+    protocol: &DeviceProtocol,
+    shutdown_rx: &mpsc::Receiver<()>,
+    idle_flush: Duration,
+    sink: &mut dyn FrameSink,
+    still_present: &mut dyn FnMut() -> bool,
+    presence_every: Duration,
+    wall_clock: &mut dyn FnMut() -> std::time::SystemTime,
+) -> Result<(), String> {
+    let mut last_wall = wall_clock();
     let mut last_presence_check = Instant::now();
     let mut assembler = FrameAssembler::new(protocol);
     let mut buffer = vec![0; 1024];
@@ -1131,6 +1141,18 @@ pub(crate) fn run_read_loop_with_presence<R: std::io::Read + ?Sized>(
     loop {
         if shutdown_rx.try_recv().is_ok() {
             return Ok(());
+        }
+
+        let wall = wall_clock();
+        let slept = wall.duration_since(last_wall).is_ok_and(|gap| gap > SLEEP_GAP);
+        last_wall = wall;
+        if slept {
+            if assembler.partial_len() > 0 {
+                if let Err(partial) = assembler.flush_idle(protocol) {
+                    sink.on_cut_off(partial);
+                }
+            }
+            return Err("Connection reopened: the computer was asleep".to_string());
         }
 
         let read_started = Instant::now();
