@@ -241,7 +241,6 @@
   },
   "deviceImport": {
     "title": "Import Device Data to Medical Record",
-    "filesCount": "files pending",
     "pendingFiles": "Pending Device Files",
     "medicalRecordDetails": "Medical Record Details",
     "selectPatient": "Select Patient",
@@ -319,7 +318,9 @@
     },
     "optionChip": "chip …{{last4}}",
     "optionAgeYears": "{{years}} y",
-    "optionAgeMonths": "{{months}} mo"
+    "optionAgeMonths": "{{months}} mo",
+    "filesPending_one": "{{count}} file pending",
+    "filesPending_other": "{{count}} files pending"
   },
   "autocomplete": {
     "typeToSearch": "Type at least 2 characters to search templates",

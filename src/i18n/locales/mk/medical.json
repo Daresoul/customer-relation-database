@@ -241,7 +241,6 @@
   },
   "deviceImport": {
     "title": "Увези податоци од уред во медицински запис",
-    "filesCount": "датотеки на чекање",
     "pendingFiles": "Датотеки од уред на чекање",
     "medicalRecordDetails": "Детали за медицински запис",
     "selectPatient": "Избери пациент",
@@ -319,7 +318,9 @@
     },
     "optionChip": "чип …{{last4}}",
     "optionAgeYears": "{{years}} г.",
-    "optionAgeMonths": "{{months}} мес."
+    "optionAgeMonths": "{{months}} мес.",
+    "filesPending_one": "{{count}} датотека на чекање",
+    "filesPending_other": "{{count}} датотеки на чекање"
   },
   "autocomplete": {
     "typeToSearch": "Внесете најмалку 2 знаци за пребарување на шаблони",

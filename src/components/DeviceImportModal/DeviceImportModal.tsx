@@ -628,7 +628,7 @@ const DeviceImportDialog: React.FC = () => {
         <Space>
           <FileOutlined />
           {t('medical:deviceImport.title')}
-          <Tag color="blue">{pendingFiles.length} {t('medical:deviceImport.filesCount')}</Tag>
+          <Tag color="blue">{t('medical:deviceImport.filesPending', { count: pendingFiles.length })}</Tag>
           {waitingCount > 0 && (
             <Tag color="orange">{t('medical:deviceImport.moreWaiting', { count: waitingCount })}</Tag>
           )}
