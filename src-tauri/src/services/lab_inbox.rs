@@ -138,6 +138,11 @@ pub(crate) fn is_analyte_key(key: &str) -> bool {
 }
 
 /// The analytes in a parsed result, with unit, range and H/L flag.
+/// A value no animal can have: negative, or above a hundred times the top of its range.
+pub fn implausible(_value: &str, _range: Option<&str>) -> bool {
+    false
+}
+
 /// The machine dated the result more than 10 minutes after it arrived.
 pub fn machine_clock_ahead(machine: chrono::NaiveDateTime, received: chrono::DateTime<Utc>) -> bool {
     machine - received.with_timezone(&chrono::Local).naive_local() > chrono::Duration::minutes(10)

@@ -699,3 +699,16 @@ fn a_machine_time_in_the_future_is_flagged() {
     assert!(!machine_clock_ahead(local + chrono::Duration::minutes(5), received));
     assert!(!machine_clock_ahead(local - chrono::Duration::hours(3), received), "resent later is normal");
 }
+
+// A value no animal can have (negative, or a hundred times the top of the
+// range) usually means a misread or a machine fault: check it on the machine.
+#[test]
+fn values_no_animal_can_have_are_marked() {
+    use crate::services::lab_inbox::implausible;
+    assert!(implausible("-3", Some("12-27")));
+    assert!(implausible("4200", Some("12-27")));
+    assert!(!implausible("40", Some("12-27")), "high is not implausible");
+    assert!(!implausible("0", Some("0-5")));
+    assert!(!implausible("Positive", None));
+    assert!(!implausible("NoCt", Some(">36 or NoCt")));
+}
