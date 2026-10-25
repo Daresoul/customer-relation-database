@@ -9,6 +9,7 @@ import LabInboxBadge from '../components/LabInbox/LabInboxBadge';
 import { WakeFromTrayHandler } from './WakeFromTrayHandler';
 import { ChipScanHandler } from './ChipScanHandler';
 import { DocumentTitle } from './DocumentTitle';
+import { OfflineGapNotice } from '../components/OfflineGapNotice/OfflineGapNotice';
 
 /** Every page renders inside this: header (lab machines chip, lab inbox badge), lab import, crash boundary. */
 export function RootLayout() {
@@ -16,6 +17,7 @@ export function RootLayout() {
     <GlobalSearchProvider>
       <DocumentTitle />
       <WakeFromTrayHandler />
+      <OfflineGapNotice />
       <ChipScanHandler />
       <DeviceImportModal />
       <AppWrapper

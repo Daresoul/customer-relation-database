@@ -446,5 +446,9 @@
     "saved": "Notification settings saved",
     "saveFailed": "Couldn't save: {{error}}",
     "loadFailed": "Couldn't load the notification settings: {{error}}"
+  },
+  "offlineGap": {
+    "title": "Arkivet was closed during clinic hours",
+    "body": "From {{from}} to {{to}}. Results the lab machines sent in that time were not received: send them again from each machine."
   }
 }
