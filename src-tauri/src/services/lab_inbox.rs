@@ -134,6 +134,11 @@ pub(crate) fn is_analyte_key(key: &str) -> bool {
 }
 
 /// The analytes in a parsed result, with unit, range and H/L flag.
+/// The machine dated the result more than 10 minutes after it arrived.
+pub fn machine_clock_ahead(_machine: chrono::NaiveDateTime, _received: chrono::DateTime<Utc>) -> bool {
+    false
+}
+
 pub fn lab_values(device_type: &str, test_results: &serde_json::Value) -> Vec<LabValue> {
     let Some(map) = test_results.as_object() else { return Vec::new() };
     let get = |k: &str| -> Option<String> {

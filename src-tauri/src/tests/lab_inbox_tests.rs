@@ -687,3 +687,15 @@ async fn attaching_stores_how_the_result_was_matched() {
     assert_eq!(stored_match_method(&db, "r1").await.as_deref(), Some("name"));
     assert_eq!(stored_match_method(&db, "r2").await.as_deref(), Some("manual"));
 }
+
+// A machine whose clock runs ahead dates results in the future, and a result
+// can then be matched to the wrong day. Later is normal (resent from the machine).
+#[test]
+fn a_machine_time_in_the_future_is_flagged() {
+    use crate::services::lab_inbox::machine_clock_ahead;
+    let received = chrono::Utc::now();
+    let local = received.with_timezone(&chrono::Local).naive_local();
+    assert!(machine_clock_ahead(local + chrono::Duration::hours(2), received));
+    assert!(!machine_clock_ahead(local + chrono::Duration::minutes(5), received));
+    assert!(!machine_clock_ahead(local - chrono::Duration::hours(3), received), "resent later is normal");
+}
