@@ -375,6 +375,20 @@
   cable is pulled). A result cut by an unplug, a stall or the 64 kB size limit
   reaches the lab inbox as cut off; bytes outside any result (wrong speed or
   machine type) show in the machine's history, at most every 10 minutes.
+- A jump of more than a minute in the wall clock between two turns of the
+  read loop (the PC slept) reopens the port. Three or more drops of one machine
+  in an hour show USB power-saving advice in the panel.
+- "Read today again" (machine panel, serial machines) re-reads today's raw
+  serial log (`raw_serial_logs/`, kept 30 days) and adds results the inbox is
+  missing; results whose values are already stored are skipped
+  (`recover_device_results`).
+- Results sent while Arkivet is closed are lost (serial machines don't wait).
+  The app writes `last_alive` every minute; at start a gap of 5+ minutes that
+  touches clinic hours, with serial machines set up, shows a one-time notice
+  to resend from the machines (`take_offline_gap`).
+- Lab inbox values: a machine time more than 10 minutes after arrival is shown
+  as "the machine's clock is ahead"; a value that is negative or above 100× the
+  top of its range is marked "check on the machine".
 - A background monitor checks at start, 2 s after a status change and every
   30 s. It sends an OS notification (Tauri `notification` Cargo feature; the
   webview allowlist is unchanged) when a machine has been down longer than N
