@@ -8,6 +8,8 @@ export interface LabValue {
   range?: string | null;
   /** 'H' above the machine's range, 'L' below it */
   flag?: 'H' | 'L' | null;
+  /** No animal has this value (negative, or 100× the top of the range). */
+  implausible?: boolean;
 }
 
 export interface LabInboxItem {
