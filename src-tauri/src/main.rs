@@ -268,6 +268,7 @@ fn main() {
                         log::info!("Exiting from tray. Stopped {} listeners.", count);
                         if let Some(dir) = tauri::api::path::app_data_dir(&app.config()) {
                             services::session_marker::end_session(&dir);
+                            services::offline_gap::note_alive(&dir, chrono::Utc::now());
                         }
                         // Unlike std::process::exit, removes the tray icon first.
                         app.exit(0);
@@ -313,6 +314,7 @@ fn main() {
                 }),
             );
 
+            let previous_alive = session_dir.as_deref().and_then(services::offline_gap::last_alive);
             if let Some(dir) = session_dir.as_deref() {
                 let previous = services::session_marker::begin_session(
                     dir,
@@ -439,6 +441,21 @@ fn main() {
 
             // Store SeaORM pool in app state (legacy pool only used internally for migrations)
             app.manage(sea_orm_pool.clone());
+
+            // Was Arkivet closed while machines could have sent results?
+            let gap = tauri::async_runtime::block_on(services::offline_gap::startup_gap(&sea_orm_pool, previous_alive));
+            if let Some(g) = &gap {
+                log::warn!("Arkivet was closed from {} to {} during clinic hours", g.from, g.to);
+            }
+            app.manage(services::offline_gap::OfflineGapState(std::sync::Mutex::new(gap)));
+            if let Some(dir) = session_dir.clone() {
+                tauri::async_runtime::spawn(async move {
+                    loop {
+                        services::offline_gap::note_alive(&dir, chrono::Utc::now());
+                        tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+                    }
+                });
+            }
 
             // Start the Windows Raw Input capture for managed HID scanners. On
             // non-Windows targets this is a compile-time no-op. The capture
@@ -722,6 +739,7 @@ fn main() {
             commands::get_device_details,
             commands::get_results_today,
             commands::recover_device_results,
+            commands::take_offline_gap,
             commands::get_device_diagnostics,
             commands::open_device_log_folder,
             commands::get_device_alert_settings,
@@ -797,6 +815,7 @@ fn main() {
             if let tauri::RunEvent::Exit = event {
                 if let Some(dir) = session_dir_for_exit.as_deref() {
                     services::session_marker::end_session(dir);
+                    services::offline_gap::note_alive(dir, chrono::Utc::now());
                 }
             }
         }),

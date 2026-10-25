@@ -62,6 +62,12 @@ pub async fn recover_device_results(
     Ok(report)
 }
 
+/// The time Arkivet was closed during clinic hours, once per start.
+#[tauri::command]
+pub fn take_offline_gap(state: State<'_, crate::services::offline_gap::OfflineGapState>) -> Option<crate::services::offline_gap::OfflineGap> {
+    state.0.lock().ok()?.take()
+}
+
 /// Readable results per machine since local midnight, for the overview.
 #[tauri::command]
 pub async fn get_results_today(pool: State<'_, SeaOrmPool>) -> Result<std::collections::HashMap<i64, i64>, String> {
