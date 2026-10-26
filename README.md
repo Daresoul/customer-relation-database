@@ -420,6 +420,12 @@
   shows its Healvet values with name and unit but no range or H/L flag, on the
   lab PDF and in the app (`lab_reference::Species::Other`).
 
+### PDF tool check at start (`services/java_pdf_service.rs`)
+- At start the app asks the bundled PDF tool for its version (`java -jar … --version`).
+  A missing tool, missing Java or a tool from another version (a half-applied
+  update) shows an error banner under the header with what to do
+  (`get_pdf_tool_health`); an unclear failure is only logged. Records still save.
+
 ### Lab inbox (`services/lab_inbox.rs`, page `/lab-inbox`, dashboard tab)
 - The header shows the lab inbox badge (waiting count) on every page.
 - The lab import lists each result's values the way the inbox does
