@@ -358,11 +358,17 @@ fn main() {
             // days); logs + ships an ERROR event on mismatch. See
             // services::java_pdf_service::verify_jar_version.
             {
+                app.manage(services::java_pdf_service::PdfToolState(std::sync::Mutex::new(None)));
                 let jar_check_handle = app.handle();
                 std::thread::spawn(move || {
-                    services::java_pdf_service::JavaPdfService::verify_jar_version(
+                    let health = services::java_pdf_service::JavaPdfService::verify_jar_version(
                         &jar_check_handle,
                     );
+                    if let Some(state) = jar_check_handle.try_state::<services::java_pdf_service::PdfToolState>() {
+                        if let Ok(mut slot) = state.0.lock() {
+                            *slot = Some(health);
+                        }
+                    }
                 });
             }
 
@@ -740,6 +746,7 @@ fn main() {
             commands::get_results_today,
             commands::recover_device_results,
             commands::take_offline_gap,
+            commands::get_pdf_tool_health,
             commands::get_device_diagnostics,
             commands::open_device_log_folder,
             commands::get_device_alert_settings,

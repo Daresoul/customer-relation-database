@@ -62,6 +62,14 @@ pub async fn recover_device_results(
     Ok(report)
 }
 
+/// Whether PDFs can be made, from the start-up check; none while it runs.
+#[tauri::command]
+pub fn get_pdf_tool_health(
+    state: State<'_, crate::services::java_pdf_service::PdfToolState>,
+) -> Option<crate::services::java_pdf_service::PdfToolHealth> {
+    state.0.lock().ok()?.clone()
+}
+
 /// The time Arkivet was closed during clinic hours, once per start.
 #[tauri::command]
 pub fn take_offline_gap(state: State<'_, crate::services::offline_gap::OfflineGapState>) -> Option<crate::services::offline_gap::OfflineGap> {

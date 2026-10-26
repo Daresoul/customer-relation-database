@@ -73,10 +73,21 @@ pub enum PdfToolHealth {
     Unknown { detail: String },
 }
 
+/// The start-up check's outcome; none until it has run (it starts Java, ~0.5 s).
+pub struct PdfToolState(pub std::sync::Mutex<Option<PdfToolHealth>>);
+
 impl JavaPdfService {
     /// The start-up check's outcome from reading the tool's version.
-    pub fn pdf_tool_health(_read: Result<String, String>, _app_version: &str) -> PdfToolHealth {
-        PdfToolHealth::Ok
+    pub fn pdf_tool_health(read: Result<String, String>, app_version: &str) -> PdfToolHealth {
+        match read {
+            Ok(jar) => match Self::classify_jar_version(app_version, &jar) {
+                JarVersionVerdict::Mismatch { app, jar } => PdfToolHealth::Stale { app, tool: jar },
+                _ => PdfToolHealth::Ok,
+            },
+            Err(e) if e.contains("not found at resolved path") || e.contains("JAR not found") => PdfToolHealth::ToolMissing,
+            Err(e) if e.contains("Failed to execute Java") => PdfToolHealth::JavaMissing,
+            Err(detail) => PdfToolHealth::Unknown { detail },
+        }
     }
 }
 
@@ -516,16 +527,17 @@ impl JavaPdfService {
     /// app still generates PDFs (an out-of-date renderer beats none), but the
     /// mismatch is now loudly visible instead of silent. Dev sentinels ("dev"
     /// JAR, "0.0.0" app) are skipped so local runs stay quiet.
-    pub fn verify_jar_version(app_handle: &tauri::AppHandle) {
+    pub fn verify_jar_version(app_handle: &tauri::AppHandle) -> PdfToolHealth {
         let app_version = app_handle.package_info().version.to_string();
-        let jar_version = match Self::read_jar_version(app_handle) {
+        let read = Self::read_jar_version(app_handle);
+        let health = Self::pdf_tool_health(read.clone(), &app_version);
+        let jar_version = match read {
             Ok(v) => v,
             Err(e) => {
-                // Can't read the JAR version at all — surface it, but don't
-                // block startup; the first real PDF request will report a
-                // harder error if the JAR is truly missing.
+                // Can't read the JAR version at all — told to staff at start
+                // (`get_pdf_tool_health`); startup isn't blocked.
                 log::warn!("⚠️  Could not read PDF generator JAR version: {}", e);
-                return;
+                return health;
             }
         };
 
@@ -566,6 +578,7 @@ impl JavaPdfService {
                 );
             }
         }
+        health
     }
 
     /// Pure decision for the JAR-vs-app version check (no I/O, so it's unit
