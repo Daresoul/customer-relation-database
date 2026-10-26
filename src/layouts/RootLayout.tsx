@@ -10,6 +10,7 @@ import { WakeFromTrayHandler } from './WakeFromTrayHandler';
 import { ChipScanHandler } from './ChipScanHandler';
 import { DocumentTitle } from './DocumentTitle';
 import { OfflineGapNotice } from '../components/OfflineGapNotice/OfflineGapNotice';
+import { PdfToolWarning } from '../components/PdfToolWarning/PdfToolWarning';
 
 /** Every page renders inside this: header (lab machines chip, lab inbox badge), lab import, crash boundary. */
 export function RootLayout() {
@@ -33,6 +34,7 @@ export function RootLayout() {
           />
         }
       >
+        <PdfToolWarning />
         <RouteErrorBoundary>
           <Outlet />
         </RouteErrorBoundary>

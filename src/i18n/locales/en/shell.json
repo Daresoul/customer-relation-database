@@ -56,5 +56,11 @@
     "seenToday": "Patients seen today",
     "seenFailed": "Could not count",
     "noName": "No name"
+  },
+  "pdfTool": {
+    "title": "Arkivet cannot make PDFs on this computer",
+    "toolMissing": "The PDF tool is missing from this installation. Install Arkivet again from the latest download; records are saved meanwhile, PDFs can be made again afterwards.",
+    "javaMissing": "Java is not installed, and Arkivet needs it for PDFs. Install Java (Temurin 17); records are saved meanwhile, PDFs can be made again afterwards.",
+    "stale": "The PDF tool is from version {{tool}}, the app is {{app}}: an update was only half applied. Install Arkivet again from the latest download."
   }
 }
