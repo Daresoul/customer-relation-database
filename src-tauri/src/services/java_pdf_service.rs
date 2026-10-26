@@ -58,6 +58,28 @@ enum JarVersionVerdict {
     Mismatch { app: String, jar: String },
 }
 
+/// What staff are told at start about making PDFs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "state", rename_all = "camelCase")]
+pub enum PdfToolHealth {
+    Ok,
+    /// The PDF tool is not in this installation.
+    ToolMissing,
+    /// Java is not installed, so no PDF can be made.
+    JavaMissing,
+    /// The PDF tool is from another version (a half-applied update).
+    Stale { app: String, tool: String },
+    /// Something else went wrong; PDFs may still work.
+    Unknown { detail: String },
+}
+
+impl JavaPdfService {
+    /// The start-up check's outcome from reading the tool's version.
+    pub fn pdf_tool_health(_read: Result<String, String>, _app_version: &str) -> PdfToolHealth {
+        PdfToolHealth::Ok
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct JavaPdfInput {
     patient: JavaPatient,
@@ -899,6 +921,28 @@ impl JavaPdfService {
 
 #[cfg(test)]
 mod tests {
+    // F3: a missing PDF tool or Java was only in the log; staff found out
+    // when a PDF failed during a save.
+    #[test]
+    fn the_start_up_check_names_why_pdfs_cannot_be_made() {
+        use super::{JavaPdfService as J, PdfToolHealth as H};
+        assert_eq!(J::pdf_tool_health(Ok("0.8.0".into()), "0.8.0"), H::Ok);
+        assert_eq!(J::pdf_tool_health(Ok("dev".into()), "0.8.0"), H::Ok);
+        assert_eq!(
+            J::pdf_tool_health(Ok("0.7.0".into()), "0.8.0"),
+            H::Stale { app: "0.8.0".into(), tool: "0.7.0".into() }
+        );
+        assert_eq!(
+            J::pdf_tool_health(Err("pdf-generator-0.8.0.jar not found at resolved path: \"C:/x\"".into()), "0.8.0"),
+            H::ToolMissing
+        );
+        assert_eq!(
+            J::pdf_tool_health(Err("Failed to run JAR --version: Failed to execute Java: program not found".into()), "0.8.0"),
+            H::JavaMissing
+        );
+        assert!(matches!(J::pdf_tool_health(Err("disk on fire".into()), "0.8.0"), H::Unknown { .. }));
+    }
+
     use super::*;
 
     fn sample(device_type: &str, test_results: serde_json::Value) -> crate::services::device_pdf_service::DeviceTestData {
