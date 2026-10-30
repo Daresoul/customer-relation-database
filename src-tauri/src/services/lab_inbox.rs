@@ -74,6 +74,8 @@ pub struct LabInboxItem {
     pub machine_time: Option<String>,
     /// That time is more than 10 minutes after the result arrived: its clock is ahead.
     pub clock_ahead: bool,
+    /// Part of the message was broken on the way (bytes lost on the cable).
+    pub damaged: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -314,6 +316,7 @@ pub async fn list_inbox(db: &DatabaseConnection, state: Option<&str>) -> Result<
             values,
             machine_time: machine_time.map(|m| m.format("%Y-%m-%dT%H:%M:%S").to_string()),
             clock_ahead,
+            damaged: false,
         };
         if item.state == "waiting" {
             if let Some(id) = machine_id {

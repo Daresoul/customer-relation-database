@@ -81,7 +81,10 @@ const RAW_CHEM: &[u8] = include_bytes!("../../tests/fixtures/real_chem_pcv.bin")
 
 /// A PointCare chemistry result, as the serial delivery stores it.
 async fn receive_chemistry(db: &DatabaseConnection, dir: &std::path::Path, file_id: &str) {
-    let bytes = &RAW_CHEM[1..RAW_CHEM.len() - 2];
+    receive_chemistry_bytes(db, dir, file_id, &RAW_CHEM[1..RAW_CHEM.len() - 2]).await;
+}
+
+async fn receive_chemistry_bytes(db: &DatabaseConnection, dir: &std::path::Path, file_id: &str, bytes: &[u8]) {
     let path = dir.join(file_id);
     std::fs::write(&path, bytes).unwrap();
     db.execute(Statement::from_sql_and_values(
@@ -686,6 +689,25 @@ async fn attaching_stores_how_the_result_was_matched() {
 
     assert_eq!(stored_match_method(&db, "r1").await.as_deref(), Some("name"));
     assert_eq!(stored_match_method(&db, "r2").await.as_deref(), Some("manual"));
+}
+
+// A result with a broken segment (bytes lost on the cable) is marked, so staff
+// check its values on the machine; the marker itself is not a value.
+#[tokio::test]
+async fn a_damaged_result_is_marked_in_the_inbox() {
+    let db = create_test_db_with_migrations().await;
+    let dir = tempfile::tempdir().unwrap();
+    let frame = b"MSH|^~\\&|1|P\rPID|1||||dog|tesi\rOBX|1|ST||GLU|95|mg/dL|70-142|N\rOB|219|U/L|20-200|H\r";
+    receive_chemistry_bytes(&db, dir.path(), "broken", frame).await;
+    receive_chemistry(&db, dir.path(), "whole").await;
+
+    let items = lab_inbox::list_inbox(&db, Some("waiting")).await.unwrap();
+    let broken = items.iter().find(|i| i.file_id == "broken").unwrap();
+    let whole = items.iter().find(|i| i.file_id == "whole").unwrap();
+
+    assert!(broken.damaged);
+    assert!(!whole.damaged);
+    assert_eq!(broken.values.iter().map(|v| v.code.as_str()).collect::<Vec<_>>(), vec!["GLU"]);
 }
 
 // A machine whose clock runs ahead dates results in the future, and a result

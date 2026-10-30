@@ -931,6 +931,25 @@ mod zero_value_results {
         let one = b"MSH|^~\\&|1|P\rPID|1||||dog|tesi\rOBX|1|ST||GLU|95|mg/dL|70-142|N\r";
         assert!(DeviceParserService::parse_hl7_data("mnchip_pointcare_chemistry", "M", one, "serial_port").is_ok());
     }
+
+    // A byte lost on the cable can break a segment ("OB|219|U/L|..." or two lines
+    // run together). Its pieces are not analytes; the result says it was damaged.
+    #[test]
+    fn a_broken_segment_adds_no_values_and_marks_the_result_damaged() {
+        let frame = b"MSH|^~\\&|1|P\rPID|1||||dog|tesi\rOBX|1|ST||GLU|95|mg/dL|70-142|N\rOB|219|U/L|20-200|H\r21735||||20|2OBX|14|ST||BUN|5|mmol/L\r";
+        let d = DeviceParserService::parse_hl7_data("mnchip_pointcare_chemistry", "M", frame, "serial_port").unwrap();
+        let keys: Vec<&String> = d.test_results.as_object().unwrap().keys().collect();
+        assert!(keys.iter().all(|k| !k.starts_with("OB_") && !k.starts_with("21735")), "junk keys: {keys:?}");
+        assert_eq!(d.test_results.get("GLU").and_then(|v| v.as_str()), Some("95"));
+        assert_eq!(d.test_results.get("damaged_segments").and_then(|v| v.as_str()), Some("2"));
+    }
+
+    #[test]
+    fn a_whole_frame_has_no_damage_mark() {
+        let one = b"MSH|^~\\&|1|P\rPID|1||||dog|tesi\rPV1|1\rOBX|1|ST||GLU|95|mg/dL|70-142|N\r";
+        let d = DeviceParserService::parse_hl7_data("mnchip_pointcare_chemistry", "M", one, "serial_port").unwrap();
+        assert!(d.test_results.get("damaged_segments").is_none());
+    }
 }
 
 /// End-to-end contract: real Rust parsers -> real Java PDF JAR -> a PDF where
