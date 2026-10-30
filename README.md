@@ -761,10 +761,19 @@ SSH and starts the app with a DevTools port.
   (Playwright over the WebView2 DevTools port), `appctl shot` (desktop),
   `appctl ui list|press|type` and `appctl tray <item>` (Windows UI Automation),
   `appctl log`, `appctl click <x> <y>` (native dialogs UI Automation can't reach).
+- **Updates:** lab builds trust a throwaway lab key and ask
+  `http://127.0.0.1:8899/latest.json`, never GitHub. `appctl build 0.99.1`
+  makes a newer signed build; `appctl update-serve 0.99.1` offers it (a hidden
+  Node server, `scripts/windows-lab/update-server.cjs`, scheduled task
+  `ArkivetLabUpdates`); the installed app finds it at start or from Settings.
+  `appctl update-serve off` stops offering it. Tauri 1 only accepts an http
+  update address when its build helpers have debug checks, so `build.ps1` sets
+  `CARGO_PROFILE_RELEASE_BUILD_OVERRIDE_DEBUG_ASSERTIONS` (lab builds only).
+  `appctl tray-list` shows the tray icons the agent can see.
 - **Serial ports (com0com):** the signed 3.0.0.0 build installs, but with
-  Secure Boot on (Windows Server 2025, VM 107) Windows refuses to load its 2017
-  signature (device problem 52), so the COM pairs don't work until Secure Boot
-  or driver signature enforcement is turned off on that VM. The pairs are made
+  Secure Boot on (Windows Server 2025) Windows refuses to load its 2017
+  signature (device problem 52). Secure Boot is off on VM 107, so the pairs
+  work there. The pairs are made
   in the desktop session (`com-pairs` agent action) because Windows asks about
   the driver on screen. Serial reading can also be tested on the Mac: socat
   pty pairs (`/tmp/ttyArk_*` ↔ `/tmp/ttySim_*`), the dev bridge, and the same
