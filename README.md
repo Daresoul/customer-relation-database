@@ -389,7 +389,9 @@
   to resend from the machines (`take_offline_gap`).
 - Lab inbox values: a machine time more than 10 minutes after arrival is shown
   as "the machine's clock is ahead"; a value that is negative or above 100× the
-  top of its range is marked "check on the machine".
+  top of its range is marked "check on the machine". A line in a PointCare or
+  PCR message that is not an HL7 segment (bytes lost on the cable) adds no
+  values; the result is tagged "damaged on the way" (`damaged_segments`).
 - A background monitor checks at start, 2 s after a status change and every
   30 s. It sends an OS notification (Tauri `notification` Cargo feature; the
   webview allowlist is unchanged) when a machine has been down longer than N

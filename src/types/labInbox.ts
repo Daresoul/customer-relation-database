@@ -44,6 +44,8 @@ export interface LabInboxItem {
   machineTime?: string | null;
   /** That time is more than 10 minutes after arrival: the machine's clock is ahead. */
   clockAhead?: boolean;
+  /** Part of the message was broken on the way (bytes lost on the cable). */
+  damaged?: boolean;
 }
 
 export interface LabMoveOutcome {

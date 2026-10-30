@@ -280,6 +280,8 @@
     },
     "clockAhead": "Machine says {{time}}",
     "clockAheadHint": "The machine dated this result in the future, so its clock is ahead. Set the machine's date and time, and check the result belongs to the right day.",
+    "damaged": "Damaged on the way",
+    "damagedHint": "Part of this result did not arrive whole. Check the values on the machine, or send the result again.",
     "implausible": "No animal has this value — check it on the machine"
   },
   "portTypeTooltips": {

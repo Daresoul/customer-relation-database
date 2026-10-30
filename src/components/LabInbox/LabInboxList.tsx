@@ -159,6 +159,11 @@ const LabInboxList: React.FC = () => {
               <Tag color="orange">{t('devices:inbox.clockAhead', { time: formatDateTime(item.machineTime) })}</Tag>
             </Tooltip>
           )}
+          {item.damaged && (
+            <Tooltip title={t('devices:inbox.damagedHint')}>
+              <Tag color="red">{t('devices:inbox.damaged')}</Tag>
+            </Tooltip>
+          )}
         </Space>
       ),
     },
