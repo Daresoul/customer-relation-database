@@ -1,12 +1,15 @@
 <#
   Builds the Windows installer on the lab machine from C:\ArkivetLab\src
   (the branch arrives as a git bundle; see `appctl build`). A normal release
-  build with three lab-only changes, all from a merged config file (--config):
+  build with lab-only changes, all from a merged config file (--config):
     - the window's WebView2 gets a DevTools port (localhost) for Playwright;
-    - version 0.99.0, so the real update check never offers v0.7.x;
-    - update files are signed with a throwaway lab key (the real one stays in CI).
+    - version 0.99.0 by default (-Version 0.99.1 for an update to install);
+    - update files are signed with a throwaway lab key (the real one stays in CI),
+      the app trusts that key and asks http://127.0.0.1:8899/latest.json for
+      updates (`appctl update-serve`), never GitHub.
   Output: the NSIS setup.exe path on the last line.
 #>
+param([string]$Version = '0.99.0')
 $ErrorActionPreference = 'Stop'
 $src = 'C:\ArkivetLab\src'
 
