@@ -130,26 +130,13 @@ describe('outage wording', () => {
   });
 });
 
-// Machine status #4: a port that opened but never received anything looked fine all day.
+// Clinic logs: Healvet, PCR and PointCare send nothing between results, so a quiet port is normal.
 describe('a connected machine that sends nothing', () => {
-  const now = new Date(2026, 9, 24, 10, 0);
+  const now = new Date(2026, 9, 24, 17, 0);
   const at = (h: number, m: number) => new Date(2026, 9, 24, h, m).toISOString();
 
-  it('says so after half an hour without a byte since connecting', () => {
-    const silent = serial({ status: 'Connected', last_connected: at(9, 12), last_byte_at: undefined });
-    expect(describeSerialStatus(silent, t, now)).toEqual({
-      text: 'status.connectedSilent {"time":"09:12"}',
-      action: 'status.connectedSilentAction',
-    });
-  });
-
-  it('counts only what came in since the last connect', () => {
-    const before = serial({ status: 'Connected', last_connected: at(9, 12), last_byte_at: at(8, 30) });
-    expect(describeSerialStatus(before, t, now).text).toBe('status.connectedSilent {"time":"09:12"}');
-  });
-
-  it('stays quiet when it sent something, or connected only a moment ago', () => {
-    expect(describeSerialStatus(serial({ status: 'Connected', last_connected: at(9, 12), last_byte_at: at(9, 40) }), t, now)).toEqual({ text: 'status.connected' });
-    expect(describeSerialStatus(serial({ status: 'Connected', last_connected: at(9, 45), last_byte_at: undefined }), t, now)).toEqual({ text: 'status.connected' });
+  it.each(['healvet_hv_fia_3000', 'mnchip_pcr_analyzer', 'mnchip_pointcare_chemistry'])('reads plain connected for %s after hours of quiet', (device_type) => {
+    const quiet = serial({ status: 'Connected', device_type, last_connected: at(7, 8), last_byte_at: undefined });
+    expect(describeSerialStatus(quiet, t, now)).toEqual({ text: 'status.connected' });
   });
 });
