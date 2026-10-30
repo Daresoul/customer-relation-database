@@ -148,6 +148,24 @@ fn noise_on_the_line_is_reported_and_the_result_after_it_still_read() {
     assert_eq!(sink.unrecognized, vec![1200], "reported once it passes a kilobyte");
 }
 
+// Clinic logs: the PointCare sends long runs of 0x00 bytes (thousands a minute)
+// between results. An idle line, not garbled data.
+#[test]
+fn zero_bytes_between_results_are_not_reported_as_noise() {
+    let mut frame = vec![0x0B];
+    frame.extend_from_slice(b"MSH|ok");
+    frame.push(0x1C);
+    let mut script: Vec<Result<Vec<u8>, fn() -> io::Error>> = vec![Ok(vec![0x00; 500]); 8];
+    script.push(Ok(frame));
+    script.push(Err(|| io::Error::from_raw_os_error(1167)));
+    let mut reader = ScriptedReader::new(script);
+    let (_tx, rx) = mpsc::channel::<()>();
+    let mut sink = RecordingSink::default();
+    let _ = run_read_loop(&mut reader, &pointcare(), &rx, Duration::from_secs(5), &mut sink);
+    assert_eq!(sink.frames, vec![b"MSH|ok".to_vec()]);
+    assert!(sink.unrecognized.is_empty(), "zero bytes reported as noise: {:?}", sink.unrecognized);
+}
+
 // Windows lab: after the port's device went away the app kept "Connected",
 // reading nothing forever. Some USB-serial drivers do the same on a pulled
 // cable: no error, just no data. A gone port ends the connection.
