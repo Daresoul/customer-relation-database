@@ -457,7 +457,8 @@ impl FrameAssembler {
         partial
     }
 
-    /// Bytes since the last call that were outside any result.
+    /// Bytes since the last call that were outside any result. 0x00 is left out:
+    /// the chemistry analyser sends long runs of it between results.
     fn take_ignored(&mut self) -> usize {
         std::mem::take(&mut self.ignored)
     }
@@ -538,7 +539,7 @@ impl FrameAssembler {
             } else if self.started {
                 self.data.push(byte);
                 self.cap(protocol);
-            } else {
+            } else if byte != 0x00 {
                 self.ignored += 1;
             }
             None
@@ -548,8 +549,10 @@ impl FrameAssembler {
             self.data.push(byte);
             self.cap(protocol);
             None
-        } else {
+        } else if byte != 0x00 {
             self.ignored += 1;
+            None
+        } else {
             None
         }
     }
