@@ -47,6 +47,9 @@ $labPub = (Get-Content "$labKey.pub" -Raw).Trim()
 $updater = @{ active = $true; dialog = $false; pubkey = $labPub; endpoints = @('http://127.0.0.1:8899/latest.json'); windows = @{ installMode = 'passive' } }
 @{ package = @{ version = $labVersion }; tauri = @{ windows = @($window); updater = $updater } } | ConvertTo-Json -Depth 6 |
   Set-Content $labConfig -Encoding ascii
+# Tauri 1 rejects an http update address only when its build helpers have no
+# debug checks; turning them on lets the lab use its local http server.
+$env:CARGO_PROFILE_RELEASE_BUILD_OVERRIDE_DEBUG_ASSERTIONS = 'true'
 & npm.cmd run tauri build -- --bundles nsis --config $labConfig
 if ($LASTEXITCODE -ne 0) { throw 'tauri build failed' }
 
