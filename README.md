@@ -375,6 +375,7 @@
   cable is pulled). A result cut by an unplug, a stall or the 64 kB size limit
   reaches the lab inbox as cut off; bytes outside any result (wrong speed or
   machine type) show in the machine's history, at most every 10 minutes.
+  Zero bytes don't count: the PointCare sends long runs of them while idle.
 - A jump of more than a minute in the wall clock between two turns of the
   read loop (the PC slept) reopens the port. Three or more drops of one machine
   in an hour show USB power-saving advice in the panel.
