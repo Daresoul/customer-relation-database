@@ -661,6 +661,7 @@ public class PdfGeneratorCLI {
             case "gender_alt":
             case "birth_date":
             case "birth_date_alt":
+            case "damaged_segments":
                 return true;
             default:
                 return false;

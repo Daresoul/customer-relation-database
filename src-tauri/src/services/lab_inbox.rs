@@ -15,11 +15,11 @@ use std::path::Path;
 pub const DISCARD_REASONS: [&str; 4] = ["qc", "test", "duplicate", "other"];
 
 /// Keys the parsers add next to the analytes that describe the sample, not a value.
-const METADATA_KEYS: [&str; 20] = [
+const METADATA_KEYS: [&str; 21] = [
     "sample_id", "test_datetime", "patient_name", "patient_id", "patient_id_internal", "gender",
     "gender_alt", "sample_type", "species", "birth_date", "birth_date_alt", "test_code",
     "sending_application", "sending_facility", "message_datetime", "message_type", "hl7_version",
-    "ID2", "SNO", "DATE",
+    "ID2", "SNO", "DATE", "damaged_segments",
 ];
 
 /// Suffixes the HL7 parser uses for an analyte's extra fields.
@@ -281,6 +281,7 @@ pub async fn list_inbox(db: &DatabaseConnection, state: Option<&str>) -> Result<
         let clock_ahead = machine_time.is_some_and(|m| {
             chrono::DateTime::parse_from_rfc3339(&received_at).is_ok_and(|r| machine_clock_ahead(m, r.with_timezone(&Utc)))
         });
+        let damaged = parsed.as_ref().is_some_and(|d| d.test_results.get("damaged_segments").is_some());
         let (values, machine_id) = match &parsed {
             Some(data) => (
                 lab_values(&device_type, &data.test_results),
@@ -316,7 +317,7 @@ pub async fn list_inbox(db: &DatabaseConnection, state: Option<&str>) -> Result<
             values,
             machine_time: machine_time.map(|m| m.format("%Y-%m-%dT%H:%M:%S").to_string()),
             clock_ahead,
-            damaged: false,
+            damaged,
         };
         if item.state == "waiting" {
             if let Some(id) = machine_id {

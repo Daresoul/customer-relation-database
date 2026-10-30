@@ -88,6 +88,13 @@ pub struct DeviceData {
 
 pub struct DeviceParserService;
 
+/// An HL7 segment id: three characters, a capital letter then capitals or digits
+/// (MSH, PID, OBX, PV1). Anything else is a line broken on the way.
+fn is_segment_id(id: &str) -> bool {
+    let b = id.trim().as_bytes();
+    b.len() == 3 && b[0].is_ascii_uppercase() && b[1..].iter().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
+}
+
 impl DeviceParserService {
     /// Parse Exigo Eos Vet XML file (hematology analyzer).
     ///
@@ -551,10 +558,15 @@ impl DeviceParserService {
         let mut test_results: HashMap<String, String> = HashMap::new();
         let mut patient_id: Option<String> = None;
         let mut analyte_count = 0usize;
+        let mut damaged_segments = 0usize;
 
         for line in data_str.split(['\r', '\n']) {
             let line = line.trim();
             if line.is_empty() {
+                continue;
+            }
+            if !is_segment_id(line.split('|').next().unwrap_or("")) {
+                damaged_segments += 1;
                 continue;
             }
 
@@ -704,6 +716,10 @@ impl DeviceParserService {
                     }
                 }
             }
+        }
+
+        if damaged_segments > 0 {
+            test_results.insert("damaged_segments".to_string(), damaged_segments.to_string());
         }
 
         if analyte_count == 0 {
