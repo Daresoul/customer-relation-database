@@ -602,8 +602,39 @@ impl JavaPdfService {
     }
 
     /// PDF tools in the resources folder left by earlier versions.
-    pub(crate) fn stale_tool_files(_names: &[String], _app_version: &str) -> Vec<String> {
-        Vec::new()
+    pub(crate) fn stale_tool_files(names: &[String], app_version: &str) -> Vec<String> {
+        if app_version == "0.0.0" {
+            return Vec::new();
+        }
+        let current = format!("pdf-generator-{app_version}.jar");
+        names
+            .iter()
+            .filter(|n| {
+                let versioned = n
+                    .strip_prefix("pdf-generator-")
+                    .and_then(|r| r.strip_suffix(".jar"))
+                    .is_some_and(|v| !v.is_empty() && v.chars().all(|c| c.is_ascii_digit() || c == '.'));
+                (versioned || n.as_str() == "pdf-generator.jar") && **n != current
+            })
+            .cloned()
+            .collect()
+    }
+
+    /// Deletes earlier versions' PDF tools next to the current one. Called only
+    /// after the current tool checked out; a file still in use stays until the
+    /// next start.
+    pub fn remove_stale_tools(app_handle: &tauri::AppHandle) {
+        let Ok(jar) = Self::get_jar_path(app_handle) else { return };
+        let Some(dir) = jar.parent() else { return };
+        let Ok(entries) = std::fs::read_dir(dir) else { return };
+        let names: Vec<String> = entries.flatten().filter_map(|e| e.file_name().into_string().ok()).collect();
+        let version = app_handle.package_info().version.to_string();
+        for name in Self::stale_tool_files(&names, &version) {
+            match std::fs::remove_file(dir.join(&name)) {
+                Ok(()) => log::info!("Removed old PDF tool {name}"),
+                Err(e) => log::warn!("Could not remove old PDF tool {name}: {e}"),
+            }
+        }
     }
 
     /// Resource path of the bundled JAR for a given app version. Real releases

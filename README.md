@@ -430,6 +430,9 @@
   A missing tool, missing Java or a tool from another version (a half-applied
   update) shows an error banner under the header with what to do
   (`get_pdf_tool_health`); an unclear failure is only logged. Records still save.
+- Once the current tool checks out, earlier versions' `pdf-generator-<version>.jar`
+  and the old fixed-name `pdf-generator.jar` are deleted from the same folder
+  (an update leaves the previous one behind; 8–24 MB each).
 
 ### Lab inbox (`services/lab_inbox.rs`, page `/lab-inbox`, dashboard tab)
 - The header shows the lab inbox badge (waiting count) on every page.

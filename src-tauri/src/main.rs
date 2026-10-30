@@ -364,6 +364,9 @@ fn main() {
                     let health = services::java_pdf_service::JavaPdfService::verify_jar_version(
                         &jar_check_handle,
                     );
+                    if health == services::java_pdf_service::PdfToolHealth::Ok {
+                        services::java_pdf_service::JavaPdfService::remove_stale_tools(&jar_check_handle);
+                    }
                     if let Some(state) = jar_check_handle.try_state::<services::java_pdf_service::PdfToolState>() {
                         if let Ok(mut slot) = state.0.lock() {
                             *slot = Some(health);
