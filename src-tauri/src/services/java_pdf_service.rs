@@ -601,6 +601,11 @@ impl JavaPdfService {
         }
     }
 
+    /// PDF tools in the resources folder left by earlier versions.
+    pub(crate) fn stale_tool_files(_names: &[String], _app_version: &str) -> Vec<String> {
+        Vec::new()
+    }
+
     /// Resource path of the bundled JAR for a given app version. Real releases
     /// ship `pdf-generator-<version>.jar` (per-version filename so a failed
     /// update can't leave a silently-used stale JAR); untagged dev/E2E builds
@@ -1235,6 +1240,27 @@ mod tests {
             JavaPdfService::classify_jar_version("0.7.2", "0.7.0"),
             JarVersionVerdict::Mismatch { app: "0.7.2".to_string(), jar: "0.7.0".to_string() }
         );
+    }
+
+    // Windows lab: an update leaves the previous version's 8 MB tool behind
+    // (older ones held a 24 MB template), one more per release.
+    #[test]
+    fn old_pdf_tools_are_found_for_removal_and_the_current_one_is_kept() {
+        let names: Vec<String> = [
+            "pdf-generator-0.7.2.jar",
+            "pdf-generator-0.99.0.jar",
+            "pdf-generator-0.99.1.jar",
+            "pdf-generator.jar",
+            "pdf-generator-cli-1.0.0.jar",
+            "pdfium",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+        let mut stale = JavaPdfService::stale_tool_files(&names, "0.99.1");
+        stale.sort();
+        assert_eq!(stale, vec!["pdf-generator-0.7.2.jar", "pdf-generator-0.99.0.jar", "pdf-generator.jar"]);
+        assert!(JavaPdfService::stale_tool_files(&names, "0.0.0").is_empty(), "dev builds use the fixed name");
     }
 
     #[test]

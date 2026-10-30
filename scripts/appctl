@@ -116,7 +116,7 @@ case "$cmd" in
     "$0" psx "
       \$v = '$1'; \$dir = '$WIN_LAB\\updates'
       New-Item -ItemType Directory -Force \$dir | Out-Null
-      \$zip = Get-Item '$WIN_LAB\\builds\\*_\${v}_x64-setup.nsis.zip'
+      \$zip = Get-Item '$WIN_LAB\\builds\\*_${1}_x64-setup.nsis.zip'
       Copy-Item \$zip.FullName \$dir -Force
       \$sig = (Get-Content (\$zip.FullName + '.sig') -Raw).Trim()
       @{ version = \$v; notes = 'Lab update'; pub_date = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ');
@@ -124,7 +124,7 @@ case "$cmd" in
         ConvertTo-Json -Depth 5 | Set-Content (Join-Path \$dir 'latest.json') -Encoding ascii
       if (-not (Get-NetTCPConnection -LocalPort 8899 -State Listen -ErrorAction SilentlyContinue)) {
         \$node = (Get-Command node.exe -ErrorAction SilentlyContinue).Source; if (-not \$node) { \$node = \"\$env:ProgramFiles\\nodejs\\node.exe\" }
-        \$a = New-ScheduledTaskAction -Execute \$node -Argument '$WIN_LAB\\update-server.cjs'
+        \$a = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument \"-NoProfile -WindowStyle Hidden -Command & '\$node' '$WIN_LAB\\update-server.cjs'\"
         Register-ScheduledTask -TaskName ArkivetLabUpdates -Action \$a -Force | Out-Null
         Start-ScheduledTask -TaskName ArkivetLabUpdates; Start-Sleep 2
       }
@@ -161,6 +161,7 @@ case "$cmd" in
   keys) agent keys "{\"keys\":$(json_str "$1")}" ;;
   click) agent click "{\"x\":$1,\"y\":$2}" ;;
   tray) agent tray "{\"item\":$(json_str "$1")}" ;;
+  tray-list) agent tray-list ;;
   pw) (cd "$ROOT" && node "$LAB_DIR/pw.mjs" "$@") ;;
   log)
     # Tauri v1 keeps logs in the roaming app data folder on Windows.
