@@ -944,6 +944,16 @@ mod zero_value_results {
         assert_eq!(d.test_results.get("damaged_segments").and_then(|v| v.as_str()), Some("2"));
     }
 
+    // Real codes start with a letter (GLU, A/G, Ca*P, tCO2); "1500" or "2T" is a
+    // result line whose fields shifted on the way.
+    #[test]
+    fn a_result_line_with_a_mangled_code_is_damage_not_a_value() {
+        let frame = b"MSH|^~\\&|1|P\rPID|1||||dog|tesi\rOBX|1|ST||GLU|95|mg/dL|70-142|N\rOBX|2|ST||1500|U/L|20-150|N\rOBX|3|ST||2T|5|mmol/L\r";
+        let d = DeviceParserService::parse_hl7_data("mnchip_pointcare_chemistry", "M", frame, "serial_port").unwrap();
+        assert!(d.test_results.get("1500").is_none() && d.test_results.get("2T").is_none());
+        assert_eq!(d.test_results.get("damaged_segments").and_then(|v| v.as_str()), Some("2"));
+    }
+
     #[test]
     fn a_whole_frame_has_no_damage_mark() {
         let one = b"MSH|^~\\&|1|P\rPID|1||||dog|tesi\rPV1|1\rOBX|1|ST||GLU|95|mg/dL|70-142|N\r";
