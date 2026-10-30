@@ -5,7 +5,8 @@
 #   appctl config <host> <user>         where the lab is (Tailscale name or LAN IP)
 #   appctl connect | disconnect         SSH tunnels: 9222 (app DevTools), 8787 (agent)
 #   appctl provision                    copy agent, simulator, fixtures, demo clinic
-#   appctl build                        send this branch (git bundle) and build the installer on the lab
+#   appctl build [version]              send this branch (git bundle) and build the installer on the lab (default 0.99.0)
+#   appctl update-serve <version>|off   offer a lab build as the update the installed app finds (127.0.0.1:8899)
 #   appctl install <setup.exe|.msi>     install a build
 #   appctl reset | start [--hidden] | stop | status
 #   appctl sim <scenario> | sim list    play lab machine data
@@ -103,7 +104,32 @@ case "$cmd" in
     lab_scp "$OUT/src.bundle" "$(remote "$WIN_LAB\\builds\\src.bundle")"
     lab_scp "$LAB_DIR/build.ps1" "$(remote "$WIN_LAB\\build.ps1")"
     lab_ssh "if (-not (Test-Path '$WIN_LAB\\src')) { git clone -q -b $branch '$WIN_LAB\\builds\\src.bundle' '$WIN_LAB\\src' } else { git -C '$WIN_LAB\\src' fetch -q '$WIN_LAB\\builds\\src.bundle' ${branch}:refs/remotes/bundle/head; git -C '$WIN_LAB\\src' checkout -q -f -B $branch refs/remotes/bundle/head }; git -C '$WIN_LAB\\src' log --oneline -1"
-    lab_ssh "powershell -NoProfile -ExecutionPolicy Bypass -File '$WIN_LAB\\build.ps1'" | tee "$OUT/build.log" | tail -1
+    lab_ssh "powershell -NoProfile -ExecutionPolicy Bypass -File '$WIN_LAB\\build.ps1' -Version ${1:-0.99.0}" | tee "$OUT/build.log" | tail -1
+    ;;
+  update-serve)
+    [[ $# -eq 1 ]] || die "usage: appctl update-serve <version>|off"
+    lab_scp "$LAB_DIR/update-server.cjs" "$(remote "$WIN_LAB\\update-server.cjs")"
+    if [[ "$1" == off ]]; then
+      "$0" psx "Remove-Item '$WIN_LAB\\updates\\latest.json' -ErrorAction SilentlyContinue; 'no update offered'"
+      exit 0
+    fi
+    "$0" psx "
+      \$v = '$1'; \$dir = '$WIN_LAB\\updates'
+      New-Item -ItemType Directory -Force \$dir | Out-Null
+      \$zip = Get-Item '$WIN_LAB\\builds\\*_\${v}_x64-setup.nsis.zip'
+      Copy-Item \$zip.FullName \$dir -Force
+      \$sig = (Get-Content (\$zip.FullName + '.sig') -Raw).Trim()
+      @{ version = \$v; notes = 'Lab update'; pub_date = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ');
+         platforms = @{ 'windows-x86_64' = @{ signature = \$sig; url = 'http://127.0.0.1:8899/' + \$zip.Name } } } |
+        ConvertTo-Json -Depth 5 | Set-Content (Join-Path \$dir 'latest.json') -Encoding ascii
+      if (-not (Get-NetTCPConnection -LocalPort 8899 -State Listen -ErrorAction SilentlyContinue)) {
+        \$node = (Get-Command node.exe -ErrorAction SilentlyContinue).Source; if (-not \$node) { \$node = \"\$env:ProgramFiles\\nodejs\\node.exe\" }
+        \$a = New-ScheduledTaskAction -Execute \$node -Argument '$WIN_LAB\\update-server.cjs'
+        Register-ScheduledTask -TaskName ArkivetLabUpdates -Action \$a -Force | Out-Null
+        Start-ScheduledTask -TaskName ArkivetLabUpdates; Start-Sleep 2
+      }
+      (Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8899/latest.json).Content
+    "
     ;;
   install)
     # A path on this Mac is copied over; a bare name is a build already on the lab.
