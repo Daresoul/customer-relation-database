@@ -132,11 +132,10 @@ describe('outage wording', () => {
 
 // Clinic logs: Healvet, PCR and PointCare send nothing between results, so a quiet port is normal.
 describe('a connected machine that sends nothing', () => {
-  const now = new Date(2026, 9, 24, 17, 0);
   const at = (h: number, m: number) => new Date(2026, 9, 24, h, m).toISOString();
 
   it.each(['healvet_hv_fia_3000', 'mnchip_pcr_analyzer', 'mnchip_pointcare_chemistry'])('reads plain connected for %s after hours of quiet', (device_type) => {
     const quiet = serial({ status: 'Connected', device_type, last_connected: at(7, 8), last_byte_at: undefined });
-    expect(describeSerialStatus(quiet, t, now)).toEqual({ text: 'status.connected' });
+    expect(describeSerialStatus(quiet, t)).toEqual({ text: 'status.connected' });
   });
 });

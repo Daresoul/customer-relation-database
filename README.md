@@ -411,8 +411,9 @@
   (serial), status changes (retries are not repeated), the last raw message
   (first 2 KB, text or hex), and Reconnect, Copy diagnostics and Open log
   folder. A port that is gone lists the serial ports present now with "Use
-  COM5" (saving restarts the connection). A connected port that has received
-  nothing for 30 min since connecting says so, with what to check. Diagnostics hold
+  COM5" (saving restarts the connection). A connected port that stays quiet
+  is normal: clinic logs show Healvet, PCR and PointCare send nothing between
+  results, so the panel does not warn about silence. Diagnostics hold
   app version, OS, the device settings, states and times; never message
   contents, so no patient names. The bytes, last message, status log and
   today's outage figures live in memory for this session only.
