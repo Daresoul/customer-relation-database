@@ -120,4 +120,26 @@ class DeviceLeftoversTest {
         String err = new String(captured.toByteArray(), StandardCharsets.UTF_8);
         assertTrue(err.contains("PDF_WARN code=unmapped_analytes device=pointcare codes=ABC,XYZ"), err);
     }
+
+    // The app marks a result whose message was broken on the way; the mark is not a test.
+    @Test
+    void theDamageMarkIsNeitherARowNorAMissingValue() {
+        Map<String, String> pcr = new LinkedHashMap<>(PcrReportTest.realCatCapture());
+        pcr.put("damaged_segments", "1");
+        assertFalse(names(parse("pcr", pcr)).toString().contains("damaged"), names(parse("pcr", pcr)).toString());
+
+        Map<String, String> chem = new LinkedHashMap<>();
+        chem.put("GLU", "95");
+        chem.put("damaged_segments", "1");
+        PrintStream original = System.err;
+        ByteArrayOutputStream captured = new ByteArrayOutputStream();
+        System.setErr(new PrintStream(captured, true));
+        try {
+            parse("pointcare", chem);
+        } finally {
+            System.setErr(original);
+        }
+        String err = new String(captured.toByteArray(), StandardCharsets.UTF_8);
+        assertFalse(err.contains("damaged_segments"), err);
+    }
 }
