@@ -665,7 +665,9 @@ impl DeviceParserService {
                     // OBX-18 on a PCR result: the device's threshold for its curve.
                     let threshold = fields.get(18).map(|s| s.trim()).unwrap_or("");
 
-                    if !param_code.is_empty() {
+                    if !param_code.is_empty() && !param_code.starts_with(|c: char| c.is_ascii_alphabetic()) {
+                        damaged_segments += 1;
+                    } else if !param_code.is_empty() {
                         // A repeated analyte replaces the earlier one whole,
                         // so no unit, range or flag carries over from it.
                         for suffix in ["unit", "range", "flag", "sample_type", "curve", "threshold", "lot"] {
