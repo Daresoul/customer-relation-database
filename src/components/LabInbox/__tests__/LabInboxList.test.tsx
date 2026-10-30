@@ -140,6 +140,19 @@ describe('LabInboxList — waiting results', () => {
     expect(within(fine).queryByText(/devices:inbox\.clockAhead/)).not.toBeInTheDocument();
   });
 
+  // Bytes lost on the cable can break part of a result: check it on the machine.
+  it('marks a result whose message was damaged on the way', async () => {
+    mocks.list.mockResolvedValue([
+      item({ fileId: 'broken', machinePatientId: 'BROKEN', damaged: true }),
+      item({ fileId: 'whole', machinePatientId: 'WHOLE', damaged: false }),
+    ]);
+    renderList();
+    const broken = (await screen.findByText('BROKEN')).closest('tr') as HTMLElement;
+    const whole = screen.getByText('WHOLE').closest('tr') as HTMLElement;
+    expect(within(broken).getByText('devices:inbox.damaged')).toBeInTheDocument();
+    expect(within(whole).queryByText('devices:inbox.damaged')).not.toBeInTheDocument();
+  });
+
   it('says when a result could not be read and offers only Discard', async () => {
     mocks.list.mockResolvedValue([
       item({ status: 'failed', error: 'not xml', values: [], machinePatientId: null, matchMethod: 'none' }),
