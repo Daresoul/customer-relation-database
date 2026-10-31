@@ -578,6 +578,8 @@
   Lines added or changed after it count as edits.
 - A long invoice continues on another letterhead page with the column headings
   repeated; long item names wrap.
+- A long medical report description or prescription continues on further
+  letterhead pages (`flowOntoPages`); the date is on the first page.
 - An edit waits for the record's diagnoses to load before it can be saved, and
   the record modal and page ask before discarding typed text.
 - Record templates (Settings › Record templates, `services/record_template.rs`)

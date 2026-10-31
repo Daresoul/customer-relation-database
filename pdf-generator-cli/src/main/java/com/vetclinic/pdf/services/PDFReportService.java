@@ -42,6 +42,9 @@ import javax.imageio.ImageIO;
 
 
 public class PDFReportService {
+    /** A safety stop for text that never fits (one unbreakable element). */
+    private static final int MAX_TEXT_PAGES = 50;
+
 
     private static PDFReportService instance;
     private static final int CELL_FONT_SIZE = 10;
@@ -1747,7 +1750,8 @@ public class PDFReportService {
         Paragraph descParagraph = new Paragraph(description, descFont);
         descParagraph.setLeading(16); // Line spacing
         descColumn.addElement(descParagraph);
-        descColumn.go();
+        flowOntoPages(stamper, reader, descColumn, descX, 150, descX + descWidth, descY,
+                c -> Letterhead.stampReport(c, clinic));
 
         // Add current date at the footer "Датум:" position
         float dateX = 80;
@@ -1823,7 +1827,8 @@ public class PDFReportService {
         Paragraph contentParagraph = new Paragraph(prescriptionText, prescriptionFont);
         contentParagraph.setLeading(18); // Line spacing for readability
         contentColumn.addElement(contentParagraph);
-        contentColumn.go();
+        flowOntoPages(stamper, reader, contentColumn, contentLeft, contentBottom, contentRight, contentTop,
+                c -> Letterhead.stampPharmacyNote(c, clinic));
 
         // Close stamper and reader
         stamper.close();
@@ -1980,7 +1985,8 @@ public class PDFReportService {
         Paragraph descParagraph = new Paragraph(description, descFont);
         descParagraph.setLeading(15);
         descColumn.addElement(descParagraph);
-        descColumn.go();
+        flowOntoPages(stamper, reader, descColumn, leftMargin, descBottom, rightMargin, pageHeight - 180,
+                c -> Letterhead.stampReport(c, clinic));
 
         // Date - positioned next to "Датум:" field in footer (bottom left of template)
         float dateX = 110;  // After "Датум:" label
@@ -2426,6 +2432,32 @@ public class PDFReportService {
         ct.addElement(new Paragraph(p));
         ct.go(true);
         return top - ct.getYLine();
+    }
+
+    /**
+     * Draws the column on page 1; text that does not fit continues on new
+     * pages carrying the template and letterhead, between {@code bottom} and
+     * {@code nextTop}.
+     */
+    private void flowOntoPages(PdfStamper stamper, PdfReader reader, ColumnText column,
+                               float left, float bottom, float right, float nextTop,
+                               java.util.function.Consumer<PdfContentByte> stamp) throws DocumentException {
+        int status = column.go();
+        PdfImportedPage template = null;
+        int page = 1;
+        while (ColumnText.hasMoreText(status) && page < MAX_TEXT_PAGES) {
+            if (template == null) {
+                template = stamper.getImportedPage(reader, 1);
+            }
+            page++;
+            stamper.insertPage(page, reader.getPageSize(1));
+            PdfContentByte canvas = stamper.getOverContent(page);
+            canvas.addTemplate(template, 0, 0);
+            stamp.accept(canvas);
+            column.setCanvas(canvas);
+            column.setSimpleColumn(left, bottom, right, nextTop);
+            status = column.go();
+        }
     }
 
     /** Appends a page carrying the letterhead and returns its canvas. */
