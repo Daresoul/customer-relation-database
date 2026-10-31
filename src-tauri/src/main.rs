@@ -264,8 +264,15 @@ fn main() {
                         }));
                     }
                     "quit" => {
-                        let count = services::device_input::stop_all_listeners();
-                        log::info!("Exiting from tray. Stopped {} listeners.", count);
+                        // Not joined here: a listener handing over a result waits for
+                        // this (main) thread, so joining it here could hang the app.
+                        match services::device_input::within(
+                            std::time::Duration::from_secs(3),
+                            services::device_input::stop_all_listeners,
+                        ) {
+                            Some(count) => log::info!("Exiting from tray. Stopped {} listeners.", count),
+                            None => log::warn!("Exiting from tray. Listeners did not stop within 3 s."),
+                        }
                         if let Some(dir) = tauri::api::path::app_data_dir(&app.config()) {
                             services::session_marker::end_session(&dir);
                             services::offline_gap::note_alive(&dir, chrono::Utc::now());

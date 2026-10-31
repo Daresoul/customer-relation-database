@@ -1246,8 +1246,12 @@ pub fn complete_frames(bytes: &[u8], protocol: &DeviceProtocol) -> Vec<Vec<u8>> 
 }
 
 /// Runs `f` on its own thread and waits for it at most `limit`.
-pub fn within<T: Send + 'static>(_limit: Duration, f: impl FnOnce() -> T + Send + 'static) -> Option<T> {
-    Some(f())
+pub fn within<T: Send + 'static>(limit: Duration, f: impl FnOnce() -> T + Send + 'static) -> Option<T> {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = tx.send(f());
+    });
+    rx.recv_timeout(limit).ok()
 }
 
 /// Stop all active listeners - used for graceful shutdown

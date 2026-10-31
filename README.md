@@ -708,7 +708,9 @@
   normal exit. Found at the next start it logs a warn event "Previous session
   ended unexpectedly" (`failure: unclean_shutdown`); with another version in
   it, an info event that the session ended for an update.
-- Tray Quit uses `app.exit(0)`, which removes the tray icon first.
+- Tray Quit uses `app.exit(0)`, which removes the tray icon first. It waits at most
+  3 s for the machine listeners to stop (`device_input::within`): a listener
+  handing over a result needs the main thread, so an unbounded wait could hang.
 - Log archives older than 30 days are pruned at start and daily while the
   app runs (`log_rotation::run_log_prune_schedule`).
 - The Loki shipper stores, with each file's position, a fingerprint of its
