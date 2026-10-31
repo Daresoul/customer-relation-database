@@ -282,6 +282,29 @@ describe('Appointment panel', () => {
     expect(new Date(end_time).getTime() - start.getTime()).toBe(30 * 60_000);
   });
 
+  // Final review: Reschedule moved the visit without checking the room or the patient.
+  it('asks before rescheduling into a full room, and keeps the visit when cancelled', async () => {
+    backend({ check_conflicts: () => ({ hasConflicts: true, conflicts: [{ ...detail, id: 9 }], patientConflicts: [] }) });
+    renderDrawer();
+
+    fireEvent.click(await screen.findByRole('button', { name: /appointments:actions.reschedule/ }));
+    const dialog = await screen.findByRole('dialog', { name: /appointments:reschedule.title/ });
+    const [dateInput, timeInput] = within(dialog).getAllByRole('textbox');
+    fireEvent.mouseDown(dateInput);
+    fireEvent.change(dateInput, { target: { value: '11/01/2030' } });
+    fireEvent.keyDown(dateInput, { key: 'Enter' });
+    fireEvent.mouseDown(timeInput);
+    fireEvent.change(timeInput, { target: { value: '14:15' } });
+    fireEvent.keyDown(timeInput, { key: 'Enter' });
+    fireEvent.click(within(dialog).getByRole('button', { name: /appointments:reschedule.save/ }));
+
+    await screen.findByText(/appointments:conflicts.confirmTitle/);
+    expect(calls('check_conflicts')[0]).toMatchObject({ input: { roomId: 3, patientId: 21, excludeAppointmentId: 4 } });
+    fireEvent.click(screen.getByRole('button', { name: /common:cancel/ }));
+    await waitFor(() => expect(screen.queryByText(/appointments:conflicts.confirmTitle/)).not.toBeInTheDocument());
+    expect(calls('update_appointment')).toHaveLength(0);
+  });
+
   it('opens the edit form with this appointment', async () => {
     renderDrawer();
 
