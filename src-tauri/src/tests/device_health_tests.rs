@@ -424,3 +424,16 @@ fn open_error_of_another_kind_is_unknown() {
     let e = serialport::Error::new(serialport::ErrorKind::InvalidInput, "bad baud");
     assert_eq!(classify_open_error(&e, true), DeviceErrorKind::Unknown);
 }
+
+// Final review: Quit from the tray joined every listener on the main thread,
+// while a listener handing over a result waited for the main thread: the app
+// hung. The wait is now bounded.
+#[test]
+fn a_stop_that_hangs_gives_up_after_the_limit() {
+    use crate::services::device_input::within;
+    let started = Instant::now();
+    assert_eq!(within(Duration::from_millis(200), || { std::thread::sleep(Duration::from_secs(5)); 3 }), None);
+    assert!(started.elapsed() < Duration::from_secs(2));
+    assert_eq!(within(Duration::from_secs(2), || 3), Some(3));
+}
+

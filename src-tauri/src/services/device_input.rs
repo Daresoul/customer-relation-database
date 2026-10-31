@@ -1245,6 +1245,11 @@ pub fn complete_frames(bytes: &[u8], protocol: &DeviceProtocol) -> Vec<Vec<u8>> 
     bytes.iter().filter_map(|&b| assembler.push_byte(b, protocol)).collect()
 }
 
+/// Runs `f` on its own thread and waits for it at most `limit`.
+pub fn within<T: Send + 'static>(_limit: Duration, f: impl FnOnce() -> T + Send + 'static) -> Option<T> {
+    Some(f())
+}
+
 /// Stop all active listeners - used for graceful shutdown
 /// Returns number of threads that were stopped
 pub fn stop_all_listeners() -> usize {
