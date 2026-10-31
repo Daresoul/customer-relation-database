@@ -129,14 +129,19 @@ fn main() {
     // (from package name) here later.
     let _ = (bundle_config, package_info);
 
-    if let Some(ref dir) = main_log_dir {
-        services::log_rotation::rotate_main_log_at_startup(dir);
-        services::log_rotation::prune_old_logs(dir, 30);
-    }
-    if let Some(ref dir) = raw_serial_log_dir {
-        // Raw serial logs already include the date in their filename,
-        // so no startup-rename pass is needed — just the retention sweep.
-        services::log_rotation::prune_old_logs(dir, 30);
+    // A second copy (double click while running) leaves the running copy's
+    // logs alone; the single-instance handoff then closes it.
+    let instance_lock = app_data_dir.as_deref().and_then(services::instance_lock::acquire);
+    if instance_lock.is_some() {
+        if let Some(ref dir) = main_log_dir {
+            services::log_rotation::rotate_main_log_at_startup(dir);
+            services::log_rotation::prune_old_logs(dir, 30);
+        }
+        if let Some(ref dir) = raw_serial_log_dir {
+            // Raw serial logs already include the date in their filename,
+            // so no startup-rename pass is needed — just the retention sweep.
+            services::log_rotation::prune_old_logs(dir, 30);
+        }
     }
 
     let log_dirs_to_prune: Vec<std::path::PathBuf> =

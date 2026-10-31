@@ -7,11 +7,26 @@ use std::path::Path;
 
 const LOCK_FILE: &str = "instance.lock";
 
-/// The lock for this copy, or None when another copy holds it. Keep the
-/// returned file open for the life of the process.
+/// The lock for this copy, or None when another copy holds it (or the lock
+/// file can't be made: the start-up log housekeeping is then skipped once).
+/// Keep the returned file open for the life of the process.
 pub fn acquire(dir: &Path) -> Option<File> {
     let _ = std::fs::create_dir_all(dir);
-    OpenOptions::new().create(true).truncate(false).write(true).open(dir.join(LOCK_FILE)).ok()
+    let file = match OpenOptions::new().create(true).truncate(false).write(true).open(dir.join(LOCK_FILE)) {
+        Ok(f) => f,
+        Err(e) => {
+            log::warn!("Instance lock not available: {}", e);
+            return None;
+        }
+    };
+    match file.try_lock() {
+        Ok(()) => Some(file),
+        Err(std::fs::TryLockError::WouldBlock) => None,
+        Err(std::fs::TryLockError::Error(e)) => {
+            log::warn!("Instance lock not taken: {}", e);
+            Some(file)
+        }
+    }
 }
 
 #[cfg(test)]

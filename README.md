@@ -707,6 +707,9 @@
 - A failed start (database, migration, plugin) logs the error, ships the
   waiting log lines to Loki for at most 5 s (`loki_shipper::push_pending_now`;
   nothing when Loki is not set up) and shows a dialog.
+- `<app data>/instance.lock` is held (an OS file lock) while a copy runs; a
+  second copy started meanwhile skips the start-up log rename and prune, so it
+  can't move the running copy's live log (`services/instance_lock.rs`).
 - `<app data>/session.lock` is written at start and removed on Quit or a
   normal exit. Found at the next start it logs a warn event "Previous session
   ended unexpectedly" (`failure: unclean_shutdown`); with another version in
