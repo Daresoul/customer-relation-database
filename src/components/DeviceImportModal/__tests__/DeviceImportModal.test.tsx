@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   openAttachment: vi.fn(),
   previewValues: vi.fn(),
   listen: vi.fn(),
+  /** Patients whose record list fails to load. */
+  recordsFailFor: [] as number[],
 }));
 
 vi.mock('react-i18next', () => ({
@@ -43,9 +45,9 @@ vi.mock('@/hooks/useMedicalRecords', () => ({
             { id: 61, name: 'Consult', recordType: 'procedure', createdAt: new Date().toISOString(), isArchived: false },
           ],
         }
-      : { records: [] },
+      : mocks.recordsFailFor.includes(patientId) ? undefined : { records: [] },
     isLoading: false,
-    isError: false,
+    isError: mocks.recordsFailFor.includes(patientId),
   }),
 }));
 vi.mock('@/services/labInboxService', () => ({
@@ -151,6 +153,7 @@ async function confirmCancel(user: ReturnType<typeof userEvent.setup>) {
 
 beforeEach(() => {
   mocks.patients = [MAX, BELLA];
+  mocks.recordsFailFor = [];
   mocks.createRecord.mockReset().mockResolvedValue({ id: 99 });
   mocks.upload.mockReset().mockResolvedValue({ id: 500 });
   mocks.regenerateLabReport.mockReset().mockResolvedValue({ id: 700 });
@@ -347,6 +350,23 @@ describe('DeviceImportModal — attach to an existing record', () => {
     );
     expect(mocks.regenerateLabReport).toHaveBeenCalledWith(61);
     expect(mocks.generateReport).not.toHaveBeenCalled();
+  });
+
+  // Final review: the record picked for the first patient stayed chosen after
+  // switching patient, so Attach put the result on the wrong patient's record.
+  it('forgets the chosen record when the patient changes', async () => {
+    mocks.recordsFailFor = [2];
+    const user = userEvent.setup({ delay: 5 });
+    renderModal();
+    receive(result({ patientId: 1 }));
+    await chooseExisting(user);
+
+    await user.keyboard(`${BELLA.microchipId}{Enter}`);
+    await waitFor(() => expect(dialog().getByText('Bella - Dog')).toBeInTheDocument());
+    await user.click(screen.getByTestId('device-import-submit-btn'));
+
+    expect(await screen.findByText('medical:deviceImport.pickRecord')).toBeInTheDocument();
+    expect(mocks.upload).not.toHaveBeenCalled();
   });
 
   it('does not ask for the record form when adding to an existing record', async () => {
