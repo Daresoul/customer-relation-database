@@ -435,6 +435,44 @@ async fn moving_rebuilds_the_lab_report_on_the_chosen_record() {
     );
 }
 
+// Final review: a rebuild left out a result it couldn't read, said it worked,
+// and retired the earlier report that had it.
+#[tokio::test]
+async fn a_rebuild_with_an_unreadable_result_keeps_the_old_report_and_names_the_file() {
+    let db = create_test_db_with_migrations().await;
+    let dir = tempfile::tempdir().unwrap();
+    let Some(env) = jar_env(&dir) else { return };
+    let patient = seed_patient(&db, "Bella", None).await;
+    let record = seed_record(&db, patient, "Consult").await;
+    receive(&db, dir.path(), "r1", &koko_xml(), "ok", "2026-10-23T08:00:00+00:00").await;
+    receive_chemistry(&db, dir.path(), "r2").await;
+    lab_inbox::attach_to_record(&db, dir.path(), "r1", record).await.unwrap();
+    lab_inbox::attach_to_record(&db, dir.path(), "r2", record).await.unwrap();
+    let complete = lab_inbox::regenerate_lab_report(&env, &db, record).await.unwrap();
+    let chem_file: String = db
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "SELECT file_id FROM medical_attachments WHERE medical_record_id = ? AND original_name = 'chem.hl7' AND deleted_at IS NULL",
+            [record.into()],
+        ))
+        .await
+        .unwrap()
+        .unwrap()
+        .try_get("", "file_id")
+        .unwrap();
+    std::fs::remove_file(dir.path().join(chem_file)).unwrap();
+
+    let err = lab_inbox::regenerate_lab_report(&env, &db, record).await.unwrap_err();
+
+    assert!(err.contains("chem.hl7"), "{err}");
+    let live = scalar_i64(
+        &db,
+        &format!("SELECT COUNT(*) FROM medical_attachments WHERE id = {complete} AND deleted_at IS NULL"),
+    )
+    .await;
+    assert_eq!(live, 1, "the complete report stays");
+}
+
 #[tokio::test]
 async fn a_second_result_on_a_record_gives_one_lab_report_for_both() {
     let db = create_test_db_with_migrations().await;
