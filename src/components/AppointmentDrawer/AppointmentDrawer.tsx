@@ -33,6 +33,7 @@ import {
 import styles from './AppointmentDrawer.module.css';
 import { speciesLabel } from '../../utils/species';
 import { formatDateTime, formatDayMonth, getDatePickerFormat } from '@/utils/dateFormatter';
+import { roomOverbooked, roomTotal } from '@/utils/roomCapacity';
 
 const { Text } = Typography;
 
@@ -68,7 +69,7 @@ function ownerOf(patient: PatientDetail | null | undefined): { name?: string; ph
  */
 export const AppointmentDrawer: React.FC<AppointmentDrawerProps> = ({ appointmentId, onClose }) => {
   const { t } = useTranslation(['appointments', 'common']);
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [dialog, setDialog] = useState<Dialog>(null);
@@ -77,7 +78,7 @@ export const AppointmentDrawer: React.FC<AppointmentDrawerProps> = ({ appointmen
   const detail = useAppointmentDetail(appointmentId);
   const apt = appointmentId ? detail.data : undefined;
   const { data: patient } = usePatientDetail(apt?.patientId ?? 0);
-  const { updateAppointment, deleteAppointment, duplicateAppointment } = useAppointments();
+  const { updateAppointment, deleteAppointment, duplicateAppointment, checkConflicts } = useAppointments();
 
   const patientName = apt?.patientName || apt?.patient?.name || t('appointments:details.unknownPatient');
   const owner = ownerOf(patient);
@@ -148,13 +149,42 @@ export const AppointmentDrawer: React.FC<AppointmentDrawerProps> = ({ appointmen
     }
   };
 
+  /** Same checks as the edit form: a full room or the patient booked elsewhere asks first. */
+  const confirmMove = async (startTime: string, endTime: string): Promise<boolean> => {
+    if (!apt) return false;
+    try {
+      const check = await checkConflicts({
+        startTime,
+        endTime,
+        roomId: apt.roomId ?? undefined,
+        patientId: apt.patientId,
+        excludeAppointmentId: apt.id,
+      });
+      const capacity = apt.room?.capacity;
+      const roomFull = apt.roomId != null && capacity != null && roomOverbooked(check.conflicts?.length ?? 0, capacity);
+      const patientBusy = (check.patientConflicts?.length ?? 0) > 0;
+      if (!roomFull && !patientBusy) return true;
+      return await modal.confirm({
+        title: t(roomFull ? 'appointments:conflicts.confirmTitle' : 'appointments:conflicts.samePatientTitle'),
+        content: roomFull
+          ? t('appointments:conflicts.confirmMessage', { capacity, count: roomTotal(check.conflicts?.length ?? 0) })
+          : undefined,
+        okText: t('appointments:conflicts.continueAnyway'),
+        cancelText: t('common:cancel'),
+      });
+    } catch {
+      message.warning(t('appointments:validation.conflictCheckFailed'));
+      return true;
+    }
+  };
+
   const moveTo = async (start: Dayjs) => {
     if (!apt) return;
     const length = dayjs(apt.endTime).diff(dayjs(apt.startTime), 'minute');
-    const ok = await update({
-      startTime: start.toISOString(),
-      endTime: start.add(length, 'minute').toISOString(),
-    });
+    const startTime = start.toISOString();
+    const endTime = start.add(length, 'minute').toISOString();
+    if (!(await confirmMove(startTime, endTime))) return;
+    const ok = await update({ startTime, endTime });
     if (ok) {
       message.success(t('appointments:messages.rescheduledSuccess'));
       setDialog(null);

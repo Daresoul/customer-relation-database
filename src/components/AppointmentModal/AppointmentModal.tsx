@@ -42,6 +42,7 @@ import { useTranslation } from 'react-i18next';
 import styles from './AppointmentModal.module.css';
 import { speciesLabel } from '../../utils/species';
 import { formatDayMonth, getDatePickerFormat } from '@/utils/dateFormatter';
+import { roomTotal } from '@/utils/roomCapacity';
 
 const { TextArea } = Input;
 const { Text } = Typography;
@@ -262,8 +263,7 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
       if (conflicts.length > 0 && values.roomId) {
         const selectedRoom = rooms?.find(r => r.id === values.roomId);
 
-        // Calculate total appointments at this time (conflicts + current appointment)
-        const totalAppointments = mode === 'edit' ? conflicts.length : conflicts.length + 1;
+                const totalAppointments = roomTotal(conflicts.length);
 
         // Only warn if capacity is exceeded
         if (selectedRoom && totalAppointments > selectedRoom.capacity) {
@@ -271,9 +271,7 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
             title: t('appointments:conflicts.confirmTitle'),
             content: t('appointments:conflicts.confirmMessage', {
               capacity: selectedRoom.capacity,
-              isPlural: totalAppointments === 1 ? 'is' : 'are',
               count: totalAppointments,
-              pluralSuffix: totalAppointments === 1 ? '' : 's'
             }),
             okText: t('appointments:conflicts.continueAnyway'),
             cancelText: t('common:cancel'),
@@ -517,7 +515,7 @@ const AppointmentModalContent: React.FC<Omit<AppointmentModalProps, 'visible' | 
         {(() => {
           const roomId = form.getFieldValue('roomId');
           const selectedRoom = rooms?.find(r => r.id === roomId);
-          const totalAppointments = mode === 'edit' ? conflicts.length : conflicts.length + 1;
+          const totalAppointments = roomTotal(conflicts.length);
           const capacityExceeded = selectedRoom && totalAppointments > selectedRoom.capacity;
 
           return conflicts.length > 0 && capacityExceeded && (

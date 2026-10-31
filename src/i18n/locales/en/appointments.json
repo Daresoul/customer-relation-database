@@ -48,7 +48,8 @@
     "capacityWarning": "Room capacity is {{capacity}}, but there {{count}} appointment at this time",
     "capacityWarning_plural": "Room capacity is {{capacity}}, but there are {{count}} appointments at this time",
     "confirmTitle": "Room Capacity Exceeded",
-    "confirmMessage": "Room capacity is {{capacity}}, but there {{isPlural}} {{count}} appointment{{pluralSuffix}} at this time. Do you want to continue?",
+    "confirmMessage_one": "Room capacity is {{capacity}}, but there would be {{count}} appointment at this time. Do you want to continue?",
+    "confirmMessage_other": "Room capacity is {{capacity}}, but there would be {{count}} appointments at this time. Do you want to continue?",
     "continueAnyway": "Continue Anyway",
     "samePatientTitle": "This patient is already booked at this time"
   },
