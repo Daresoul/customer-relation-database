@@ -508,6 +508,7 @@ pub async fn generate_configured_report(
     // 4. Fetch and parse selected attachments
     let record_time = MedicalRecordService::record_time(&pool, medical_record_id).await?;
     let mut all_device_data: Vec<DeviceTestData> = Vec::new();
+    let mut unreadable: Vec<String> = Vec::new();
 
     for attachment_id in &selected_attachment_ids {
         let attachment_row = pool.query_one(Statement::from_sql_and_values(
@@ -566,12 +567,16 @@ pub async fn generate_configured_report(
                 });
             }
             Err(e) => {
-                log::debug!("Failed to parse attachment {}: {}", attachment_id, e);
-                // Continue with other attachments
+                log::warn!("Failed to parse attachment {}: {}", attachment_id, e);
+                unreadable.push(original_name.clone());
             }
         }
     }
 
+    // A report missing one of the chosen results would look complete.
+    if !unreadable.is_empty() {
+        return Err(crate::services::lab_inbox::unreadable_results(&unreadable));
+    }
     if all_device_data.is_empty() {
         return Err("Could not parse any device data from selected attachments.".to_string());
     }

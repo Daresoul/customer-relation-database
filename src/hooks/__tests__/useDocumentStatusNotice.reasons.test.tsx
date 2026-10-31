@@ -10,7 +10,9 @@ import type { ReactNode } from 'react';
 import { useDocumentStatusNotice } from '../useDocumentStatusNotice';
 
 vi.mock('@/services/invoke', () => ({ invoke: vi.fn() }));
-vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (key: string, o?: object) => (o ? `${key} ${JSON.stringify(o)}` : key) }),
+}));
 
 function wrapper({ children }: { children: ReactNode }) {
   return (
@@ -48,6 +50,14 @@ describe('why a document could not be made', () => {
     showFailure('Java PDF generator timed out after 60s and was stopped. STDERR: ');
     expect(await screen.findByText(/medical:documents\.reasons\.timedOut/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'medical:actions.retry' })).toBeInTheDocument();
+  });
+
+  // Final review: a result that can't be read keeps the old lab report; staff
+  // must remove or re-add that result, so trying again can't help.
+  it('names a lab result that could not be read, and offers no Retry', async () => {
+    showFailure('Could not read the lab result: chem.hl7, BM-1.xml; the lab report was left as it was');
+    expect(await screen.findByText(/medical:documents\.reasons\.labUnreadable \{"files":"chem\.hl7, BM-1\.xml"\}/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'medical:actions.retry' })).not.toBeInTheDocument();
   });
 
   it('keeps the first line of an error it does not know, with Retry', async () => {

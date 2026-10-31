@@ -618,12 +618,14 @@ pub async fn regenerate_lab_report(env: &PdfEnv, db: &DatabaseConnection, record
     let identifier = Some(patient.microchip_id.clone().unwrap_or_else(|| patient.name.clone()));
 
     let mut devices = Vec::new();
+    let mut unreadable = Vec::new();
     for row in &rows {
         let text = |c: &str| row.try_get::<Option<String>>("", c).ok().flatten().unwrap_or_default();
         let bytes = match std::fs::read(env.storage_dir.join(text("file_id"))) {
             Ok(b) => b,
             Err(e) => {
                 log::warn!("Lab report for record {}: could not read {}: {}", record_id, text("original_name"), e);
+                unreadable.push(text("original_name"));
                 continue;
             }
         };
@@ -636,8 +638,15 @@ pub async fn regenerate_lab_report(env: &PdfEnv, db: &DatabaseConnection, record
                 detected_at,
                 patient_identifier: identifier.clone(),
             }),
-            Err(e) => log::warn!("Lab report for record {}: could not read {}: {}", record_id, text("original_name"), e),
+            Err(e) => {
+                log::warn!("Lab report for record {}: could not read {}: {}", record_id, text("original_name"), e);
+                unreadable.push(text("original_name"));
+            }
         }
+    }
+    // A report without one of the record's results would replace a complete one.
+    if !unreadable.is_empty() {
+        return Err(unreadable_results(&unreadable));
     }
     if devices.is_empty() {
         return Err("Could not parse any device data from test_result attachments.".to_string());
@@ -657,6 +666,12 @@ pub async fn regenerate_lab_report(env: &PdfEnv, db: &DatabaseConnection, record
         .ok_or("The new lab report was not stored".to_string())?;
     retire_lab_reports(db, record_id, Some(newest)).await?;
     Ok(newest)
+}
+
+/// The error for results a lab report could not include; the app words it
+/// for staff (`useDocumentStatusNotice`).
+pub fn unreadable_results(names: &[String]) -> String {
+    format!("Could not read the lab result: {}; the lab report was left as it was", names.join(", "))
 }
 
 async fn retire_lab_reports<C: ConnectionTrait>(db: &C, record_id: i64, keep: Option<i64>) -> Result<(), String> {
