@@ -76,9 +76,9 @@ beforeEach(() => {
     if (cmd === 'recover_device_results') return { found: 5, added: 2 };
     if (cmd === 'get_available_ports')
       return [
-        { port_name: 'COM5', port_type: { USB: { vid: 0x1a86, pid: 0x7523, device_name: 'USB-SERIAL CH340' } } },
+        { port_name: 'COM5', port_type: { SerialUSBPort: { vid: 0x1a86, pid: 0x7523, device_name: 'USB-SERIAL CH340' } } },
         { port_name: 'COM9', port_type: { HIDDevice: { vid: 1, pid: 2, device_name: 'Barcode scanner' } } },
-        { port_name: 'COM7', port_type: { USB: { vid: 0x0403, pid: 0x6001, device_name: 'FTDI' } } },
+        { port_name: 'COM7', port_type: { SerialUSBPort: { vid: 0x0403, pid: 0x6001, device_name: 'FTDI' } } },
       ];
     if (cmd === 'get_device_diagnostics') return 'Arkivet diagnostics\nDevice: PointCare';
     return undefined;
