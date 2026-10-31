@@ -437,3 +437,13 @@ fn a_stop_that_hangs_gives_up_after_the_limit() {
     assert_eq!(within(Duration::from_secs(2), || 3), Some(3));
 }
 
+// Final review: some drivers leave a working port out of the port list; the
+// presence check then closed it every 5 s and results sent meanwhile were lost.
+#[test]
+fn a_port_the_driver_never_lists_is_not_dropped_for_being_unlisted() {
+    use crate::services::device_input::still_there;
+    assert!(still_there(false, false), "never listed: the list says nothing about it");
+    assert!(!still_there(true, false), "listed when opened, gone now");
+    assert!(still_there(true, true));
+}
+

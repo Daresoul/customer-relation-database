@@ -1047,6 +1047,11 @@ pub(crate) fn classify_open_error(e: &serialport::Error, port_present: bool) -> 
     }
 }
 
+/// Whether an open port still counts as present.
+pub fn still_there(_listed_at_open: bool, listed_now: bool) -> bool {
+    listed_now
+}
+
 fn port_present(port_name: &str) -> bool {
     if port_name.starts_with('/') {
         return std::path::Path::new(port_name).exists();
