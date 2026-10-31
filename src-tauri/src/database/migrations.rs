@@ -105,6 +105,7 @@ const MIGRATIONS: &[(&str, MigrationFn)] = &[
     ("059_appointment_arrival", add_appointment_arrival),
     ("060_device_alerts", add_device_alerts),
     ("061_lab_match_method", add_lab_match_method),
+    ("062_invoice_price_mode", add_invoice_price_mode),
 ];
 
 /// How many migrations the app knows.
@@ -3118,6 +3119,24 @@ fn fix_medical_records_fts_triggers(pool: &SqlitePool) -> std::pin::Pin<Box<dyn 
 
 // Migration 050: the invoice date (local calendar date, `YYYY-MM-DD`), stored
 // once when the invoice number is assigned so later edits reprint the same date.
+/// The clinic's price mode (gross or net) an invoice was issued with, so a
+/// later switch in Settings can't change an invoice already given out.
+fn add_invoice_price_mode(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
+    Box::pin(async move {
+        let exists: (i32,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM pragma_table_info('medical_records') WHERE name = 'invoice_prices_include_vat'"
+        )
+        .fetch_one(pool)
+        .await?;
+        if exists.0 == 0 {
+            sqlx::query("ALTER TABLE medical_records ADD COLUMN invoice_prices_include_vat BOOLEAN")
+                .execute(pool)
+                .await?;
+        }
+        Ok(())
+    })
+}
+
 fn add_invoice_date_column(pool: &SqlitePool) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), sqlx::Error>> + Send + '_>> {
     Box::pin(async move {
         let exists: (i32,) = sqlx::query_as(

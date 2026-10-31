@@ -572,6 +572,10 @@
 - The invoice number and date are assigned once, on the first invoice, in
   local time (`assign_invoice`; columns `invoice_number`, `invoice_date`). Later
   edits reprint the same number and date. The number's year is the local year.
+  An issued invoice also keeps its VAT and price mode: a later save keeps each
+  line's VAT name and percent for rates already on the invoice, and the gross
+  or net mode it was issued with (`invoice_prices_include_vat`, migration 062).
+  Lines added or changed after it count as edits.
 - A long invoice continues on another letterhead page with the column headings
   repeated; long item names wrap.
 - An edit waits for the record's diagnoses to load before it can be saved, and

@@ -298,6 +298,7 @@ impl MedicalRecordService {
         record_id: i64,
         now: DateTime<Tz>,
     ) -> Result<Invoice, String> {
+        let prices_include_vat = crate::services::settings::SettingsService::get_clinic_profile(db).await?.prices_include_vat;
         let txn = db.begin().await.map_err(|e| format!("Failed to start invoice numbering: {}", e))?;
         let row = txn
             .query_one(Statement::from_sql_and_values(
@@ -316,6 +317,15 @@ impl MedicalRecordService {
             .and_then(|d| chrono::NaiveDate::parse_from_str(&d, "%Y-%m-%d").ok());
 
         if let (Some(number), Some(date)) = (number.clone(), stored_date) {
+            // Invoiced before the price mode was kept: it is the one in use now.
+            txn.execute(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "UPDATE medical_records SET invoice_prices_include_vat = ? WHERE id = ? AND invoice_prices_include_vat IS NULL",
+                [prices_include_vat.into(), record_id.into()],
+            ))
+            .await
+            .map_err(|e| format!("Failed to store the invoice price mode: {}", e))?;
+            txn.commit().await.map_err(|e| format!("Failed to store the invoice price mode: {}", e))?;
             return Ok(Invoice { number, date });
         }
 
@@ -353,10 +363,12 @@ impl MedicalRecordService {
 
         txn.execute(Statement::from_sql_and_values(
             DbBackend::Sqlite,
-            "UPDATE medical_records SET invoice_number = ?, invoice_date = ? WHERE id = ?",
+            "UPDATE medical_records SET invoice_number = ?, invoice_date = ?, \
+             invoice_prices_include_vat = COALESCE(invoice_prices_include_vat, ?) WHERE id = ?",
             [
                 invoice.number.clone().into(),
                 invoice.date.format("%Y-%m-%d").to_string().into(),
+                prices_include_vat.into(),
                 record_id.into(),
             ],
         ))
@@ -1009,8 +1021,25 @@ impl MedicalRecordService {
             .await
             .map_err(|e| format!("Failed to read the discount: {}", e))?
             .and_then(|row| row_f64(&row, "discount_percent"));
-        let clinic = crate::services::settings::SettingsService::get_clinic_profile(db).await?;
-        Ok(Self::totals_of(&lines, discount, clinic.prices_include_vat))
+        Ok(Self::totals_of(&lines, discount, Self::price_mode(db, record_id).await?))
+    }
+
+    /// Gross or net prices for this record's invoice: the mode it was issued
+    /// with, else the clinic's current one.
+    pub(crate) async fn price_mode(db: &DatabaseConnection, record_id: i64) -> Result<bool, String> {
+        let stored = db
+            .query_one(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "SELECT invoice_prices_include_vat FROM medical_records WHERE id = ?",
+                [record_id.into()],
+            ))
+            .await
+            .map_err(|e| format!("Failed to read the invoice price mode: {}", e))?
+            .and_then(|row| row.try_get::<Option<bool>>("", "invoice_prices_include_vat").ok().flatten());
+        match stored {
+            Some(mode) => Ok(mode),
+            None => Ok(crate::services::settings::SettingsService::get_clinic_profile(db).await?.prices_include_vat),
+        }
     }
 
     fn totals_of(
@@ -1059,7 +1088,7 @@ impl MedicalRecordService {
 
         let invoice = Self::assign_invoice(db, record.id, chrono::Local::now()).await?;
         let clinic = crate::services::settings::SettingsService::get_clinic_profile(db).await?;
-        let totals = Self::totals_of(&line_items, record.discount_percent, clinic.prices_include_vat);
+        let totals = Self::totals_of(&line_items, record.discount_percent, Self::price_mode(db, record.id).await?);
         let job = JavaPdfService::invoice_json(
             &invoice.date.format("%d/%m/%Y").to_string(),
             &invoice.number,

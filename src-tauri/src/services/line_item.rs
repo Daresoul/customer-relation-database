@@ -373,15 +373,46 @@ impl LineItemService {
         medical_record_id: i64,
         items: Vec<CreateLineItemInput>,
     ) -> Result<Vec<MedicalRecordLineItem>, String> {
-        // Delete existing line items
+        // An issued invoice keeps the VAT it went out with: a rate edited in
+        // Settings since then does not change its lines on a later save.
+        let invoiced = db
+            .query_one(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "SELECT invoice_number FROM medical_records WHERE id = ?",
+                [medical_record_id.into()],
+            ))
+            .await
+            .map_err(|e| format!("Failed to read the invoice number: {}", e))?
+            .and_then(|row| row.try_get::<Option<String>>("", "invoice_number").ok().flatten())
+            .is_some();
+        let issued: Vec<(i64, Option<String>, Option<f64>)> = if invoiced {
+            Self::get_line_items_for_record_in(db, medical_record_id)
+                .await?
+                .into_iter()
+                .filter_map(|l| l.tax_rate_id.map(|id| (id, l.vat_name, l.vat_percent)))
+                .collect()
+        } else {
+            Vec::new()
+        };
+
         MedicalRecordLineItemEntity::delete_many()
             .filter(medical_record_line_item::Column::MedicalRecordId.eq(medical_record_id))
             .exec(db)
             .await
             .map_err(|e| format!("Failed to delete existing line items: {}", e))?;
 
-        // Create new line items
-        Self::create_line_items_for_record_in(db, medical_record_id, items).await
+        Self::create_line_items_for_record_in(db, medical_record_id, items).await?;
+        for (rate_id, name, percent) in issued {
+            db.execute(Statement::from_sql_and_values(
+                DbBackend::Sqlite,
+                "UPDATE medical_record_line_items SET vat_name = ?, vat_percent = ? \
+                 WHERE medical_record_id = ? AND tax_rate_id = ?",
+                [name.into(), percent.into(), medical_record_id.into(), rate_id.into()],
+            ))
+            .await
+            .map_err(|e| format!("Failed to keep the invoice VAT: {}", e))?;
+        }
+        Self::get_line_items_for_record_in(db, medical_record_id).await
     }
 
     /// Delete all line items for a medical record
