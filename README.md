@@ -426,6 +426,9 @@
   lab PDF and in the app (`lab_reference::Species::Other`).
 
 ### PDF tool check at start (`services/java_pdf_service.rs`)
+- A lab report (rebuild or Print report) is not made without a result it
+  can't read: the earlier report stays and the message names the file
+  (`lab_inbox::unreadable_results`).
 - Ranges and flags are stored per result for the patient's species. Moving a
   result re-reads it for the new patient, and changing a patient's species
   re-reads all its results (`lab_results::forget`, `reindex_patient`).

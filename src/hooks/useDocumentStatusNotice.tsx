@@ -18,6 +18,7 @@ function shortError(error: string | null): string {
 
 /** Known causes, in plain words; `retry` is false when trying again can't help. */
 const REASONS: Array<{ match: RegExp; key: string; retry: boolean }> = [
+  { match: /Could not read the lab result: (.+?); the lab report was left as it was/, key: 'labUnreadable', retry: false },
   { match: /not found at resolved path|JAR not found/i, key: 'toolMissing', retry: false },
   { match: /Failed to execute Java/i, key: 'javaMissing', retry: false },
   { match: /timed out/i, key: 'timedOut', retry: true },
@@ -37,6 +38,10 @@ export function useDocumentStatusNotice() {
   const queryClient = useQueryClient();
 
   const kindLabel = (kind: string) => t(`medical:documents.kinds.${kind}`);
+  const reasonText = (reason: { match: RegExp; key: string }, error: string | null) => {
+    const files = reason.match.exec(error ?? '')?.[1];
+    return files ? t(`medical:documents.reasons.${reason.key}`, { files }) : t(`medical:documents.reasons.${reason.key}`);
+  };
 
   const retry = async (recordId: number, kind: string) => {
     const key = `record-${recordId}-document-${kind}`;
@@ -69,7 +74,7 @@ export function useDocumentStatusNotice() {
     notification.warning({
       key: `record-${recordId}-document-${status.kind}`,
       message: t('medical:documents.someFailed'),
-      description: `${kindLabel(status.kind)}: ${reason ? t(`medical:documents.reasons.${reason.key}`) : shortError(status.error)}`,
+      description: `${kindLabel(status.kind)}: ${reason ? reasonText(reason, status.error) : shortError(status.error)}`,
       placement: 'bottomRight',
       duration: 0,
       actions: reason && !reason.retry ? undefined : (

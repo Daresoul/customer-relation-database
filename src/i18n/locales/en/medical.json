@@ -341,6 +341,7 @@
     "valuesNotOnPdf": "Values not on the lab report ({{count}}): {{codes}}",
     "valuesNotOnPdfHint": "The machine sent them but the report has no row for them. They stay with the result in the Lab inbox and on the patient's Labs tab.",
     "reasons": {
+      "labUnreadable": "the lab result {{files}} could not be read, so the lab report was not changed. Remove that result from the record or add it again, then make the report.",
       "toolMissing": "the PDF tool is missing from this installation. Install Arkivet again from the latest download.",
       "javaMissing": "Java is not installed on this computer, and Arkivet needs it to make PDFs. Install Java, then press Retry on the record page.",
       "timedOut": "making it took too long. Try again."
