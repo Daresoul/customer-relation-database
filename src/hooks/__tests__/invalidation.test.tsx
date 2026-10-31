@@ -84,6 +84,20 @@ describe('invalidation after saves', () => {
     expect(roots()).toContain('household-patients');
   });
 
+  // Lab ranges and flags follow the species; a species fix re-reads them.
+  it('editing a patient refreshes its lab values', async () => {
+    patientService.updatePatient.mockResolvedValue({ id: 3, name: 'Rex', householdId: 12, speciesId: 2 });
+    const { wrapper, roots } = setup();
+    const { result } = renderHook(() => useUpdatePatient(), { wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync({ patientId: 3, updates: { speciesId: 2 } });
+    });
+
+    expect(roots()).toContain('patient-labs');
+    expect(roots()).toContain('record-labs');
+  });
+
   it('deleting a patient refreshes the household pets list and the calendar', async () => {
     patientService.deletePatient.mockResolvedValue(undefined);
     const { wrapper, roots } = setup();
