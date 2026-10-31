@@ -1047,9 +1047,10 @@ pub(crate) fn classify_open_error(e: &serialport::Error, port_present: bool) -> 
     }
 }
 
-/// Whether an open port still counts as present.
-pub fn still_there(_listed_at_open: bool, listed_now: bool) -> bool {
-    listed_now
+/// Whether an open port still counts as present. Some drivers never put a
+/// working port in the list; for those the list says nothing.
+pub fn still_there(listed_at_open: bool, listed_now: bool) -> bool {
+    !listed_at_open || listed_now
 }
 
 fn port_present(port_name: &str) -> bool {
@@ -1607,13 +1608,14 @@ fn handle_listening_serial(
 
     log::info!("📖 Starting serial port read loop for {} ({})", device_type, port_name);
     let mut sink = SerialSink { app_handle, port_name, device_type, integration_id };
+    let listed_at_open = port_present(port_name);
     let result = run_read_loop_with_presence(
         &mut *port,
         &protocol,
         shutdown_rx,
         INTER_FRAME_IDLE_FLUSH,
         &mut sink,
-        &mut || port_present(port_name),
+        &mut || still_there(listed_at_open, port_present(port_name)),
         PRESENCE_CHECK_EVERY,
     );
     drop(port);

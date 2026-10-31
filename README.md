@@ -372,7 +372,8 @@
   logged at info/warn; the rest go to debug.
 - While a serial line is quiet the app checks every 5 s that the port still
   exists (some USB-serial drivers return no data instead of an error when the
-  cable is pulled). A result cut by an unplug, a stall or the 64 kB size limit
+  cable is pulled). A port that was not in the port list when it opened is
+  never dropped for being unlisted (`still_there`). A result cut by an unplug, a stall or the 64 kB size limit
   reaches the lab inbox as cut off; bytes outside any result (wrong speed or
   machine type) show in the machine's history, at most every 10 minutes.
   Zero bytes don't count: the PointCare sends long runs of them while idle.
