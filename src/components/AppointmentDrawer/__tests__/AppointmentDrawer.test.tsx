@@ -298,9 +298,9 @@ describe('Appointment panel', () => {
     fireEvent.keyDown(timeInput, { key: 'Enter' });
     fireEvent.click(within(dialog).getByRole('button', { name: /appointments:reschedule.save/ }));
 
-    await screen.findByText(/appointments:conflicts.confirmTitle/);
-    expect(calls('check_conflicts')[0]).toMatchObject({ input: { roomId: 3, patientId: 21, excludeAppointmentId: 4 } });
-    fireEvent.click(screen.getByRole('button', { name: /common:cancel/ }));
+    const confirm = (await screen.findByText(/appointments:conflicts.confirmTitle/)).closest('.ant-modal-confirm') as HTMLElement;
+    expect(calls('check_conflicts')[0]).toMatchObject({ input: { room_id: 3, patient_id: 21, exclude_appointment_id: 4 } });
+    fireEvent.click(within(confirm).getByRole('button', { name: /common:cancel/ }));
     await waitFor(() => expect(screen.queryByText(/appointments:conflicts.confirmTitle/)).not.toBeInTheDocument());
     expect(calls('update_appointment')).toHaveLength(0);
   });
