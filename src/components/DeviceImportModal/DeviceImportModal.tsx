@@ -133,8 +133,9 @@ const DeviceImportDialog: React.FC = () => {
   const [printAfterSave, setPrintAfterSave] = useState(true);
   // Make a new record, or add the result to one the patient already has
   const [target, setTarget] = useState<'new' | 'existing'>('new');
-  const [existingRecordId, setExistingRecordId] = useState<number | undefined>();
-  const onExistingRecordChange = useCallback((id?: number) => setExistingRecordId(id), []);
+  // The record is kept with the patient it was picked for: after a patient
+  // change it no longer counts, even before the new patient's records load.
+  const [existingRecord, setExistingRecord] = useState<{ patientId?: number; recordId?: number }>({});
   const [scannedMicrochipId, setScannedMicrochipId] = useState<string>('');
   const [titleSearchTerm, setTitleSearchTerm] = useState<string>('');
   const debouncedSearchTerm = useDebounce(titleSearchTerm, 300);
@@ -168,6 +169,11 @@ const DeviceImportDialog: React.FC = () => {
   const { patients, refreshPatients, loading: patientsLoading, error: patientsError } = usePatients();
 
   const pickedPatientId = Form.useWatch('patientId', form);
+  const existingRecordId = existingRecord.patientId === pickedPatientId ? existingRecord.recordId : undefined;
+  const onExistingRecordChange = useCallback(
+    (id?: number) => setExistingRecord({ patientId: pickedPatientId, recordId: id }),
+    [pickedPatientId],
+  );
   const pickedPatient = patients.find((p) => p.id === pickedPatientId);
   const pickedForCheck = pickedPatient
     ? { id: pickedPatient.id, name: pickedPatient.name, species: pickedPatient.species, microchipId: pickedPatient.microchipId }
