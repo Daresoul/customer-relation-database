@@ -38,6 +38,7 @@ pub mod record_template;
 pub mod device_health;
 pub mod app_launch;
 pub mod session_marker;
+pub mod instance_lock;
 pub mod offline_gap;
 pub mod temp_cleanup;
 pub mod names;
