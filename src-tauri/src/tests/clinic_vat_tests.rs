@@ -2,7 +2,7 @@
 
 use crate::models::dto::{CreatePatientDto, MaybeNull};
 use crate::models::line_item::{CreateLineItemInput, CreateLineItemTemplateInput, UpdateLineItemTemplateInput};
-use crate::models::medical::CreateMedicalRecordInput;
+use crate::models::medical::{CreateMedicalRecordInput, UpdateMedicalRecordInput};
 use crate::models::settings::{CreateTaxRateInput, UpdateClinicProfileInput, UpdateTaxRateInput};
 use crate::services::java_pdf_service::JavaPdfService;
 use crate::services::line_item::LineItemService;
@@ -276,6 +276,75 @@ async fn a_line_item_keeps_the_rate_it_was_saved_with() {
     let items = LineItemService::get_line_items_for_record(&db, saved.id).await.unwrap();
     assert_eq!((items[0].tax_rate_id, items[0].vat_percent, items[0].vat_name.as_deref()), (Some(r18), Some(18.0), Some("ДДВ 18%")));
     assert_eq!((items[1].tax_rate_id, items[1].vat_percent), (None, None));
+}
+
+fn resave(items: Vec<CreateLineItemInput>) -> UpdateMedicalRecordInput {
+    UpdateMedicalRecordInput {
+        name: None,
+        procedure_name: None,
+        description: Some("typo fixed".to_string()),
+        prescription_notes: None,
+        price: MaybeNull::Undefined,
+        currency_id: MaybeNull::Undefined,
+        discount_percent: MaybeNull::Undefined,
+        manual_total: MaybeNull::Undefined,
+        is_archived: None,
+        line_items: Some(items),
+    }
+}
+
+// Final review: a rate edited in Settings after the invoice went out changed
+// the issued invoice on the next save of the record (same number and date).
+#[tokio::test]
+async fn an_invoiced_record_keeps_its_vat_when_saved_after_a_rate_change() {
+    let db = create_test_db_with_migrations().await;
+    let r18 = rate_id(&db, "ДДВ 18%").await;
+    let patient_id = seed_patient(&db).await;
+    let saved = MedicalRecordService::save_new_record(&db, record(patient_id, None, vec![
+        item("Surgery", 1180.0, None, MaybeNull::Value(r18)),
+    ])).await.unwrap();
+    MedicalRecordService::assign_invoice(&db, saved.id, chrono::Local::now()).await.unwrap();
+
+    SettingsService::update_tax_rate(&db, r18, UpdateTaxRateInput { percent: Some(10.0), ..Default::default() }).await.unwrap();
+    MedicalRecordService::save_record_changes(&db, saved.id, resave(vec![item("Surgery", 1180.0, None, MaybeNull::Value(r18))])).await.unwrap();
+
+    let items = LineItemService::get_line_items_for_record(&db, saved.id).await.unwrap();
+    assert_eq!(items[0].vat_percent, Some(18.0));
+}
+
+#[tokio::test]
+async fn a_record_not_yet_invoiced_takes_the_current_rate() {
+    let db = create_test_db_with_migrations().await;
+    let r18 = rate_id(&db, "ДДВ 18%").await;
+    let patient_id = seed_patient(&db).await;
+    let saved = MedicalRecordService::save_new_record(&db, record(patient_id, None, vec![
+        item("Surgery", 1180.0, None, MaybeNull::Value(r18)),
+    ])).await.unwrap();
+
+    SettingsService::update_tax_rate(&db, r18, UpdateTaxRateInput { percent: Some(10.0), ..Default::default() }).await.unwrap();
+    MedicalRecordService::save_record_changes(&db, saved.id, resave(vec![item("Surgery", 1180.0, None, MaybeNull::Value(r18))])).await.unwrap();
+
+    let items = LineItemService::get_line_items_for_record(&db, saved.id).await.unwrap();
+    assert_eq!(items[0].vat_percent, Some(10.0));
+}
+
+#[tokio::test]
+async fn an_invoiced_record_keeps_the_price_mode_it_was_issued_with() {
+    let db = create_test_db_with_migrations().await;
+    SettingsService::update_clinic_profile(&db, profile_input()).await.unwrap();
+    let r18 = rate_id(&db, "ДДВ 18%").await;
+    let patient_id = seed_patient(&db).await;
+    let saved = MedicalRecordService::save_new_record(&db, record(patient_id, None, vec![
+        item("Surgery", 1180.0, None, MaybeNull::Value(r18)),
+    ])).await.unwrap();
+    MedicalRecordService::assign_invoice(&db, saved.id, chrono::Local::now()).await.unwrap();
+
+    let mut p = profile_input();
+    p.prices_include_vat = Some(false);
+    SettingsService::update_clinic_profile(&db, p).await.unwrap();
+
+    let totals = MedicalRecordService::invoice_totals_for_record(&db, saved.id).await.unwrap();
+    assert_eq!((totals.total, totals.vat_total), (1180.0, 180.0));
 }
 
 #[tokio::test]
