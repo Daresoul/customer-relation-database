@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toMoneyLines, withRate, rateForTemplate, defaultRate } from '../invoiceLines';
+import { toMoneyLines, withRate, rateForTemplate, defaultRate, toLineItemInputs } from '../invoiceLines';
 import type { MedicalRecordLineItem, LineItemTemplate } from '@/types/lineItem';
 import type { TaxRate } from '@/types/clinic';
 
@@ -33,5 +33,20 @@ describe('invoice lines', () => {
     expect(defaultRate([r18, r5])).toBe(r5);
     expect(defaultRate([r18])).toBeUndefined();
     expect(defaultRate([{ ...r5, isActive: false }])).toBeUndefined();
+  });
+});
+
+// Final review: the lab import's "new record" dropped each line's VAT rate,
+// so the backend fell back to the item's default (or none).
+describe('toLineItemInputs', () => {
+  it('sends each line with its VAT rate, and null for a line without one', () => {
+    const inputs = toLineItemInputs([
+      { name: 'Surgery', unitPrice: 1180, currencyId: 1, quantity: 1, taxRateId: 3, vatName: 'ДДВ 18%', vatPercent: 18 },
+      { name: 'Walk-in', unitPrice: 300, currencyId: 1, quantity: 2, templateId: 7 },
+    ]);
+    expect(inputs).toEqual([
+      { templateId: undefined, name: 'Surgery', description: undefined, unitPrice: 1180, currencyId: 1, quantity: 1, taxRateId: 3 },
+      { templateId: 7, name: 'Walk-in', description: undefined, unitPrice: 300, currencyId: 1, quantity: 2, taxRateId: null },
+    ]);
   });
 });
