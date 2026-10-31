@@ -62,6 +62,7 @@ import type { MatchStrength } from '@/utils/deviceDataValidation';
 import type { ValidationWarning } from '@/types/deviceImport';
 import { speciesLabel } from '../../utils/species';
 import { formatDateTime } from '@/utils/dateFormatter';
+import { toLineItemInputs } from '@/utils/invoiceLines';
 
 const { Option } = Select;
 const { Text } = Typography;
@@ -561,16 +562,7 @@ const DeviceImportDialog: React.FC = () => {
         }));
 
       // Convert line items for submission
-      const lineItemsInput: CreateLineItemInput[] | undefined = lineItems.length > 0
-        ? lineItems.map(item => ({
-            templateId: item.templateId,
-            name: item.name,
-            description: item.description,
-            unitPrice: item.unitPrice,
-            currencyId: item.currencyId,
-            quantity: item.quantity,
-          }))
-        : undefined;
+      const lineItemsInput: CreateLineItemInput[] | undefined = lineItems.length > 0 ? toLineItemInputs(lineItems) : undefined;
 
       const input: CreateMedicalRecordInput = {
         patientId: values.patientId,

@@ -254,6 +254,7 @@ export const LineItemsFieldGroup: React.FC<LineItemsFieldGroupProps> = ({
         description: values.description || undefined,
         defaultPrice: values.unitPrice,
         currencyId: values.currencyId,
+        defaultTaxRateId: values.taxRateId ?? null,
       });
     } catch {
       // Mutation hook already surfaced an error notification via

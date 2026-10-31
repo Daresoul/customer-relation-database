@@ -19,6 +19,7 @@ import type { RecordType } from '@/components/forms/fieldGroups';
 import type { UploadFile } from 'antd';
 import styles from './MedicalRecordForm.module.css';
 import { localeNumberParser } from '@/utils/localeNumber';
+import { toLineItemInputs } from '@/utils/invoiceLines';
 
 const { Text } = Typography;
 const { Dragger } = Upload;
@@ -243,16 +244,7 @@ const MedicalRecordForm: React.FC<MedicalRecordFormProps> = ({
     // Convert MedicalRecordLineItem to CreateLineItemInput for submission
     // Cleared values go out as [] / null: a missing field means "unchanged"
     // to the backend, so leaving them out would keep the old ones.
-    const lineItemsInput: CreateLineItemInput[] = lineItems.map(item => ({
-      templateId: item.templateId,
-      name: item.name,
-      description: item.description,
-      unitPrice: item.unitPrice,
-      currencyId: item.currencyId,
-      quantity: item.quantity,
-      // null: no rate. A missing field would give the line its item's default rate.
-      taxRateId: item.taxRateId ?? null,
-    }));
+    const lineItemsInput: CreateLineItemInput[] = toLineItemInputs(lineItems);
     // The manual total stands in for line items; with items it no longer applies.
     const manualTotalInput = lineItems.length > 0 ? null : manualTotal;
     // The Prescriptions tab mounts only once opened, so `values` lacks a
