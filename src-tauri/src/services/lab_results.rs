@@ -387,6 +387,11 @@ pub async fn index_attachment(db: &DatabaseConnection, storage_dir: &Path, attac
     Ok(values.len())
 }
 
+/// Reads the patient's lab results again, after its species changed.
+pub async fn reindex_patient(_db: &DatabaseConnection, _storage_dir: &Path, _patient_id: i64) -> Result<(), String> {
+    Ok(())
+}
+
 /// Hand a moved result's values to its new attachment and record.
 pub async fn repoint<C: ConnectionTrait>(db: &C, from_attachment: i64, to_attachment: i64, to_record: i64) -> Result<(), String> {
     db.execute(Statement::from_sql_and_values(

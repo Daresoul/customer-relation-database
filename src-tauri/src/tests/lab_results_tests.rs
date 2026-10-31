@@ -279,6 +279,44 @@ async fn moving_a_result_re_points_its_rows_to_the_chosen_record() {
     assert_eq!(count(&db, "SELECT COUNT(*) FROM lab_results").await, before as i64, "moved, not copied");
 }
 
+// Final review: ranges and flags were worked out once, for the species of the
+// patient a result was first attached to, and kept through a move.
+#[tokio::test]
+async fn a_result_moved_to_another_species_gets_that_species_ranges() {
+    let db = create_test_db_with_migrations().await;
+    let dir = tempfile::tempdir().unwrap();
+    let dog = seed_patient(&db, "Rex", 1).await;
+    let cat = seed_patient(&db, "Mici", 2).await;
+    let wrong = seed_record(&db, dog, "Rex consult").await;
+    let right = seed_record(&db, cat, "Mici consult").await;
+    let att = upload(&db, dir.path(), wrong, "stored-hv", "healvet_hv_fia_3000", br#"{"SAA": "6.0", "patient_name": "Mici"}"#).await;
+    lab_results::index_attachment(&db, dir.path(), att).await.unwrap();
+    let before = lab_results::patient_lab_results(&db, dog).await.unwrap();
+    assert_eq!(before.iter().find(|r| r.code == "SAA").unwrap().flag, "H", "dog range 0–5.4");
+
+    lab_inbox::move_result(&broken_env(&dir), &db, att, right, None).await.unwrap();
+
+    let moved = lab_results::patient_lab_results(&db, cat).await.unwrap();
+    assert_eq!(moved.iter().find(|r| r.code == "SAA").unwrap().flag, "N", "cat range 0–8");
+}
+
+#[tokio::test]
+async fn correcting_a_patients_species_recomputes_its_ranges() {
+    let db = create_test_db_with_migrations().await;
+    let dir = tempfile::tempdir().unwrap();
+    let mici = seed_patient(&db, "Mici", 1).await;
+    let record = seed_record(&db, mici, "Check-up").await;
+    let att = upload(&db, dir.path(), record, "stored-hv", "healvet_hv_fia_3000", br#"{"SAA": "6.0", "patient_name": "Mici"}"#).await;
+    lab_results::index_attachment(&db, dir.path(), att).await.unwrap();
+
+    db.execute(Statement::from_string(DbBackend::Sqlite, format!("UPDATE patients SET species_id = 2 WHERE id = {mici}"))).await.unwrap();
+    lab_results::reindex_patient(&db, dir.path(), mici).await.unwrap();
+
+    let rows = lab_results::patient_lab_results(&db, mici).await.unwrap();
+    assert_eq!(rows.iter().find(|r| r.code == "SAA").unwrap().flag, "N");
+    assert_eq!(rows.len(), 1, "recomputed, not doubled");
+}
+
 #[tokio::test]
 async fn deleting_the_attachment_hides_its_values() {
     let db = create_test_db_with_migrations().await;
