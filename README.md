@@ -244,9 +244,11 @@
   alert chips, owner and phone, reason, notes, status with arrival time and wait,
   Google state (`google_sync_state`: off, synced, not_synced, reconnect) and the
   linked record. Actions: status moves (one click), Open patient, Start medical
-  record, Edit, Reschedule (keeps the length), Duplicate (to a chosen date),
+  record, Edit, Reschedule (keeps the length; asks first when the room is full
+  or the patient is booked then, like Edit), Duplicate (to a chosen date),
   Delete (asks first). A right click on a calendar card offers the same status
-  moves.
+  moves. Room capacity counts the visit being saved with the others at that
+  time (`utils/roomCapacity.ts`).
 - Start medical record sets the visit to in consult and opens the record
   modal. The record it saves is linked through `appointments.medical_record_id`:
   the panel watches the `CREATE_RECORD_MUTATION_KEY` mutation
