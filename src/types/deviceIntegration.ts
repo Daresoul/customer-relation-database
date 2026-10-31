@@ -217,13 +217,29 @@ export interface UsbInfo {
   device_name?: string; // Friendly name from USB ID database (e.g., "FTDI FT232 USB-Serial")
 }
 
+/** As the backend sends it (`services::device_input::PortType`): kinds without
+ *  data come as plain text, the others as a one-key object. */
 export type PortType =
-  | { USB: UsbInfo }
-  | { PCI: null }
-  | { BluetoothPort: null }
-  | { BuiltInPort: null }
+  | { SerialUSBPort: UsbInfo }
   | { HIDDevice: UsbInfo }
-  | { Unknown: null };
+  | { VirtualPort: string }
+  | { DisconnectedPort: string }
+  | 'SerialPciPort'
+  | 'SerialBluetoothPort'
+  | 'SerialUnknown'
+  | 'BuiltInPort';
+
+/** The USB details of a USB-serial adapter or HID device, if it is one. */
+export function usbInfoOf(portType: PortType): UsbInfo | undefined {
+  if (typeof portType !== 'object') return undefined;
+  if ('SerialUSBPort' in portType) return portType.SerialUSBPort;
+  if ('HIDDevice' in portType) return portType.HIDDevice;
+  return undefined;
+}
+
+export function isHidDevice(portType: PortType): boolean {
+  return typeof portType === 'object' && 'HIDDevice' in portType;
+}
 
 export interface PortInfo {
   port_name: string;
@@ -232,19 +248,14 @@ export interface PortInfo {
 
 // Helper to format USB device display name (for dropdown/list)
 export function formatUsbDeviceDisplayName(port: PortInfo): string {
-  if ('USB' in port.port_type || 'HIDDevice' in port.port_type) {
-    const usb = 'USB' in port.port_type ? port.port_type.USB : port.port_type.HIDDevice;
-    if (usb.device_name) {
-      return `${port.port_name} - ${usb.device_name}`;
-    }
-  }
-  return port.port_name;
+  const usb = usbInfoOf(port.port_type);
+  return usb?.device_name ? `${port.port_name} - ${usb.device_name}` : port.port_name;
 }
 
 // Helper to format USB device tooltip (detailed info on hover)
 export function formatUsbDeviceTooltip(port: PortInfo): string | undefined {
-  if ('USB' in port.port_type || 'HIDDevice' in port.port_type) {
-    const usb = 'USB' in port.port_type ? port.port_type.USB : port.port_type.HIDDevice;
+  const usb = usbInfoOf(port.port_type);
+  if (usb) {
     const parts: string[] = [];
     parts.push(`VID: 0x${usb.vid.toString(16).padStart(4, '0')}`);
     parts.push(`PID: 0x${usb.pid.toString(16).padStart(4, '0')}`);

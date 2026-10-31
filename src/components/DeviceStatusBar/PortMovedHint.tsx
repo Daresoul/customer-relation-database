@@ -3,7 +3,7 @@ import { App, Button, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@/services/invoke';
 import { useUpdateDeviceIntegration } from '../../hooks/useDeviceIntegrations';
-import { formatUsbDeviceDisplayName, type PortInfo } from '../../types/deviceIntegration';
+import { formatUsbDeviceDisplayName, isHidDevice, type PortInfo } from '../../types/deviceIntegration';
 
 const { Text } = Typography;
 
@@ -28,7 +28,7 @@ export const PortMovedHint: React.FC<{ integrationId: number; missingPort: strin
       .then((list) => {
         if (!cancelled) {
           // Another machine's port is not offered: taking it would break that machine.
-          setPorts((list ?? []).filter((p) => !('HIDDevice' in p.port_type) && p.port_name !== missingPort && !takenPorts.includes(p.port_name)));
+          setPorts((list ?? []).filter((p) => !isHidDevice(p.port_type) && p.port_name !== missingPort && !takenPorts.includes(p.port_name)));
         }
       })
       .catch(() => {
