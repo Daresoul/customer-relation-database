@@ -20,10 +20,29 @@ pub async fn create_patient(pool: State<'_, SeaOrmPool>, dto: CreatePatientDto) 
 }
 
 #[tauri::command]
-pub async fn update_patient(pool: State<'_, SeaOrmPool>, id: i64, dto: UpdatePatientDto) -> Result<Option<Patient>, String> {
+pub async fn update_patient(
+    app_handle: tauri::AppHandle,
+    pool: State<'_, SeaOrmPool>,
+    id: i64,
+    dto: UpdatePatientDto,
+) -> Result<Option<Patient>, String> {
     log::debug!("update_patient called with id: {}, dto: {:?}", id, dto);
+    let species_before = PatientService::get_by_id(&pool, id).await?.and_then(|p| p.species_id);
     let result = PatientService::update(&pool, id, dto).await;
     log::debug!("update_patient result: {:?}", result);
+    if let Ok(Some(patient)) = &result {
+        // Lab ranges and flags depend on the species.
+        if patient.species_id != species_before {
+            match crate::services::file_storage::FileStorageService::get_storage_dir(&app_handle) {
+                Ok(dir) => {
+                    if let Err(e) = crate::services::lab_results::reindex_patient(&pool, &dir, id).await {
+                        log::warn!("Lab values of patient {} not read again: {}", id, e);
+                    }
+                }
+                Err(e) => log::warn!("Lab values of patient {} not read again: {}", id, e),
+            }
+        }
+    }
     result
 }
 

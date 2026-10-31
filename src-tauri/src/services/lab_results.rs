@@ -387,29 +387,39 @@ pub async fn index_attachment(db: &DatabaseConnection, storage_dir: &Path, attac
     Ok(values.len())
 }
 
-/// Reads the patient's lab results again, after its species changed.
-pub async fn reindex_patient(_db: &DatabaseConnection, _storage_dir: &Path, _patient_id: i64) -> Result<(), String> {
+/// Reads the patient's lab results again, after its species changed: ranges
+/// and flags depend on it.
+pub async fn reindex_patient(db: &DatabaseConnection, storage_dir: &Path, patient_id: i64) -> Result<(), String> {
+    let rows = db
+        .query_all(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "SELECT ma.id FROM medical_attachments ma JOIN medical_records mr ON mr.id = ma.medical_record_id \
+             WHERE mr.patient_id = ? AND ma.deleted_at IS NULL AND ma.device_type IS NOT NULL",
+            [patient_id.into()],
+        ))
+        .await
+        .map_err(|e| format!("Failed to read the patient's lab results: {}", e))?;
+    for row in rows {
+        let Ok(id) = row.try_get::<i64>("", "id") else { continue };
+        forget(db, id).await?;
+        if let Err(e) = index_attachment(db, storage_dir, id).await {
+            log::warn!("Lab values of attachment {} not read again: {}", id, e);
+        }
+    }
     Ok(())
 }
 
-/// Hand a moved result's values to its new attachment and record.
-pub async fn repoint<C: ConnectionTrait>(db: &C, from_attachment: i64, to_attachment: i64, to_record: i64) -> Result<(), String> {
-    db.execute(Statement::from_sql_and_values(
-        DbBackend::Sqlite,
-        "UPDATE lab_results SET attachment_id = ?, medical_record_id = ?, \
-             patient_id = (SELECT patient_id FROM medical_records WHERE id = ?) \
-         WHERE attachment_id = ?",
-        [to_attachment.into(), to_record.into(), to_record.into(), from_attachment.into()],
-    ))
-    .await
-    .map_err(|e| format!("Failed to move the lab values: {}", e))?;
-    db.execute(Statement::from_sql_and_values(
-        DbBackend::Sqlite,
-        "UPDATE lab_result_imports SET attachment_id = ? WHERE attachment_id = ?",
-        [to_attachment.into(), from_attachment.into()],
-    ))
-    .await
-    .map_err(|e| format!("Failed to move the lab values state: {}", e))?;
+/// Drops a result's stored values and its "read" mark, so the next read
+/// works them out again (after a move, for the new patient's species).
+pub async fn forget<C: ConnectionTrait>(db: &C, attachment_id: i64) -> Result<(), String> {
+    for sql in [
+        "DELETE FROM lab_results WHERE attachment_id = ?",
+        "DELETE FROM lab_result_imports WHERE attachment_id = ?",
+    ] {
+        db.execute(Statement::from_sql_and_values(DbBackend::Sqlite, sql, [attachment_id.into()]))
+            .await
+            .map_err(|e| format!("Failed to clear the lab values: {}", e))?;
+    }
     Ok(())
 }
 

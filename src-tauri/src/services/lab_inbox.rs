@@ -745,7 +745,8 @@ pub async fn move_result(
     .await
     .map_err(|e| format!("Failed to detach the lab result: {}", e))?;
     retire_lab_reports(&txn, from_record_id, None).await?;
-    crate::services::lab_results::repoint(&txn, attachment_id, new_id, target_record_id).await?;
+    // Read again below for the new patient: ranges and flags depend on the species.
+    crate::services::lab_results::forget(&txn, attachment_id).await?;
     txn.execute(Statement::from_sql_and_values(
         DbBackend::Sqlite,
         "INSERT INTO lab_result_moves (file_id, from_attachment_id, to_attachment_id, from_record_id, to_record_id, moved_at, moved_by) \

@@ -12,8 +12,10 @@ import type { QueryClient } from '@tanstack/react-query';
  *   all-households      household pickers (patient page owner block, appointments)
  *   appointments        calendar (patient names; removed with a deleted patient)
  *   patient-weights     weight log and trend on the patient page
+ *   patient-labs        Labs tab (ranges and flags follow the species)
+ *   record-labs         lab values on a record
  */
-const PATIENT_READERS = ['patients', 'patient', 'household-patients', 'household', 'appointments', 'patient-weights'];
+const PATIENT_READERS = ['patients', 'patient', 'household-patients', 'household', 'appointments', 'patient-weights', 'patient-labs', 'record-labs'];
 const HOUSEHOLD_READERS = ['household', 'all-households', 'patient', 'patients'];
 
 export function invalidatePatientData(queryClient: QueryClient): void {

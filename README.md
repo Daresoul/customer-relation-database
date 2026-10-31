@@ -426,6 +426,9 @@
   lab PDF and in the app (`lab_reference::Species::Other`).
 
 ### PDF tool check at start (`services/java_pdf_service.rs`)
+- Ranges and flags are stored per result for the patient's species. Moving a
+  result re-reads it for the new patient, and changing a patient's species
+  re-reads all its results (`lab_results::forget`, `reindex_patient`).
 - At start the app asks the bundled PDF tool for its version (`java -jar … --version`).
   A missing tool, missing Java or a tool from another version (a half-applied
   update) shows an error banner under the header with what to do
