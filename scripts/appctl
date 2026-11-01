@@ -7,6 +7,7 @@
 #   appctl provision                    copy agent, simulator, fixtures, demo clinic
 #   appctl build [version]              send this branch (git bundle) and build the installer on the lab (default 0.99.0)
 #   appctl update-serve <version>|off   offer a lab build as the update the installed app finds (127.0.0.1:8899)
+#   appctl test-windows                 send this branch and run the Rust tests on Windows, as the release does
 #   appctl install <setup.exe|.msi>     install a build
 #   appctl reset | start [--hidden] | stop | status
 #   appctl sim <scenario> | sim list    play lab machine data
@@ -105,6 +106,15 @@ case "$cmd" in
     lab_scp "$LAB_DIR/build.ps1" "$(remote "$WIN_LAB\\build.ps1")"
     lab_ssh "if (-not (Test-Path '$WIN_LAB\\src')) { git clone -q -b $branch '$WIN_LAB\\builds\\src.bundle' '$WIN_LAB\\src' } else { git -C '$WIN_LAB\\src' fetch -q '$WIN_LAB\\builds\\src.bundle' ${branch}:refs/remotes/bundle/head; git -C '$WIN_LAB\\src' checkout -q -f -B $branch refs/remotes/bundle/head }; git -C '$WIN_LAB\\src' log --oneline -1"
     lab_ssh "powershell -NoProfile -ExecutionPolicy Bypass -File '$WIN_LAB\\build.ps1' -Version ${1:-0.99.0}" | tee "$OUT/build.log" | tail -1
+    ;;
+  test-windows)
+    need_conf
+    mkdir -p "$OUT"
+    branch=$(git -C "$ROOT" rev-parse --abbrev-ref HEAD)
+    git -C "$ROOT" bundle create "$OUT/src.bundle" "$branch" 2>/dev/null
+    lab_scp "$OUT/src.bundle" "$(remote "$WIN_LAB\\builds\\src.bundle")"
+    lab_ssh "git -C '$WIN_LAB\\src' fetch -q '$WIN_LAB\\builds\\src.bundle' ${branch}:refs/remotes/bundle/head; git -C '$WIN_LAB\\src' checkout -q -f -B $branch refs/remotes/bundle/head; git -C '$WIN_LAB\\src' log --oneline -1"
+    lab_ssh "\$env:Path = \"\$env:USERPROFILE\\.cargo\\bin;\$env:ProgramFiles\\nodejs;\$env:Path\"; Set-Location '$WIN_LAB\\src'; & npm.cmd run build *> \$null; Set-Location src-tauri; cargo test --release --bin vet-clinic 2>&1 | Select-String -Pattern '^test result|FAILED|panicked'"
     ;;
   update-serve)
     [[ $# -eq 1 ]] || die "usage: appctl update-serve <version>|off"
