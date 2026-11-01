@@ -473,6 +473,43 @@ async fn a_rebuild_with_an_unreadable_result_keeps_the_old_report_and_names_the_
     assert_eq!(live, 1, "the complete report stays");
 }
 
+// Final review (low): a result added again from Recent files to a second
+// record, then deleted there, went back to "waiting" while the first record
+// still had it.
+#[tokio::test]
+async fn deleting_one_copy_keeps_the_result_attached_to_the_other() {
+    let db = create_test_db_with_migrations().await;
+    let dir = tempfile::tempdir().unwrap();
+    let patient = seed_patient(&db, "Bella", None).await;
+    let first = seed_record(&db, patient, "Consult").await;
+    let second = seed_record(&db, patient, "Recheck").await;
+    receive(&db, dir.path(), "r1", &koko_xml(), "ok", "2026-10-23T08:00:00+00:00").await;
+    lab_inbox::attach_to_record(&db, dir.path(), "r1", first).await.unwrap();
+    let copy = lab_inbox::attach_to_record(&db, dir.path(), "r1", second).await.unwrap();
+
+    lab_inbox::delete_attachment(&db, copy).await.unwrap();
+
+    assert!(lab_inbox::list_inbox(&db, Some("waiting")).await.unwrap().is_empty());
+    let item = lab_inbox::list_inbox(&db, Some("attached")).await.unwrap().remove(0);
+    assert_eq!(item.attached_record_id, Some(first));
+}
+
+#[tokio::test]
+async fn adding_a_result_to_a_record_that_has_it_makes_no_second_copy() {
+    let db = create_test_db_with_migrations().await;
+    let dir = tempfile::tempdir().unwrap();
+    let patient = seed_patient(&db, "Bella", None).await;
+    let record = seed_record(&db, patient, "Consult").await;
+    receive(&db, dir.path(), "r1", &koko_xml(), "ok", "2026-10-23T08:00:00+00:00").await;
+
+    let a = lab_inbox::attach_to_record(&db, dir.path(), "r1", record).await.unwrap();
+    let b = lab_inbox::attach_to_record(&db, dir.path(), "r1", record).await.unwrap();
+
+    assert_eq!(a, b);
+    let live = scalar_i64(&db, &format!("SELECT COUNT(*) FROM medical_attachments WHERE medical_record_id = {record} AND deleted_at IS NULL")).await;
+    assert_eq!(live, 1);
+}
+
 #[tokio::test]
 async fn a_second_result_on_a_record_gives_one_lab_report_for_both() {
     let db = create_test_db_with_migrations().await;
