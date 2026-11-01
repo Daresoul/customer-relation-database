@@ -467,3 +467,28 @@ fn a_result_cut_by_a_reconnect_is_reported_not_dropped() {
     assert_eq!(sink.cut_offs.len(), 1, "the half result must reach the lab inbox as cut off");
 }
 
+// Final review (low): saving a result (database, files, the main thread) ran
+// inside the read loop, so a slow save let the port's buffer overflow.
+#[test]
+fn deliveries_run_in_order_without_holding_up_the_reader() {
+    use crate::services::device_input::DeliveryQueue;
+    use std::sync::{Arc, Mutex};
+    let done = Arc::new(Mutex::new(Vec::new()));
+    let queue = DeliveryQueue::new("test");
+    let started = Instant::now();
+    for i in 0..3 {
+        let done = done.clone();
+        queue.push(move || {
+            std::thread::sleep(Duration::from_millis(150));
+            done.lock().unwrap().push(i);
+        });
+    }
+    assert!(started.elapsed() < Duration::from_millis(100), "handing over doesn't wait for the save");
+    drop(queue);
+    let deadline = Instant::now() + Duration::from_secs(3);
+    while done.lock().unwrap().len() < 3 && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert_eq!(*done.lock().unwrap(), vec![0, 1, 2], "all saved, in arrival order, after the reader stops");
+}
+

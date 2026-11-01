@@ -1666,6 +1666,19 @@ fn handle_listening_serial(
     })
 }
 
+/// Saves results one after another on its own thread.
+pub struct DeliveryQueue;
+
+impl DeliveryQueue {
+    pub fn new(_name: &str) -> Self {
+        DeliveryQueue
+    }
+
+    pub fn push(&self, job: impl FnOnce() + Send + 'static) {
+        job();
+    }
+}
+
 struct SerialSink<'a> {
     app_handle: &'a AppHandle,
     port_name: &'a str,
