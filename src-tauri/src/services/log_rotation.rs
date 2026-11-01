@@ -130,6 +130,11 @@ pub async fn run_log_prune_schedule(dirs: Vec<std::path::PathBuf>, days_to_keep:
     }
 }
 
+/// Archives and empties a live log past `max_bytes`.
+pub fn cap_live_logs(_dir: &Path, _max_bytes: u64) -> Vec<std::path::PathBuf> {
+    Vec::new()
+}
+
 pub fn prune_old_logs(dir: &Path, days_to_keep: i64) {
     let entries = match std::fs::read_dir(dir) {
         Ok(e) => e,

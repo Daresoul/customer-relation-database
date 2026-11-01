@@ -851,6 +851,21 @@ mod tests {
         assert_eq!(creds.password, "env-pass");
     }
 
+    // An archive copy of the live log was already sent under the live name.
+    #[test]
+    fn archive_copies_of_the_live_log_are_not_sent_again() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("Arkivet.log"), "x\n").unwrap();
+        std::fs::write(dir.path().join("Arkivet_2026-11-01_14-30-00.log"), "x\n").unwrap();
+        std::fs::write(dir.path().join("Arkivet-2026-10-31.log"), "x\n").unwrap();
+        let mut names: Vec<String> = discover_files(dir.path(), &dir.path().join("none"))
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string_lossy().to_string())
+            .collect();
+        names.sort();
+        assert_eq!(names, vec!["Arkivet-2026-10-31.log", "Arkivet.log"]);
+    }
+
     #[test]
     fn credentials_fall_back_to_baked_values() {
         let creds = resolve_credentials(env_of(&[]), &BAKED).unwrap();
