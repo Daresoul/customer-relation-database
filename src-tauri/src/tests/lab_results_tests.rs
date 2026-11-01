@@ -405,3 +405,17 @@ async fn a_records_values_carry_the_previous_value_of_the_same_analyte() {
     assert_eq!(previous.sample_at, "2026-07-10T14:52:11");
     assert!(older.iter().all(|v| v.previous.is_none()));
 }
+
+// Final review (low): a machine with a dead clock battery (year 2000) sorted
+// its values as the oldest, which also changed the "previous value".
+#[test]
+fn a_machine_time_far_off_the_arrival_is_not_the_sample_time() {
+    use chrono::NaiveDate;
+    let at = |y, m, d, h| NaiveDate::from_ymd_opt(y, m, d).unwrap().and_hms_opt(h, 0, 0).unwrap();
+    let received = at(2026, 11, 1, 10);
+    assert_eq!(lab_results::sample_time(Some(at(2000, 1, 1, 0)), received), received, "clock reset");
+    assert_eq!(lab_results::sample_time(Some(at(2026, 11, 3, 10)), received), received, "clock ahead");
+    assert_eq!(lab_results::sample_time(Some(at(2026, 10, 30, 9)), received), at(2026, 10, 30, 9), "resent later");
+    assert_eq!(lab_results::sample_time(None, received), received);
+}
+

@@ -387,6 +387,11 @@ pub async fn index_attachment(db: &DatabaseConnection, storage_dir: &Path, attac
     Ok(values.len())
 }
 
+/// When the sample was taken.
+pub fn sample_time(machine: Option<chrono::NaiveDateTime>, received: chrono::NaiveDateTime) -> chrono::NaiveDateTime {
+    machine.unwrap_or(received)
+}
+
 /// Reads the patient's lab results again, after its species changed: ranges
 /// and flags depend on it.
 pub async fn reindex_patient(db: &DatabaseConnection, storage_dir: &Path, patient_id: i64) -> Result<(), String> {
