@@ -69,7 +69,9 @@ pub(crate) fn get_raw_log_path(app_handle: &AppHandle, port_name: &str) -> Optio
 
     // Create directory if it doesn't exist
     if let Err(e) = create_dir_all(&log_dir) {
-        log::error!("❌ Failed to create raw log directory {:?}: {}", log_dir, e);
+        if raw_log_complaint(port_name) {
+            log::error!("❌ Failed to create raw log directory {:?}: {}", log_dir, e);
+        }
         return None;
     }
 
@@ -87,16 +89,33 @@ pub(crate) fn get_raw_log_path(app_handle: &AppHandle, port_name: &str) -> Optio
 }
 
 /// Lets a message through once per `every` for each key.
-pub struct Throttle;
+pub struct Throttle {
+    every: Duration,
+    last: Mutex<std::collections::HashMap<String, Instant>>,
+}
 
 impl Throttle {
-    pub fn new(_every: Duration) -> Self {
-        Throttle
+    pub fn new(every: Duration) -> Self {
+        Throttle { every, last: Mutex::new(std::collections::HashMap::new()) }
     }
 
-    pub fn allow(&self, _key: &str, _now: Instant) -> bool {
-        true
+    pub fn allow(&self, key: &str, now: Instant) -> bool {
+        let Ok(mut last) = self.last.lock() else { return true };
+        match last.get(key) {
+            Some(at) if now.saturating_duration_since(*at) < self.every => false,
+            _ => {
+                last.insert(key.to_string(), now);
+                true
+            }
+        }
     }
+}
+
+/// Raw log trouble (a locked file, a full disk) is said once per 10 minutes
+/// per port, not on every read.
+fn raw_log_complaint(port_name: &str) -> bool {
+    static THROTTLE: OnceLock<Throttle> = OnceLock::new();
+    THROTTLE.get_or_init(|| Throttle::new(Duration::from_secs(600))).allow(port_name, Instant::now())
 }
 
 /// Write raw bytes to the per-port log file with timestamp
@@ -109,7 +128,9 @@ fn write_raw_log(app_handle: &AppHandle, port_name: &str, data: &[u8]) {
     let log_path = match get_raw_log_path(app_handle, port_name) {
         Some(path) => path,
         None => {
-            log::warn!("⚠️ Could not get raw log path for port {}", port_name);
+            if raw_log_complaint(port_name) {
+                log::warn!("⚠️ Could not get raw log path for port {}", port_name);
+            }
             return;
         }
     };
@@ -122,7 +143,9 @@ fn write_raw_log(app_handle: &AppHandle, port_name: &str, data: &[u8]) {
     {
         Ok(f) => f,
         Err(e) => {
-            log::error!("❌ Failed to open raw log file {:?}: {}", log_path, e);
+            if raw_log_complaint(port_name) {
+                log::error!("❌ Failed to open raw log file {:?}: {}", log_path, e);
+            }
             return;
         }
     };
