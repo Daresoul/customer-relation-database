@@ -717,8 +717,9 @@ impl FileWatcherService {
         let app = self.app_handle.clone().ok_or("File watcher needs the app handle")?;
         let first_start = RUNTIME.set(WatcherRuntime { db: self.db.clone(), app }).is_ok();
         let runtime = RUNTIME.get().ok_or("File watcher runtime missing")?;
-        sync_watchers(runtime).await?;
 
+        // The loop starts before the first sync: a failed first sync is then
+        // retried 30 s later instead of leaving no folder watched all session.
         if first_start {
             tauri::async_runtime::spawn(async {
                 let mut checks: u32 = 0;
@@ -732,6 +733,6 @@ impl FileWatcherService {
                 }
             });
         }
-        Ok(())
+        sync_watchers(runtime).await
     }
 }
