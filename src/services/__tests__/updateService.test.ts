@@ -24,10 +24,10 @@ vi.mock('@tauri-apps/api/process', () => ({ relaunch: mocks.relaunch }));
 
 import { updateService, createBackupFailedConfirm } from '../updateService';
 
-function backend({ directory, backupError }: { directory: string | null; backupError?: unknown }) {
+function backend({ directory, backupError, configError = null }: { directory: string | null; backupError?: unknown; configError?: string | null }) {
   mocks.invoke.mockImplementation((command: string) => {
     if (command === 'get_backup_config') {
-      return Promise.resolve({ directory, lastBackupAt: null, lastError: null });
+      return Promise.resolve({ directory, lastBackupAt: null, lastError: configError });
     }
     if (command === 'run_backup_now') {
       return backupError === undefined ? Promise.resolve({}) : Promise.reject(backupError);
@@ -88,6 +88,19 @@ describe('updateService.installAndRestart', () => {
     expect(mocks.invoke).not.toHaveBeenCalledWith('run_backup_now', expect.anything());
     expect(confirm).not.toHaveBeenCalled();
     expect(mocks.installUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  // Final review (low): a damaged settings file reads as "no folder", so the
+  // update went ahead without a backup and without asking.
+  it('asks when the backup settings could not be read', async () => {
+    backend({ directory: null, configError: 'Backup settings could not be read: expected value at line 1' });
+    const confirm = vi.fn().mockResolvedValue(false);
+
+    const installed = await updateService.installAndRestart(confirm);
+
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('could not be read'));
+    expect(installed).toBe(false);
+    expect(mocks.installUpdate).not.toHaveBeenCalled();
   });
 });
 
