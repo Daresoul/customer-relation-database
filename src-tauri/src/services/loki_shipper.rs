@@ -576,6 +576,11 @@ fn read_chunk(path: &Path, offset: u64, max_bytes: u64) -> std::io::Result<Vec<u
 /// Split a byte buffer into complete lines, returning the number of
 /// bytes consumed (so the caller can advance the offset by exactly that
 /// amount and leave any trailing partial line for the next tick).
+/// A raw serial line as it goes to Loki.
+pub(crate) fn redact_raw_line(line: &str) -> String {
+    line.to_string()
+}
+
 fn split_complete_lines(bytes: &[u8]) -> (usize, Vec<&str>) {
     let last_newline = match bytes.iter().rposition(|&b| b == b'\n') {
         Some(i) => i,

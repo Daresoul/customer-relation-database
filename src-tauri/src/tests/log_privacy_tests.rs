@@ -146,4 +146,47 @@ fn the_scan_catches_a_name_and_skips_device_names() {
     assert!(personal_value("Open failed with code {}", ", code").is_none());
     assert!(personal_value("Watching '{}'", ", config.name, integration.name, port_name").is_none());
     assert!(personal_value("patient {} record {}", ", patient_id, record_id").is_none());
+    // Final review: a chip number and a PDF path (pet or owner name in it) got past the scan.
+    assert!(personal_value("Microchip {} is on {} active patients", ", identifier, n").is_some());
+    assert!(personal_value("   📂 Output path: {}", ", output_path").is_some());
+}
+
+/// Each `telemetry::event(...)` call's text.
+fn telemetry_calls(source: &str) -> Vec<String> {
+    source
+        .match_indices("telemetry::event(")
+        .map(|(i, _)| source[i..].chars().take(600).collect::<String>())
+        .map(|s| s.split(");").next().unwrap_or("").to_string())
+        .collect()
+}
+
+// Final review: an event sent the Exigo ID2 field (a chip, a name or another id).
+#[test]
+fn no_telemetry_event_carries_what_the_machine_said_about_the_patient() {
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut files = Vec::new();
+    rust_files(&src, &mut files);
+    let mut found = Vec::new();
+    for file in files {
+        let source = std::fs::read_to_string(&file).unwrap();
+        for call in telemetry_calls(&source) {
+            if ["\"ID2\"", "patient_identifier", "patient_name", "microchip"].iter().any(|k| call.contains(k)) {
+                found.push(format!("{}: {}", file.display(), call.lines().next().unwrap_or("")));
+            }
+        }
+    }
+    assert!(found.is_empty(), "events with patient data:\n{}", found.join("\n"));
+}
+
+// Final review: raw serial logs went to Loki whole, with what staff typed on
+// the machine (patient name, id) and every value. Timing and size are kept.
+#[test]
+fn raw_serial_lines_reach_loki_without_their_content() {
+    use crate::services::loki_shipper::redact_raw_line;
+    assert_eq!(
+        redact_raw_line("[2026-10-22 14:02:27.185] [9 bytes] HEX: 50 49 44 7C | ASCII: PID|"),
+        "[2026-10-22 14:02:27.185] [9 bytes]"
+    );
+    let header = "[2026-10-22 06:35:17.177] Port: COM6 | Device: healvet_hv_fia_3000 | Baud: 9600 | Integration ID: 2";
+    assert_eq!(redact_raw_line(header), header);
 }
