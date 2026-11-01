@@ -893,7 +893,8 @@ mod tests {
 
     #[test]
     fn source_has_no_hard_coded_credentials() {
-        let src = include_str!("loki_shipper.rs");
+        // A Windows checkout has CRLF line ends.
+        let src = include_str!("loki_shipper.rs").replace("\r\n", "\n");
         let non_test = src.split("#[cfg(test)]\nmod tests").next().unwrap();
         assert!(
             !non_test.contains("Some(\"https://"),

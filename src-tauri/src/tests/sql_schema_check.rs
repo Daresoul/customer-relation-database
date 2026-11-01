@@ -139,7 +139,11 @@ fn looks_like_sql(s: &str) -> bool {
 
 /// Prepares every SQL literal of one source file. Returns (checked, failures).
 async fn check_source(pool: &SqlitePool, rel: &str, src: &str) -> (usize, Vec<String>) {
-    let cut = src.find("#[cfg(test)]\nmod ").unwrap_or(src.len());
+    // A Windows checkout has CRLF line ends.
+    let cut = src
+        .find("#[cfg(test)]\nmod ")
+        .or_else(|| src.find("#[cfg(test)]\r\nmod "))
+        .unwrap_or(src.len());
     let (mut checked, mut failures) = (0, Vec::new());
     for (line, sql) in string_literals(&src[..cut]) {
         if !looks_like_sql(&sql) || sql.contains('{') {
