@@ -40,6 +40,15 @@ mod tests {
         assert!(first.is_some());
         assert!(acquire(dir.path()).is_none(), "second copy");
         drop(first);
-        assert!(acquire(dir.path()).is_some(), "free again once the first copy ends");
+        // Another test's child process can hold the lock for a moment between
+        // fork and exec (a shared open file on Unix), so this waits briefly.
+        let freed = (0..50).any(|_| {
+            let again = acquire(dir.path()).is_some();
+            if !again {
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            again
+        });
+        assert!(freed, "free again once the first copy ends");
     }
 }
