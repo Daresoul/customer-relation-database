@@ -418,6 +418,34 @@ async fn record_totals_use_the_saved_rates_and_the_clinics_price_mode() {
     assert_eq!((net.total, net.vat_total), (1392.4, 212.4));
 }
 
+// Final review (low): every invoice said "ден", and lines in different
+// currencies were added into one total.
+#[tokio::test]
+async fn lines_in_different_currencies_are_refused() {
+    let db = create_test_db_with_migrations().await;
+    let patient_id = seed_patient(&db).await;
+    let mut eur = item("Vaccine", 50.0, None, MaybeNull::Null);
+    eur.currency_id = 3;
+    let r = MedicalRecordService::save_new_record(&db, record(patient_id, None, vec![
+        item("Surgery", 1180.0, None, MaybeNull::Null),
+        eur,
+    ])).await;
+    assert!(r.unwrap_err().contains("one currency"));
+}
+
+#[tokio::test]
+async fn the_invoice_is_in_the_lines_currency() {
+    let db = create_test_db_with_migrations().await;
+    let patient_id = seed_patient(&db).await;
+    let mut eur = item("Vaccine", 50.0, None, MaybeNull::Null);
+    eur.currency_id = 3;
+    let saved = MedicalRecordService::save_new_record(&db, record(patient_id, None, vec![eur])).await.unwrap();
+
+    let job = MedicalRecordService::invoice_job(&db, &saved).await.unwrap();
+
+    assert_eq!(job["currency"], "€");
+}
+
 #[tokio::test]
 async fn the_invoice_job_carries_the_clinic_and_the_totals() {
     let db = create_test_db_with_migrations().await;
