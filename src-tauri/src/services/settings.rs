@@ -305,6 +305,11 @@ impl SettingsService {
         Self::get_clinic_profile(db).await
     }
 
+    /// Points the profile at this PC's copy of the logo when the stored path is gone.
+    pub async fn relocate_logo(_db: &DatabaseConnection, _clinic_dir: &std::path::Path) -> Result<(), String> {
+        Ok(())
+    }
+
     pub async fn remove_clinic_logo(db: &DatabaseConnection) -> Result<ClinicProfile, String> {
         let old = Self::get_clinic_profile(db).await?.logo_path;
         Self::store_logo_path(db, None).await?;

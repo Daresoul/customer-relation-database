@@ -150,6 +150,29 @@ async fn a_logo_is_copied_into_the_app_folder() {
     assert_eq!(std::fs::read_dir(app.path()).unwrap().count(), 0);
 }
 
+// Final review (low): after a restore onto another PC or Windows user, the
+// stored logo path pointed into the old profile; the backup now holds the
+// logo in clinic/, and start-up points the profile there.
+#[tokio::test]
+async fn a_logo_restored_into_this_pcs_folder_is_found_again() {
+    let db = create_test_db_with_migrations().await;
+    let old_pc = tempfile::tempdir().unwrap();
+    let this_pc = tempfile::tempdir().unwrap();
+    let picked = tempfile::tempdir().unwrap();
+    std::fs::write(picked.path().join("logo.png"), png_bytes()).unwrap();
+    SettingsService::set_clinic_logo(&db, &old_pc.path().join("clinic"), &picked.path().join("logo.png")).await.unwrap();
+    let stored = SettingsService::get_clinic_profile(&db).await.unwrap().logo_path.unwrap();
+    let file_name = std::path::Path::new(&stored).file_name().unwrap().to_owned();
+    std::fs::create_dir_all(this_pc.path().join("clinic")).unwrap();
+    std::fs::copy(&stored, this_pc.path().join("clinic").join(&file_name)).unwrap();
+    drop(old_pc);
+
+    SettingsService::relocate_logo(&db, &this_pc.path().join("clinic")).await.unwrap();
+
+    let now = SettingsService::get_clinic_profile(&db).await.unwrap().logo_path.unwrap();
+    assert_eq!(std::path::Path::new(&now), this_pc.path().join("clinic").join(&file_name));
+}
+
 #[tokio::test]
 async fn the_logo_preview_is_a_data_url() {
     let db = create_test_db_with_migrations().await;
