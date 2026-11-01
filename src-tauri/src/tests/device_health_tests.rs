@@ -447,3 +447,23 @@ fn a_port_the_driver_never_lists_is_not_dropped_for_being_unlisted() {
     assert!(still_there(true, true));
 }
 
+// Final review (low): Reconnect or a settings change during a result dropped
+// the half received so far without a word; the other exits report it.
+#[test]
+fn a_result_cut_by_a_reconnect_is_reported_not_dropped() {
+    let mut half = vec![0x0B];
+    half.extend_from_slice(b"MSH|^~\\&|PointCare|PID|kiki|OBX|GLU|5.1");
+    let mut reader = ScriptedReader::new(vec![Ok(half), Err(timed_out)]);
+    let (tx, rx) = mpsc::channel::<()>();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(300));
+        let _ = tx.send(());
+    });
+    let mut sink = RecordingSink::default();
+
+    let result = run_read_loop(&mut reader, &pointcare(), &rx, Duration::from_secs(30), &mut sink);
+
+    assert!(result.is_ok());
+    assert_eq!(sink.cut_offs.len(), 1, "the half result must reach the lab inbox as cut off");
+}
+
