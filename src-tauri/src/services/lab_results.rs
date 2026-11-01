@@ -334,10 +334,12 @@ pub async fn index_attachment(db: &DatabaseConnection, storage_dir: &Path, attac
     };
 
     let values = extract_values(&device_type, &parsed.test_results, text(&row, "species_name").as_deref());
-    let sample_at = JavaPdfService::device_time(&parsed.test_results)
-        .or_else(|| text(&row, "received_at").as_deref().and_then(local_time))
+    let received = text(&row, "received_at")
+        .as_deref()
+        .and_then(local_time)
         .or_else(|| text(&row, "uploaded_at").as_deref().and_then(local_time))
-        .unwrap_or_else(|| Local::now().naive_local())
+        .unwrap_or_else(|| Local::now().naive_local());
+    let sample_at = sample_time(JavaPdfService::device_time(&parsed.test_results), received)
         .format("%Y-%m-%dT%H:%M:%S")
         .to_string();
     let record_id: i64 = row.try_get("", "medical_record_id").map_err(|e| e.to_string())?;
@@ -387,9 +389,14 @@ pub async fn index_attachment(db: &DatabaseConnection, storage_dir: &Path, attac
     Ok(values.len())
 }
 
-/// When the sample was taken.
+/// When the sample was taken: the machine's time, unless its clock is off
+/// (later than arrival, or more than a year before it, like a reset clock);
+/// then the arrival time. Results resent or read late keep their machine time.
 pub fn sample_time(machine: Option<chrono::NaiveDateTime>, received: chrono::NaiveDateTime) -> chrono::NaiveDateTime {
-    machine.unwrap_or(received)
+    match machine {
+        Some(m) if m <= received + chrono::Duration::minutes(10) && m >= received - chrono::Duration::days(365) => m,
+        _ => received,
+    }
 }
 
 /// Reads the patient's lab results again, after its species changed: ranges

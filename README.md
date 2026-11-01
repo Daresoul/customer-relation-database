@@ -432,6 +432,9 @@
 - A lab report (rebuild or Print report) is not made without a result it
   can't read: the earlier report stays and the message names the file
   (`lab_inbox::unreadable_results`).
+- A result's sample time is the machine's time, unless that is after arrival
+  or more than a year before it (a reset clock); then the arrival time
+  (`lab_results::sample_time`).
 - Ranges and flags are stored per result for the patient's species. Moving a
   result re-reads it for the new patient, and changing a patient's species
   re-reads all its results (`lab_results::forget`, `reindex_patient`).
