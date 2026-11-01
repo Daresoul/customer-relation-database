@@ -1642,7 +1642,13 @@ fn handle_listening_serial(
     const INTER_FRAME_IDLE_FLUSH: Duration = Duration::from_secs(5);
 
     log::info!("📖 Starting serial port read loop for {} ({})", device_type, port_name);
-    let mut sink = SerialSink { app_handle, port_name, device_type, integration_id };
+    let mut sink = SerialSink {
+        app_handle,
+        port_name,
+        device_type,
+        integration_id,
+        deliveries: DeliveryQueue::new(port_name),
+    };
     let listed_at_open = port_present(port_name);
     let result = run_read_loop_with_presence(
         &mut *port,
@@ -1666,16 +1672,37 @@ fn handle_listening_serial(
     })
 }
 
-/// Saves results one after another on its own thread.
-pub struct DeliveryQueue;
+type DeliveryJob = Box<dyn FnOnce() + Send>;
+
+/// Saves results one after another on its own thread, so the read loop only
+/// hands them over and goes on reading (a slow save would otherwise let the
+/// port's buffer overflow). Arrival order is kept for the duplicate filter.
+/// Dropping the queue lets the thread finish what is queued, then end.
+pub struct DeliveryQueue {
+    sender: mpsc::Sender<DeliveryJob>,
+}
 
 impl DeliveryQueue {
-    pub fn new(_name: &str) -> Self {
-        DeliveryQueue
+    pub fn new(name: &str) -> Self {
+        let (sender, receiver) = mpsc::channel::<DeliveryJob>();
+        let spawned = thread::Builder::new()
+            .name(format!("deliver-{name}"))
+            .spawn(move || {
+                for job in receiver {
+                    job();
+                }
+            });
+        if let Err(e) = spawned {
+            log::error!("Result delivery thread for {} not started: {}", name, e);
+        }
+        DeliveryQueue { sender }
     }
 
     pub fn push(&self, job: impl FnOnce() + Send + 'static) {
-        job();
+        if let Err(mpsc::SendError(job)) = self.sender.send(Box::new(job)) {
+            // No thread to take it: save it here rather than lose it.
+            job();
+        }
     }
 }
 
@@ -1684,6 +1711,7 @@ struct SerialSink<'a> {
     port_name: &'a str,
     device_type: &'a str,
     integration_id: i64,
+    deliveries: DeliveryQueue,
 }
 
 impl SerialSink<'_> {
@@ -1721,7 +1749,10 @@ impl FrameSink for SerialSink<'_> {
         let Some((db, dir)) = self.storage() else { return };
         let sink = AppSink { app: self.app_handle.clone() };
         let raw_name = format!("{}_{}.txt", self.device_type, Utc::now().format("%Y%m%d_%H%M%S"));
-        tauri::async_runtime::block_on(deliver_result(&db, &dir, &sink, &self.source(), &raw_name, &frame));
+        let source = self.source();
+        self.deliveries.push(move || {
+            tauri::async_runtime::block_on(deliver_result(&db, &dir, &sink, &source, &raw_name, &frame));
+        });
     }
 
     fn on_unrecognized(&mut self, bytes: usize) {
@@ -1733,7 +1764,10 @@ impl FrameSink for SerialSink<'_> {
             partial.len(), self.device_type, self.port_name, self.integration_id);
         let Some((db, dir)) = self.storage() else { return };
         let sink = AppSink { app: self.app_handle.clone() };
-        tauri::async_runtime::block_on(report_cut_off(&db, &dir, &sink, &self.source(), &partial));
+        let source = self.source();
+        self.deliveries.push(move || {
+            tauri::async_runtime::block_on(report_cut_off(&db, &dir, &sink, &source, &partial));
+        });
     }
 }
 
