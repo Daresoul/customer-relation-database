@@ -369,7 +369,7 @@ pub async fn trigger_manual_sync(
                             // Save mapping
                             let _ = pool.execute(Statement::from_sql_and_values(
                                 DbBackend::Sqlite,
-                                "INSERT INTO calendar_event_mappings (appointment_id, event_id, calendar_id, last_synced_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
+                                "INSERT INTO calendar_event_mappings (appointment_id, event_id, calendar_id, last_synced_at) VALUES (?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))",
                                 [appt_id.into(), event_id.to_string().into(), calendar_id.clone().into()]
                             ))
                             .await;

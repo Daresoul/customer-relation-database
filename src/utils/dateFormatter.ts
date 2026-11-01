@@ -70,7 +70,8 @@ export const updateDateFormatInStorage = (dateFormat: string) => {
   localStorage.setItem('veterinary-clinic-settings', JSON.stringify(settings));
 };
 
-/** A time as SQLite stores it. */
+/** A time from SQLite's CURRENT_TIMESTAMP ("2026-10-31 12:05:00") is UTC
+ *  without a zone; mark it UTC so it isn't read as local time. */
 export function fromSqliteUtc(value: string): string {
-  return value;
+  return /[zZ]|[+-]\d\d:\d\d$/.test(value) ? value : `${value.replace(' ', 'T')}Z`;
 }

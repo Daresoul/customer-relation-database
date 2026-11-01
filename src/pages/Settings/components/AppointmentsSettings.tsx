@@ -3,7 +3,7 @@ import { Card, Form, Switch, Button, Typography, Alert, Space, App } from 'antd'
 import { CalendarOutlined, GoogleOutlined, LinkOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@/services/invoke';
-import { formatDateTime } from '../../../utils/dateFormatter';
+import { formatDateTime, fromSqliteUtc } from '../../../utils/dateFormatter';
 import styles from '../Settings.module.css';
 
 const { Text, Paragraph } = Typography;
@@ -28,7 +28,6 @@ interface SyncResult {
 }
 
 // SQLite CURRENT_TIMESTAMP is UTC without a zone marker.
-const fromSqliteUtc = (value: string) => (/[zZ]|[+-]\d\d:\d\d$/.test(value) ? value : `${value.replace(' ', 'T')}Z`);
 
 const AppointmentsSettings: React.FC<AppointmentsSettingsProps> = ({ isUpdating }) => {
   const { t } = useTranslation(['common', 'forms', 'settings']);

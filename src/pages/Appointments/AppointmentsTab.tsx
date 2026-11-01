@@ -30,6 +30,7 @@ import { usePatients } from '../../hooks/usePatients';
 import { useGoogleNeedsReauth } from '../../hooks/useGoogleCalendarStatus';
 import { statusLabelKey } from '../../utils/appointmentStatus';
 import styles from './Appointments.module.css';
+import { patientFilterOptions } from './patientFilterOptions';
 
 const FILTER_STATUSES: AppointmentStatus[] = ['scheduled', 'checked_in', 'in_progress', 'completed', 'cancelled', 'no_show'];
 
@@ -95,14 +96,7 @@ const AppointmentsTab: React.FC = () => {
 
   const { data: rooms = [] } = useRooms();
   const { patients } = usePatients();
-  const patientOptions = useMemo(
-    () =>
-      (patients ?? []).map((p) => ({
-        value: p.id,
-        label: [p.name, p.species].filter(Boolean).join(' · '),
-      })),
-    [patients],
-  );
+  const patientOptions = useMemo(() => patientFilterOptions(patients ?? [], t), [patients, t]);
 
   const handleRangeChange = useCallback((start: Date, end: Date) => {
     setCalendarRange((prev) =>

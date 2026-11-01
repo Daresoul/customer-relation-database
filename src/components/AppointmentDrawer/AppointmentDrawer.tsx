@@ -32,7 +32,7 @@ import {
 } from '@/utils/appointmentStatus';
 import styles from './AppointmentDrawer.module.css';
 import { speciesLabel } from '../../utils/species';
-import { formatDateTime, formatDayMonth, getDatePickerFormat } from '@/utils/dateFormatter';
+import { formatDateTime, formatDayMonth, fromSqliteUtc, getDatePickerFormat } from '@/utils/dateFormatter';
 import { roomOverbooked, roomTotal } from '@/utils/roomCapacity';
 
 const { Text } = Typography;
@@ -268,7 +268,7 @@ export const AppointmentDrawer: React.FC<AppointmentDrawerProps> = ({ appointmen
               </Text>
               {apt.googleSyncedAt && googleKey === 'synced' && (
                 <Text type="secondary">
-                  {t('appointments:drawer.googleSyncedAt', { time: formatDayMonth(apt.googleSyncedAt, true) })}
+                  {t('appointments:drawer.googleSyncedAt', { time: formatDayMonth(fromSqliteUtc(apt.googleSyncedAt), true) })}
                 </Text>
               )}
             </Space>
