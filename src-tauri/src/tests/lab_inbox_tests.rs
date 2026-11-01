@@ -209,6 +209,24 @@ async fn a_new_result_waits_in_the_inbox_with_its_values_and_machine_id() {
     assert_eq!(lab_inbox::waiting_count(&db).await.unwrap(), 1);
 }
 
+// Final review (low): past 300 waiting results the list kept the oldest, so
+// today's results were missing while the badge counted them.
+#[tokio::test]
+async fn a_long_waiting_list_keeps_the_newest_results() {
+    let db = create_test_db_with_migrations().await;
+    let dir = tempfile::tempdir().unwrap();
+    for i in 0..305 {
+        let at = (chrono::Utc::now() - chrono::Duration::minutes(400 - i)).to_rfc3339();
+        receive(&db, dir.path(), &format!("r{i}"), &koko_xml(), "ok", &at).await;
+    }
+
+    let items = lab_inbox::list_inbox(&db, Some("waiting")).await.unwrap();
+
+    assert_eq!(items.len(), 300);
+    assert_eq!(items.last().unwrap().file_id, "r304", "newest kept, shown last");
+    assert_eq!(items[0].file_id, "r5", "oldest shown first");
+}
+
 #[tokio::test]
 async fn a_waiting_result_shows_the_patient_the_machine_id_matches() {
     let db = create_test_db_with_migrations().await;
