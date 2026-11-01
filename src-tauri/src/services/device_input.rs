@@ -457,6 +457,11 @@ impl FrameAssembler {
         partial
     }
 
+    /// A result whose end marker came last, once nothing followed it.
+    fn take_pending_end(&mut self) -> Option<Vec<u8>> {
+        None
+    }
+
     /// Bytes since the last call that were outside any result. 0x00 is left out:
     /// the chemistry analyser sends long runs of it between results.
     fn take_ignored(&mut self) -> usize {
@@ -1709,6 +1714,8 @@ mod frame_assembler_tests {
                 frames.push(f);
             }
         }
+        // The input ends here, as when the line goes quiet.
+        frames.extend(asm.take_pending_end());
         frames
     }
 
@@ -1748,6 +1755,21 @@ mod frame_assembler_tests {
         let p = healvet();
         let frames = feed(&p, b"#AFS1000&S1&12.5&06-04-2026 11:49:53&&cCRP&LEELOO&&M&Serum&EE");
         assert_eq!(frames, vec![b"#AFS1000&S1&12.5&06-04-2026 11:49:53&&cCRP&LEELOO&&M&Serum&".to_vec()]);
+    }
+
+    // Final review (low): a field starting with "EE" (a pet named EEVEE) ended
+    // the result early and sent the rest as a second, unreadable one.
+    #[test]
+    fn healvet_name_starting_with_ee_stays_one_result() {
+        let p = healvet();
+        let frame = b"#AFS1000&S1&12.5&06-04-2026 11:49:53&&cCRP&EEVEE&&M&Serum&EE";
+        assert_eq!(feed(&p, frame), vec![frame[..frame.len() - 2].to_vec()]);
+    }
+
+    #[test]
+    fn healvet_end_marker_followed_by_the_next_message_ends_the_first() {
+        let p = healvet();
+        assert_eq!(feed(&p, b"#AFS1000&A&EE#AFS1000&B&EE"), vec![b"#AFS1000&A&".to_vec(), b"#AFS1000&B&".to_vec()]);
     }
 
     #[test]
