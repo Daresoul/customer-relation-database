@@ -100,6 +100,9 @@ export const updateService = {
       const config = await invoke<BackupConfig>('get_backup_config');
       if (config.directory) {
         await invoke('run_backup_now', { preUpdate: true });
+      } else if (config.lastError) {
+        // No folder because the settings couldn't be read, not because none is set.
+        backupError = config.lastError;
       }
     } catch (err) {
       backupError = errorText(err);
