@@ -550,6 +550,20 @@ pub async fn attach_to_record(
     if !record_exists(db, record_id).await? {
         return Err("Medical record not found".to_string());
     }
+    // Already on this record: no second copy.
+    if let Some(existing) = db
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "SELECT id FROM medical_attachments WHERE source_file_id = ? AND medical_record_id = ? AND deleted_at IS NULL \
+             ORDER BY id LIMIT 1",
+            [file_id.into(), record_id.into()],
+        ))
+        .await
+        .map_err(|e| format!("Failed to read the record's lab results: {}", e))?
+        .and_then(|r| r.try_get::<i64>("", "id").ok())
+    {
+        return Ok(existing);
+    }
     let bytes = std::fs::read(text("file_path").unwrap_or_default())
         .map_err(|e| format!("Failed to read the stored lab result: {}", e))?;
     let match_method = match_method_for(db, file_id, record_id).await;
@@ -864,13 +878,34 @@ pub async fn delete_attachment(db: &DatabaseConnection, attachment_id: i64) -> R
     let Some(row) = source else { return Ok(()) };
     let Some(file_id) = row.try_get::<Option<String>>("", "source_file_id").ok().flatten() else { return Ok(()) };
     let record_id: i64 = row.try_get("", "medical_record_id").map_err(|e| e.to_string())?;
+    // Another record still has the result (added again from Recent files):
+    // the inbox follows that copy instead of calling it waiting.
+    let other = db
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "SELECT medical_record_id FROM medical_attachments \
+             WHERE source_file_id = ? AND deleted_at IS NULL ORDER BY id DESC LIMIT 1",
+            [file_id.clone().into()],
+        ))
+        .await
+        .map_err(|e| format!("Failed to read the result's other copies: {}", e))?;
+    if let Some(other) = other {
+        let other_record: i64 = other.try_get("", "medical_record_id").map_err(|e| e.to_string())?;
+        db.execute(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "UPDATE file_access_history SET attached_record_id = ? \
+             WHERE file_id = ? AND inbox_state = 'attached' AND attached_record_id = ?",
+            [other_record.into(), file_id.into(), record_id.into()],
+        ))
+        .await
+        .map_err(|e| format!("Failed to point the lab result at its other copy: {}", e))?;
+        return Ok(());
+    }
     db.execute(Statement::from_sql_and_values(
         DbBackend::Sqlite,
         "UPDATE file_access_history SET inbox_state = 'waiting', attached_record_id = NULL, attached_at = NULL \
-         WHERE file_id = ? AND inbox_state = 'attached' AND attached_record_id = ? \
-           AND NOT EXISTS (SELECT 1 FROM medical_attachments ma \
-                           WHERE ma.source_file_id = ? AND ma.medical_record_id = ? AND ma.deleted_at IS NULL)",
-        [file_id.clone().into(), record_id.into(), file_id.into(), record_id.into()],
+         WHERE file_id = ? AND inbox_state = 'attached' AND attached_record_id = ?",
+        [file_id.into(), record_id.into()],
     ))
     .await
     .map_err(|e| format!("Failed to put the lab result back in the inbox: {}", e))?;
