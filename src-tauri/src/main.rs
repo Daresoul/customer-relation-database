@@ -525,7 +525,13 @@ fn main() {
 
             // The clinic profile for lab reports made without a database at hand.
             let sea_orm_pool_for_letterhead = sea_orm_pool.clone();
+            let clinic_dir = app.path_resolver().app_data_dir().map(|d| d.join("clinic"));
             tauri::async_runtime::spawn(async move {
+                if let Some(dir) = clinic_dir {
+                    if let Err(e) = services::settings::SettingsService::relocate_logo(&sea_orm_pool_for_letterhead, &dir).await {
+                        log::warn!("Clinic logo not checked: {}", e);
+                    }
+                }
                 match services::settings::SettingsService::get_clinic_profile(&sea_orm_pool_for_letterhead).await {
                     Ok(profile) => services::java_pdf_service::JavaPdfService::set_letterhead(Some(profile)),
                     Err(e) => log::warn!("Clinic profile not loaded for PDFs: {}", e),

@@ -181,6 +181,10 @@ impl BackupService {
         db: &DatabaseConnection,
         kind: SnapshotKind,
     ) -> Result<BackupConfig, String> {
+        // One backup at a time: start-up, scheduled, manual and pre-update
+        // runs share the snapshot's and the mirror's temporary files.
+        static RUNNING: std::sync::OnceLock<tokio::sync::Mutex<()>> = std::sync::OnceLock::new();
+        let _one_at_a_time = RUNNING.get_or_init(|| tokio::sync::Mutex::new(())).lock().await;
         let mut cfg = Self::load_config(app_data_dir);
         let backup_dir = cfg
             .directory
@@ -248,6 +252,12 @@ impl BackupService {
         if files_src.exists() {
             copy_dir_additive(&files_src, &files_dest)
                 .map_err(|e| format!("Files mirror failed: {}", e))?;
+        }
+        // The letterhead logo lives outside `files`.
+        let clinic_src = app_data_dir.join("clinic");
+        if clinic_src.exists() {
+            copy_dir_additive(&clinic_src, &backup_dir.join("clinic"))
+                .map_err(|e| format!("Logo copy failed: {}", e))?;
         }
 
         let (keep, pre_update) = match kind {

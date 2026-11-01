@@ -306,7 +306,20 @@ impl SettingsService {
     }
 
     /// Points the profile at this PC's copy of the logo when the stored path is gone.
-    pub async fn relocate_logo(_db: &DatabaseConnection, _clinic_dir: &std::path::Path) -> Result<(), String> {
+    /// After a restore onto another PC or Windows user the stored path points
+    /// into the old profile, while the logo came back in this PC's folder.
+    pub async fn relocate_logo(db: &DatabaseConnection, clinic_dir: &std::path::Path) -> Result<(), String> {
+        let Some(stored) = Self::get_clinic_profile(db).await?.logo_path else { return Ok(()) };
+        let stored = std::path::Path::new(&stored);
+        if stored.exists() {
+            return Ok(());
+        }
+        let Some(name) = stored.file_name() else { return Ok(()) };
+        let here = clinic_dir.join(name);
+        if here.is_file() {
+            Self::store_logo_path(db, Some(here.to_string_lossy().to_string())).await?;
+            log::info!("Clinic logo found again in this PC's clinic folder");
+        }
         Ok(())
     }
 

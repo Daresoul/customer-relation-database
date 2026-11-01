@@ -686,6 +686,10 @@
 - Snapshots carry no Google login: after `VACUUM INTO` the copy's tokens are
   cleared (with `secure_delete`) and `needs_reauth` is set, so a restored
   copy shows Reconnect in Settings.
+- The clinic logo (`<app data>/clinic`) is mirrored to `<backup>/clinic`. After
+  a restore onto another PC or Windows user, start-up points the profile at
+  this PC's copy of the logo (`SettingsService::relocate_logo`).
+- Only one backup runs at a time (start-up, scheduled, manual, pre-update).
 - The file mirror copies a file when the backup copy is missing, has another
   size (a copy cut off mid-way) or is older; each copy is written as
   `<name>.part` and renamed when complete.
