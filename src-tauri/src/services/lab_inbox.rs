@@ -249,7 +249,8 @@ fn now() -> String {
 }
 
 pub async fn list_inbox(db: &DatabaseConnection, state: Option<&str>) -> Result<Vec<LabInboxItem>, String> {
-    let order = if state == Some("waiting") { "ASC" } else { "DESC" };
+    // The newest 300; the waiting list then reads oldest first.
+    let oldest_first = state == Some("waiting");
     let sql = format!(
         "SELECT fah.file_id, fah.original_name, fah.file_path, fah.device_type, fah.device_name, \
                 fah.connection_method, fah.received_at, fah.status, fah.error, fah.inbox_state, \
@@ -262,13 +263,17 @@ pub async fn list_inbox(db: &DatabaseConnection, state: Option<&str>) -> Result<
          LEFT JOIN medical_records mr ON mr.id = fah.attached_record_id \
          LEFT JOIN patients p ON p.id = mr.patient_id \
          WHERE (? IS NULL OR fah.inbox_state = ?) \
-         ORDER BY fah.received_at {order}, fah.id {order} LIMIT 300"
+         ORDER BY fah.received_at DESC, fah.id DESC LIMIT 300"
     );
     let state_value = Value::String(state.map(|s| Box::new(s.to_string())));
     let rows = db
         .query_all(Statement::from_sql_and_values(DbBackend::Sqlite, &sql, [state_value.clone(), state_value]))
         .await
         .map_err(|e| format!("Failed to load the lab inbox: {}", e))?;
+    let mut rows = rows;
+    if oldest_first {
+        rows.reverse();
+    }
 
     let mut items = Vec::with_capacity(rows.len());
     for row in rows {
