@@ -412,7 +412,10 @@ pub async fn catch_up(ctx: &WatchContext, sink: &dyn DeviceSink) -> Result<usize
     let now = SystemTime::now();
     let mut offered = 0;
     for (modified, path) in files {
-        let result = if first_look {
+        // On the first look only files from before the machine was set up are
+        // history; one written since (into a folder that was empty) is new.
+        let since_set_up = ctx.config.set_up_at.is_some_and(|t| modified > t);
+        let result = if first_look && !since_set_up {
             process_file(ctx, sink, &path, ProcessMode::Seed).await
         } else if now.duration_since(modified).map_or(true, |age| age <= CATCH_UP_WINDOW) {
             process_file(ctx, sink, &path, ProcessMode::Offer).await
@@ -494,7 +497,7 @@ const FOLDER_CHECK_INTERVAL: Duration = Duration::from_secs(30);
 async fn enabled_folder_configs(db: &DatabaseConnection) -> Result<Vec<WatchConfig>, String> {
     let rows = db.query_all(Statement::from_string(
         DbBackend::Sqlite,
-        "SELECT id, name, watch_directory, file_pattern, device_type
+        "SELECT id, name, watch_directory, file_pattern, device_type, created_at
          FROM device_integrations
          WHERE connection_type = 'file_watch'
            AND enabled = 1
@@ -514,10 +517,23 @@ async fn enabled_folder_configs(db: &DatabaseConnection) -> Result<Vec<WatchConf
                 directory: directory.filter(|d| !d.trim().is_empty())?,
                 pattern: pattern.filter(|p| !p.trim().is_empty())?,
                 device_type: row.try_get("", "device_type").ok()?,
-                set_up_at: None,
+                set_up_at: row
+                    .try_get::<Option<String>>("", "created_at")
+                    .ok()
+                    .flatten()
+                    .and_then(|t| stored_time(&t)),
             })
         })
         .collect())
+}
+
+/// A time as the database keeps it: RFC 3339, or SQLite's UTC "YYYY-MM-DD HH:MM:SS".
+fn stored_time(text: &str) -> Option<SystemTime> {
+    let utc = chrono::DateTime::parse_from_rfc3339(text.trim())
+        .map(|t| t.with_timezone(&chrono::Utc))
+        .or_else(|_| chrono::NaiveDateTime::parse_from_str(text.trim(), "%Y-%m-%d %H:%M:%S").map(|t| t.and_utc()))
+        .ok()?;
+    Some(SystemTime::from(utc))
 }
 
 fn dir_state(directory: &str) -> DirState {
