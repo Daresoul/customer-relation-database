@@ -248,6 +248,30 @@ fn now() -> String {
     Utc::now().to_rfc3339()
 }
 
+/// A stored result never changes, so the inbox parses each one once per
+/// session instead of on every refresh (each minute and each machine event).
+fn parsed_once(
+    file_path: &str,
+    parse: impl FnOnce() -> Option<crate::services::device_parser::DeviceData>,
+) -> Option<crate::services::device_parser::DeviceData> {
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+    const MAX_KEPT: usize = 2000;
+    static PARSED: OnceLock<Mutex<HashMap<String, crate::services::device_parser::DeviceData>>> = OnceLock::new();
+    let cache = PARSED.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Some(hit) = cache.lock().ok().and_then(|c| c.get(file_path).cloned()) {
+        return Some(hit);
+    }
+    let fresh = parse()?;
+    if let Ok(mut c) = cache.lock() {
+        if c.len() >= MAX_KEPT {
+            c.clear();
+        }
+        c.insert(file_path.to_string(), fresh.clone());
+    }
+    Some(fresh)
+}
+
 pub async fn list_inbox(db: &DatabaseConnection, state: Option<&str>) -> Result<Vec<LabInboxItem>, String> {
     // The newest 300; the waiting list then reads oldest first.
     let oldest_first = state == Some("waiting");
@@ -286,15 +310,17 @@ pub async fn list_inbox(db: &DatabaseConnection, state: Option<&str>) -> Result<
         let item_state = text("inbox_state").unwrap_or_else(|| "waiting".to_string());
 
         let parsed = if status == "ok" {
-            std::fs::read(&file_path).ok().and_then(|bytes| {
-                DeviceParserService::parse_device_data(
-                    &device_type,
-                    &device_name,
-                    &original_name,
-                    &bytes,
-                    text("connection_method").as_deref().unwrap_or("file_watch"),
-                )
-                .ok()
+            parsed_once(&file_path, || {
+                std::fs::read(&file_path).ok().and_then(|bytes| {
+                    DeviceParserService::parse_device_data(
+                        &device_type,
+                        &device_name,
+                        &original_name,
+                        &bytes,
+                        text("connection_method").as_deref().unwrap_or("file_watch"),
+                    )
+                    .ok()
+                })
             })
         } else {
             None
