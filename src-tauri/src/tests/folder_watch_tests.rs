@@ -81,6 +81,7 @@ async fn exigo_folder() -> Folder {
             directory: watch.path().display().to_string(),
             pattern: "*.xml".to_string(),
             device_type: "exigo_eos_vet".to_string(),
+            set_up_at: None,
         },
     };
     Folder { _db: db, ctx, watch, _storage: storage }
@@ -308,6 +309,27 @@ async fn first_look_at_a_folder_remembers_what_is_there_without_offering_it() {
     assert_eq!(sink.patient_ids(), vec!["KIRE"]);
 }
 
+// Final review (low): the "first look" lasted until the first result was
+// claimed, so results written into a folder that was empty when it was set
+// up (machine set up in the evening, day file before the app started) were
+// remembered as old and never offered.
+#[tokio::test]
+async fn on_the_first_look_files_written_after_set_up_are_offered() {
+    let mut f = exigo_folder().await;
+    f.ctx.config.set_up_at = Some(SystemTime::now() - Duration::from_secs(3600));
+    let before = f.file("before.xml");
+    std::fs::write(&before, first_sample_only().replace("SEQ=\"1", "SEQ=\"8")).unwrap();
+    std::fs::File::options().write(true).open(&before).unwrap()
+        .set_modified(SystemTime::now() - Duration::from_secs(2 * 3600)).unwrap();
+    write_old(&f.file("BM-53672_2026-07-10.xml"), DAY_FILE);
+
+    let sink = RecordingSink::default();
+    let offered = catch_up(&f.ctx, &sink).await.unwrap();
+
+    assert!(offered >= 1, "the day file written after set-up is offered");
+    assert!(sink.patient_ids().contains(&"KIRE".to_string()));
+}
+
 #[tokio::test]
 async fn results_written_while_the_app_was_closed_are_offered_on_start() {
     let f = exigo_folder().await;
@@ -351,6 +373,7 @@ fn cfg(id: i64, dir: &str) -> WatchConfig {
         directory: dir.to_string(),
         pattern: "*.xml".to_string(),
         device_type: "exigo_eos_vet".to_string(),
+        set_up_at: None,
     }
 }
 

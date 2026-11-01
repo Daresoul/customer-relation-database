@@ -224,6 +224,8 @@ pub struct WatchConfig {
     pub directory: String,
     pub pattern: String,
     pub device_type: String,
+    /// When the machine was set up in Arkivet.
+    pub set_up_at: Option<SystemTime>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -512,6 +514,7 @@ async fn enabled_folder_configs(db: &DatabaseConnection) -> Result<Vec<WatchConf
                 directory: directory.filter(|d| !d.trim().is_empty())?,
                 pattern: pattern.filter(|p| !p.trim().is_empty())?,
                 device_type: row.try_get("", "device_type").ok()?,
+                set_up_at: None,
             })
         })
         .collect())
