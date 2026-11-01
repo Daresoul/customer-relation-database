@@ -219,31 +219,6 @@ pub async fn record_device_file_with_status(
     Ok(())
 }
 
-/// Record or update file access history when device data is received
-#[tauri::command]
-pub async fn record_device_file_access(
-    pool: State<'_, SeaOrmPool>,
-    file_id: String,
-    original_name: String,
-    file_path: String,
-    file_size: Option<i64>,
-    mime_type: Option<String>,
-    device_type: String,
-    device_name: String,
-    connection_method: Option<String>,
-) -> Result<(), String> {
-    record_device_file_access_internal_seaorm(
-        &pool,
-        file_id,
-        original_name,
-        file_path,
-        file_size,
-        mime_type,
-        device_type,
-        device_name,
-        connection_method,
-    ).await
-}
 
 /// Internal function for updating file attachment (called from Rust code) - SeaORM version
 pub async fn update_file_attachment_internal_seaorm(
@@ -452,7 +427,7 @@ pub async fn open_device_file(
     let row = pool.query_one(Statement::from_sql_and_values(
         DbBackend::Sqlite,
         "SELECT original_name, file_path FROM file_access_history WHERE file_id = ?",
-        [file_id.into()]
+        [file_id.clone().into()]
     ))
     .await
     .map_err(|e| format!("Failed to fetch file metadata: {}", e))?
@@ -468,11 +443,11 @@ pub async fn open_device_file(
 
     // Copy to a temp file that preserves the original name/extension so the OS
     // opens it in the correct application.
-    let mut tmp_dir = std::env::temp_dir();
-    tmp_dir.push("vet-clinic-device-files");
-    std::fs::create_dir_all(&tmp_dir)
-        .map_err(|e| format!("Failed to create temp dir: {}", e))?;
-    let target = tmp_dir.join(&original_name);
+    // Only the name's last part: a name with a folder in it can't write elsewhere.
+    let target = crate::services::file_storage::FileStorageService::temp_copy_path(&file_id, &original_name);
+    if let Some(dir) = target.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| format!("Failed to create temp dir: {}", e))?;
+    }
     std::fs::write(&target, &file_data)
         .map_err(|e| format!("Failed to write temp file: {}", e))?;
 

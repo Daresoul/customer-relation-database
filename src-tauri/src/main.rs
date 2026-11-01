@@ -782,7 +782,6 @@ fn main() {
             // File history commands
             commands::get_recent_device_files,
             commands::get_file_history,
-            commands::record_device_file_access,
             commands::update_file_attachment,
             commands::cleanup_old_file_history,
             commands::download_device_file,
