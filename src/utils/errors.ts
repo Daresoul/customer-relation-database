@@ -436,6 +436,7 @@ export function normalizeError(
  * These keys correspond to entries in errors.json
  */
 const ERROR_CODE_TO_TRANSLATION_KEY: Record<string, string> = {
+  'LINE_ITEMS_MIXED_CURRENCY': 'errors:lineItems.mixedCurrency',
   // Network & Connection Errors
   'NETWORK_ERROR': 'errors:network.error',
   'TIMEOUT': 'errors:network.timeout',
@@ -613,6 +614,9 @@ const CATEGORY_TO_TRANSLATION_KEY: Record<ErrorCategory, string> = {
  * Maps regex patterns to error codes
  */
 const ERROR_PATTERN_MATCHERS: Array<{ pattern: RegExp; code: string }> = [
+  // Invoice lines
+  { pattern: /line items must all be in one currency/i, code: 'LINE_ITEMS_MIXED_CURRENCY' },
+
   // Patient patterns
   { pattern: /patient.*not found/i, code: 'PATIENT_NOT_FOUND' },
   { pattern: /patient.*already exists/i, code: 'PATIENT_ALREADY_EXISTS' },

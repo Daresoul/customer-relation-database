@@ -302,6 +302,10 @@ impl LineItemService {
                 return Err("Quantity must be at least 1".to_string());
             }
         }
+        // One invoice, one currency: amounts in different currencies can't be added up.
+        if items.windows(2).any(|w| w[0].currency_id != w[1].currency_id) {
+            return Err("Line items must all be in one currency".to_string());
+        }
 
         let mut new_items: Vec<medical_record_line_item::ActiveModel> = Vec::with_capacity(items.len());
         for item in items {

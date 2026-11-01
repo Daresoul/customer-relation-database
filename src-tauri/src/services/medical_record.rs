@@ -1024,6 +1024,21 @@ impl MedicalRecordService {
         Ok(Self::totals_of(&lines, discount, Self::price_mode(db, record_id).await?))
     }
 
+    /// The symbol printed on an invoice for its lines' currency ("ден" if unknown).
+    async fn currency_symbol(db: &DatabaseConnection, currency_id: i64) -> String {
+        db.query_one(Statement::from_sql_and_values(
+            DbBackend::Sqlite,
+            "SELECT symbol FROM currencies WHERE id = ?",
+            [currency_id.into()],
+        ))
+        .await
+        .ok()
+        .flatten()
+        .and_then(|row| row.try_get::<Option<String>>("", "symbol").ok().flatten())
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| "ден".to_string())
+    }
+
     /// Gross or net prices for this record's invoice: the mode it was issued
     /// with, else the clinic's current one.
     pub(crate) async fn price_mode(db: &DatabaseConnection, record_id: i64) -> Result<bool, String> {
@@ -1095,7 +1110,7 @@ impl MedicalRecordService {
             &recipient,
             &line_items,
             record.discount_percent.unwrap_or(0.0),
-            "ден",
+            &Self::currency_symbol(db, line_items[0].currency_id).await,
             &totals,
             &clinic,
         );

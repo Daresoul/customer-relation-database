@@ -588,6 +588,8 @@
   line's VAT name and percent for rates already on the invoice, and the gross
   or net mode it was issued with (`invoice_prices_include_vat`, migration 062).
   Lines added or changed after it count as edits.
+- A record's lines are all in one currency (a mix is refused); the invoice
+  prints that currency's symbol from `currencies`.
 - A long invoice continues on another letterhead page with the column headings
   repeated; long item names wrap.
 - A long medical report description or prescription continues on further

@@ -19,6 +19,10 @@
     "tokenExpired": "Your authentication token has expired. Please log in again."
   },
 
+  "lineItems": {
+    "mixedCurrency": "All line items on one record must be in the same currency. Change the currency of the line that differs."
+  },
+
   "generic": {
     "notFound": "The requested resource was not found.",
     "alreadyExists": "This record already exists.",
