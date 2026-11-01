@@ -20,7 +20,8 @@
 #>
 param(
   [Parameter(Mandatory = $true)][string]$AuthorizedKey,
-  [string]$LabUser = "$env:USERDOMAIN\$env:USERNAME"
+  # The account as Windows names it ("PC\user"); USERDOMAIN is "WORKGROUP" off a domain.
+  [string]$LabUser = [Security.Principal.WindowsIdentity]::GetCurrent().Name
 )
 $ErrorActionPreference = 'Stop'
 
