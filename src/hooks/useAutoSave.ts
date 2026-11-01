@@ -15,18 +15,18 @@ export function useAutoSave<T>({ onSave, delay = 500, enabled = true }: UseAutoS
     saveRef.current = onSave;
   });
 
+  // The handler is taken when the edit is made: by the time the delay ends the
+  // page may show another patient, whose handler would save onto them.
   const debouncedSave = useRef(
-    debounce((value: T) => {
-      if (enabled) {
-        saveRef.current(value);
-      }
+    debounce((value: T, save: (value: T) => void | Promise<void>) => {
+      save(value);
     }, delay)
   ).current;
 
   const triggerSave = useCallback(
     (value: T) => {
       if (enabled) {
-        debouncedSave(value);
+        debouncedSave(value, saveRef.current);
       }
     },
     [debouncedSave, enabled]
