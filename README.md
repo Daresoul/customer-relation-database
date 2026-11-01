@@ -676,6 +676,8 @@
   path, a directory, a symlink, an unreadable `deleted_at`, or a file still
   listed in `file_access_history` is skipped. A file already gone is marked
   purged. A missing attachment folder stops the run.
+- Programs (`.exe`, `.bat`, `.js`, `.lnk`, `.msi` and similar) can't be
+  attached, and one attached earlier is not opened (`is_program_file`).
 - Backups mirror files additively, so a purged file stays in earlier backups.
 
 ## Backups (`services/backup.rs`)

@@ -19,6 +19,9 @@
     "tokenExpired": "Your authentication token has expired. Please log in again."
   },
 
+  "attachments": {
+    "programFile": "This file could run a program, so Arkivet doesn't attach or open it. Attach a PDF, image or document instead."
+  },
   "lineItems": {
     "mixedCurrency": "All line items on one record must be in the same currency. Change the currency of the line that differs."
   },

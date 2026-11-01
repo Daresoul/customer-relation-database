@@ -16,6 +16,9 @@ use std::process::{Command, Stdio};
 // T028: FileStorageService for attachment handling
 pub struct FileStorageService;
 
+/// Why a program file is neither attached nor opened (worded for staff in the app).
+pub const PROGRAM_FILE_REFUSED: &str = "This file could run a program, so Arkivet doesn't attach or open it";
+
 impl FileStorageService {
     /// Get the base directory for file storage
     pub fn get_storage_dir(app_handle: &AppHandle) -> Result<PathBuf, String> {
@@ -203,7 +206,7 @@ impl FileStorageService {
     /// Validate file before upload
     pub fn validate_file(
         file_data: &[u8],
-        _file_name: &str,
+        file_name: &str,
         max_size_mb: usize,
     ) -> Result<(), String> {
         // Check file size
@@ -211,12 +214,24 @@ impl FileStorageService {
         if file_data.len() > max_size {
             return Err(format!("File size exceeds {}MB limit", max_size_mb));
         }
-
-        // Allow all file types - doctors need to upload various medical records,
-        // device data (XML, JSON, CSV), images, PDFs, videos, etc.
-        // Only restriction is file size for practical storage reasons.
-
+        // Any medical file type is fine (records, device data, images, PDFs,
+        // video); a program is not: Open would run it.
+        if Self::is_program_file(file_name) {
+            return Err(PROGRAM_FILE_REFUSED.to_string());
+        }
         Ok(())
+    }
+
+    /// A file Windows would run rather than show (".exe", "results.pdf.exe").
+    pub fn is_program_file(name: &str) -> bool {
+        const PROGRAMS: [&str; 22] = [
+            "exe", "com", "bat", "cmd", "scr", "pif", "msi", "msp", "js", "jse", "vbs", "vbe", "wsf", "wsh", "hta",
+            "lnk", "ps1", "psm1", "reg", "cpl", "jar", "msc",
+        ];
+        std::path::Path::new(name)
+            .extension()
+            .and_then(|e| e.to_str())
+            .is_some_and(|e| PROGRAMS.contains(&e.to_ascii_lowercase().as_str()))
     }
 
     /// Where a stored file is copied to be opened or printed: a folder per
@@ -318,6 +333,10 @@ impl FileStorageService {
     /// Uses subprocess isolation (process group, Stdio::null) to prevent
     /// the spawned application from stealing focus from the main window.
     pub fn open_path_with_default_app(path: &str) -> Result<(), String> {
+        // Attached before uploads were checked: shown, never run.
+        if Self::is_program_file(path) {
+            return Err(PROGRAM_FILE_REFUSED.to_string());
+        }
         #[cfg(target_os = "macos")]
         {
             let mut cmd = Command::new("open");

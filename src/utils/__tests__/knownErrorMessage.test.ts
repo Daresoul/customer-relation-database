@@ -23,6 +23,11 @@ describe('knownErrorMessage', () => {
     expect(knownErrorMessage(new Error('Line items must all be in one currency'), tt)).toBe('mixed');
   });
 
+  it('words the refusal of a program file', () => {
+    const tt = (key: string) => (key === 'errors:attachments.programFile' ? 'program' : key);
+    expect(knownErrorMessage(new Error("This file could run a program, so Arkivet doesn't attach or open it"), tt)).toBe('program');
+  });
+
   it('returns null for errors it has no message for', () => {
     expect(knownErrorMessage(new Error('Failed to create patient: disk I/O error'), t)).toBeNull();
   });
