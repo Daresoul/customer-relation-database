@@ -43,8 +43,9 @@ Step 'Lab folders'
 foreach ($d in 'state', 'builds', 'exigo', 'shots', 'fixtures', 'clinic-sim', 'logs') {
   New-Item -ItemType Directory -Force (Join-Path $Lab $d) | Out-Null
 }
-# Only this user (and admins) can read the agent token.
-icacls (Join-Path $Lab 'state') /inheritance:r /grant:r "${LabUser}:(OI)(CI)F" "Administrators:(OI)(CI)F" "SYSTEM:(OI)(CI)F" | Out-Null
+# Only this user (and admins): the agent script, the token and the builds run
+# as this user, so no other local account may change them.
+icacls $Lab /inheritance:r /grant:r "${LabUser}:(OI)(CI)F" "Administrators:(OI)(CI)F" "SYSTEM:(OI)(CI)F" | Out-Null
 # The lab agent's reset only runs where this marker is.
 Set-Content -Path $LabMarker -Value "Arkivet test lab, set up $(Get-Date -Format 'yyyy-MM-dd') for $LabUser" -Encoding ascii
 

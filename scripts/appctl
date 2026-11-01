@@ -165,7 +165,7 @@ case "$cmd" in
   pw) (cd "$ROOT" && node "$LAB_DIR/pw.mjs" "$@") ;;
   log)
     # Tauri v1 keeps logs in the roaming app data folder on Windows.
-    lab_ssh "Get-Content (Join-Path \$env:APPDATA 'com.vetclinic.app\\logs\\Arkivet.log') -Tail ${1:-60}"
+    lab_ssh "Get-Content (Get-ChildItem (Join-Path \$env:APPDATA 'com.vetclinic.app.lab\\logs') -Filter '*.log' | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName -Tail ${1:-60}"
     ;;
   ps) lab_ssh "$*" ;;
   psx)

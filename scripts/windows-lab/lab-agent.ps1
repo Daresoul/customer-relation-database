@@ -30,7 +30,10 @@ $ErrorActionPreference = 'Stop'
 $Lab = 'C:\ArkivetLab'
 $Prefix = 'http://127.0.0.1:8787/'
 $CdpPort = 9222
-$AppData = Join-Path $env:APPDATA 'com.vetclinic.app'
+# Lab builds install as ArkivetLab (com.vetclinic.app.lab), never over Arkivet.
+$AppId = 'com.vetclinic.app.lab'
+$AppName = 'ArkivetLab'
+$AppData = Join-Path $env:APPDATA $AppId
 $Token = (Get-Content (Join-Path $Lab 'state\agent.token') -Raw).Trim()
 
 Add-Type -AssemblyName System.Drawing, System.Windows.Forms, UIAutomationClient, UIAutomationTypes
@@ -47,14 +50,14 @@ public static class LabNative {
 [void][LabNative]::SetProcessDPIAware()
 
 function Find-AppExe {
-  foreach ($c in @((Join-Path $env:LOCALAPPDATA 'Arkivet\Arkivet.exe'), (Join-Path $env:ProgramFiles 'Arkivet\Arkivet.exe'))) {
+  foreach ($c in @((Join-Path $env:LOCALAPPDATA "$AppName\$AppName.exe"), (Join-Path $env:ProgramFiles "$AppName\$AppName.exe"))) {
     if (Test-Path $c) { return $c }
   }
-  throw 'Arkivet is not installed (looked in LOCALAPPDATA\Arkivet and Program Files\Arkivet)'
+  throw "$AppName is not installed (looked in LOCALAPPDATA\$AppName and Program Files\$AppName)"
 }
 
 # vet-clinic.exe: dev and e2e builds of the same app (same data folder).
-function Get-AppProcess { @(Get-Process -Name 'Arkivet', 'vet-clinic' -ErrorAction SilentlyContinue) }
+function Get-AppProcess { @(Get-Process -Name $AppName, 'vet-clinic' -ErrorAction SilentlyContinue) }
 
 function Get-Status {
   $cdp = $false
@@ -84,7 +87,7 @@ function Stop-App {
     $procs | Wait-Process -Timeout 15 -ErrorAction SilentlyContinue
     # WebView2 keeps its browser process (and the profile) a moment longer.
     Get-Process msedgewebview2 -ErrorAction SilentlyContinue |
-      Where-Object { $_.Path -and (Get-CimInstance Win32_Process -Filter "ProcessId=$($_.Id)").CommandLine -like '*com.vetclinic.app*' } |
+      Where-Object { $_.Path -and (Get-CimInstance Win32_Process -Filter "ProcessId=$($_.Id)").CommandLine -like "*$AppId*" } |
       Stop-Process -Force -ErrorAction SilentlyContinue
     Start-Sleep -Milliseconds 500
   }

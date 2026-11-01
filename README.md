@@ -803,6 +803,9 @@ SSH and starts the app with a DevTools port.
   (Playwright over the WebView2 DevTools port), `appctl shot` (desktop),
   `appctl ui list|press|type` and `appctl tray <item>` (Windows UI Automation),
   `appctl log`, `appctl click <x> <y>` (native dialogs UI Automation can't reach).
+- **Identity:** lab builds install as `ArkivetLab` (`com.vetclinic.app.lab`, its
+  own data folder), so a lab installer never replaces a real Arkivet. The
+  whole `C:\ArkivetLab` folder belongs to the lab user only.
 - **Updates:** lab builds trust a throwaway lab key and ask
   `http://127.0.0.1:8899/latest.json`, never GitHub. `appctl build 0.99.1`
   makes a newer signed build; `appctl update-serve 0.99.1` offers it (a hidden

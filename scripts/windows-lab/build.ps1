@@ -4,6 +4,8 @@
   build with lab-only changes, all from a merged config file (--config):
     - the window's WebView2 gets a DevTools port (localhost) for Playwright;
     - version 0.99.0 by default (-Version 0.99.1 for an update to install);
+    - its own name and identity (ArkivetLab, com.vetclinic.app.lab), so it never
+      replaces a real Arkivet install;
     - update files are signed with a throwaway lab key (the real one stays in CI),
       the app trusts that key and asks http://127.0.0.1:8899/latest.json for
       updates (`appctl update-serve`), never GitHub.
@@ -48,7 +50,9 @@ $window | Add-Member -NotePropertyName additionalBrowserArgs -NotePropertyValue 
 $labConfig = 'C:\ArkivetLab\state\lab-tauri.json'
 $labPub = (Get-Content "$labKey.pub" -Raw).Trim()
 $updater = @{ active = $true; dialog = $false; pubkey = $labPub; endpoints = @('http://127.0.0.1:8899/latest.json'); windows = @{ installMode = 'passive' } }
-@{ package = @{ version = $labVersion }; tauri = @{ windows = @($window); updater = $updater } } | ConvertTo-Json -Depth 6 |
+# Its own name and identity: a lab installer copied to a clinic PC by mistake
+# installs beside Arkivet, with its own data folder, instead of replacing it.
+@{ package = @{ version = $labVersion; productName = 'ArkivetLab' }; tauri = @{ windows = @($window); updater = $updater; bundle = @{ identifier = 'com.vetclinic.app.lab' } } } | ConvertTo-Json -Depth 6 |
   Set-Content $labConfig -Encoding ascii
 # Tauri 1 rejects an http update address only when its build helpers have no
 # debug checks; turning them on lets the lab use its local http server.
