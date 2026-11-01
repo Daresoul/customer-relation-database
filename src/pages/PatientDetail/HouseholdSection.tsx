@@ -113,6 +113,10 @@ export const HouseholdSection: React.FC<HouseholdSectionProps> = ({
     try {
       await assignPatientToHousehold(newHousehold.id);
     } catch (error) {
+      // The household exists now: offer it in the picker, so Assign retries
+      // the link instead of the form making a second household.
+      setMode('pick');
+      setSelectedHouseholdId(newHousehold.id);
       notification.error({
         message: t('detail.householdInfo.assignFailed'),
         description: errorText(error, t),
