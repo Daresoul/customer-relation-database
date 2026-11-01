@@ -721,6 +721,11 @@
   app runs (`log_rotation::run_log_prune_schedule`).
 - The Loki shipper stores, with each file's position, a fingerprint of its
   first line; a file replaced under the same name is read from the start.
+- Raw serial lines reach Loki without their bytes, only the time and the
+  size (`redact_raw_line`): the bytes hold what staff typed on a machine and
+  every value. The full raw log stays on the clinic PC. Log lines and
+  telemetry events carry no names, chips or PDF file names
+  (`tests/log_privacy_tests.rs`).
 - At start, files older than a day are deleted from the app's own temp
   folders (`services/temp_cleanup.rs`, `OUR_TEMP_FOLDERS`); loose files in
   the temp folder itself are left alone.

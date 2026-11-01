@@ -100,11 +100,12 @@ fn personal_value(format: &str, args: &str) -> Option<String> {
         let parts: Vec<&str> = token.split('.').collect();
         let last = *parts.last().unwrap();
         if parts.len() == 1 {
+            // A PDF's path holds the pet's or the owner's name.
             let always = matches!(
                 last,
-                "patient_name" | "owner_name" | "owner" | "microchip" | "microchip_id" | "chip" | "phone" | "email"
+                "patient_name" | "owner_name" | "owner" | "microchip" | "microchip_id" | "chip" | "phone" | "email" | "output_path"
             );
-            if always || (about_a_patient && matches!(last, "name" | "code")) {
+            if always || (about_a_patient && matches!(last, "name" | "code" | "identifier")) {
                 return Some(token.to_string());
             }
         } else if personal_fields.contains(&last) && personal_holders.contains(&parts[parts.len() - 2]) {

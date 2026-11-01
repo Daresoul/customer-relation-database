@@ -311,7 +311,6 @@ impl DeviceParserService {
                     serde_json::json!({
                         "file_name": file_name,
                         "sample_count": sample_maps.len(),
-                        "chosen_id2": chosen.get("ID2"),
                     }),
                 );
             }

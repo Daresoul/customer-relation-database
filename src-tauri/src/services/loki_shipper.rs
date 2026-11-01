@@ -471,7 +471,7 @@ async fn try_ship_batch(
             streams
                 .entry((cursor.label.clone(), level))
                 .or_default()
-                .push((ts_ns, line.to_string()));
+                .push((ts_ns, if is_raw_serial { redact_raw_line(line) } else { line.to_string() }));
             total_lines += 1;
         }
 
@@ -577,8 +577,13 @@ fn read_chunk(path: &Path, offset: u64, max_bytes: u64) -> std::io::Result<Vec<u
 /// bytes consumed (so the caller can advance the offset by exactly that
 /// amount and leave any trailing partial line for the next tick).
 /// A raw serial line as it goes to Loki.
+/// The bytes stay on the PC: they hold what staff typed on the machine
+/// (patient name, id) and every value. Timing and size still show the traffic.
 pub(crate) fn redact_raw_line(line: &str) -> String {
-    line.to_string()
+    match line.find(" HEX: ") {
+        Some(i) => line[..i].to_string(),
+        None => line.to_string(),
+    }
 }
 
 fn split_complete_lines(bytes: &[u8]) -> (usize, Vec<&str>) {

@@ -350,7 +350,7 @@ pub(crate) async fn resolve_patient(
             });
         }
         n => {
-            log::warn!("Microchip {} is on {} active patients; not auto-matching", identifier, n);
+            log::warn!("A microchip is on {} active patients; not auto-matching", n);
             return Ok(PatientMatch {
                 patient: None,
                 method: "microchip".to_string(),

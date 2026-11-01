@@ -421,7 +421,9 @@ impl JavaPdfService {
             .map_err(|e| format!("Failed to write temp JSON file: {}", e))?;
 
         log::info!("   ☕ JAR path: {:?}", jar_path);
-        log::info!("   📂 Output path: {}", output_path);
+        // The file name holds the pet's or the owner's name; the folder does not.
+        let output_folder = Path::new(output_path).parent();
+        log::info!("   📂 Output folder: {:?}", output_folder);
 
         let output = Self::run_with_timeout(
             Self::create_java_command(jar_path, &[input_json_path.as_os_str()]),
