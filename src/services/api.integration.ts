@@ -158,30 +158,37 @@ export const householdApi = {
   create: async (household: HouseholdFormValues | Partial<HouseholdTableRecord>): Promise<HouseholdTableRecord> => {
     const hide = showLoading(i18n.t('common:api.loading.creatingHousehold'));
     try {
-      // Format address as a single string if it's an object
-      let addressString = null;
+      // The street goes in `address`; city and postal code have their own fields.
+      let addressString: string | null = null;
+      let city: string | null = null;
+      let postalCode: string | null = null;
       if (household.address) {
         if (typeof household.address === 'string') {
           addressString = household.address;
         } else if (typeof household.address === 'object') {
           const addr = household.address;
-          const parts = [addr.street, addr.city, addr.state, addr.zipCode].filter(Boolean);
-          addressString = parts.length > 0 ? parts.join(', ') : null;
+          addressString = [addr.street, addr.state].filter(Boolean).join(', ') || null;
+          city = addr.city || null;
+          postalCode = addr.zipCode || null;
         }
       }
+      // The person ticked as primary, else the first: never two.
+      const primaryIndex = Math.max(0, household.contacts?.findIndex((c) => c.isPrimary) ?? 0);
 
       // Transform to backend DTO format
       const dto = {
         household: {
           household_name: household.lastName || null,
           address: addressString,
+          city,
+          postal_code: postalCode,
           notes: household.notes || null,
         },
         people: household.contacts?.map((c, index) => ({
           person: {
             first_name: c.firstName || '',
             last_name: c.lastName || household.lastName || '',
-            is_primary: index === 0 ? true : (c.isPrimary || false)
+            is_primary: index === primaryIndex
           },
           contacts: [
             ...(c.phone ? [{
