@@ -58,6 +58,19 @@ class LongTextTest {
         assertTrue(pages(pdf) >= 2);
     }
 
+    // Final review (low): a title past about 70 characters was cut off.
+    @Test
+    void aLongTitleIsPrintedWhole() throws Exception {
+        String title = "Контролен преглед по операција на левата задна нога со промена на завој и проверка на шевовите и раната крајзбор";
+        for (boolean withPatient : new boolean[] {true, false}) {
+            JsonObject in = RecordDocumentsTest.report(withPatient);
+            in.addProperty("title", title);
+            String text = RecordDocumentsTest.flat(InvoiceRenderTest.text(InvoiceRenderTest.renderToFile(in)));
+            assertTrue(text.contains("крајзбор"), (withPatient ? "with patient: " : "without patient: ") + text);
+            assertTrue(text.contains("Здрав."), "description still printed: " + text);
+        }
+    }
+
     @Test
     void aShortReportStaysOnOnePage() throws Exception {
         assertTrue(pages(InvoiceRenderTest.renderToFile(RecordDocumentsTest.report(true))) == 1);
