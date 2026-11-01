@@ -17,6 +17,12 @@ describe('knownErrorMessage', () => {
     );
   });
 
+  // Final review (low): lines in different currencies are refused; staff see why.
+  it('words the mixed-currency refusal', () => {
+    const tt = (key: string) => (key === 'errors:lineItems.mixedCurrency' ? 'mixed' : key);
+    expect(knownErrorMessage(new Error('Line items must all be in one currency'), tt)).toBe('mixed');
+  });
+
   it('returns null for errors it has no message for', () => {
     expect(knownErrorMessage(new Error('Failed to create patient: disk I/O error'), t)).toBeNull();
   });
