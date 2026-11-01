@@ -92,12 +92,18 @@ function Stop-App {
 }
 
 function Reset-Lab {
+  # Only where bootstrap.ps1 set up the lab: elsewhere this would replace real data.
+  if (-not (Test-Path (Join-Path $Lab 'state\IS_LAB'))) { throw 'Not a lab machine (no state\IS_LAB); nothing was reset.' }
   Stop-App | Out-Null
   $snapshot = Join-Path $Lab 'state\demo-clinic'
   if (-not (Test-Path $snapshot)) { throw "No demo clinic at $snapshot (run: appctl provision)" }
-  # Keep the logs; everything else comes from the demo clinic.
+  # The previous data is moved aside (one copy kept), then the demo clinic goes
+  # in; the logs carry over.
+  $aside = "$AppData.before-reset"
+  if (Test-Path $aside) { Remove-Item $aside -Recurse -Force }
+  if (Test-Path $AppData) { Move-Item $AppData $aside }
   New-Item -ItemType Directory -Force $AppData | Out-Null
-  Get-ChildItem $AppData -Exclude 'logs' | Remove-Item -Recurse -Force
+  if (Test-Path (Join-Path $aside 'logs')) { Copy-Item (Join-Path $aside 'logs') $AppData -Recurse -Force }
   Copy-Item (Join-Path $snapshot '*') $AppData -Recurse -Force
   Get-ChildItem (Join-Path $Lab 'exigo') -File -ErrorAction SilentlyContinue | Remove-Item -Force
   @{ reset = $true; appData = $AppData }

@@ -777,7 +777,10 @@ SSH and starts the app with a DevTools port.
   `bootstrap.ps1 -AuthorizedKey "<output of scripts/appctl keygen>"`, then turn
   on auto-logon. It sets up OpenSSH, Java 17, Node LTS, com0com pairs
   (app COM20/22/24 ↔ simulator COM21/23/25), `C:\ArkivetLab`, the agent token
-  and the `ArkivetLabAgent` logon task.
+  and the `ArkivetLabAgent` logon task. SSH takes keys only. It refuses a PC
+  that already has Arkivet data, and writes the lab marker
+  `C:\ArkivetLab\state\IS_LAB`; `appctl reset` refuses without it and moves
+  the previous app data to `com.vetclinic.app.before-reset` (one copy kept).
 - **From the Mac:** `scripts/appctl config <host> <user>`, `appctl connect`
   (tunnels 9222 DevTools and 8787 agent), `appctl provision` (agent, clinic
   simulator, fixtures, demo clinic from `scripts/windows-lab/make-demo-clinic.sh`).

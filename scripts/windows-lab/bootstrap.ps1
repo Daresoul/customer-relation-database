@@ -7,8 +7,10 @@
 
     powershell -ExecutionPolicy Bypass -File .\bootstrap.ps1 -AuthorizedKey "ssh-ed25519 AAAA... arkivet-lab"
 
+  It refuses a PC that already holds Arkivet clinic data (no lab marker).
   It:
-    - turns on the OpenSSH server (PowerShell as the SSH shell) and adds the key
+    - turns on the OpenSSH server (PowerShell as the SSH shell, keys only) and adds the key
+    - writes the lab marker C:\ArkivetLab\state\IS_LAB, which the agent's reset requires
     - installs Java 17 (PDFs) and Node LTS (clinic simulator) with winget
     - creates virtual COM port pairs with com0com if it is installed
     - creates C:\ArkivetLab, the agent token and lab.json
@@ -28,7 +30,14 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 }
 
 $Lab = 'C:\ArkivetLab'
+$LabMarker = Join-Path $Lab 'state\IS_LAB'
 function Step($text) { Write-Host "==> $text" -ForegroundColor Cyan }
+
+# A PC with Arkivet data and no lab marker is a clinic PC (or one in use):
+# the lab would open SSH on it and its reset would replace that data.
+if ((Test-Path "$env:APPDATA\com.vetclinic.app\vet_clinic.db") -and -not (Test-Path $LabMarker)) {
+  throw 'This PC has Arkivet clinic data. The test lab is for test machines only; nothing was changed.'
+}
 
 Step 'Lab folders'
 foreach ($d in 'state', 'builds', 'exigo', 'shots', 'fixtures', 'clinic-sim', 'logs') {
@@ -36,6 +45,8 @@ foreach ($d in 'state', 'builds', 'exigo', 'shots', 'fixtures', 'clinic-sim', 'l
 }
 # Only this user (and admins) can read the agent token.
 icacls (Join-Path $Lab 'state') /inheritance:r /grant:r "${LabUser}:(OI)(CI)F" "Administrators:(OI)(CI)F" "SYSTEM:(OI)(CI)F" | Out-Null
+# The lab agent's reset only runs where this marker is.
+Set-Content -Path $LabMarker -Value "Arkivet test lab, set up $(Get-Date -Format 'yyyy-MM-dd') for $LabUser" -Encoding ascii
 
 Step 'OpenSSH server'
 $cap = Get-WindowsCapability -Online -Name 'OpenSSH.Server*'
@@ -43,6 +54,13 @@ if ($cap.State -ne 'Installed') { Add-WindowsCapability -Online -Name $cap.Name 
 Set-Service sshd -StartupType Automatic
 Start-Service sshd
 New-ItemProperty -Path 'HKLM:\SOFTWARE\OpenSSH' -Name DefaultShell -Value "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -PropertyType String -Force | Out-Null
+# Keys only: the default also accepts passwords.
+$sshdConfig = 'C:\ProgramData\ssh\sshd_config'
+if (Test-Path $sshdConfig) {
+  $conf = Get-Content $sshdConfig | Where-Object { $_ -notmatch '^\s*#?\s*PasswordAuthentication\s' }
+  Set-Content -Path $sshdConfig -Value (@('PasswordAuthentication no') + $conf) -Encoding ascii
+  Restart-Service sshd
+}
 
 Step 'SSH key'
 $shortName = $LabUser.Split('\')[-1]
