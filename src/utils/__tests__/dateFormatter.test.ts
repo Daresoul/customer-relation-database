@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { getUserDateFormat, formatDate, formatDayMonth } from '../dateFormatter';
+import { getUserDateFormat, formatDate, formatDayMonth, fromSqliteUtc } from '../dateFormatter';
 
 // The clinic writes 31/01/2024, as its PDFs do.
 describe('date format default', () => {
@@ -37,5 +37,15 @@ describe('formatDayMonth', () => {
   it('adds the time when asked', () => {
     withFormat('DD/MM/YYYY');
     expect(formatDayMonth(at, true)).toBe('31/01 14:05');
+  });
+});
+
+// Final review (low): SQLite's CURRENT_TIMESTAMP is UTC with no zone; read
+// as local time, "Synced with Google at" showed 1–2 hours early.
+describe('fromSqliteUtc', () => {
+  it('reads a zone-less SQLite time as UTC and leaves a zoned one alone', () => {
+    expect(fromSqliteUtc('2026-10-31 12:05:00')).toBe('2026-10-31T12:05:00Z');
+    expect(fromSqliteUtc('2026-10-31T12:05:00+01:00')).toBe('2026-10-31T12:05:00+01:00');
+    expect(fromSqliteUtc('2026-10-31T12:05:00Z')).toBe('2026-10-31T12:05:00Z');
   });
 });

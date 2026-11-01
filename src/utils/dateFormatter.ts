@@ -69,3 +69,8 @@ export const updateDateFormatInStorage = (dateFormat: string) => {
   }
   localStorage.setItem('veterinary-clinic-settings', JSON.stringify(settings));
 };
+
+/** A time as SQLite stores it. */
+export function fromSqliteUtc(value: string): string {
+  return value;
+}
