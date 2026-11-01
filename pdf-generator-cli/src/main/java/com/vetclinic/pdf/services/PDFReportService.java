@@ -1724,7 +1724,7 @@ public class PDFReportService {
         ColumnText titleColumn = new ColumnText(canvas);
         titleColumn.setSimpleColumn(
             titleX,
-            titleY - 30, // Lower bound
+            titleY - 120, // Room for a long title; the description moves down
             pageWidth - 50, // Right margin
             titleY + 10 // Upper bound
         );
@@ -1734,7 +1734,7 @@ public class PDFReportService {
 
         // Description position - main content area
         float descX = 50; // Left margin
-        float descY = titleY - 50; // Below title
+        float descY = Math.min(titleY - 50, titleColumn.getYLine() - 15); // Below title
         float descWidth = pageWidth - 100; // Content width with margins
         float descHeight = descY - 150; // Leave space for footer
 
@@ -1970,11 +1970,12 @@ public class PDFReportService {
         Font titleFont = FontUtil.getMacedonianFont(16, FontUtil.DEFAULT_FONT_COLOR);
         titleFont.setStyle(Font.BOLD);
         ColumnText titleColumn = new ColumnText(canvas);
-        titleColumn.setSimpleColumn(leftMargin, infoY - 25, rightMargin, infoY + 5);
+        // As many lines as the title needs; the description starts below it.
+        titleColumn.setSimpleColumn(leftMargin, infoY - 120, rightMargin, infoY + 5);
         Paragraph titleParagraph = new Paragraph(title, titleFont);
         titleColumn.addElement(titleParagraph);
         titleColumn.go();
-        infoY -= 30;
+        infoY = Math.min(infoY - 30, titleColumn.getYLine() - 5);
 
         // Description area - fits within content box (after title)
         float descY = infoY - 5;
