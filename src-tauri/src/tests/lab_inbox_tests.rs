@@ -227,6 +227,22 @@ async fn a_long_waiting_list_keeps_the_newest_results() {
     assert_eq!(items[0].file_id, "r5", "oldest shown first");
 }
 
+// Final review (low): every refresh (each minute and each machine event)
+// read and parsed every listed file again. A stored result never changes.
+#[tokio::test]
+async fn the_inbox_reads_each_stored_result_once() {
+    let db = create_test_db_with_migrations().await;
+    let dir = tempfile::tempdir().unwrap();
+    receive(&db, dir.path(), "cache-once", &koko_xml(), "ok", "2026-10-23T08:00:00+00:00").await;
+    let first = lab_inbox::list_inbox(&db, Some("waiting")).await.unwrap();
+    assert!(!first[0].values.is_empty());
+
+    std::fs::remove_file(dir.path().join("cache-once")).unwrap();
+    let again = lab_inbox::list_inbox(&db, Some("waiting")).await.unwrap();
+
+    assert_eq!(again[0].values.len(), first[0].values.len());
+}
+
 #[tokio::test]
 async fn a_waiting_result_shows_the_patient_the_machine_id_matches() {
     let db = create_test_db_with_migrations().await;
