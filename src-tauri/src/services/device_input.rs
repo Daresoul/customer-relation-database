@@ -412,6 +412,8 @@ struct FrameAssembler {
     consecutive_end_symbols: u32,
     dropped: Option<Vec<u8>>,
     ignored: usize,
+    /// Healvet: "&EE" seen; it ends the result unless the field goes on (EEVEE).
+    end_pending: bool,
 }
 
 impl FrameAssembler {
@@ -423,12 +425,14 @@ impl FrameAssembler {
             consecutive_end_symbols: 0,
             dropped: None,
             ignored: 0,
+            end_pending: false,
         }
     }
 
     /// Reset state and hand back the accumulated frame.
     fn take_frame(&mut self, protocol: &DeviceProtocol) -> Vec<u8> {
         let msg = std::mem::take(&mut self.data);
+        self.end_pending = false;
         self.consecutive_end_symbols = 0;
         self.started = protocol.start_symbol.is_none();
         msg
@@ -452,6 +456,7 @@ impl FrameAssembler {
     /// Like `discard_partial`, but hands the bytes back so they can be kept.
     fn take_partial(&mut self, protocol: &DeviceProtocol) -> Vec<u8> {
         let partial = std::mem::take(&mut self.data);
+        self.end_pending = false;
         self.consecutive_end_symbols = 0;
         self.started = protocol.start_symbol.is_none();
         partial
@@ -459,7 +464,13 @@ impl FrameAssembler {
 
     /// A result whose end marker came last, once nothing followed it.
     fn take_pending_end(&mut self) -> Option<Vec<u8>> {
-        None
+        if !self.end_pending {
+            return None;
+        }
+        self.end_pending = false;
+        let mut frame = std::mem::take(&mut self.data);
+        frame.truncate(frame.len().saturating_sub(2));
+        Some(frame)
     }
 
     /// Bytes since the last call that were outside any result. 0x00 is left out:
@@ -493,13 +504,20 @@ impl FrameAssembler {
 
     /// Feed one byte; returns the completed message when a frame terminates.
     fn push_byte(&mut self, byte: u8, protocol: &DeviceProtocol) -> Option<Vec<u8>> {
-        // Healvet: only "&EE" ends a frame; an "EE" inside a value (LEELOO) is data.
+        // Healvet: only "&EE" ends a frame; an "EE" inside a value (LEELOO) is
+        // data. "&EE" followed by more of the field (EEVEE) is data too, so the
+        // end waits for the next byte or for the line to go quiet.
         if protocol.end_symbol == b'E' && protocol.start_symbol.is_none() {
+            if self.end_pending && !byte.is_ascii_alphanumeric() {
+                let frame = self.take_pending_end();
+                self.data.push(byte);
+                return frame;
+            }
+            self.end_pending = false;
             self.data.push(byte);
             if self.data.ends_with(b"&EE") {
-                let mut frame = self.take_frame(protocol);
-                frame.truncate(frame.len() - 2);
-                return Some(frame);
+                self.end_pending = true;
+                return None;
             }
             self.cap(protocol);
             return None;
@@ -1212,6 +1230,9 @@ pub(crate) fn run_read_loop_with_clock<R: std::io::Read + ?Sized>(
         };
 
         if no_data {
+            if let Some(frame) = assembler.take_pending_end() {
+                sink.on_frame(frame);
+            }
             if last_presence_check.elapsed() >= presence_every {
                 last_presence_check = Instant::now();
                 if !still_present() {
@@ -1260,7 +1281,9 @@ pub fn raw_log_sessions(text: &str) -> Vec<Vec<u8>> {
 /// The complete results in `bytes`, as the live reader would have cut them.
 pub fn complete_frames(bytes: &[u8], protocol: &DeviceProtocol) -> Vec<Vec<u8>> {
     let mut assembler = FrameAssembler::new(protocol);
-    bytes.iter().filter_map(|&b| assembler.push_byte(b, protocol)).collect()
+    let mut frames: Vec<Vec<u8>> = bytes.iter().filter_map(|&b| assembler.push_byte(b, protocol)).collect();
+    frames.extend(assembler.take_pending_end());
+    frames
 }
 
 /// Runs `f` on its own thread and waits for it at most `limit`.
@@ -1888,7 +1911,8 @@ mod frame_assembler_tests {
         let mut asm = FrameAssembler::new(&p);
         for &b in b"AB&" { assert!(asm.push_byte(b, &p).is_none()); }
         assert!(asm.push_byte(b'E', &p).is_none()); // first terminator E
-        assert_eq!(asm.push_byte(b'E', &p), Some(b"AB&".to_vec())); // second E completes
+        assert!(asm.push_byte(b'E', &p).is_none()); // second E: the end, once nothing continues the field
+        assert_eq!(asm.take_pending_end(), Some(b"AB&".to_vec()));
     }
 
     #[test]
@@ -1937,6 +1961,7 @@ mod frame_assembler_tests {
                 frames.push(f);
             }
         }
+        frames.extend(asm.take_pending_end());
         frames
     }
 }
