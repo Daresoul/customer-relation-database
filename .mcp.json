@@ -25,7 +25,7 @@
         "firecrawl-mcp"
       ],
       "env": {
-        "FIRECRAWL_API_KEY": "fc-0c98c3a982ca438b80bba18afc1c894a"
+        "FIRECRAWL_API_KEY": "${FIRECRAWL_API_KEY}"
       }
     },
     "allPepper-memory-bank": {

@@ -810,6 +810,11 @@ SSH and starts the app with a DevTools port.
   session so the app gets a real window (programs started over SSH can't show
   one). Listens on 127.0.0.1:8787 with a token; reached only through SSH.
 
+## Developer tools
+
+`.mcp.json` (Claude Code's MCP servers) holds no keys: the Firecrawl server
+reads `FIRECRAWL_API_KEY` from the environment.
+
 ## Release build secrets
 
 The release workflow (`.github/workflows/release.yml`) reads these GitHub
