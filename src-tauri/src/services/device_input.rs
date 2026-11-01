@@ -1149,6 +1149,13 @@ pub(crate) fn run_read_loop_with_clock<R: std::io::Read + ?Sized>(
 
     loop {
         if shutdown_rx.try_recv().is_ok() {
+            // Reconnect or a settings change mid-result: say so, like a pulled cable.
+            if assembler.partial_len() > 0 {
+                match assembler.flush_idle(protocol) {
+                    Ok(frame) => sink.on_frame(frame),
+                    Err(partial) => sink.on_cut_off(partial),
+                }
+            }
             return Ok(());
         }
 
