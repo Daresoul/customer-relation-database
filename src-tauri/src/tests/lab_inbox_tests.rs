@@ -173,6 +173,21 @@ fn hl7_values_use_the_machines_unit_range_and_flag_and_skip_metadata() {
     assert_eq!(value(&values, "GLU").flag.as_deref(), Some("L"), "a missing flag is worked out from the range");
 }
 
+// Final review (low): with no range from the machine the inbox showed no H/L,
+// while the record (same value) did; it now uses the same reference ranges.
+#[test]
+fn values_without_a_machine_range_use_the_reference_range_like_the_record() {
+    let healvet = serde_json::json!({ "cCRP": "30", "species": "Dog" });
+    let crp = lab_inbox::lab_values("healvet_hv_fia_3000", &healvet).into_iter().find(|v| v.code == "cCRP").unwrap();
+    assert_eq!(crp.flag.as_deref(), Some("H"));
+    assert!(crp.range.is_some());
+
+    let pointcare = serde_json::json!({ "GLU": "50" });
+    let glu = lab_inbox::lab_values("mnchip_pointcare_chemistry", &pointcare).into_iter().find(|v| v.code == "GLU").unwrap();
+    assert_eq!(glu.flag.as_deref(), Some("L"));
+    assert_eq!(glu.unit.as_deref(), Some("mg/dL"));
+}
+
 // ---------------------------------------------------------------------------
 // The inbox
 // ---------------------------------------------------------------------------
