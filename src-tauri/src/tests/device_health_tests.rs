@@ -492,3 +492,16 @@ fn deliveries_run_in_order_without_holding_up_the_reader() {
     assert_eq!(*done.lock().unwrap(), vec![0, 1, 2], "all saved, in arrival order, after the reader stops");
 }
 
+// Final review (low): a raw log locked by Excel or a full disk logged an error
+// on every read, hundreds a minute, all shipped to Loki.
+#[test]
+fn a_repeated_complaint_is_logged_once_per_ten_minutes_per_port() {
+    use crate::services::device_input::Throttle;
+    let throttle = Throttle::new(Duration::from_secs(600));
+    let t0 = Instant::now();
+    assert!(throttle.allow("COM7", t0));
+    assert!(!throttle.allow("COM7", t0 + Duration::from_secs(5)));
+    assert!(throttle.allow("COM6", t0 + Duration::from_secs(5)), "another port has its own");
+    assert!(throttle.allow("COM7", t0 + Duration::from_secs(601)));
+}
+

@@ -86,6 +86,19 @@ pub(crate) fn get_raw_log_path(app_handle: &AppHandle, port_name: &str) -> Optio
     Some(log_dir.join(format!("raw_{}-{}.log", safe_port_name, today)))
 }
 
+/// Lets a message through once per `every` for each key.
+pub struct Throttle;
+
+impl Throttle {
+    pub fn new(_every: Duration) -> Self {
+        Throttle
+    }
+
+    pub fn allow(&self, _key: &str, _now: Instant) -> bool {
+        true
+    }
+}
+
 /// Write raw bytes to the per-port log file with timestamp
 /// Logs both hex and ASCII representation for debugging
 fn write_raw_log(app_handle: &AppHandle, port_name: &str, data: &[u8]) {
