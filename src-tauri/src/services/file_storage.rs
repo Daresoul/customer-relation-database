@@ -413,8 +413,18 @@ impl FileStorageService {
     }
 
     /// The `osascript` arguments that print `path` from Preview on macOS.
+    /// The path is the script's argument, never part of its text.
     pub fn mac_print_args(path: &str) -> Vec<String> {
-        vec!["-e".to_string(), format!("set theFile to POSIX file \"{}\"", path)]
+        let script = r#"on run argv
+    set theFile to POSIX file (item 1 of argv)
+    tell application "Preview"
+        activate
+        open theFile
+        delay 0.5
+        print front document with print dialog
+    end tell
+end run"#;
+        vec!["-e".to_string(), script.to_string(), path.to_string()]
     }
 
     /// Print a file using the system's native print dialog.
@@ -425,20 +435,8 @@ impl FileStorageService {
             // On macOS, use AppleScript to open the PDF in Preview and trigger the print dialog.
             // Note: Preview.app needs to come to front for the print dialog, so we use `activate`.
             // We isolate the osascript process via process_group(0) to limit focus side-effects.
-            let script = format!(
-                r#"
-                set theFile to POSIX file "{}"
-                tell application "Preview"
-                    activate
-                    open theFile
-                    delay 0.5
-                    print front document with print dialog
-                end tell
-                "#,
-                path
-            );
             let mut cmd = Command::new("osascript");
-            cmd.args(["-e", &script])
+            cmd.args(Self::mac_print_args(path))
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())
                 .stderr(Stdio::null());
