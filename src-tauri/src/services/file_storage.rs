@@ -412,6 +412,11 @@ impl FileStorageService {
         Err("Unsupported platform".to_string())
     }
 
+    /// The `osascript` arguments that print `path` from Preview on macOS.
+    pub fn mac_print_args(path: &str) -> Vec<String> {
+        vec!["-e".to_string(), format!("set theFile to POSIX file \"{}\"", path)]
+    }
+
     /// Print a file using the system's native print dialog.
     /// Uses subprocess isolation to minimize focus disruption.
     pub fn print_file(path: &str) -> Result<(), String> {

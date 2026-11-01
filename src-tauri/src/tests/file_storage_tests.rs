@@ -372,3 +372,14 @@ fn a_preview_image_is_named_by_the_stored_file() {
     assert_ne!(a, b);
     assert!(a.file_name().unwrap().to_string_lossy().starts_with("uuid-a_p1_w900"));
 }
+
+// Final review (low, macOS only): the file's path was written into the
+// AppleScript text, so a name with a quote could run a shell command.
+#[test]
+fn the_mac_print_script_gets_the_path_as_an_argument() {
+    let path = r#"/tmp/a" & do shell script "touch /tmp/pwned" & ".pdf"#;
+    let args = FileStorageService::mac_print_args(path);
+    assert_eq!(args.last().map(String::as_str), Some(path));
+    assert!(args.iter().take(args.len() - 1).all(|a| !a.contains("pwned")), "{args:?}");
+}
+
