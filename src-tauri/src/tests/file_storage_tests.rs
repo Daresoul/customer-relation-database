@@ -25,6 +25,20 @@ fn validate_file_under_limit_succeeds() {
     assert!(r.is_ok());
 }
 
+// Final review (low): an attached program (a "results.pdf.exe" from an
+// email) ran when staff clicked Open.
+#[test]
+fn a_program_file_is_refused_as_an_attachment_and_never_opened() {
+    let data = vec![0u8; 10];
+    for name in ["results.pdf.exe", "invoice.JS", "photo.scr", "report.lnk", "run.bat", "x.hta", "setup.msi"] {
+        assert!(FileStorageService::validate_file(&data, name, 10).unwrap_err().contains("run a program"), "{name}");
+        assert!(FileStorageService::open_path_with_default_app(&format!("/tmp/{name}")).unwrap_err().contains("run a program"), "{name}");
+    }
+    for name in ["scan.pdf", "xray.jpg", "BM-53672_2026-10-01.xml", "notes.txt", "data.csv"] {
+        assert!(FileStorageService::validate_file(&data, name, 10).is_ok(), "{name}");
+    }
+}
+
 #[test]
 fn validate_file_at_exact_limit_succeeds() {
     let data = vec![0u8; 5 * 1024 * 1024]; // exactly 5 MB
