@@ -123,16 +123,50 @@ pub fn prune_log_dirs(dirs: &[std::path::PathBuf], days_to_keep: i64) {
 
 /// Prunes once a day while the app runs (the start pass happens in `main`).
 pub async fn run_log_prune_schedule(dirs: Vec<std::path::PathBuf>, days_to_keep: i64) {
+    let (_, max_size) = main_log_rotation();
+    let mut hours: u64 = 0;
     loop {
-        tokio::time::sleep(LOG_PRUNE_INTERVAL).await;
-        prune_log_dirs(&dirs, days_to_keep);
-        log::info!("Log prune: archives older than {} days removed", days_to_keep);
+        tokio::time::sleep(LIVE_LOG_CHECK_INTERVAL).await;
+        hours += 1;
+        for dir in &dirs {
+            for archived in cap_live_logs(dir, max_size as u64) {
+                log::info!("Log over its size limit; earlier lines kept in {:?}", archived.file_name());
+            }
+        }
+        if hours % (LOG_PRUNE_INTERVAL.as_secs() / LIVE_LOG_CHECK_INTERVAL.as_secs()) == 0 {
+            prune_log_dirs(&dirs, days_to_keep);
+            log::info!("Log prune: archives older than {} days removed", days_to_keep);
+        }
     }
 }
 
-/// Archives and empties a live log past `max_bytes`.
-pub fn cap_live_logs(_dir: &Path, _max_bytes: u64) -> Vec<std::path::PathBuf> {
-    Vec::new()
+/// How often a live log's size is checked while the app runs.
+pub const LIVE_LOG_CHECK_INTERVAL: std::time::Duration = std::time::Duration::from_secs(3600);
+
+/// A live log past `max_bytes` is copied to `<name>_YYYY-MM-DD_HH-MM-SS.log`
+/// (the plugin's own size-rotation name, pruned after 30 days) and emptied.
+/// The logger appends, so it goes on writing at the start of the empty file.
+/// The plugin checks its size limit only at start; the app runs for weeks.
+pub fn cap_live_logs(dir: &Path, max_bytes: u64) -> Vec<std::path::PathBuf> {
+    let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new() };
+    let mut archived = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Some(stem) = path.file_stem().and_then(|s| s.to_str()).map(str::to_string) else { continue };
+        if path.extension().and_then(|e| e.to_str()) != Some("log") || is_already_archived(&stem) {
+            continue;
+        }
+        if entry.metadata().map_or(true, |m| m.len() <= max_bytes) {
+            continue;
+        }
+        let target = dir.join(format!("{}_{}.log", stem, Local::now().format("%Y-%m-%d_%H-%M-%S")));
+        let copied = std::fs::copy(&path, &target);
+        let emptied = copied.is_ok() && std::fs::OpenOptions::new().write(true).open(&path).and_then(|f| f.set_len(0)).is_ok();
+        if emptied {
+            archived.push(target);
+        }
+    }
+    archived
 }
 
 pub fn prune_old_logs(dir: &Path, days_to_keep: i64) {
@@ -176,6 +210,11 @@ fn undated_raw_log_date(stem: &str, entry: &std::fs::DirEntry) -> Option<NaiveDa
 
 /// Returns true if `stem` ends with a 10-char `-YYYY-MM-DD` suffix.
 /// Pure for testing.
+/// A copy made by the size limit (`<name>_YYYY-MM-DD_HH-MM-SS`).
+pub fn is_size_archive(stem: &str) -> bool {
+    parse_plugin_rotated_suffix(stem).is_some()
+}
+
 fn is_already_archived(stem: &str) -> bool {
     parse_date_suffix(stem).is_some()
 }

@@ -557,7 +557,12 @@ fn list_log_files(dir: &Path, out: &mut Vec<PathBuf>) {
     };
     for entry in entries.flatten() {
         let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) == Some("log") {
+        let size_archive = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .is_some_and(crate::services::log_rotation::is_size_archive);
+        // A size archive is a copy of the live log, already sent under its name.
+        if path.extension().and_then(|e| e.to_str()) == Some("log") && !size_archive {
             out.push(path);
         }
     }

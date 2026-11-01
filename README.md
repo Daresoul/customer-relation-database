@@ -728,6 +728,9 @@
   handing over a result needs the main thread, so an unbounded wait could hang.
 - Log archives older than 30 days are pruned at start and daily while the
   app runs (`log_rotation::run_log_prune_schedule`).
+- While the app runs, a live log past 50 MB is copied hourly to
+  `<name>_YYYY-MM-DD_HH-MM-SS.log` and emptied (`cap_live_logs`); the plugin
+  checks its size only at start. The Loki shipper skips those copies.
 - The Loki shipper stores, with each file's position, a fingerprint of its
   first line; a file replaced under the same name is read from the start.
 - Raw serial lines reach Loki without their bytes, only the time and the
