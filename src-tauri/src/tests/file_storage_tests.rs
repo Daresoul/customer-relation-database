@@ -63,11 +63,11 @@ fn validate_file_empty_data_succeeds() {
 }
 
 #[test]
-fn validate_file_accepts_any_extension() {
-    // Service documentation: "Allow all file types — doctors need to upload
-    // various medical records, device data, images, PDFs, videos."
+fn validate_file_accepts_any_extension_but_programs() {
+    // Doctors upload many kinds of files; programs are the exception (see
+    // a_program_file_is_refused_as_an_attachment_and_never_opened).
     let data = vec![0u8; 100];
-    for ext in [".xml", ".pdf", ".jpg", ".mp4", ".exe", ".unknown"] {
+    for ext in [".xml", ".pdf", ".jpg", ".mp4", ".unknown"] {
         let r = FileStorageService::validate_file(&data, &format!("test{}", ext), 10);
         assert!(r.is_ok(), "should accept {}", ext);
     }
