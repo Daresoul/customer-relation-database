@@ -122,6 +122,35 @@ async fn run_backup_with_no_destination_fails() {
     assert!(err.contains("No backup directory"), "got: {}", err);
 }
 
+// Final review (low): the logo lives in <app data>/clinic, outside the
+// mirrored files folder, so a restore lost the letterhead logo.
+#[tokio::test]
+async fn run_backup_copies_the_clinic_logo() {
+    let fx = setup().await;
+    write(&fx.app_dir.path().join("clinic").join("logo.png"), "png");
+    BackupService::set_directory(fx.app_dir.path(), fx.dest_dir.path().to_str().unwrap()).unwrap();
+
+    BackupService::run_backup(fx.app_dir.path(), &fx.test_db).await.expect("backup");
+
+    assert!(fx.dest_dir.path().join("clinic").join("logo.png").is_file());
+}
+
+// Final review (low): the start-up, scheduled, manual and pre-update backups
+// could run at once and fight over the same temporary files.
+#[tokio::test]
+async fn backups_started_together_all_succeed() {
+    let fx = setup().await;
+    write(&fx.app_dir.path().join("files").join("a.pdf"), "pdf");
+    BackupService::set_directory(fx.app_dir.path(), fx.dest_dir.path().to_str().unwrap()).unwrap();
+
+    let (a, b) = tokio::join!(
+        BackupService::run_backup(fx.app_dir.path(), &fx.test_db),
+        BackupService::run_backup(fx.app_dir.path(), &fx.test_db),
+    );
+
+    assert!(a.is_ok() && b.is_ok(), "{a:?} {b:?}");
+}
+
 #[tokio::test]
 async fn run_backup_writes_dated_snapshot() {
     let fx = setup().await;
