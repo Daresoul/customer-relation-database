@@ -190,11 +190,28 @@ pub fn lab_values(device_type: &str, test_results: &serde_json::Value) -> Vec<La
             .collect();
     }
 
+    // Without a range from the machine: the same reference ranges as the
+    // record and the lab PDF, for the species the machine reported.
+    use crate::services::lab_reference::{self, Species};
+    let species = Species::from_name(get("species").as_deref());
+    let reference = |code: &str| {
+        let found = if device_type.starts_with("healvet") {
+            if species == Species::Other { None } else { lab_reference::healvet(code, species) }
+        } else if crate::services::lab_results::is_pointcare(device_type) {
+            lab_reference::pointcare(code)
+        } else {
+            None
+        };
+        found.map(|(_, r)| r)
+    };
+
     map.keys()
         .filter(|k| is_analyte_key(k))
         .filter_map(|code| {
             let value = get(code)?;
-            let range = get(&format!("{}_range", code));
+            let known = reference(code);
+            let range = get(&format!("{}_range", code))
+                .or_else(|| known.and_then(|r| crate::services::lab_results::range_text(r.low, r.high)));
             let flag = match get(&format!("{}_flag", code)) {
                 Some(f) => normalize_flag(&f),
                 None => range.as_deref().and_then(|r| {
@@ -203,7 +220,8 @@ pub fn lab_values(device_type: &str, test_results: &serde_json::Value) -> Vec<La
                 }),
             };
             let implausible = implausible(&value, range.as_deref());
-            Some(LabValue { code: code.clone(), unit: get(&format!("{}_unit", code)), range, flag, value, implausible })
+            let unit = get(&format!("{}_unit", code)).or_else(|| known.and_then(|r| r.unit).map(str::to_string));
+            Some(LabValue { code: code.clone(), unit, range, flag, value, implausible })
         })
         .collect()
 }

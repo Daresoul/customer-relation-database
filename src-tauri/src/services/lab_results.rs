@@ -138,11 +138,11 @@ fn device_flag(flag: Option<String>) -> Option<&'static str> {
     }
 }
 
-fn range_text(low: Option<f64>, high: Option<f64>) -> Option<String> {
+pub(crate) fn range_text(low: Option<f64>, high: Option<f64>) -> Option<String> {
     Some(format!("{} - {}", low?, high?))
 }
 
-fn is_pointcare(device_type: &str) -> bool {
+pub(crate) fn is_pointcare(device_type: &str) -> bool {
     device_type.contains("pointcare") && !device_type.contains("pcr")
 }
 
